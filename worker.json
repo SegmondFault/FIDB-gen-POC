@@ -1,0 +1,35 @@
+{
+  "schema_version": "fidb-worker/v2",
+  "recipe_directory": "recipes",
+  "requested_libraries": ["zlib", "bzip2"],
+  "routes": [
+    {
+      "id": "linux-x86_64-gnu-gcc",
+      "target_os": "linux",
+      "architecture": "x86_64",
+      "binary_format": "ELF",
+      "compiler": ["/usr/bin/gcc"],
+      "archiver": ["/usr/bin/ar"],
+      "ranlib": ["/usr/bin/ranlib"],
+      "compiler_flags": [
+        "-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"
+      ],
+      "object_file_markers": ["ELF", "x86-64", "relocatable"],
+      "linked_suffix": ".so",
+      "linked_file_markers": ["ELF", "x86-64", "shared object"],
+      "ghidra_language": "x86:LE:64:default",
+      "ghidra_compiler_spec": "gcc",
+      "compiler_version_markers": ["Free Software Foundation"]
+    }
+  ],
+  "treatments": [
+    {
+      "id": "baseline_o2",
+      "factor": "baseline",
+      "description": "O2, compiled without -g or LTO, frame pointer retained"
+    }
+  ],
+  "profiles": {
+    "smoke": ["baseline_o2"]
+  }
+}
