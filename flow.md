@@ -524,6 +524,29 @@ one or more records are incomplete
 > CLI exits 1
 ```
 
+## Source-mode cross-build execution routes
+
+The separate `hunt` and `build-malware` source-cell paths resolve an executor
+alongside the pinned source, pinned cross-toolchain, target ABI and reviewed
+named build adapter:
+
+```text
+source cell (executor=qemu, default)
+> run the fixed adapter inside the existing offline QEMU VM
+
+source cell (executor=local, explicit opt-in)
+> run the same fixed adapter directly in the invoking Linux environment
+> no QEMU isolation boundary
+
+archive hunt candidate
+> extract the pinned prebuilt archive; executor selection does not apply
+```
+
+Both routes use the command construction in `source_build.py`; recipes and
+callers cannot supply raw commands. The executor is recorded in source-cell
+reports/manifests as routing provenance, not as a FID treatment. The native
+zlib/bzip2 pipeline described above is unchanged.
+
 ## Condensed call chain
 
 ```text

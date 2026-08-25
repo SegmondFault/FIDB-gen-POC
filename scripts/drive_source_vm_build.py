@@ -54,10 +54,13 @@ scratch.qcow2 (pre-created) and an out/ subdirectory. Copies
 WORK_DIR/<output-relpath relative to src build root> to WORK_DIR/out/.
 """
 import argparse
+from pathlib import Path
 import pexpect
 import socket
 import sys
 import time
+
+from fidb_poc.source_build import AdapterInputs, BUILD_ADAPTERS, shell_adapter_command
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--work", required=True)
@@ -72,7 +75,7 @@ parser.add_argument("--payload-kind", choices=("zip",), help="required with --pa
 parser.add_argument("--toolchain-dir", required=True, help="toolchain dir name under --work")
 parser.add_argument(
     "--build-adapter",
-    choices=("uclibc_defconfig", "plain_make", "mirai_bot_gcc"),
+    choices=BUILD_ADAPTERS,
     default="uclibc_defconfig",
 )
 parser.add_argument(
@@ -198,32 +201,25 @@ else:
     )
 run(f"cp -r /mnt/ro/{args.toolchain_dir} /root/toolchain", timeout=180)
 
+inputs = AdapterInputs(
+    build_adapter=args.build_adapter,
+    arch=args.arch or "",
+    cross_bin_prefix=args.cross_bin_prefix,
+    output_relpath=args.output_relpath,
+    jobs=int(args.jobs),
+)
 if args.build_adapter == "uclibc_defconfig":
     run("ls -la /root/build/.config")
     print(">>> starting build (host generated .config, no cross-compiler involved there)", flush=True)
-    build_command = (
-        f"cd /root/build && make ARCH={args.arch} "
-        f"CROSS=/root/toolchain/{args.cross_bin_prefix} -j{args.jobs} "
-        "> /root/build.log 2>&1 ; echo BUILD_EXIT=$?"
-    )
 elif args.build_adapter == "plain_make":
     print(">>> starting build (plain make, no ARCH=/.config)", flush=True)
-    build_command = (
-        f"cd /root/build && make CC=/root/toolchain/{args.cross_bin_prefix}gcc "
-        f"-j{args.jobs} > /root/build.log 2>&1 ; echo BUILD_EXIT=$?"
-    )
 else:  # mirai_bot_gcc -- mirrors the compile_bot() function in the fork's
        # own mirai/build.sh: a direct gcc invocation, no Makefile
     print(">>> starting build (mirai_bot_gcc, direct gcc invocation)", flush=True)
-    output_dir = "/".join(args.output_relpath.split("/")[:-1]) or "."
-    output_name = args.output_relpath.split("/")[-1]
-    build_command = (
-        f"cd /root/build/{output_dir} && "
-        f"/root/toolchain/{args.cross_bin_prefix}gcc -std=c99 bot/*.c "
-        f"-O3 -fomit-frame-pointer -fdata-sections -ffunction-sections -Wl,--gc-sections "
-        f'-o {output_name} -DMIRAI_BOT_ARCH=\\"{args.arch}\\" -DMIRAI_TELNET -static '
-        "> /root/build.log 2>&1 ; echo BUILD_EXIT=$?"
-    )
+build_command = (
+    shell_adapter_command(inputs, Path("/root/build"), Path("/root/toolchain"))
+    + " > /root/build.log 2>&1 ; echo BUILD_EXIT=$?"
+)
 run(build_command, timeout=2400)
 run("tail -c 300000 /root/build.log")
 print(">>> build step done", flush=True)

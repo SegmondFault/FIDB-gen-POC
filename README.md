@@ -250,8 +250,8 @@ change.
 
 Building the two reviewed recipes above is only one thing `fidb-poc` does.
 The same binary also takes an arbitrary target and works out which libc it was
-probably built against, cross-compiling candidates inside an isolated,
-network-severed QEMU VM when no prebuilt archive matches -- via the
+probably built against, cross-compiling source candidates through the default
+isolated, network-severed QEMU executor when no prebuilt archive matches -- via the
 `inspect`/`investigate`/`hunt`/`build-malware`/`hunt-doctor` subcommands
 (`fidb-hunt` still works too, as a thin alias over the same code):
 
@@ -259,7 +259,7 @@ network-severed QEMU VM when no prebuilt archive matches -- via the
 target binary
   -> investigate: infer machine/endianness/elf_class and libc family hypotheses
   -> select: matching toolchain rows + recipe-generated cells, closest priority first
-  -> prepare: extract a prebuilt libc.a, or cross-compile one in an isolated VM
+  -> prepare: extract a prebuilt libc.a, or cross-compile one through the selected executor
   -> match: Ghidra FID comparison against the target
   -> report + copy: exported .fidb/.fidbf per unambiguous match, ready to reuse
 ```
@@ -268,13 +268,21 @@ target binary
 uv run fidb-poc hunt path/to/target --fidb-dir artifacts/fidbs
 ```
 
+Source-mode cells accept `--executor {qemu,local}` on `hunt` and
+`build-malware`. `qemu` is the default. `--executor local` is an explicit
+opt-in that runs the same pinned cross-toolchain, reviewed named adapter and
+target flags directly in the invoking Linux environment (including a
+Toolbx/Distrobox), without the QEMU isolation boundary. Executor choice is
+recorded as route provenance and does not change FID treatment. Archive-only
+hunt candidates and the native zlib/bzip2 worker are unaffected.
+
 Candidates come from `toolchains/registry.toml` (pinned cross-toolchains,
 some directly archive-extractable) and `recipes/libs/*.toml`
 (`mode="source"`, fanned out per matching toolchain by
 `recipe_generator.generate_cells`) -- see `UNIFICATION_PLAN.md` for why this
 is one schema instead of the two ad hoc ones this repository started with.
 
-The same VM isolation also builds a static, known-source malware corpus from
+The same executor routing also builds a static, known-source malware corpus from
 `recipes/malware/*.toml`, for use as ground truth rather than as an unknown
 target to match:
 
@@ -282,9 +290,9 @@ target to match:
 uv run fidb-poc build-malware --recipes recipes/malware
 ```
 
-See `recipes/malware/README.md` before adding a fork recipe -- source
-archives are pinned by SHA-256, never a moving branch ref, and are only ever
-unpacked/compiled inside the disposable, offline VM.
+See `recipes/malware/README.md` before adding a fork recipe. Source archives
+are pinned by SHA-256, never a moving branch ref; use the default QEMU executor
+when its disposable offline boundary is required.
 
 ## Verification
 

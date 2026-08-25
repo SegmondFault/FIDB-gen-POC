@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 
 def load_cells(
-    toolchains: str | Path, recipes: str | Path
+    toolchains: str | Path, recipes: str | Path, executor: str = "qemu"
 ) -> list[dict[str, object]]:
     """Every hunt candidate: archive-capable toolchain rows used directly,
     plus every recipe fanned out across its matching toolchain rows.
@@ -41,7 +41,9 @@ def load_cells(
     """
     toolchain_rows = load_toolchains(toolchains)
     archive_cells = [row for row in toolchain_rows if row.get("mode") == "archive"]
-    source_cells = generate_cells(load_source_recipes(recipes), toolchain_rows)
+    source_cells = generate_cells(
+        load_source_recipes(recipes), toolchain_rows, executor=executor
+    )
     return archive_cells + source_cells
 
 
@@ -68,6 +70,7 @@ def hunt(
     maximum: int = 8,
     requested: tuple[str, ...] = (),
     fidb_dir: str | Path = "artifacts/fidbs",
+    executor: str = "qemu",
 ) -> dict[str, object]:
     target_path = Path(target).expanduser().resolve()
     work_path = Path(work)
@@ -76,7 +79,9 @@ def hunt(
 
     evidence = investigate(target_path)
     facts = evidence.target
-    candidates = select_recipes(evidence, load_cells(toolchains, recipe_dir), requested)
+    candidates = select_recipes(
+        evidence, load_cells(toolchains, recipe_dir, executor=executor), requested
+    )
     if not candidates:
         suffix = f" for {', '.join(requested)}" if requested else ""
         raise ValueError(f"no compatible catalog candidates{suffix}")
@@ -158,6 +163,7 @@ def hunt(
                 "fidbf_sha256": hashlib.sha256(raw_destination.read_bytes()).hexdigest(),
                 "matched_functions": attempt["assessment"]["matched_functions"],
                 "unambiguous_matches": attempt["assessment"]["unambiguous_match_count"],
+                **({"executor": guess["executor"]} if "executor" in guess else {}),
             }
         )
 
@@ -167,6 +173,7 @@ def hunt(
         "matched": any(item["assessment"]["unambiguous_match_count"] for item in attempts),
         "toolchains": str(Path(toolchains)),
         "recipes": str(Path(recipe_dir)),
+        "executor": executor,
         "report": str(report_path),
         "fidbs": exported,
     }

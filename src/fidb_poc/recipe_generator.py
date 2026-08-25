@@ -17,6 +17,8 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
+from .source_build import EXECUTORS
+
 SCHEMA_VERSION = "fidb-recipe/v3"
 
 REQUIRED_FIELDS = {
@@ -64,8 +66,11 @@ def load_recipes(directory: str | Path) -> list[dict[str, object]]:
 
 
 def generate_cells(
-    recipes: list[dict[str, object]], toolchains: list[dict[str, object]]
+    recipes: list[dict[str, object]], toolchains: list[dict[str, object]],
+    executor: str = "qemu",
 ) -> list[dict[str, object]]:
+    if executor not in EXECUTORS:
+        raise ValueError(f"unsupported source-build executor: {executor}")
     cells = []
     for recipe in recipes:
         family = recipe["toolchain_family"]
@@ -92,6 +97,7 @@ def generate_cells(
                 "elf_class": row["elf_class"],
                 "priority": int(recipe.get("priority", row.get("priority", 100))),
                 "mode": "source",
+                "executor": executor,
                 "source_url": recipe["url"],
                 "source_sha256": recipe["sha256"],
                 "toolchain_url": row["toolchain_url"],

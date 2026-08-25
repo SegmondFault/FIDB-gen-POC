@@ -22,12 +22,17 @@ import logging
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tarfile
 from urllib.request import Request, urlopen
 
 from .elf import ghidra_language
 from .investigate import Investigation
+from .source_build import (
+    adapter_inputs,
+    executor_for,
+    run_local_source_build,
+    run_qemu_source_build,
+)
 
 log = logging.getLogger(__name__)
 
@@ -182,20 +187,19 @@ def _normalize_object_extensions(objects: Path) -> None:
             member.rename(member.with_suffix(".o"))
 
 
-_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
-
-
 def _prepare_source_recipe(
     recipe: dict[str, object], work: Path, download_cache: Path
 ) -> dict[str, object]:
-    """Cross-compile a recipe from source inside an isolated, offline QEMU VM.
+    """Cross-compile a source cell through its explicit executor.
 
     Config generation (defconfig/oldconfig) needs only a native host
     compiler and runs directly on the host. Only the actual cross-compile,
-    which must execute the downloaded third-party toolchain, runs inside
-    the VM -- see scripts/drive_source_vm_build.py for the isolation
-    details (network cut before the toolchain is ever invoked).
+    which executes the downloaded third-party toolchain, is routed through
+    QEMU by default or directly through the invoking Linux environment when
+    the caller explicitly selects local.
     """
+    executor = executor_for(recipe)
+    inputs = adapter_inputs(recipe, "uclibc_defconfig")
     recipe_digest = _digest(recipe)
     root = work / "prepared" / recipe_digest[:16]
     objects = root / "objects"
@@ -206,14 +210,18 @@ def _prepare_source_recipe(
         return _guess(recipe, objects, recipe_digest)
 
     log.info(
-        "compiling from source: %s (source=%s toolchain=%s)",
-        label, recipe["source_url"], recipe["toolchain_url"],
+        "compiling from source: %s (executor=%s source=%s toolchain=%s)",
+        label, executor, recipe["source_url"], recipe["toolchain_url"],
     )
     source_archive = _download_url(str(recipe["source_url"]), str(recipe["source_sha256"]), download_cache)
     toolchain_archive = _download_url(
         str(recipe["toolchain_url"]), str(recipe["toolchain_sha256"]), download_cache
     )
-    iso = _download_url(str(recipe["vm_iso_url"]), str(recipe["vm_iso_sha256"]), download_cache)
+    iso = None
+    if executor == "qemu":
+        iso = _download_url(
+            str(recipe["vm_iso_url"]), str(recipe["vm_iso_sha256"]), download_cache
+        )
 
     vm_dir = root / "vm"
     if vm_dir.exists():
@@ -233,7 +241,13 @@ def _prepare_source_recipe(
         cwd=src_root, check=True,
     )
     if "kernel_headers_relpath" in recipe:
-        headers = f"/root/toolchain/{recipe['kernel_headers_relpath']}"
+        headers = (
+            f"/root/toolchain/{recipe['kernel_headers_relpath']}"
+            if executor == "qemu"
+            else str(
+                (vm_dir / toolchain_dir_name / str(recipe["kernel_headers_relpath"])).resolve()
+            )
+        )
         subprocess.run(
             ["sed", "-i", f's#^KERNEL_HEADERS=.*#KERNEL_HEADERS="{headers}"#', str(src_root / ".config")],
             check=True,
@@ -245,27 +259,19 @@ def _prepare_source_recipe(
 
     out_dir = vm_dir / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["qemu-img", "create", "-f", "qcow2", str(vm_dir / "scratch.qcow2"), "3G"], check=True,
-    )
     log.info(
-        "cross-compiling %s inside isolated VM: src=%s toolchain=%s library=%s",
-        label, src_dir_name, toolchain_dir_name, recipe["library_path"],
+        "cross-compiling %s via %s: src=%s toolchain=%s library=%s",
+        label, executor, src_dir_name, toolchain_dir_name, recipe["library_path"],
     )
-    subprocess.run(
-        [
-            sys.executable, str(_SCRIPTS_DIR / "drive_source_vm_build.py"),
-            "--work", str(vm_dir),
-            "--iso", str(iso),
-            "--src-dir", src_dir_name,
-            "--toolchain-dir", toolchain_dir_name,
-            "--build-adapter", str(recipe.get("build_adapter", "uclibc_defconfig")),
-            "--arch", str(recipe["arch"]),
-            "--cross-bin-prefix", str(recipe["cross_bin_prefix"]),
-            "--output-relpath", str(recipe["library_path"]),
-        ],
-        check=True, timeout=3000,
-    )
+    if executor == "qemu":
+        assert iso is not None
+        run_qemu_source_build(
+            inputs, vm_dir, iso, toolchain_dir_name, src_dir_name=src_dir_name
+        )
+    else:
+        run_local_source_build(
+            inputs, src_root, vm_dir / toolchain_dir_name, out_dir
+        )
 
     built_library = out_dir / Path(str(recipe["library_path"])).name
     if not built_library.exists():
@@ -308,4 +314,5 @@ def _guess(recipe: dict[str, object], objects: Path, recipe_digest: str) -> dict
         "recipe_digest": recipe_digest,
         "source_url": source_url,
         "source_sha256": source_sha256,
+        **({"executor": executor_for(recipe)} if recipe.get("mode") == "source" else {}),
     }

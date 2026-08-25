@@ -21,6 +21,7 @@ from .hunt import hunt
 from .investigate import investigate
 from .malware_build import build_malware_binary
 from .recipe_generator import generate_cells, load_recipes
+from .source_build import EXECUTORS
 from .toolchain_registry import load_toolchains
 
 log = logging.getLogger(__name__)
@@ -90,6 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
     hunt_parser.add_argument("--max-candidates", type=int, default=8)
     hunt_parser.add_argument("--guess", action="append", default=[])
     hunt_parser.add_argument("--fidb-dir", default="artifacts/fidbs")
+    hunt_parser.add_argument(
+        "--executor", choices=EXECUTORS, default="qemu",
+        help=("source-cell executor (default: qemu); local runs the pinned "
+              "cross-build directly without the QEMU isolation boundary"),
+    )
     malware_parser = subcommands.add_parser(
         "build-malware",
         help="cross-compile recipes/malware/*.toml into a static ground-truth corpus",
@@ -100,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     malware_parser.add_argument("--work", default="work/malware")
     malware_parser.add_argument("--out", default="artifacts/malware")
     malware_parser.add_argument("--download-cache", default="work/downloads")
+    malware_parser.add_argument(
+        "--executor", choices=EXECUTORS, default="qemu",
+        help=("source-cell executor (default: qemu); local runs the pinned "
+              "cross-build directly without the QEMU isolation boundary"),
+    )
     return parser
 
 
@@ -108,7 +119,9 @@ def _build_malware(args: argparse.Namespace) -> int:
     if not recipes:
         print(f"fidb-hunt: no recipes found under {args.recipes}", file=sys.stderr)
         return 2
-    cells = generate_cells(recipes, load_toolchains(args.toolchains))
+    cells = generate_cells(
+        recipes, load_toolchains(args.toolchains), executor=args.executor
+    )
     log.info("%d recipe(s) -> %d cell(s)", len(recipes), len(cells))
 
     out_root = Path(args.out)
@@ -147,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             report = hunt(
                 args.target, args.toolchains, args.recipes, args.work, args.report,
                 args.max_candidates, tuple(args.guess), args.fidb_dir,
+                executor=args.executor,
             )
             last = report["attempts"][-1]["assessment"] if report["attempts"] else None
             _json(
