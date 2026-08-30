@@ -192,6 +192,10 @@ def main(argv: list[str] | None = None) -> int:
         from .queue_cli import main as queue_main
 
         return queue_main(tokens[1:])
+    if tokens and tokens[0] == "api":
+        from .local_api import main as api_main
+
+        return api_main(tokens[1:])
     if tokens and tokens[0] in _HUNT_SUBCOMMANDS:
         from .hunt_cli import main as hunt_main
 
