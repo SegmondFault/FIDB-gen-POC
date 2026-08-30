@@ -15,7 +15,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
+
+from .timing import utc_now
 
 log = logging.getLogger(__name__)
 
@@ -146,11 +149,41 @@ def run_local_source_build(
                 f"{invocation.cwd}: mirai_bot_gcc found no bot/*.c sources"
             )
         command[command.index("bot/*.c") : command.index("bot/*.c") + 1] = sources
-    subprocess.run(command, cwd=invocation.cwd, check=True, timeout=2400)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    timing_log = out_dir / "reviewed-build-command.log"
+    started_at = utc_now()
+    started_ns = time.monotonic_ns()
+    outcome = "failed"
+    returncode: int | None = None
+    try:
+        result = subprocess.run(command, cwd=invocation.cwd, check=True, timeout=2400)
+        returncode = result.returncode
+        outcome = "completed"
+    except subprocess.TimeoutExpired:
+        outcome = "timeout"
+        raise
+    except subprocess.CalledProcessError as error:
+        returncode = error.returncode
+        raise
+    finally:
+        timing_log.write_text(
+            "\n".join(
+                (
+                    f"$ {shlex.join(command)}",
+                    f"cwd={invocation.cwd}",
+                    f"started_at_utc={started_at}",
+                    f"finished_at_utc={utc_now()}",
+                    f"duration_ns={max(0, time.monotonic_ns() - started_ns)}",
+                    f"outcome={outcome}",
+                    f"returncode={returncode if returncode is not None else 'unavailable'}",
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
     built = source_root / inputs.output_relpath
     if not built.is_file():
         raise ValueError(f"local source build did not produce {inputs.output_relpath}")
-    out_dir.mkdir(parents=True, exist_ok=True)
     destination = out_dir / built.name
     shutil.copy2(built, destination)
     return destination

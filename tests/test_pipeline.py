@@ -37,7 +37,9 @@ class PipelineTests(unittest.TestCase):
             log_path = Path(tmp) / "logs" / "cmd.log"
             command = ["python3", "-c", "print('line1'); print('line2')"]
             printed = []
-            with patch("builtins.print", side_effect=lambda *a: printed.append(" ".join(a))):
+            with patch(
+                "builtins.print", side_effect=lambda *a: printed.append(" ".join(a))
+            ):
                 result = run_command(
                     command,
                     cwd=None,
@@ -48,7 +50,13 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertIn("line1\nline2\n", result.stdout)
             self.assertTrue(any("line1" in line for line in printed))
-            self.assertIn("line1", log_path.read_text(encoding="utf-8"))
+            logged = log_path.read_text(encoding="utf-8")
+            self.assertIn("line1", logged)
+            self.assertIn("started_at_utc=", logged)
+            self.assertIn("finished_at_utc=", logged)
+            self.assertIn("duration_ns=", logged)
+            self.assertIn("outcome=completed", logged)
+            self.assertIn("returncode=0", logged)
 
     def test_ghidra_environment_isolates_linux_xdg_directories(self):
         inherited = {
@@ -389,9 +397,7 @@ class PipelineTests(unittest.TestCase):
                     "fidb_poc.pipeline.java_identity",
                     return_value=(Path("/usr/bin/java"), "21.0.1", 21),
                 ),
-                patch(
-                    "fidb_poc.pipeline.pyghidra_identity", return_value="3.1.0"
-                ),
+                patch("fidb_poc.pipeline.pyghidra_identity", return_value="3.1.0"),
                 patch("fidb_poc.pipeline.ghidra_fid.ensure_started"),
                 patch(
                     "fidb_poc.pipeline.ghidra_fid.build_library_fidb",

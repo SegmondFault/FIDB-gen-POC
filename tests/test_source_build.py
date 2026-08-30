@@ -124,6 +124,13 @@ class SourceExecutorTests(unittest.TestCase):
                     inputs, source, toolchain, root / "out"
                 )
             self.assertEqual(destination.read_bytes(), b"cross-built")
+            timing_log = root / "out/reviewed-build-command.log"
+            self.assertTrue(timing_log.is_file())
+            logged = timing_log.read_text(encoding="utf-8")
+            self.assertIn("started_at_utc=", logged)
+            self.assertIn("finished_at_utc=", logged)
+            self.assertIn("duration_ns=", logged)
+            self.assertIn("outcome=completed", logged)
 
         run.assert_called_once_with(
             [

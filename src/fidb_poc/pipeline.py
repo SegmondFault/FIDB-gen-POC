@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 import csv
 import hashlib
 import importlib.metadata
@@ -15,7 +16,7 @@ import urllib.request
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, ContextManager, Iterable, Mapping
 from urllib.error import HTTPError
 
 from . import __version__, ghidra_fid
@@ -30,6 +31,34 @@ from .adapters import (
     linked_output_command,
 )
 from .config import Configuration, Library, Route, Treatment
+from .timing import utc_now
+
+TimingFactory = Callable[
+    [str, str, Mapping[str, object] | None], ContextManager[dict[str, object]]
+]
+SkipCallback = Callable[[str, str, Mapping[str, object] | None], None]
+
+
+def _timed(
+    timing: TimingFactory | None,
+    stage: str,
+    message: str,
+    metrics: Mapping[str, object] | None = None,
+) -> ContextManager[dict[str, object]]:
+    if timing is None:
+        return nullcontext(dict(metrics or {}))
+    return timing(stage, message, metrics)
+
+
+def _skip(
+    skipped: SkipCallback | None,
+    stage: str,
+    message: str,
+    metrics: Mapping[str, object] | None = None,
+) -> None:
+    if skipped is not None:
+        skipped(stage, message, metrics)
+
 
 DETERMINISTIC_ENVIRONMENT = {
     "LC_ALL": "C",
@@ -160,45 +189,79 @@ def run_command(
     verbose: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    if verbose:
-        print(f"    $ {command_text(command)}")
-        process = subprocess.Popen(
-            command,
-            cwd=cwd,
-            env=environment,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+    started_at = utc_now()
+    started_ns = time.monotonic_ns()
+    outcome = "failed"
+    returncode: int | None = None
+    stdout = ""
+    try:
+        if verbose:
+            print(f"    $ {command_text(command)}")
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                env=environment,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            assert process.stdout is not None
+            lines: list[str] = []
+            # Streaming retains the historical behaviour. A fully silent
+            # process cannot be timed out until stdout closes in this mode.
+            for line in process.stdout:
+                lines.append(line)
+                print(f"    | {line.rstrip()}")
+            process.stdout.close()
+            try:
+                returncode = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                outcome = "timeout"
+                stdout = "".join(lines)
+                raise
+            result = subprocess.CompletedProcess(
+                command, returncode, "".join(lines), None
+            )
+        else:
+            result = subprocess.run(
+                command,
+                cwd=cwd,
+                env=environment,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                check=False,
+            )
+            returncode = result.returncode
+        stdout = result.stdout or ""
+        outcome = "completed" if result.returncode == 0 else "failed"
+    except subprocess.TimeoutExpired as error:
+        outcome = "timeout"
+        if isinstance(error.stdout, bytes):
+            stdout = error.stdout.decode("utf-8", errors="replace")
+        elif isinstance(error.stdout, str):
+            stdout = error.stdout
+        raise
+    finally:
+        duration_ns = max(0, time.monotonic_ns() - started_ns)
+        log_path.write_text(
+            "\n".join(
+                (
+                    f"$ {command_text(command)}",
+                    f"started_at_utc={started_at}",
+                    f"finished_at_utc={utc_now()}",
+                    f"duration_ns={duration_ns}",
+                    f"outcome={outcome}",
+                    f"returncode={returncode if returncode is not None else 'unavailable'}",
+                    "",
+                    stdout,
+                )
+            ),
+            encoding="utf-8",
         )
-        assert process.stdout is not None
-        lines: list[str] = []
-        # ponytail: no per-line timeout while streaming (a fully-silent hang
-        # can't be interrupted here); process.wait() below still enforces one.
-        for line in process.stdout:
-            lines.append(line)
-            print(f"    | {line.rstrip()}")
-        process.stdout.close()
-        try:
-            returncode = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-            raise
-        result = subprocess.CompletedProcess(command, returncode, "".join(lines), None)
-    else:
-        result = subprocess.run(
-            command,
-            cwd=cwd,
-            env=environment,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            check=False,
-        )
-    log_path.write_text(
-        f"$ {command_text(command)}\n\n{result.stdout}", encoding="utf-8"
-    )
     if result.returncode != 0:
         raise PipelineError(
             f"command failed ({result.returncode}); see {log_path}: "
@@ -256,40 +319,101 @@ def validate_generated_child(root: Path, path: Path, relative_name: str) -> Path
     return expected
 
 
-def download_library(library: Library, downloads: Path) -> Path:
+def _verify_library_archive(
+    library: Library,
+    archive: Path,
+    timing: TimingFactory | None,
+    *,
+    fail_mismatch: bool,
+) -> bool:
+    with _timed(
+        timing,
+        "input-verification",
+        "verifying pinned native-library source archive",
+        {
+            "input_kind": "source",
+            "library": library.identifier,
+            "expected_sha256": library.sha256,
+            "bytes": archive.stat().st_size,
+        },
+    ) as metrics:
+        observed = sha256(archive)
+        matched = observed == library.sha256
+        metrics.update({"observed_sha256": observed, "matched": matched})
+        if fail_mismatch and not matched:
+            raise PipelineError(
+                f"source hash mismatch for {library.identifier}: "
+                f"expected {library.sha256}, observed {observed}"
+            )
+        return matched
+
+
+def download_library(
+    library: Library,
+    downloads: Path,
+    *,
+    timing: TimingFactory | None = None,
+    skipped: SkipCallback | None = None,
+) -> Path:
     downloads.mkdir(parents=True, exist_ok=True)
     archive = downloads / f"{library.identifier}.tar.gz"
-    if archive.is_file() and sha256(archive) == library.sha256:
-        return archive
     if archive.exists():
+        if archive.is_file() and _verify_library_archive(
+            library, archive, timing, fail_mismatch=False
+        ):
+            _skip(
+                skipped,
+                "source-acquire",
+                "using cached pinned native-library source archive",
+                {
+                    "library": library.identifier,
+                    "input_kind": "source",
+                    "cache_hit": True,
+                    "bytes": archive.stat().st_size,
+                    "sha256": library.sha256,
+                },
+            )
+            return archive
         archive.unlink()
 
     partial = archive.with_suffix(archive.suffix + ".partial")
     request = urllib.request.Request(
         library.url, headers={"User-Agent": f"fidb-poc/{__version__}"}
     )
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                with partial.open("wb") as output:
-                    shutil.copyfileobj(response, output)
-            break
-        except HTTPError as error:
-            partial.unlink(missing_ok=True)
-            retryable = error.code == 429 or 500 <= error.code < 600
-            if not retryable or attempt == 2:
-                raise
-            time.sleep(2 ** (attempt + 1))
-        except Exception:
-            partial.unlink(missing_ok=True)
-            raise
-    observed = sha256(partial)
-    if observed != library.sha256:
+    try:
+        with _timed(
+            timing,
+            "source-acquire",
+            "acquiring pinned native-library source archive",
+            {
+                "library": library.identifier,
+                "input_kind": "source",
+                "cache_hit": False,
+                "url": library.url,
+                "sha256": library.sha256,
+            },
+        ) as metrics:
+            for attempt in range(3):
+                try:
+                    with urllib.request.urlopen(request, timeout=120) as response:
+                        with partial.open("wb") as output:
+                            shutil.copyfileobj(response, output)
+                    metrics["download_attempts"] = attempt + 1
+                    break
+                except HTTPError as error:
+                    partial.unlink(missing_ok=True)
+                    retryable = error.code == 429 or 500 <= error.code < 600
+                    if not retryable or attempt == 2:
+                        raise
+                    time.sleep(2 ** (attempt + 1))
+                except Exception:
+                    partial.unlink(missing_ok=True)
+                    raise
+            metrics["bytes"] = partial.stat().st_size
+        _verify_library_archive(library, partial, timing, fail_mismatch=True)
+    except BaseException:
         partial.unlink(missing_ok=True)
-        raise PipelineError(
-            f"source hash mismatch for {library.identifier}: "
-            f"expected {library.sha256}, observed {observed}"
-        )
+        raise
     partial.replace(archive)
     return archive
 
@@ -304,50 +428,65 @@ def _safe_member_path(destination: Path, member_name: str) -> Path:
     return resolved
 
 
-def extract_source(library: Library, archive: Path, sources: Path) -> Path:
-    observed = sha256(archive)
-    if observed != library.sha256:
-        raise PipelineError(
-            f"source hash mismatch for {library.identifier}: "
-            f"expected {library.sha256}, observed {observed}"
+def extract_source(
+    library: Library,
+    archive: Path,
+    sources: Path,
+    *,
+    timing: TimingFactory | None = None,
+    verified: bool = False,
+) -> Path:
+    if not verified:
+        _verify_library_archive(library, archive, timing, fail_mismatch=True)
+    with _timed(
+        timing,
+        "source-extract",
+        "extracting pinned native-library source archive",
+        {"library": library.identifier, "archive_bytes": archive.stat().st_size},
+    ) as metrics:
+        sources.mkdir(parents=True, exist_ok=True)
+        destination = sources / library.identifier
+        member_count = 0
+        file_count = 0
+        with tempfile.TemporaryDirectory(
+            prefix=f".{library.identifier}-", dir=sources
+        ) as temporary:
+            staging = Path(temporary) / library.identifier
+            staging.mkdir()
+            with tarfile.open(archive, "r:*") as source_tar:
+                for member in source_tar.getmembers():
+                    member_count += 1
+                    target = _safe_member_path(staging, member.name)
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
+                    if not member.isfile():
+                        raise PipelineError(
+                            f"unsupported archive member type for {member.name!r}"
+                        )
+                    file_count += 1
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    input_stream = source_tar.extractfile(member)
+                    if input_stream is None:
+                        raise PipelineError(
+                            f"could not read archive member {member.name!r}"
+                        )
+                    with input_stream, target.open("wb") as output_stream:
+                        shutil.copyfileobj(input_stream, output_stream)
+                    target.chmod(0o644)
+
+            staged_root = staging / library.source_directory
+            if not staged_root.is_dir():
+                raise PipelineError(
+                    f"archive for {library.identifier} did not contain "
+                    f"{library.source_directory!r}"
+                )
+            _remove_generated_path(destination)
+            staging.replace(destination)
+        metrics.update(
+            {"archive_member_count": member_count, "extracted_file_count": file_count}
         )
-
-    sources.mkdir(parents=True, exist_ok=True)
-    destination = sources / library.identifier
-    with tempfile.TemporaryDirectory(
-        prefix=f".{library.identifier}-", dir=sources
-    ) as temporary:
-        staging = Path(temporary) / library.identifier
-        staging.mkdir()
-        with tarfile.open(archive, "r:*") as source_tar:
-            for member in source_tar.getmembers():
-                target = _safe_member_path(staging, member.name)
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                    continue
-                if not member.isfile():
-                    raise PipelineError(
-                        f"unsupported archive member type for {member.name!r}"
-                    )
-                target.parent.mkdir(parents=True, exist_ok=True)
-                input_stream = source_tar.extractfile(member)
-                if input_stream is None:
-                    raise PipelineError(
-                        f"could not read archive member {member.name!r}"
-                    )
-                with input_stream, target.open("wb") as output_stream:
-                    shutil.copyfileobj(input_stream, output_stream)
-                target.chmod(0o644)
-
-        staged_root = staging / library.source_directory
-        if not staged_root.is_dir():
-            raise PipelineError(
-                f"archive for {library.identifier} did not contain "
-                f"{library.source_directory!r}"
-            )
-        _remove_generated_path(destination)
-        staging.replace(destination)
-    return destination / library.source_directory
+        return destination / library.source_directory
 
 
 def executable_identity(
@@ -534,11 +673,24 @@ def build_library(
     work: Path,
     logs: Path,
     verbose: bool = False,
+    *,
+    timing: TimingFactory | None = None,
+    skipped: SkipCallback | None = None,
 ) -> tuple[BuildRecord, list[Path]]:
     record = _base_record(library, route, treatment, detection)
     if not treatment.applies_to(route):
         record.status = "unsupported"
         record.error = "treatment is not valid for this route"
+        _skip(
+            skipped,
+            "compile",
+            "native treatment does not apply to route",
+            {
+                "library": library.identifier,
+                "route": route.id,
+                "treatment": treatment.id,
+            },
+        )
         return record, []
     cell_id = f"{library.identifier}-{route.id}-{treatment.id}"
     build_root = work / "builds" / cell_id
@@ -559,40 +711,93 @@ def build_library(
     ranlib_path, ranlib_version = executable_identity(
         route.ranlib, environment, label="ranlib"
     )
-    for index, command in enumerate(
-        build_commands(
-            detection.build_system,
-            route=route,
-            compiler_flags=treatment.flags_for(route),
-            jobs=4,
-        ),
-        start=1,
-    ):
-        run_command(
-            list(command),
-            cwd=cell_source,
-            environment=environment,
-            log_path=logs / "build" / f"{cell_id}-{index:02d}.log",
-            timeout=3600,
-            verbose=verbose,
+    commands = build_commands(
+        detection.build_system,
+        route=route,
+        compiler_flags=treatment.flags_for(route),
+        jobs=4,
+    )
+    _skip(
+        skipped,
+        "patch",
+        "native reviewed adapter has no patch phase",
+        {"library": library.identifier, "patch_count": 0},
+    )
+    if not any("configure" in command for command in commands):
+        _skip(
+            skipped,
+            "configure",
+            "native reviewed adapter has no configure command",
+            {"library": library.identifier, "adapter": detection.build_system},
+        )
+    for index, command in enumerate(commands, start=1):
+        stage = "configure" if "configure" in command else "compile"
+        with _timed(
+            timing,
+            stage,
+            f"running reviewed native {stage} command",
+            {
+                "library": library.identifier,
+                "route": route.id,
+                "treatment": treatment.id,
+                "adapter": detection.build_system,
+                "command_index": index,
+                "command_count": len(commands),
+                "jobs": 4,
+            },
+        ):
+            run_command(
+                list(command),
+                cwd=cell_source,
+                environment=environment,
+                log_path=logs / "build" / f"{cell_id}-{index:02d}.log",
+                timeout=3600,
+                verbose=verbose,
+            )
+
+    with _timed(
+        timing,
+        "archive-object-selection",
+        "selecting native static archives and analysis objects",
+        {"library": library.identifier, "treatment_phase": treatment.phase},
+    ) as selection_metrics:
+        archives = find_static_archives(cell_source, library.static_archives)
+        selection_metrics.update(
+            {
+                "archive_count": len(archives),
+                "archive_bytes": sum(path.stat().st_size for path in archives),
+            }
+        )
+        if treatment.phase == "compile":
+            analysis_artifacts: list[Path] = []
+            for index, archive in enumerate(archives, start=1):
+                analysis_artifacts.extend(
+                    _extract_archive_objects(
+                        archive,
+                        objects_root / f"{index:02d}-{archive.stem}",
+                        route,
+                        environment,
+                        logs / "archive" / cell_id / archive.name,
+                    )
+                )
+            artifact_kind = "archive_members"
+        else:
+            artifact_kind = "linked_library"
+        selection_metrics.update(
+            {
+                "analysis_artifact_kind": artifact_kind,
+                "object_count": (
+                    len(analysis_artifacts) if treatment.phase == "compile" else 0
+                ),
+                "object_bytes": (
+                    sum(path.stat().st_size for path in analysis_artifacts)
+                    if treatment.phase == "compile"
+                    else 0
+                ),
+            }
         )
 
-    archives = find_static_archives(cell_source, library.static_archives)
-    if treatment.phase == "compile":
-        analysis_artifacts: list[Path] = []
-        for index, archive in enumerate(archives, start=1):
-            analysis_artifacts.extend(
-                _extract_archive_objects(
-                    archive,
-                    objects_root / f"{index:02d}-{archive.stem}",
-                    route,
-                    environment,
-                    logs / "archive" / cell_id / archive.name,
-                )
-            )
-        _validate_objects(analysis_artifacts, route, environment)
-        artifact_kind = "archive_members"
-    else:
+    if treatment.phase != "compile":
         linked_root = build_root / "linked"
         linked_root.mkdir(parents=True, exist_ok=True)
         linked_output = linked_root / f"{library.name}{route.linked_suffix}"
@@ -602,17 +807,42 @@ def build_library(
             archives=archives,
             output=linked_output,
         )
-        run_command(
-            list(command),
-            cwd=build_root,
-            environment=environment,
-            log_path=logs / "link" / f"{cell_id}.log",
-            timeout=3600,
-            verbose=verbose,
-        )
-        _validate_linked_output(linked_output, route, environment)
+        with _timed(
+            timing,
+            "compile",
+            "linking reviewed native analysis artifact",
+            {
+                "library": library.identifier,
+                "route": route.id,
+                "treatment": treatment.id,
+                "archive_count": len(archives),
+            },
+        ):
+            run_command(
+                list(command),
+                cwd=build_root,
+                environment=environment,
+                log_path=logs / "link" / f"{cell_id}.log",
+                timeout=3600,
+                verbose=verbose,
+            )
         analysis_artifacts = [linked_output]
-        artifact_kind = "linked_library"
+
+    with _timed(
+        timing,
+        "artifact-validation",
+        "validating native analysis artifacts",
+        {
+            "library": library.identifier,
+            "route": route.id,
+            "analysis_artifact_kind": artifact_kind,
+            "object_count": len(analysis_artifacts),
+        },
+    ):
+        if treatment.phase == "compile":
+            _validate_objects(analysis_artifacts, route, environment)
+        else:
+            _validate_linked_output(analysis_artifacts[0], route, environment)
 
     record.compiler_path = str(compiler_path)
     record.compiler_sha256 = sha256(compiler_path)
@@ -871,10 +1101,9 @@ def _populate_group(
     records: dict[tuple[str, str, str], BuildRecord],
     objects: dict[tuple[str, str, str], list[Path]],
     verbose: bool = False,
+    *,
+    timing: TimingFactory | None = None,
 ) -> None:
-    headless, ghidra_home = find_ghidra()
-    _require_executable_file(headless, "Ghidra analyzeHeadless")
-    identity = ghidra_identity(headless, ghidra_home)
     group_id = f"{route.id}-{treatment.id}"
     projects = project_root / "work/ghidra/projects" / group_id
     references = project_root / "work/ghidra/references" / route.id / treatment.id
@@ -902,22 +1131,38 @@ def _populate_group(
             raise PipelineError(
                 f"no analysis artifacts were submitted for {library.identifier}"
             )
+    if not available:
+        return
+
+    with _timed(
+        timing,
+        "ghidra-startup",
+        "initializing isolated Ghidra JVM",
+        {"route": route.id, "treatment": treatment.id},
+    ) as startup_metrics:
+        headless, ghidra_home = find_ghidra()
+        _require_executable_file(headless, "Ghidra analyzeHeadless")
+        identity = ghidra_identity(headless, ghidra_home)
+        environment = ghidra_environment(user_root)
+        java, java_version, java_major = java_identity(environment)
+        pyghidra_version = pyghidra_identity()
+        started_now = ghidra_fid.ensure_started(ghidra_home, environment)
+        startup_metrics.update(
+            {
+                "ghidra_version": identity.version,
+                "java_major": java_major,
+                "pyghidra_version": pyghidra_version,
+                "jvm_started_now": started_now,
+            }
+        )
+    for library in available:
+        key = (library.identifier, route.id, treatment.id)
         record = records[key]
         record.ghidra_version = identity.version
         record.ghidra_release = identity.release
         record.ghidra_build = identity.build
         record.ghidra_application_properties_sha256 = identity.properties_sha256
         record.ghidra_headless_path = identity.headless_path
-    if not available:
-        return
-
-    environment = ghidra_environment(user_root)
-    java, java_version, _ = java_identity(environment)
-    pyghidra_version = pyghidra_identity()
-    ghidra_fid.ensure_started(ghidra_home, environment)
-    for library in available:
-        key = (library.identifier, route.id, treatment.id)
-        record = records[key]
         record.pyghidra_version = pyghidra_version
         record.java_path = str(java)
         record.java_version = java_version
@@ -945,6 +1190,7 @@ def _populate_group(
             variant=group_id,
             language=route.ghidra_language,
             compiler_spec=route.ghidra_compiler_spec,
+            timing=timing,
         )
         populations.append(
             {
@@ -959,19 +1205,42 @@ def _populate_group(
             }
         )
 
-    by_library = _validate_population_report(
-        populations,
-        available,
-        group_id,
-        candidates,
-        expected_program_counts,
-    )
-    for library in available:
-        population = by_library[library.name]
-        candidate_fidb = Path(population["fidb_path"])
-        final_fidb = output_fidb / candidate_fidb.name
-        candidate_fidb.replace(final_fidb)
-        population["fidb_path"] = str(final_fidb.resolve())
+    with _timed(
+        timing,
+        "fid-validation",
+        "validating native Ghidra FID population",
+        {"library_count": len(available), "population_count": len(populations)},
+    ) as validation_metrics:
+        by_library = _validate_population_report(
+            populations,
+            available,
+            group_id,
+            candidates,
+            expected_program_counts,
+        )
+        validation_metrics.update(
+            {
+                "programs": sum(int(item["program_count"]) for item in populations),
+                "attempted": sum(int(item["attempted"]) for item in populations),
+                "added": sum(int(item["added"]) for item in populations),
+                "excluded": sum(int(item["excluded"]) for item in populations),
+            }
+        )
+    with _timed(
+        timing,
+        "fidb-export",
+        "publishing packed native FIDB artifacts",
+        {"library_count": len(available)},
+    ) as export_metrics:
+        exported_bytes = 0
+        for library in available:
+            population = by_library[library.name]
+            candidate_fidb = Path(population["fidb_path"])
+            final_fidb = output_fidb / candidate_fidb.name
+            candidate_fidb.replace(final_fidb)
+            exported_bytes += final_fidb.stat().st_size
+            population["fidb_path"] = str(final_fidb.resolve())
+        export_metrics["bytes"] = exported_bytes
     for library in available:
         key = (library.identifier, route.id, treatment.id)
         record = records[key]
@@ -993,6 +1262,8 @@ def populate_fidbs(
     records: dict[tuple[str, str, str], BuildRecord],
     objects: dict[tuple[str, str, str], list[Path]],
     verbose: bool = False,
+    *,
+    timing: TimingFactory | None = None,
 ) -> None:
     for route in configuration.routes:
         for treatment in configuration.treatments:
@@ -1011,6 +1282,7 @@ def populate_fidbs(
                     records,
                     objects,
                     verbose=verbose,
+                    timing=timing,
                 )
             except (
                 KeyError,
@@ -1097,8 +1369,23 @@ def execute(
     project_root: Path,
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
+    *,
+    timing: TimingFactory | None = None,
+    skipped: SkipCallback | None = None,
 ) -> Path:
     announce = progress or (lambda _: None)
+    _skip(
+        skipped,
+        "toolchain-acquire",
+        "native route uses an installed reviewed toolchain",
+        {"download_required": False, "route_count": len(configuration.routes)},
+    )
+    _skip(
+        skipped,
+        "toolchain-extract",
+        "installed native toolchain requires no extraction",
+        {"extraction_required": False, "route_count": len(configuration.routes)},
+    )
     downloads = project_root / "work/downloads"
     sources = project_root / "work/sources"
     work = project_root / "work"
@@ -1138,12 +1425,26 @@ def execute(
         announce(
             f"[source {index}/{len(configuration.libraries)}] " f"{library.identifier}"
         )
-        archive = download_library(library, downloads)
-        source_root = extract_source(library, archive, sources)
-        try:
-            detection = detect_project(library, source_root)
-        except AdapterError as error:
-            raise PipelineError(str(error)) from error
+        archive = download_library(library, downloads, timing=timing, skipped=skipped)
+        source_root = extract_source(
+            library, archive, sources, timing=timing, verified=True
+        )
+        with _timed(
+            timing,
+            "artifact-validation",
+            "validating extracted native-library project",
+            {"library": library.identifier},
+        ) as detection_metrics:
+            try:
+                detection = detect_project(library, source_root)
+            except AdapterError as error:
+                raise PipelineError(str(error)) from error
+            detection_metrics.update(
+                {
+                    "build_system": detection.build_system,
+                    "languages": list(detection.languages),
+                }
+            )
         source_roots[library.identifier] = source_root
         detections[library.identifier] = detection
         announce(
@@ -1176,6 +1477,8 @@ def execute(
                         work,
                         logs,
                         verbose=verbose,
+                        timing=timing,
+                        skipped=skipped,
                     )
                 except (
                     AdapterError,
@@ -1197,7 +1500,14 @@ def execute(
                 announce(f"  {visible_status}")
 
     announce("[ghidra] generating candidate FIDBs")
-    populate_fidbs(configuration, project_root, records, object_sets, verbose=verbose)
+    populate_fidbs(
+        configuration,
+        project_root,
+        records,
+        object_sets,
+        verbose=verbose,
+        timing=timing,
+    )
     ordered = [
         records[(library.identifier, route.id, treatment.id)]
         for library in configuration.libraries
