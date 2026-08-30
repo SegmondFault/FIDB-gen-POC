@@ -176,6 +176,7 @@ def _plan_authority(root: Path) -> list[dict[str, object]]:
         plans.append(
             {
                 "path": _relative(root, path),
+                "toml_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "name": request["name"],
                 "policy": request["policy"],
                 "coverage": request["coverage"],

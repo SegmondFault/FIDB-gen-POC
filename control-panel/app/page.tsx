@@ -10,6 +10,7 @@ import {
   type CoordinatorSnapshot,
   type StageSpan,
   type TimingEta,
+  type PlanDraftResult,
 } from './use-factory-api';
 
 const navItems = [
@@ -592,6 +593,11 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
   const [inspectedRecipe, setInspectedRecipe] = useState<string | null>(null);
   const [inspectedFactor, setInspectedFactor] = useState<string | null>(null);
   const [tomlOpen, setTomlOpen] = useState(true);
+  const [draftName, setDraftName] = useState('matrix-draft');
+  const [draftResult, setDraftResult] = useState<PlanDraftResult | null>(null);
+  const [validatedToml, setValidatedToml] = useState<string | null>(null);
+  const [savedDraftSha256, setSavedDraftSha256] = useState<string | null>(null);
+  const [draftMessage, setDraftMessage] = useState('Resolve the generated request before saving it.');
   const authority = factory.authority;
   const inventoryCells = authority?.plans.flatMap(plan => (
     Object.entries(plan.inventory.cells)
@@ -960,7 +966,7 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
   const matrixColumnCount = displayedVariableGroups.reduce((total, group) => total + group.displayedOptions.length, 0);
   const toml = [
     'schema_version = "fidb-plan/v1"',
-    'name = "matrix-draft"',
+    `name = "${draftName}"`,
     '',
     '[policy]',
     'max_cells = 256',
@@ -986,6 +992,38 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
       return ['', '[[matrix]]', `id = "${recipe.id}-cross"`, `kind = "${recipe.mode === 'malware' ? 'malware' : 'source-library'}"`, `recipes = ["${recipe.id}@${recipe.version}"]`, 'toolchains = [', ...toolchainLines, ']', `executor = "${executor}"`, 'factor_variants = [', ...factorLines, ']'];
     }),
   ].join('\n');
+  const savedAuthorityDraft = authority?.plans.find(plan => (
+    plan.path === `plans/drafts/${draftName}.toml`
+  ));
+  const draftIsCurrent = validatedToml === toml && draftResult !== null;
+  const resolveDraft = async () => {
+    try {
+      const result = await factory.resolvePlanDraft(toml);
+      setDraftResult(result);
+      setValidatedToml(toml);
+      setDraftMessage(`Resolved ${result.resolved.summary.desired_cells ?? 0} desired executions; digest ${result.resolved.plan_digest.slice(0, 12)}…`);
+    } catch (error) {
+      setDraftResult(null);
+      setValidatedToml(null);
+      setDraftMessage(error instanceof Error ? error.message : 'Draft resolution failed.');
+    }
+  };
+  const saveDraft = async () => {
+    if (!draftIsCurrent) return;
+    try {
+      const result = await factory.savePlanDraft(
+        draftName,
+        toml,
+        savedDraftSha256 ?? savedAuthorityDraft?.toml_sha256,
+      );
+      setDraftResult(result);
+      setValidatedToml(toml);
+      setSavedDraftSha256(result.toml_sha256);
+      setDraftMessage(`Saved ${result.path}; plan digest ${result.resolved.plan_digest.slice(0, 12)}…`);
+    } catch (error) {
+      setDraftMessage(error instanceof Error ? error.message : 'Draft save failed.');
+    }
+  };
   return (
     <div className="view-stack">
       <ViewIntro kicker="ANALYST MATRIX" title="The whole factory in one view" copy="Libraries and match sets run down the batch-ordered left edge; every known platform, compiler, build and analysis variable runs across the top. Use the intersections to inspect coverage, plan precise work, and see queued, built, unbuilt and blocked state." action={<button className="secondary-action" onClick={() => setTomlOpen(!tomlOpen)}>{tomlOpen ? 'Hide' : 'Show'} TOML</button>} />
@@ -1088,7 +1126,7 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
 
           <section className="panel execution-queue-panel"><div className="panel-header"><div><p className="panel-kicker">PRIORITY QUEUE DRAFT</p><h3>Batch order × base cell × variance</h3></div><span className="plan-state">TOML INTENT</span></div><div className="queue-controls single"><label><span>VARIANCE ORDER WITHIN EACH BATCH</span><select value={queueStrategy} onChange={event => setQueueStrategyOverride(event.target.value)}><option value="recipe-then-variant">recipe, then variance</option><option value="variant-then-recipe">variance, then recipe</option></select></label><button onClick={() => setQueueMessage(`Priority queue draft updated with ${executionQueue.length} execution identities in current batch order.`)}>Update priority queue draft</button></div>{queueMessage && <div className="queue-message">✓ {queueMessage}</div>}<div className="queue-state-summary"><div><span>QUEUEABLE</span><strong>{executionQueue.filter(row => row.state === 'queueable').length}</strong></div><div><span>BUILT</span><strong>{builtExecutions}</strong></div><div><span>ARTIFACT ONLY</span><strong>{cells.filter(cell => cell.coverage === 'artifact-only').length}</strong></div><div><span>UNBUILT / BLOCKED</span><strong>{executionQueue.filter(row => row.state === 'blocked').length}</strong></div></div><div className="execution-queue-list">{executionQueue.slice(0, 8).map(row => <div className={`execution-queue-row ${row.state}`} key={`${row.cell.id}-${row.position}`}><b>{String(row.position).padStart(3, '0')}</b><div><strong>{row.cell.recipe}</strong><small>{row.cell.target} · {row.combination.map(option => option.label).join(' / ') || 'route defaults'}</small></div><em>{row.cell.batch}</em><span>{row.cell.coverage === 'built' ? 'built' : row.cell.coverage === 'artifact-only' ? 'artifact only' : row.state}</span></div>)}{executionQueue.length > 8 && <div className="queue-remainder">+ {executionQueue.length - 8} more ordered execution identities</div>}</div><div className="estimate-note"><span>i</span><p><strong>Batch priority is read from plans/priority-queue.toml.</strong><small>The synchronized ledger owns queued, leased, running and complete state. Change reviewed TOML intent, synchronize it through the API or CLI, then let workers follow the durable order.</small></p></div></section>
 
-          {tomlOpen && <section className="panel toml-panel"><div className="panel-header"><div><p className="panel-kicker">AUTHORITATIVE REQUEST</p><h3>Equivalent TOML</h3></div><span className="plan-state">DRAFT</span></div><pre>{toml}</pre><div className="toml-footer"><span>GUI fields map to catalog identities only</span><code>fidb-poc resolve-plan …</code></div></section>}
+          {tomlOpen && <section className="panel toml-panel"><div className="panel-header"><div><p className="panel-kicker">VALIDATED REQUEST DRAFT</p><h3>Equivalent TOML</h3></div><span className={draftIsCurrent ? 'plan-state ready' : 'plan-state'}>{draftIsCurrent ? 'RESOLVED' : 'DRAFT'}</span></div><pre>{toml}</pre><div className="draft-controls"><label><span>DRAFT NAME</span><input value={draftName} onChange={event => { setDraftName(event.target.value); setDraftMessage('Draft changed; resolve it again before saving.'); }} spellCheck={false} /></label><div><button onClick={() => void resolveDraft()} disabled={factory.busyAction !== null || !plannedRecipeRows.length}>{factory.busyAction === 'plan-draft-resolve' ? 'Resolving…' : 'Resolve against authority'}</button><button className="primary" onClick={() => void saveDraft()} disabled={factory.busyAction !== null || !draftIsCurrent}>{factory.busyAction === 'plan-draft-save' ? 'Saving…' : savedAuthorityDraft || savedDraftSha256 ? 'Save validated update' : 'Save validated draft'}</button></div><p className={draftIsCurrent ? 'valid' : ''}>{draftResult && !draftIsCurrent ? 'Draft changed; resolve it again before saving.' : draftMessage}</p></div><div className="toml-footer"><span>Only catalog identities are accepted; saving does not enqueue or execute the plan</span><code>{savedAuthorityDraft?.path ?? 'plans/drafts/&lt;name&gt;.toml'}</code></div></section>}
         </aside>
       </div>
     </div>

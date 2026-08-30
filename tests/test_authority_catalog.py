@@ -25,6 +25,7 @@ class AuthorityCatalogTests(unittest.TestCase):
             "plans/coverage-baseline.toml",
             {row["path"] for row in document["plans"]},
         )
+        self.assertTrue(all(len(row["toml_sha256"]) == 64 for row in document["plans"]))
         self.assertEqual(len(document["authority_digest"]), 64)
 
     def test_catalog_contains_no_caller_supplied_command_field(self):

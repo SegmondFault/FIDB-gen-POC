@@ -301,6 +301,7 @@ export type AuthorityFactorVariant = {
 
 export type AuthorityPlan = {
   path: string;
+  toml_sha256: string;
   name: string;
   policy: { max_cells: number; priority: string };
   coverage: { factor_variants: string[] };
