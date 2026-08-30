@@ -1,0 +1,876 @@
+"""CLI surface for the durable, TOML-authoritative build queue.
+
+The queue document defines immutable intent and priority.  SQLite contains only
+runtime coordination state: leases, attempts, stages and terminal results.  A
+worker can execute only resolved cells through :func:`cell_runner.run_cell`;
+there is no command string or recipe-provided shell escape in this interface.
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timedelta
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import sys
+import tempfile
+import threading
+import time
+from typing import Sequence
+
+from .cell_runner import (
+    SEAL_SCHEMA,
+    CellResolutionError,
+    CellRunResult,
+    ProgressEvent,
+    run_cell,
+)
+from .coordinator import (
+    MAX_DURATION_NS,
+    Coordinator,
+    LeaseConflictError,
+    QueueConfig,
+    WORKER_POOLS,
+)
+from .timing import CellStage, ProgressStatus, TIMING_SCHEMA, TimingRecorder
+
+DEFAULT_QUEUE = Path("plans/priority-queue.toml")
+DEFAULT_STATE = Path("var/fidb-coordinator/ledger.sqlite3")
+RESULT_SCHEMA = "fidb-job-result/v1"
+JOB_TIMING_SCHEMA = "fidb-job-timing/v1"
+_JOB_ID = re.compile(r"job-[0-9a-f]{64}\Z")
+
+
+class QueueCliError(RuntimeError):
+    """An operator-facing queue command could not be completed safely."""
+
+
+def _common_parser(*, queue: bool) -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(add_help=False)
+    result.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path.cwd(),
+        help="FIDB project directory (default: current directory)",
+    )
+    result.add_argument(
+        "--state",
+        type=Path,
+        default=DEFAULT_STATE,
+        help=f"coordinator SQLite path (default: {DEFAULT_STATE})",
+    )
+    if queue:
+        result.add_argument(
+            "--queue",
+            type=Path,
+            default=DEFAULT_QUEUE,
+            help=f"priority queue TOML (default: {DEFAULT_QUEUE})",
+        )
+    return result
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc queue",
+        description=(
+            "Synchronize and run the TOML-authoritative FIDB priority queue. "
+            "Synchronizing and inspecting never execute a build."
+        ),
+    )
+    commands = result.add_subparsers(dest="command", required=True)
+
+    sync = commands.add_parser(
+        "sync",
+        parents=[_common_parser(queue=True)],
+        help="resolve queue plans into the ledger without executing them",
+    )
+    sync.add_argument(
+        "--full", action="store_true", help="include batches, jobs and events"
+    )
+
+    status = commands.add_parser(
+        "status",
+        parents=[_common_parser(queue=False)],
+        help="show durable coordinator state",
+    )
+    status.add_argument(
+        "--full", action="store_true", help="include batches, jobs and events"
+    )
+
+    events = commands.add_parser(
+        "events",
+        parents=[_common_parser(queue=False)],
+        help="show append-only queue events",
+    )
+    events.add_argument("--after", type=int, default=0, help="event cursor")
+
+    pause = commands.add_parser(
+        "pause",
+        parents=[_common_parser(queue=False)],
+        help="stop new claims while current leases finish",
+    )
+    pause.add_argument("--reason", default="operator request")
+
+    commands.add_parser(
+        "resume",
+        parents=[_common_parser(queue=False)],
+        help="resume claims when the TOML queue is armed",
+    )
+
+    worker = commands.add_parser(
+        "run",
+        parents=[_common_parser(queue=True)],
+        help="continuously execute the highest-priority runnable cells",
+    )
+    worker.add_argument("--worker-id", required=True)
+    worker.add_argument(
+        "--pool",
+        choices=WORKER_POOLS,
+        help=(
+            "restrict atomic claims to a typed worker pool; library-local accepts "
+            "only native-local native cells and local source-library cells"
+        ),
+    )
+    worker.add_argument(
+        "--once",
+        action="store_true",
+        help="claim at most one cell, then exit (useful for service tests)",
+    )
+    worker.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="stream underlying build output where supported",
+    )
+    return result
+
+
+def _project_root(path: Path) -> Path:
+    root = path.expanduser().resolve()
+    required = (
+        root / "pyproject.toml",
+        root / "worker.json",
+        root / "recipes",
+        root / "toolchains/registry.toml",
+    )
+    if not root.is_dir() or any(not item.exists() for item in required):
+        raise QueueCliError(f"not an FIDB project root: {root}")
+    return root
+
+
+def _inside_project(path: Path, root: Path, label: str) -> Path:
+    candidate = path if path.is_absolute() else root / path
+    resolved = candidate.expanduser().resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise QueueCliError(
+            f"{label} must remain inside the project root: {path}"
+        ) from error
+    if candidate.is_symlink():
+        raise QueueCliError(f"{label} cannot be a symlink: {candidate}")
+    return resolved
+
+
+def _paths(
+    arguments: argparse.Namespace, *, require_queue: bool
+) -> tuple[Path, Path, Path | None]:
+    root = _project_root(arguments.project_root)
+    state = _inside_project(arguments.state, root, "coordinator state")
+    queue = None
+    if require_queue:
+        queue = _inside_project(arguments.queue, root, "queue configuration")
+        if not queue.is_file():
+            raise QueueCliError(f"queue configuration is not a file: {queue}")
+    return root, state, queue
+
+
+def _existing_state(state: Path) -> None:
+    if not state.is_file():
+        raise QueueCliError(
+            f"coordinator state does not exist: {state}; run 'fidb-poc queue sync' first"
+        )
+
+
+def _print_json(value: object) -> None:
+    print(json.dumps(value, indent=2, sort_keys=True))
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _fsync_regular_file(path: Path) -> None:
+    """Flush one generated file without following a final-component symlink."""
+
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise QueueCliError(f"artifact is not a regular file: {path}")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_directory(path: Path) -> None:
+    """Flush a directory entry set without following a symlink."""
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+    )
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise QueueCliError(f"artifact publication path is not a directory: {path}")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_directory_chains(directories: Sequence[Path], boundary: Path) -> None:
+    """Flush relevant directory trees from their leaves through ``boundary``."""
+
+    root = boundary.resolve()
+    pending: dict[Path, None] = {}
+    for directory in directories:
+        resolved = directory.resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError as error:
+            raise QueueCliError(
+                f"artifact publication directory escaped the project root: {directory}"
+            ) from error
+        current = resolved
+        while True:
+            pending[current] = None
+            if current == root:
+                break
+            current = current.parent
+    for directory in sorted(pending, key=lambda item: len(item.parts), reverse=True):
+        _fsync_directory(directory)
+
+
+class _Heartbeat:
+    """Renew one fenced lease using a connection owned by its thread."""
+
+    def __init__(
+        self,
+        database: Path,
+        project_root: Path,
+        lease: dict[str, object],
+        lease_seconds: int,
+    ) -> None:
+        self.database = database
+        self.project_root = project_root
+        self.lease = lease
+        self.interval = max(0.25, min(float(lease_seconds) / 3.0, 60.0))
+        self.stop_event = threading.Event()
+        self.error: BaseException | None = None
+        self.thread = threading.Thread(
+            target=self._run,
+            name=f"lease-{lease['job_id']}",
+            daemon=True,
+        )
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.thread.join(timeout=max(2.0, self.interval + 1.0))
+
+    def check(self) -> None:
+        if self.error is not None:
+            raise LeaseConflictError(f"lease heartbeat failed: {self.error}")
+
+    def _run(self) -> None:
+        try:
+            with Coordinator(self.database, self.project_root) as coordinator:
+                while not self.stop_event.wait(self.interval):
+                    coordinator.renew(
+                        str(self.lease["job_id"]),
+                        str(self.lease["lease_token"]),
+                        int(self.lease["lease_generation"]),
+                    )
+        except BaseException as error:  # surfaced synchronously by check()
+            self.error = error
+            self.stop_event.set()
+
+
+def _staging_root(root: Path, lease: dict[str, object]) -> tuple[Path, Path]:
+    job_id = str(lease["job_id"])
+    generation = int(lease["lease_generation"])
+    if not _JOB_ID.fullmatch(job_id) or generation < 1:
+        raise QueueCliError("coordinator returned an invalid job identity")
+    runs = root / "artifacts/runs"
+    # Ghidra rejects project paths containing any component which starts with
+    # a dot.  Runs are already ignored as a whole, so the attempt staging tree
+    # does not need hidden path components.
+    staging_parent = runs / "staging"
+    final_parent = runs / job_id
+    for directory in (runs, staging_parent, final_parent):
+        if directory.is_symlink():
+            raise QueueCliError(
+                f"artifact publication path cannot be a symlink: {directory}"
+            )
+        directory.mkdir(parents=True, exist_ok=True)
+    final = final_parent / f"attempt-{generation}"
+    if final.exists() or final.is_symlink():
+        raise QueueCliError(f"attempt publication already exists: {final}")
+    staging = Path(
+        tempfile.mkdtemp(prefix=f"{job_id}-g{generation}-", dir=staging_parent)
+    ).resolve()
+    return staging, final
+
+
+def _nonnegative_integer(value: object, label: str) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > MAX_DURATION_NS
+    ):
+        raise QueueCliError(
+            f"{label} must be an integer between 0 and {MAX_DURATION_NS}"
+        )
+    return value
+
+
+def _utc_timing_timestamp(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise QueueCliError(f"{label} must be a UTC RFC3339 timestamp")
+    try:
+        parsed = datetime.fromisoformat(f"{value[:-1]}+00:00")
+    except ValueError as error:
+        raise QueueCliError(f"{label} must be a UTC RFC3339 timestamp") from error
+    if parsed.utcoffset() != timedelta(0):
+        raise QueueCliError(f"{label} must be a UTC RFC3339 timestamp")
+    return value
+
+
+def _validate_cell_timing(timing: object) -> None:
+    """Require a complete, JSON-safe execution record before publication."""
+
+    if not isinstance(timing, dict) or timing.get("schema_version") != TIMING_SCHEMA:
+        raise QueueCliError("cell result is missing valid execution timing provenance")
+    try:
+        json.dumps(timing, allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise QueueCliError(
+            "cell execution timing provenance is not valid JSON"
+        ) from error
+
+    policy = timing.get("policy")
+    summary = timing.get("summary")
+    spans = timing.get("spans")
+    if not isinstance(policy, dict) or policy.get("duration_clock") != "monotonic_ns":
+        raise QueueCliError("cell execution timing has an invalid duration policy")
+    if not isinstance(summary, dict):
+        raise QueueCliError("cell execution timing is missing its summary")
+    _utc_timing_timestamp(
+        summary.get("measurement_started_at"),
+        "cell timing measurement_started_at",
+    )
+    _nonnegative_integer(
+        summary.get("elapsed_before_snapshot_ns"),
+        "cell timing elapsed_before_snapshot_ns",
+    )
+    if not isinstance(spans, list) or not spans:
+        raise QueueCliError("cell result is missing terminal execution timing spans")
+
+    status_counts = {status.value: 0 for status in ProgressStatus}
+    stage_durations: dict[str, int] = {}
+    terminal_statuses = {
+        ProgressStatus.COMPLETED.value,
+        ProgressStatus.FAILED.value,
+        ProgressStatus.SKIPPED.value,
+    }
+    for index, span in enumerate(spans):
+        label = f"cell timing span {index}"
+        if not isinstance(span, dict):
+            raise QueueCliError(f"{label} must be an object")
+        stage_value = span.get("stage")
+        try:
+            stage = CellStage(stage_value)
+        except (TypeError, ValueError) as error:
+            raise QueueCliError(f"{label} has an invalid stage") from error
+        if stage is CellStage.PUBLICATION:
+            raise QueueCliError(f"{label} cannot contain the publication stage")
+        status = span.get("status")
+        if status not in terminal_statuses:
+            raise QueueCliError(f"{label} does not have a terminal status")
+        if status == ProgressStatus.FAILED.value:
+            raise QueueCliError("a successful cell result cannot contain a failed span")
+        message = span.get("message")
+        if not isinstance(message, str) or not message:
+            raise QueueCliError(f"{label} must contain a message")
+        started_at = _utc_timing_timestamp(
+            span.get("started_at"), f"{label} started_at"
+        )
+        finished_at = _utc_timing_timestamp(
+            span.get("finished_at"), f"{label} finished_at"
+        )
+        duration = _nonnegative_integer(span.get("duration_ns"), f"{label} duration_ns")
+        if status == ProgressStatus.SKIPPED.value and duration != 0:
+            raise QueueCliError(f"{label} has a non-zero skipped duration")
+        if status == ProgressStatus.SKIPPED.value and started_at != finished_at:
+            raise QueueCliError(f"{label} has unequal skipped timestamps")
+        if not isinstance(span.get("metrics"), dict):
+            raise QueueCliError(f"{label} metrics must be an object")
+        status_counts[status] += 1
+        stage_durations[stage.value] = stage_durations.get(stage.value, 0) + duration
+
+    final = spans[-1]
+    if (
+        final["stage"] != CellStage.PROVENANCE_SEAL.value
+        or final["status"] != ProgressStatus.COMPLETED.value
+    ):
+        raise QueueCliError(
+            "cell execution timing must end with a completed provenance-seal span"
+        )
+
+    recorded_counts = summary.get("terminal_event_counts")
+    if recorded_counts != status_counts:
+        raise QueueCliError(
+            "cell execution timing summary counts do not match its spans"
+        )
+    recorded_durations = summary.get("stage_duration_ns")
+    if recorded_durations != stage_durations:
+        raise QueueCliError(
+            "cell execution timing summary durations do not match its spans"
+        )
+
+
+def _material_relatives(result: CellRunResult, staging: Path) -> dict[str, Path]:
+    """Validate material artifact paths and return stable staging-relative names."""
+
+    root = staging.resolve()
+    relatives: dict[str, Path] = {}
+    materials = {
+        "seal": result.seal_path,
+        "FIDB": result.fidb_path,
+        "FIDBF": result.fidbf_path,
+    }
+    for label, raw_path in materials.items():
+        candidate = Path(raw_path)
+        if not candidate.is_absolute():
+            candidate = staging / candidate
+        try:
+            resolved = candidate.resolve(strict=True)
+            relative = resolved.relative_to(root)
+        except (FileNotFoundError, ValueError) as error:
+            raise QueueCliError(
+                f"generated {label} escaped or is missing from the staging root: {raw_path}"
+            ) from error
+        current = root
+        for component in relative.parts:
+            current /= component
+            if current.is_symlink():
+                raise QueueCliError(f"generated {label} cannot be a symlink: {current}")
+        if not resolved.is_file():
+            raise QueueCliError(f"generated {label} is not a regular file: {resolved}")
+        relatives[label] = relative
+    if _sha256(root / relatives["seal"]) != result.seal_sha256:
+        raise QueueCliError("generated cell seal digest does not match its result")
+    return relatives
+
+
+def _validate_seal_binding(
+    result: CellRunResult,
+    staging: Path,
+    relatives: dict[str, Path],
+) -> None:
+    """Bind the published artifacts and timing prefix to the immutable seal."""
+
+    seal_path = staging / relatives["seal"]
+    try:
+        seal = json.loads(seal_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise QueueCliError(
+            f"generated cell seal is not valid JSON: {seal_path}"
+        ) from error
+    if not isinstance(seal, dict) or seal.get("schema_version") != SEAL_SCHEMA:
+        raise QueueCliError("generated cell seal has an invalid schema")
+
+    cell = seal.get("cell")
+    if not isinstance(cell, dict):
+        raise QueueCliError("generated cell seal is missing its resolved cell identity")
+    expected_identity = {
+        "id": result.cell_id,
+        "kind": result.kind,
+        "executor": result.executor,
+    }
+    observed_identity = {field: cell.get(field) for field in expected_identity}
+    if observed_identity != expected_identity:
+        raise QueueCliError(
+            "generated cell seal does not match the completed cell identity"
+        )
+
+    artifacts = seal.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise QueueCliError("generated cell seal is missing artifact provenance")
+    for label, field in (("FIDB", "fidb"), ("FIDBF", "fidbf")):
+        record = artifacts.get(field)
+        if not isinstance(record, dict):
+            raise QueueCliError(f"generated cell seal is missing its {label} record")
+        recorded_path = record.get("path")
+        if (
+            not isinstance(recorded_path, str)
+            or not recorded_path
+            or recorded_path.startswith("/")
+            or "\\" in recorded_path
+            or any(part in {"", ".", ".."} for part in recorded_path.split("/"))
+        ):
+            raise QueueCliError(f"generated cell seal has an invalid {label} path")
+        if Path(recorded_path) != relatives[label]:
+            raise QueueCliError(
+                f"generated {label} path does not match the authoritative seal"
+            )
+        artifact_path = staging / relatives[label]
+        digest = _sha256(artifact_path)
+        size = artifact_path.stat().st_size
+        recorded_size = _nonnegative_integer(
+            record.get("bytes"), f"sealed {label} byte count"
+        )
+        if record.get("sha256") != digest or recorded_size != size:
+            raise QueueCliError(
+                f"generated {label} content does not match the authoritative seal"
+            )
+
+    sealed_timing = seal.get("timing")
+    if not isinstance(sealed_timing, dict):
+        raise QueueCliError("generated cell seal is missing its timing provenance")
+    result_summary = result.timing["summary"]
+    sealed_summary = sealed_timing.get("summary")
+    prefix = result.timing["spans"][:-1]
+    if (
+        sealed_timing.get("schema_version") != TIMING_SCHEMA
+        or sealed_timing.get("policy") != result.timing["policy"]
+        or sealed_timing.get("spans") != prefix
+        or not isinstance(sealed_summary, dict)
+        or sealed_summary.get("measurement_started_at")
+        != result_summary["measurement_started_at"]
+    ):
+        raise QueueCliError(
+            "generated cell seal timing does not match completed execution timing"
+        )
+    sealed_elapsed = _nonnegative_integer(
+        sealed_summary.get("elapsed_before_snapshot_ns"),
+        "sealed timing elapsed_before_snapshot_ns",
+    )
+    if sealed_elapsed > result_summary["elapsed_before_snapshot_ns"]:
+        raise QueueCliError(
+            "sealed timing elapsed duration exceeds completed execution"
+        )
+    prefix_counts = {status.value: 0 for status in ProgressStatus}
+    prefix_durations: dict[str, int] = {}
+    for span in prefix:
+        prefix_counts[span["status"]] += 1
+        prefix_durations[span["stage"]] = (
+            prefix_durations.get(span["stage"], 0) + span["duration_ns"]
+        )
+    if (
+        sealed_summary.get("terminal_event_counts") != prefix_counts
+        or sealed_summary.get("stage_duration_ns") != prefix_durations
+    ):
+        raise QueueCliError(
+            "generated cell seal timing summary does not match its prefix"
+        )
+
+
+def _durably_publish(
+    result: CellRunResult,
+    staging: Path,
+    final: Path,
+    root: Path,
+) -> dict[str, Path]:
+    """Sync material artifacts, rename the attempt, and sync the new names."""
+
+    _validate_cell_timing(result.timing)
+    if final.exists() or final.is_symlink():
+        raise QueueCliError(f"attempt publication already exists: {final}")
+    relatives = _material_relatives(result, staging)
+    _validate_seal_binding(result, staging, relatives)
+    staged = {label: staging / relative for label, relative in relatives.items()}
+    for path in staged.values():
+        _fsync_regular_file(path)
+    _fsync_directory_chains(
+        [
+            staging,
+            staging.parent,
+            final.parent,
+            *(path.parent for path in staged.values()),
+        ],
+        root,
+    )
+
+    os.replace(staging, final)
+
+    published = {label: final / relative for label, relative in relatives.items()}
+    for path in published.values():
+        _fsync_regular_file(path)
+    _fsync_directory_chains(
+        [
+            final,
+            staging.parent,
+            final.parent,
+            *(path.parent for path in published.values()),
+        ],
+        root,
+    )
+    return published
+
+
+def _result_document(
+    result: CellRunResult,
+    published: dict[str, Path],
+    final: Path,
+    root: Path,
+) -> dict[str, object]:
+    seal = published["seal"]
+    fidb = published["FIDB"]
+    fidbf = published["FIDBF"]
+    for label, path in (("seal", seal), ("FIDB", fidb), ("FIDBF", fidbf)):
+        if not path.is_file() or path.is_symlink():
+            raise QueueCliError(f"published {label} is not a regular file: {path}")
+    if _sha256(seal) != result.seal_sha256:
+        raise QueueCliError("published cell seal digest changed during publication")
+    return {
+        "schema_version": RESULT_SCHEMA,
+        "cell_id": result.cell_id,
+        "kind": result.kind,
+        "executor": result.executor,
+        "attempt_root": str(final.relative_to(root)),
+        "seal": {
+            "path": str(seal.relative_to(root)),
+            "sha256": result.seal_sha256,
+        },
+        "fidb": {"path": str(fidb.relative_to(root)), "sha256": _sha256(fidb)},
+        "fidbf": {"path": str(fidbf.relative_to(root)), "sha256": _sha256(fidbf)},
+    }
+
+
+def _execute_claim(
+    coordinator: Coordinator,
+    database: Path,
+    root: Path,
+    lease: dict[str, object],
+    lease_seconds: int,
+    *,
+    verbose: bool,
+) -> bool:
+    staging, final = _staging_root(root, lease)
+    token = str(lease["lease_token"])
+    generation = int(lease["lease_generation"])
+    job_id = str(lease["job_id"])
+    heartbeat = _Heartbeat(database, root, lease, lease_seconds)
+
+    def progress(event: ProgressEvent) -> None:
+        heartbeat.check()
+        coordinator.record_stage(
+            job_id,
+            token,
+            generation,
+            event.stage.value,
+            status=event.status.value,
+            duration_ns=event.duration_ns,
+            details={
+                "message": event.message,
+                "metrics": event.metrics,
+                "started_at": event.started_at,
+                "finished_at": event.finished_at,
+            },
+        )
+        duration = (
+            f" ({event.duration_ns / 1_000_000_000:.3f}s)"
+            if event.duration_ns is not None
+            else ""
+        )
+        print(
+            f"{job_id}: {event.stage.value}: {event.status.value}{duration}: "
+            f"{event.message}",
+            flush=True,
+        )
+
+    heartbeat.start()
+    try:
+        result = run_cell(
+            lease["cell"],
+            lease["factor_variants"],
+            root,
+            staging,
+            progress=progress,
+            verbose=verbose,
+        )
+        heartbeat.check()
+        _validate_cell_timing(result.timing)
+        publication_timing = TimingRecorder(progress)
+        with publication_timing.span(
+            CellStage.PUBLICATION,
+            "atomically publishing sealed cell artifacts",
+            {"job_id": job_id, "lease_generation": generation},
+        ) as publication_metrics:
+            coordinator.renew(job_id, token, generation)
+            final.parent.mkdir(parents=True, exist_ok=True)
+            published = _durably_publish(result, staging, final, root)
+            document = _result_document(result, published, final, root)
+            publication_metrics.update(
+                {
+                    "seal_bytes": (root / str(document["seal"]["path"])).stat().st_size,
+                    "fidb_bytes": (root / str(document["fidb"]["path"])).stat().st_size,
+                    "fidbf_bytes": (root / str(document["fidbf"]["path"]))
+                    .stat()
+                    .st_size,
+                }
+            )
+        document["timing"] = {
+            "schema_version": JOB_TIMING_SCHEMA,
+            "cell": result.timing,
+            "publication": publication_timing.document(),
+        }
+        coordinator.complete(job_id, token, generation, result=document)
+        print(f"{job_id}: complete: {document['seal']['path']}", flush=True)
+        return True
+    except KeyboardInterrupt:
+        try:
+            coordinator.fail(
+                job_id,
+                token,
+                generation,
+                "worker interrupted",
+                retryable=True,
+            )
+        except LeaseConflictError:
+            pass
+        raise
+    except Exception as error:
+        retryable = not isinstance(error, (CellResolutionError, ValueError))
+        try:
+            coordinator.fail(
+                job_id,
+                token,
+                generation,
+                f"{type(error).__name__}: {error}",
+                retryable=retryable,
+            )
+        except LeaseConflictError:
+            pass
+        print(f"error: {job_id}: {error}", file=sys.stderr, flush=True)
+        return False
+    finally:
+        heartbeat.stop()
+
+
+def _sync(arguments: argparse.Namespace) -> int:
+    root, state, queue = _paths(arguments, require_queue=True)
+    assert queue is not None
+    with Coordinator(state, root) as coordinator:
+        snapshot = coordinator.sync_queue(queue, actor="operator")
+        _print_json(snapshot if arguments.full else coordinator.status())
+    return 0
+
+
+def _status(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        _print_json(coordinator.snapshot() if arguments.full else coordinator.status())
+    return 0
+
+
+def _events(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    if arguments.after < 0:
+        raise QueueCliError("event cursor cannot be negative")
+    with Coordinator(state, root) as coordinator:
+        _print_json(coordinator.events(after_event_id=arguments.after))
+    return 0
+
+
+def _pause(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        _print_json(coordinator.pause(arguments.reason))
+    return 0
+
+
+def _resume(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        _print_json(coordinator.resume())
+    return 0
+
+
+def _run_worker(arguments: argparse.Namespace) -> int:
+    root, state, queue_path = _paths(arguments, require_queue=True)
+    assert queue_path is not None
+    config = QueueConfig.load(queue_path, root)
+    if not config.armed:
+        raise QueueCliError(f"queue is disarmed in {queue_path}; no build was started")
+
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+    def interrupt_worker(_signum: int, _frame: object) -> None:
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, interrupt_worker)
+    try:
+        with Coordinator(state, root) as coordinator:
+            coordinator.sync_queue(config, actor=arguments.worker_id)
+            while True:
+                lease = coordinator.claim(arguments.worker_id, pool=arguments.pool)
+                if lease is not None:
+                    succeeded = _execute_claim(
+                        coordinator,
+                        state,
+                        root,
+                        lease,
+                        config.lease_seconds,
+                        verbose=arguments.verbose,
+                    )
+                    if arguments.once:
+                        return 0 if succeeded else 1
+                    continue
+
+                if arguments.once:
+                    _print_json(coordinator.status())
+                    return 0
+                time.sleep(config.poll_seconds)
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = parser().parse_args(argv)
+    handlers = {
+        "sync": _sync,
+        "status": _status,
+        "events": _events,
+        "pause": _pause,
+        "resume": _resume,
+        "run": _run_worker,
+    }
+    try:
+        return handlers[arguments.command](arguments)
+    except KeyboardInterrupt:
+        print("worker interrupted", file=sys.stderr)
+        return 130
+    except (OSError, QueueCliError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
