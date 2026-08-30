@@ -1,0 +1,43 @@
+schema_version = "fidb-plan/v1"
+name = "tier0-runtime-foundations"
+
+[policy]
+max_cells = 2
+priority = "high"
+
+[coverage]
+factor_variants = [
+  "optimization:o2",
+  "compiler-family:route-default",
+  "compiler-version:exact",
+  "frame-pointer:retained",
+  "stack-protection:off",
+  "sanitizer:off",
+  "pac-bti:off",
+  "lto:off",
+  "symbol-stripping:unstripped",
+  "recovery:route-selected",
+  "language:route-mapped",
+]
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = [
+  "zlib@1.3.1",
+  "uclibc@0.9.30.1",
+]
+
+[[matrix]]
+id = "tier0-zlib-native"
+kind = "native"
+recipes = ["zlib@1.3.1"]
+routes = ["linux-x86_64-gnu-gcc"]
+treatments = ["baseline_o2"]
+
+[[matrix]]
+id = "tier0-uclibc-powerpc"
+kind = "source-library"
+recipes = ["uclibc@0.9.30.1"]
+factor_variants = []
+toolchains = ["uclibc@2017.05:powerpc-e500mc-bootlin-2017.05"]
+executor = "local"

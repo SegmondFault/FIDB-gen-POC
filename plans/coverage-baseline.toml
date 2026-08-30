@@ -1,0 +1,65 @@
+schema_version = "fidb-plan/v1"
+name = "coverage-baseline"
+
+[policy]
+max_cells = 18
+priority = "normal"
+
+[coverage]
+factor_variants = [
+  "optimization:o2",
+  "compiler-family:route-default",
+  "compiler-version:exact",
+  "frame-pointer:retained",
+  "stack-protection:off",
+  "sanitizer:off",
+  "pac-bti:off",
+  "lto:off",
+  "symbol-stripping:unstripped",
+  "recovery:route-selected",
+  "language:route-mapped",
+]
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = [
+  "zlib@1.3.1",
+  "bzip2@1.0.7",
+  "uclibc@0.9.30.1",
+  "mirai@4889a6f79723",
+]
+
+# Native cells use the reviewed recipes, route and treatment from worker.json.
+[[matrix]]
+id = "native-libraries"
+kind = "native"
+recipes = ["zlib@1.3.1", "bzip2@1.0.7"]
+routes = ["linux-x86_64-gnu-gcc"]
+treatments = ["baseline_o2"]
+
+# Cross-build cells select only reviewed recipe and registry identities.  The
+# second target remains visible as desired coverage even though its registry
+# row is archive-only and cannot currently execute this source recipe.
+[[matrix]]
+id = "uclibc-cross"
+kind = "source-library"
+recipes = ["uclibc@0.9.30.1"]
+# This adapter's codegen choices are recorded as adapter-owned. Do not attach
+# the native baseline treatment labels until exact reviewed variants exist.
+factor_variants = []
+toolchains = [
+  "uclibc@2017.05:powerpc-e500mc-bootlin-2017.05",
+  "uclibc@1.0.34:mips-be-bootlin-sysroot-2020.08",
+]
+executor = "qemu"
+
+[[matrix]]
+id = "mirai-ground-truth"
+kind = "malware"
+recipes = ["mirai@4889a6f79723"]
+factor_variants = []
+toolchains = [
+  "uclibc@2017.05:powerpc-e500mc-bootlin-2017.05",
+  "uclibc@1.0.34:mips-be-bootlin-sysroot-2020.08",
+]
+executor = "qemu"

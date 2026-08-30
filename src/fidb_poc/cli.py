@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
 
 from .config import RecipesNotFoundError, load_configuration, select_configuration
 from .pipeline import PipelineError, doctor, execute, plan
+from .plan_request import resolve_plan, write_resolved_plan
 from .request_queue import record_missing_requests
 
 # Phase 2 CLI unification: fidb-hunt's investigate/hunt/build-malware surface
@@ -21,6 +23,28 @@ _HUNT_SUBCOMMANDS = {
     "build-malware": "build-malware",
     "hunt-doctor": "doctor",
 }
+
+
+def _resolve_plan_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc resolve-plan",
+        description="Resolve a TOML plan request without building or downloading.",
+    )
+    result.add_argument("plan", type=Path)
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--output", type=Path)
+    arguments = result.parse_args(argv)
+    try:
+        document = resolve_plan(arguments.plan, arguments.project_root)
+        if arguments.output:
+            write_resolved_plan(document, arguments.output)
+            print(f"Resolved plan: {arguments.output}")
+        else:
+            print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
 
 
 def parser() -> argparse.ArgumentParser:
@@ -162,6 +186,8 @@ def _fresh_targets(project_root: Path) -> tuple[Path, Path]:
 
 def main(argv: list[str] | None = None) -> int:
     tokens = sys.argv[1:] if argv is None else argv
+    if tokens and tokens[0] == "resolve-plan":
+        return _resolve_plan_main(tokens[1:])
     if tokens and tokens[0] in _HUNT_SUBCOMMANDS:
         from .hunt_cli import main as hunt_main
 

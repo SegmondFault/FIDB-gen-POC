@@ -1,0 +1,32 @@
+schema_version = "fidb-plan/v1"
+name = "bzip2-native-baseline"
+
+[policy]
+max_cells = 1
+priority = "normal"
+
+[coverage]
+factor_variants = [
+  "optimization:o2",
+  "compiler-family:route-default",
+  "compiler-version:exact",
+  "frame-pointer:retained",
+  "stack-protection:off",
+  "sanitizer:off",
+  "pac-bti:off",
+  "lto:off",
+  "symbol-stripping:unstripped",
+  "recovery:route-selected",
+  "language:route-mapped",
+]
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["bzip2@1.0.7"]
+
+[[matrix]]
+id = "bzip2-native"
+kind = "native"
+recipes = ["bzip2@1.0.7"]
+routes = ["linux-x86_64-gnu-gcc"]
+treatments = ["baseline_o2"]

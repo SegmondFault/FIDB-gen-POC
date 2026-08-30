@@ -1,0 +1,420 @@
+schema_version = "fidb-sensitivity/v1"
+
+# This catalog turns the FIDB sensitivity study into planning controls.  Its 41
+# rows are operational dimensions, not 41 claimed causal measurements: the
+# report independently varies 13 primitive build factors, carries two repeat
+# controls, and describes further provenance, recovery, environment, truth,
+# matching and admission controls.  Study percentages are route-specific
+# observations, not universal compatibility claims.  "Add candidate" means
+# preserve the variation as separate reference coverage; it never means
+# substitute an unreviewed compiler or flag at runtime.
+
+[[factor]]
+id = "source-identity"
+stage = "input"
+label = "Source version and bytes"
+control = "Recipe URL, version and SHA-256 pin"
+evidence = "Recipe pin and acquired archive digest"
+confidence = "known-sensitive"
+impact = "Different source changes the functions being represented."
+coverage_action = "Separate every reviewed source release."
+
+[[factor]]
+id = "target-platform-format"
+stage = "compile-analysis"
+label = "Target platform and object format"
+control = "Explicit target OS/platform and Mach-O, ELF or PE/COFF format"
+evidence = "The report studies macOS ARM64, ARM32 ELF and Windows x86-64 routes, while warning that route differences are not causally isolated."
+confidence = "known-context-unisolated"
+impact = "Platform and object format alter loading, metadata, symbol availability and analysis behavior."
+coverage_action = "Keep the platform/format route explicit; do not infer cross-route transferability."
+
+[[factor]]
+id = "target-abi"
+stage = "compile"
+label = "Target machine and ABI"
+control = "Machine, word size, endianness and calling-convention/ABI identity"
+evidence = "Registry identity plus object-file ABI validation"
+confidence = "known-sensitive"
+impact = "References are not assumed useful across architectures or ABIs."
+coverage_action = "Keep one explicit coverage target per ABI."
+
+[[factor]]
+id = "compiler-family"
+stage = "compile"
+label = "Compiler family"
+control = "Reviewed route or cross-toolchain family"
+evidence = "ARM32 GCC 14.2 to Clang 22 retained 0% exact full or specific hashes among comparable functions."
+confidence = "observed-sensitive"
+impact = "A reference from one compiler family may provide no exact coverage for another."
+coverage_action = "Add compiler-family candidates."
+
+[[factor]]
+id = "compiler-version"
+stage = "compile"
+label = "Compiler version"
+control = "Pinned toolchain release or execution-probed native compiler"
+evidence = "Observed full-hash retention among comparable functions was 82.42% for Apple Clang 21 to 22 and 92.95% for MSVC 14.37 to 14.36."
+confidence = "observed-sensitive"
+impact = "Even adjacent compiler releases can change a material fraction of hashes."
+coverage_action = "Add compiler-version candidates."
+
+[[factor]]
+id = "optimization-level"
+stage = "compile"
+label = "Optimisation level"
+control = "Reviewed treatment with exact effective flags"
+evidence = "O2 to O0 full-hash retention among comparable functions was 6.32% on macOS ARM64, 0.90% on ARM32 ELF and 0.11% on Windows x86-64."
+confidence = "observed-sensitive"
+impact = "Optimisation is a first-order coverage dimension."
+coverage_action = "Add O0, O1, O2, O3, Os and Oz where the route supports them."
+
+[[factor]]
+id = "link-time-optimization"
+stage = "compile-link"
+label = "Link-time optimisation"
+control = "Reviewed LTO treatment and attributable truth model"
+evidence = "No attributable pairs remained on the studied macOS and ARM32 routes; Windows retained 19.06% full hashes among comparable functions."
+confidence = "observed-sensitive"
+impact = "LTO can erase the function correspondence needed to assess or reuse references."
+coverage_action = "Keep separate and redesign truth before admission where attribution collapses."
+
+[[factor]]
+id = "frame-pointer"
+stage = "compile"
+label = "Frame-pointer policy"
+control = "Reviewed keep/omit treatment"
+evidence = "Full-hash retention among comparable functions was 31.68% on macOS ARM64 and 0.01% on ARM32 ELF."
+confidence = "observed-sensitive"
+impact = "Frame-pointer policy can radically change exact FIDs."
+coverage_action = "Add frame-pointer candidates."
+
+[[factor]]
+id = "stack-protection"
+stage = "compile"
+label = "Stack protection"
+control = "Reviewed hardening treatment"
+evidence = "Strong stack protection retained 85.16%, 86.18% and 89.80% full hashes among comparable functions on the three studied routes; specific-hash retention was lower on two routes."
+confidence = "observed-sensitive"
+impact = "Hardening changes enough signatures to justify distinct coverage."
+coverage_action = "Add hardening candidates."
+
+[[factor]]
+id = "sanitizer-mode"
+stage = "compile"
+label = "Sanitizer mode"
+control = "Separate reviewed sanitizer treatment"
+evidence = "AddressSanitizer retained 7.24% full and 4.05% specific hashes among comparable functions and produced one wrong-library label in the study."
+confidence = "observed-sensitive"
+impact = "Sanitized references can be weak and may introduce false-positive risk."
+coverage_action = "Do not generalize beyond measured AddressSanitizer; isolate and label sanitized references."
+
+[[factor]]
+id = "cpu-target-tuning"
+stage = "compile"
+label = "CPU target and tuning"
+control = "Reviewed target CPU/tuning treatment"
+evidence = "Generic ARMv7 to Cortex-A7 retained 11.13% full hashes among comparable functions; generic ARM64 to Apple M1 retained 100% on its studied route."
+confidence = "observed-route-dependent"
+impact = "Transferability varies sharply by route and CPU target."
+coverage_action = "Add CPU-target candidates where study evidence shows divergence."
+
+[[factor]]
+id = "pac-bti"
+stage = "compile"
+label = "PAC / BTI"
+control = "Reviewed architecture-hardening treatment"
+evidence = "The macOS ARM64 comparison retained 0.36% full and 0.20% specific hashes among comparable functions and produced one ambiguity."
+confidence = "observed-sensitive"
+impact = "Control-flow protection can make an ordinary reference nearly useless."
+coverage_action = "Use a guarded candidate with ambiguity monitoring."
+
+[[factor]]
+id = "position-independent-code"
+stage = "compile"
+label = "Position-independent code"
+control = "Reviewed PIC treatment"
+evidence = "PIC on to off retained 100% full and specific hashes among comparable functions on the studied macOS route."
+confidence = "observed-route-specific"
+impact = "No extra reference was justified on that route; transfer to other routes is unproven."
+coverage_action = "Record always; add coverage only when route evidence requires it."
+
+[[factor]]
+id = "debug-information-emission"
+stage = "compile-analysis"
+label = "Debug-information emission"
+control = "Reviewed compiler debug/no-debug treatment"
+evidence = "Comparable full hashes retained 99.95% to 100% on the studied routes."
+confidence = "observed-low-impact"
+impact = "Debug-information emission did not justify extra references in the studied routes."
+coverage_action = "Record the state; do not multiply references without contrary route evidence."
+
+[[factor]]
+id = "dead-code-elimination"
+stage = "link"
+label = "Dead-code elimination"
+control = "Reviewed linker treatment and attributable truth model"
+evidence = "The macOS dead-strip comparison left no attributable function pairs."
+confidence = "observed-truth-breaking"
+impact = "The change can invalidate the comparison model rather than merely lower retention."
+coverage_action = "Redesign truth before admitting a reference variant."
+
+[[factor]]
+id = "symbol-stripping"
+stage = "post-link-analysis"
+label = "Symbol stripping"
+control = "Reviewed strip state"
+evidence = "Comparable full hashes were nearly unchanged, but ARM32 verified-function discovery fell to 59.83%."
+confidence = "observed-recovery-sensitive"
+impact = "Signatures may survive while Ghidra fails to recover the functions needed to use them."
+coverage_action = "Track discovery loss separately from hash retention."
+
+[[factor]]
+id = "build-environment"
+stage = "build-control"
+label = "Build-environment identity"
+control = "Build host, sysroot/SDK, assembler, linker, archiver and relevant environment identity"
+evidence = "The report includes repeat-build controls but does not fully pin build-host or tool-path identity."
+confidence = "reproducibility-required"
+impact = "Unrecorded environment or auxiliary-tool changes can undermine reproducibility attribution."
+coverage_action = "Record exact identities and keep unknown components visible as provenance gaps."
+
+[[factor]]
+id = "build-repeat"
+stage = "control"
+label = "Build repeatability"
+control = "Deterministic environment and repeat build"
+evidence = "Repeated builds retained 100% hashes among comparable functions, while route-specific recovery coverage remained below 100% on two routes."
+confidence = "observed-control"
+impact = "Byte/hash stability does not imply complete recovery coverage."
+coverage_action = "Keep as a control and alert on regression."
+
+[[factor]]
+id = "build-shape"
+stage = "build"
+label = "Build adapter and patches"
+control = "Named reviewed adapter, source markers and pinned patches"
+evidence = "Adapter identity, build-system detection and patch digests"
+confidence = "known-sensitive"
+impact = "Build-system choices and patches alter produced objects."
+coverage_action = "Represent each reviewed shape explicitly."
+
+[[factor]]
+id = "link-shape"
+stage = "link"
+label = "Archive or linked-output shape"
+control = "Static members versus reviewed linked-output treatment"
+evidence = "Analyzed artifact kind, members and artifact digest"
+confidence = "known-sensitive"
+impact = "The selected artifact determines what functions reach analysis."
+coverage_action = "Do not merge archive and linked-output evidence."
+
+[[factor]]
+id = "ghidra-analysis-repeat"
+stage = "analysis-control"
+label = "Analysis repeatability"
+control = "Fresh project with identical locked settings"
+evidence = "Repeat comparisons retained 100% hashes among comparable functions, but total verified recovery was route-dependent."
+confidence = "observed-control"
+impact = "A deterministic match subset can coexist with incomplete analysis coverage."
+coverage_action = "Lock settings and keep repeat controls."
+
+[[factor]]
+id = "debug-symbol-availability"
+stage = "import-analysis"
+label = "Debug-symbol availability and import"
+control = "Embedded DWARF, external PDB or other debug-symbol source and import result"
+evidence = "ARM32 imported embedded DWARF, the Windows PDB was unavailable, and macOS lacked embedded DWARF; the report warns against reading this as platform quality."
+confidence = "observed-recovery-context"
+impact = "Symbol availability can change recovered truth coverage without changing compiled code."
+coverage_action = "Record emission and analysis-time availability separately."
+
+[[factor]]
+id = "ghidra-function-start-analysis"
+stage = "analysis-recovery"
+label = "Function-start analyzer"
+control = "Explicit function-start analyzer enablement and options"
+evidence = "The report states that function-start analysis was enabled as the common baseline."
+confidence = "observed-control-not-varied"
+impact = "Function discovery determines which compiled functions can receive usable FID hashes."
+coverage_action = "Expose and lock the setting; design an ablation before claiming its effect size."
+
+[[factor]]
+id = "ghidra-aggressive-search"
+stage = "analysis-recovery"
+label = "Aggressive / maximal built-in search"
+control = "Named analyzer configuration for aggressive instruction finding and data-block search"
+evidence = "The report states that aggressive instruction finders and searches inside data blocks were disabled at baseline and evaluates a maximal built-in profile without publishing exact atomic toggles."
+confidence = "profile-observed-components-unresolved"
+impact = "More aggressive search may recover verified functions or add unverified starts."
+coverage_action = "Keep the named profile guarded and expose exact component toggles when reconstructed."
+
+[[factor]]
+id = "ghidra-shared-return-policy"
+stage = "analysis-recovery"
+label = "Shared-return policy"
+control = "Named strict or permissive shared-return recovery setting"
+evidence = "Permissive shared returns lost 23 verified functions on the studied Windows route and had no effect on two other routes."
+confidence = "observed-route-dependent"
+impact = "Shared-return handling can change recovered and hashable function sets."
+coverage_action = "Keep route-specific and do not select globally from one route result."
+
+[[factor]]
+id = "ghidra-direct-call-recovery"
+stage = "analysis-recovery"
+label = "Direct-call target recovery"
+control = "Named direct-call/call-target recovery setting"
+evidence = "The direct-call profile was evaluated on all three routes and produced no aggregate improvement in the report."
+confidence = "observed-low-impact-route-limited"
+impact = "A no-effect result on the studied corpus does not establish universal irrelevance."
+coverage_action = "Record the setting and retain as a catalogued recovery dimension."
+
+[[factor]]
+id = "ghidra-isolated-entry-search"
+stage = "analysis-recovery"
+label = "Isolated-entry recovery"
+control = "Named isolated-flow/isolated-entry recovery setting"
+evidence = "The profile increased verified recovery on ARM32 and Windows while also adding unverified candidate starts."
+confidence = "observed-route-dependent"
+impact = "Recovery gains and false-positive risk must be assessed together."
+coverage_action = "Use only with independent confirmation and explicit admission policy."
+
+[[factor]]
+id = "ghidra-language"
+stage = "analysis"
+label = "Ghidra LanguageID"
+control = "Explicit route/ABI mapping"
+evidence = "The project LanguageID probe demonstrated changed exact FID hashes with fixed bytes."
+confidence = "observed-sensitive"
+impact = "Analysis-model selection alone can change exact FIDs."
+coverage_action = "Keep LanguageID in cell identity and provenance."
+
+[[factor]]
+id = "ghidra-compiler-spec"
+stage = "analysis"
+label = "Ghidra compiler specification"
+control = "Explicit route mapping"
+evidence = "Recorded in resolved cells, probes and output manifests."
+confidence = "plausible-sensitive"
+impact = "Compiler-spec semantics may change analysis even when bytes are fixed."
+coverage_action = "Keep compiler spec explicit and do not assume transferability."
+
+[[factor]]
+id = "fid-minimum-function-size"
+stage = "fid-hash"
+label = "FID minimum function size"
+control = "Standard FID four-code-unit minimum or explicitly versioned custom policy"
+evidence = "The report states that standard FID declines to hash functions below its four-code-unit minimum."
+confidence = "known-algorithm-policy"
+impact = "The threshold changes which recovered functions are eligible for a usable FID hash."
+coverage_action = "Record the policy; require a collision study before any custom threshold is admitted."
+
+[[factor]]
+id = "fid-parent-child-relations"
+stage = "fid-match"
+label = "FID parent / child relation policy"
+control = "Explicit relation generation and scoring behavior"
+evidence = "The report explicitly identifies parent/child relations as a determinant of final matches."
+confidence = "known-algorithm-policy"
+impact = "Relation evidence can change final matching even when function hashes are fixed."
+coverage_action = "Version and record relation policy with the active database."
+
+[[factor]]
+id = "ghidra-application"
+stage = "analysis-environment"
+label = "Ghidra application identity"
+control = "Exact Ghidra version, build and application digest"
+evidence = "The current study does not state an exact Ghidra version."
+confidence = "reproducibility-gap"
+impact = "Analyzer and FID implementation changes may alter recovery or hashes."
+coverage_action = "Record exact identity and label cross-version usefulness unknown."
+
+[[factor]]
+id = "pyghidra-version"
+stage = "analysis-environment"
+label = "PyGhidra identity"
+control = "Exact PyGhidra package version and digest where available"
+evidence = "The analysis stack uses PyGhidra, but the report does not pin its exact version."
+confidence = "reproducibility-gap"
+impact = "Bridge behavior and API defaults may change execution of the analysis workflow."
+coverage_action = "Record exact identity in analysis provenance."
+
+[[factor]]
+id = "java-runtime"
+stage = "analysis-environment"
+label = "Java runtime identity"
+control = "Exact JVM vendor, version and runtime digest"
+evidence = "The report does not record the Java runtime used by Ghidra."
+confidence = "reproducibility-gap"
+impact = "The runtime is part of the reproducible analysis environment even when no causal effect is yet measured."
+coverage_action = "Record exact identity; do not claim a measured effect without an ablation."
+
+[[factor]]
+id = "analysis-configuration"
+stage = "analysis-environment"
+label = "Analysis scripts and analyzer configuration"
+control = "Named recovery profile plus script, analyzer-option and configuration digests"
+evidence = "The report compares six named recovery profiles, but does not publish a complete exact toggle map for every bundled profile."
+confidence = "coverage-required"
+impact = "Configuration changes can alter recovery and false-positive risk even with fixed bytes."
+coverage_action = "Select reviewed named profiles and record their exact reconstructed components."
+
+[[factor]]
+id = "fid-database-set"
+stage = "fid-match"
+label = "Active FID database contents"
+control = "Ordered identity and digest of every active FID database"
+evidence = "The report explicitly identifies database contents as a determinant of final matches."
+confidence = "known-algorithm-policy"
+impact = "Adding, removing or changing reference databases changes candidate matches and ambiguity."
+coverage_action = "Snapshot the active set for every usefulness result."
+
+[[factor]]
+id = "fid-score-threshold"
+stage = "fid-match"
+label = "FID match score threshold"
+control = "Explicit score threshold and scoring-policy identity"
+evidence = "The report explicitly identifies the score threshold as a determinant of final matches."
+confidence = "known-algorithm-policy"
+impact = "Threshold changes alter accepted matches and the precision/recall trade-off."
+coverage_action = "Version the threshold and evaluate it against independent truth before changing admission."
+
+[[factor]]
+id = "fid-ambiguity-policy"
+stage = "fid-match"
+label = "Ambiguity-resolution policy"
+control = "Explicit tie, collision and multiple-library handling policy"
+evidence = "The report identifies ambiguity handling as a final-match determinant and records nonzero ambiguity for several treatments."
+confidence = "observed-safety-context"
+impact = "Policy can turn the same candidate set into a match, ambiguity or rejection."
+coverage_action = "Keep ambiguity visible; never silently choose a library."
+
+[[factor]]
+id = "truth-attribution"
+stage = "truth-evaluation"
+label = "Truth mapping and attribution"
+control = "Versioned method for mapping source functions across builds and analyses"
+evidence = "LTO and dead-strip comparisons lost attributable pairs on studied routes, so zero matches cannot be interpreted as ordinary hash churn."
+confidence = "observed-truth-critical"
+impact = "Without attributable truth, usefulness and expansion safety cannot be measured."
+coverage_action = "Block admission and redesign truth when correspondence collapses."
+
+[[factor]]
+id = "truth-corpus-cohort"
+stage = "truth-evaluation"
+label = "Truth / confirmation corpus and cohort"
+control = "Pinned library corpus plus training, validation and independent confirmation split"
+evidence = "The recovery data contains training, validation and all cohorts over six pinned libraries, while the notebook displays only the all-cohort rows."
+confidence = "observed-evaluation-context"
+impact = "Corpus composition and cohort choice change apparent usefulness and generalization evidence."
+coverage_action = "Keep cohort and independent confirmation identity with every reported metric."
+
+[[factor]]
+id = "fid-admission-policy"
+stage = "admission"
+label = "FID reference admission policy"
+control = "Policy for unverified starts, ambiguity, wrong-library labels, collision risk and expansion evidence"
+evidence = "The study reports unverified additions, ambiguities, a wrong-library result and expansion-tested state as distinct safety evidence."
+confidence = "observed-safety-critical"
+impact = "Admission policy determines whether a generated reference is safe and useful in the active matrix."
+coverage_action = "Keep experiment-run, expansion-tested, built and admitted/active states separate."

@@ -1,0 +1,33 @@
+schema_version = "fidb-plan/v1"
+name = "mirai-baseline"
+
+[policy]
+max_cells = 1
+priority = "normal"
+
+[coverage]
+factor_variants = [
+  "optimization:o2",
+  "compiler-family:route-default",
+  "compiler-version:exact",
+  "frame-pointer:retained",
+  "stack-protection:off",
+  "sanitizer:off",
+  "pac-bti:off",
+  "lto:off",
+  "symbol-stripping:unstripped",
+  "recovery:route-selected",
+  "language:route-mapped",
+]
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["mirai@4889a6f79723"]
+
+[[matrix]]
+id = "mirai-powerpc-ground-truth"
+kind = "malware"
+recipes = ["mirai@4889a6f79723"]
+factor_variants = []
+toolchains = ["uclibc@2017.05:powerpc-e500mc-bootlin-2017.05"]
+executor = "qemu"

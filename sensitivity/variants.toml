@@ -1,0 +1,310 @@
+schema_version = "fidb-factor-variants/v1"
+
+# These are named coverage choices, not compiler flags.  A registered choice
+# maps to an existing reviewed treatment or fixed route value.  Other choices
+# remain selectable planning targets until their recipe/toolchain/treatment
+# support is reviewed and added.
+
+[[variant]]
+id = "optimization:o2"
+factor = "optimization-level"
+group = "compiler-codegen"
+label = "O2"
+state = "registered"
+authority = "treatment:baseline_o2"
+
+[[variant]]
+id = "optimization:o0"
+factor = "optimization-level"
+group = "compiler-codegen"
+label = "O0"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "optimization:o1"
+factor = "optimization-level"
+group = "compiler-codegen"
+label = "O1"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "optimization:o3"
+factor = "optimization-level"
+group = "compiler-codegen"
+label = "O3"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "optimization:os"
+factor = "optimization-level"
+group = "compiler-codegen"
+label = "Os"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "optimization:oz"
+factor = "optimization-level"
+group = "compiler-codegen"
+label = "Oz"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "compiler-family:route-default"
+factor = "compiler-family"
+group = "toolchain-identity"
+label = "Route compiler"
+state = "registered"
+authority = "route-or-toolchain"
+
+[[variant]]
+id = "compiler-family:alternate"
+factor = "compiler-family"
+group = "toolchain-identity"
+label = "Alternate family"
+state = "desired"
+authority = "unmet-route"
+
+[[variant]]
+id = "compiler-version:exact"
+factor = "compiler-version"
+group = "toolchain-identity"
+label = "Exact pinned release"
+state = "registered"
+authority = "route-or-toolchain"
+
+[[variant]]
+id = "compiler-version:adjacent"
+factor = "compiler-version"
+group = "toolchain-identity"
+label = "Adjacent release"
+state = "desired"
+authority = "unmet-toolchain"
+
+[[variant]]
+id = "frame-pointer:retained"
+factor = "frame-pointer"
+group = "compiler-codegen"
+label = "Frame pointer retained"
+state = "registered"
+authority = "treatment:baseline_o2"
+
+[[variant]]
+id = "frame-pointer:omitted"
+factor = "frame-pointer"
+group = "compiler-codegen"
+label = "Frame pointer omitted"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "stack-protection:off"
+factor = "stack-protection"
+group = "hardening-instrumentation"
+label = "Stack protector off"
+state = "registered"
+authority = "treatment:baseline_o2"
+
+[[variant]]
+id = "stack-protection:strong"
+factor = "stack-protection"
+group = "hardening-instrumentation"
+label = "Stack protector strong"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "sanitizer:off"
+factor = "sanitizer-mode"
+group = "hardening-instrumentation"
+label = "No sanitizer"
+state = "registered"
+authority = "treatment:baseline_o2"
+
+[[variant]]
+id = "sanitizer:asan"
+factor = "sanitizer-mode"
+group = "hardening-instrumentation"
+label = "AddressSanitizer"
+state = "guarded"
+authority = "unmet-guarded-treatment"
+
+[[variant]]
+id = "pac-bti:off"
+factor = "pac-bti"
+group = "hardening-instrumentation"
+label = "PAC / BTI off"
+state = "registered"
+authority = "route-default"
+
+[[variant]]
+id = "pac-bti:standard"
+factor = "pac-bti"
+group = "hardening-instrumentation"
+label = "PAC / BTI standard"
+state = "guarded"
+authority = "unmet-guarded-treatment"
+
+[[variant]]
+id = "lto:off"
+factor = "link-time-optimization"
+group = "link-output"
+label = "LTO off"
+state = "registered"
+authority = "treatment:baseline_o2"
+
+[[variant]]
+id = "lto:on"
+factor = "link-time-optimization"
+group = "link-output"
+label = "LTO on"
+state = "truth-risk"
+authority = "unmet-truth-model"
+
+[[variant]]
+id = "symbol-stripping:unstripped"
+factor = "symbol-stripping"
+group = "link-output"
+label = "Unstripped"
+state = "registered"
+authority = "route-default"
+
+[[variant]]
+id = "symbol-stripping:stripped"
+factor = "symbol-stripping"
+group = "link-output"
+label = "Stripped"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "cpu-target:route-default"
+factor = "cpu-target-tuning"
+group = "target-tuning"
+label = "Route-default CPU target"
+state = "registered"
+authority = "route-or-toolchain"
+
+[[variant]]
+id = "cpu-target:alternate"
+factor = "cpu-target-tuning"
+group = "target-tuning"
+label = "Alternate reviewed CPU target"
+state = "desired"
+authority = "unmet-toolchain-or-treatment"
+
+[[variant]]
+id = "pic:on"
+factor = "position-independent-code"
+group = "link-output"
+label = "PIC enabled"
+state = "registered"
+authority = "route-default"
+
+[[variant]]
+id = "pic:off"
+factor = "position-independent-code"
+group = "link-output"
+label = "PIC disabled"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "debug-info:off"
+factor = "debug-information-emission"
+group = "compiler-codegen"
+label = "Debug information disabled"
+state = "registered"
+authority = "treatment:baseline_o2"
+
+[[variant]]
+id = "debug-info:on"
+factor = "debug-information-emission"
+group = "compiler-codegen"
+label = "Debug information enabled"
+state = "desired"
+authority = "unmet-treatment"
+
+[[variant]]
+id = "dead-code-elimination:off"
+factor = "dead-code-elimination"
+group = "link-output"
+label = "Dead-code elimination disabled"
+state = "registered"
+authority = "route-default"
+
+[[variant]]
+id = "dead-code-elimination:on"
+factor = "dead-code-elimination"
+group = "link-output"
+label = "Dead-code elimination enabled"
+state = "truth-risk"
+authority = "unmet-truth-model"
+
+[[variant]]
+id = "recovery:route-selected"
+factor = "analysis-configuration"
+group = "analysis-recovery"
+label = "Route-selected recovery"
+state = "registered"
+authority = "analysis-profile:fid-safe-default"
+
+[[variant]]
+id = "recovery:maximal-built-in"
+factor = "analysis-configuration"
+group = "analysis-recovery"
+label = "Maximal built-in search"
+state = "guarded"
+authority = "unmet-analysis-profile"
+
+[[variant]]
+id = "recovery:shared-return-permissive"
+factor = "analysis-configuration"
+group = "analysis-recovery"
+label = "Permissive shared returns"
+state = "guarded"
+authority = "unmet-analysis-profile"
+
+[[variant]]
+id = "recovery:direct-call"
+factor = "analysis-configuration"
+group = "analysis-recovery"
+label = "Direct-call recovery"
+state = "desired"
+authority = "unmet-analysis-profile"
+
+[[variant]]
+id = "recovery:isolated-entry"
+factor = "analysis-configuration"
+group = "analysis-recovery"
+label = "Isolated-entry recovery"
+state = "guarded"
+authority = "unmet-analysis-profile"
+
+[[variant]]
+id = "recovery:maximal-isolated"
+factor = "analysis-configuration"
+group = "analysis-recovery"
+label = "Maximal + isolated-flow"
+state = "guarded"
+authority = "unmet-analysis-profile"
+
+[[variant]]
+id = "language:route-mapped"
+factor = "ghidra-language"
+group = "analysis-recovery"
+label = "Route-mapped LanguageID"
+state = "registered"
+authority = "route-or-abi-mapping"
+
+[[variant]]
+id = "language:alternate"
+factor = "ghidra-language"
+group = "analysis-recovery"
+label = "Alternate LanguageID"
+state = "desired"
+authority = "unmet-analysis-variant"
