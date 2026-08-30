@@ -334,6 +334,16 @@ class LocalApiTests(unittest.TestCase):
             {("native", "native-local")},
         )
 
+    def test_authority_endpoint_projects_reviewed_catalogs_and_plans(self):
+        status, document, _ = self.request("GET", "/api/v1/authority")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v1")
+        self.assertEqual(len(document["recipes"]), 4)
+        self.assertEqual(len(document["toolchains"]), 41)
+        self.assertEqual(len(document["factors"]), 41)
+        self.assertTrue(document["plans"])
+
     def test_capabilities_detection_never_mutates_cache(self):
         managed_cache = self.root / capabilities.TOOLCHAIN_CACHE
         result = capabilities.detect_capabilities(self.root, environment={"PATH": ""})

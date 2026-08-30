@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Mapping, Sequence
 from urllib.parse import parse_qs, urlsplit
 
+from .authority_catalog import authority_catalog
 from .capabilities import detect_capabilities
 from .coordinator import (
     DEFAULT_TIMING_LIMIT,
@@ -45,6 +46,7 @@ _GET_PATHS = {
     "/api/v1/snapshot",
     "/api/v1/events",
     "/api/v1/capabilities",
+    "/api/v1/authority",
     "/api/v1/timings",
 }
 _POST_PATHS = {
@@ -534,6 +536,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             else:
                 result = detect_capabilities(self.api_server.config.project_root)
             self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
+
+        if path == "/api/v1/authority":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "authority takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                authority_catalog(self.api_server.config.project_root),
+                origin=origin,
+            )
             return
 
         with self._coordinator() as coordinator:
