@@ -1,5 +1,6 @@
 [Unit]
 Description=FIDB local library queue worker %i
+Documentation=file:///home/fidb-operator/Projects/circl/FIDB-POC-unified/operations/README.md
 PartOf=fidb-library-local-workers.target
 ConditionFileIsExecutable=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc
 ConditionFileNotEmpty=/home/fidb-operator/Projects/circl/FIDB-POC-unified/plans/priority-queue.toml

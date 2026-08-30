@@ -1,5 +1,6 @@
 [Unit]
 Description=FIDB local library worker pool (four declared instances)
+Documentation=file:///home/fidb-operator/Projects/circl/FIDB-POC-unified/operations/README.md
 Wants=fidb-library-local-worker@1.service
 Wants=fidb-library-local-worker@2.service
 Wants=fidb-library-local-worker@3.service

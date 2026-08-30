@@ -1,5 +1,6 @@
 [Unit]
 Description=FIDB loopback coordinator API
+Documentation=file:///home/fidb-operator/Projects/circl/FIDB-POC-unified/operations/README.md
 ConditionFileIsExecutable=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc
 ConditionFileNotEmpty=/home/fidb-operator/Projects/circl/FIDB-POC-unified/plans/priority-queue.toml
 
