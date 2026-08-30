@@ -166,6 +166,171 @@ target** below for the other two.
 `worker.json` is trusted operator configuration for the single Linux route, one
 treatment and one profile. It is not untrusted request data.
 
+### Declarative plan requests
+
+[`plans/coverage-baseline.toml`](plans/coverage-baseline.toml) is a human-readable
+`fidb-plan/v1` request. It selects only reviewed recipe, route, treatment and
+toolchain identities; it cannot contain a URL, hash, compiler flag, adapter or
+raw command. Resolve it without downloading or executing anything:
+
+```sh
+uv run fidb-poc resolve-plan plans/coverage-baseline.toml \
+  --output work/plans/coverage-baseline.json
+```
+
+The canonical JSON expands the requested matrices and named factor variants,
+records blocked desired coverage as well as runnable cells, snapshots the
+sensitivity catalog, and adds a deterministic plan digest. The plan's
+`max_cells` policy applies to the full factor cross-product. Toolchain
+installation is a later readiness check: a reviewed but currently unavailable
+toolchain remains visible in the plan.
+
+The optional `[queue]` table controls deterministic materialization order. Its
+`recipe_order` is the left-hand build order; `strategy` chooses whether all
+factor variants for one recipe run together or one variant is swept across all
+recipes first. The resolved `queue_preview` is immutable plan intent, not live
+coordinator state: a coordinator may later queue, lease, pause or reprioritize
+those execution identities while retaining an event trail back to this plan.
+In the operator UI, batch ordering supplies effective priority and regenerates
+this preview; batch membership and live queue state are coordinator overlays,
+not additional recipe provenance fields.
+
+[`sensitivity/factors.toml`](sensitivity/factors.toml) records the controlled and
+measured inputs known or expected to affect FID output, while
+[`sensitivity/variants.toml`](sensitivity/variants.toml) gives those factors named,
+checkable coverage choices without exposing raw compiler commands. Executor
+remains routing provenance and is deliberately not a sensitivity treatment.
+The current report audit yields 41 operational dimensions: 13 independently
+varied build factors, two repeat controls, and additional provenance, recovery,
+environment, truth, matching and admission controls. The report's number 23 is
+the count of treatment slugs, not a factor total. The 41-row catalogue is a
+versioned baseline, not a claim that sensitivity discovery is complete; known
+but unsupported dimensions remain visible and unmodeled until a reviewed
+variant and execution route exist. Compound comparisons and outcome metrics are
+kept out of the primitive factor count.
+The top-level `[coverage].factor_variants` provides defaults; a matrix may set
+its own `factor_variants` array so a crosspoint selection can vary precisely by
+library or workload. An omitted matrix field inherits the default, while an
+explicit empty array selects one unvaried execution for that matrix.
+
+The resolved document also overlays the current artifact inventory. A cell is
+reported as `built` only when `artifacts/runs` contains a matching cell seal and
+both its FIDB and FIDBF still match the sealed paths, sizes and SHA-256 digests.
+A loose FIDB without that seal is only `artifact-only`; a completed batch or
+ledger row is never enough by itself. Inventory is deliberately excluded from
+the plan digest so existing output state cannot change the requested build
+identity.
+
+### Automatic priority queue
+
+[`plans/priority-queue.toml`](plans/priority-queue.toml) is the ordered automation
+authority. Its `batch_order` is the priority list: workers claim the first
+runnable cell in the first batch, skip blocked coverage, and continue down the
+list. Each batch points to a reviewed `fidb-plan/v1` document. The queue ships
+with `armed = false`, so inspection and synchronization cannot start a build.
+
+Synchronize and inspect its durable state without executing anything:
+
+```sh
+uv run fidb-poc queue sync
+uv run fidb-poc queue status --full
+```
+
+After an operator deliberately changes `armed` to `true`, one or more workers
+can consume it continuously:
+
+```sh
+uv run fidb-poc queue run --pool library-local --worker-id reference-host-1
+uv run fidb-poc queue run --pool library-local --worker-id reference-host-2
+```
+
+The active queue is deliberately library-only: native cells and source-library
+cells with the explicit `local` executor. The typed `library-local` worker pool
+fails closed against QEMU and malware cells even if a later queue edit places
+one before an eligible library cell. `max_workers = 2` is the initial active
+lease cap for this 16-core/32-thread host; raise it only after the ledger has
+representative build and Ghidra memory/timing evidence. A worker may invoke
+four compiler jobs and one Ghidra JVM, so hardware-thread count is not a safe
+worker count.
+
+TOML remains the source of requested coverage and priority. The ignored local
+SQLite ledger at `var/fidb-coordinator/ledger.sqlite3` records only runtime
+state: claims, fenced leases, attempts, stages, failures and completions. It is
+safe for multiple worker processes on this Linux host; it must not be placed on
+SMB/NFS or opened directly by remote workers. The current loopback API is an
+operator/control-panel boundary and deliberately has no claim or run endpoint;
+remote workers still require a later authenticated worker API.
+
+Start the bounded API on `reference-host` without exposing SQLite or a coordinator
+port over Tailscale:
+
+```sh
+uv run fidb-poc api serve --bind 127.0.0.1 --port 8765
+```
+
+The control panel's same-origin `/api/fidb/*` route runs server-side on
+`reference-host` and forwards only a fixed route set to that loopback API. Read
+routes expose the ledger, timings, detected capabilities and one validated
+projection of recipes, native routes, treatments, toolchains, sensitivity
+factors, variants and plans. The matrix therefore does not maintain a second
+hard-coded build catalog. Its `built` markers use the sealed inventory from
+that projection.
+
+The panel can submit its generated TOML to a resolve-only endpoint, then save a
+successfully resolved request under `plans/drafts/`. Updates use the previous
+TOML hash and fail on a conflict rather than silently overwriting another edit.
+The saved document is still only plan intent: it is not inserted into the
+priority queue and no build starts. Thus a Mac browser may use the
+Tailscale-served control panel without treating the Mac's own `localhost` as
+the execution host. The API cannot arm a queue, claim a job, accept a command,
+or start a build.
+
+Every worker uses a fixed typed dispatcher and re-resolves the reviewed recipe,
+pins, target, toolchain, adapter and executor before running. A terminal success
+requires preparation/build, artifact validation, Ghidra analysis, FID
+population, non-empty FIDB and FIDBF export, and an atomic provenance seal.
+Successful attempts are published under `artifacts/runs/`; incomplete attempts
+cannot become completed ledger entries. No queue or plan field accepts a raw
+command.
+
+Each `library-local` attempt now records durable, fenced stage spans for request and authority
+validation, pinned source/toolchain acquisition and verification, extraction,
+patch/configure/compile, archive-object selection, artifact validation, Ghidra
+startup and import/analysis, FID population and validation, FIDB/FIDBF export,
+provenance sealing, and publication. Workers measure duration with a monotonic
+clock and retain UTC boundaries, cache/byte/object/program/function counts where
+available, process/child CPU time, peak RSS, skips, failures, retries, and
+interruptions. The sealed cell result carries its execution-timing document;
+the SQLite ledger remains the durable cross-attempt history.
+
+Malware is not part of this worker pool. Its existing typed build path remains
+available separately, but its download/extract/build internals are not yet
+split into the same fine-grained stage taxonomy.
+
+QEMU is outside the active `library-local` pool, but its default source-build
+route retains a distinct `executor-image-acquire` span for the pinned VM ISO so
+that ISO/cache time cannot contaminate source or cross-toolchain distributions.
+
+Read the aggregate timing evidence at `GET /api/v1/timings` or through the
+control panel's same-origin `GET /api/fidb/timings`. Stage p50/p90 values use
+only completed worker-monotonic spans. Coordinator wall-clock interruptions and
+queue waits remain visible with their source and basis, but are excluded from
+those stage distributions. The successful-attempt service-rate proxy is absent
+until a complete workflow has been observed; it excludes retry work, queue/idle
+time and worker concurrency, so it is not presented as measured whole-factory
+throughput. ETA remains absent until a matching evidence-backed model
+has enough samples; the UI reports **Collecting evidence** instead of inventing
+a rate from cell counts.
+
+The repository includes inactive user-service templates for the
+[`loopback API`](operations/fidb-coordinator-api.service) and
+[`library-local workers`](operations/fidb-library-local-worker@.service), plus
+the [`Tailscale control panel`](operations/fidb-control-panel.service).
+They are not installed, enabled or started by the repository, and a worker
+refuses to start while the TOML queue is disarmed. See
+[`operations/README.md`](operations/README.md) for the deliberately manual
+activation and resource-review procedure.
+
 A real run creates temporary working state and evidence:
 
 ```text

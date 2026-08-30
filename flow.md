@@ -85,6 +85,103 @@ normal build
 
 Code: [`cli.main()` dispatch](src/fidb_poc/cli.py)
 
+### Declarative planning path
+
+The visual planner and automation use the same request boundary:
+
+```text
+plans/*.toml
+> validate reviewed recipe, route, treatment, toolchain and factor identities
+> expand base cells and the named factor cross-product
+> retain unavailable desired cells as explicit blockers
+> snapshot sensitivity and usefulness context
+> digest the static resolved request
+> accept built state only from a valid cell seal plus matching FIDB/FIDBF
+> show loose unsealed FIDBs separately without changing the plan digest
+> write resolved JSON for inspection or later coordinator dispatch
+```
+
+Run this read-only resolution with `fidb-poc resolve-plan`. The backend also
+projects every reviewed recipe, native route, treatment, toolchain, factor,
+variant and plan through one read-only catalog endpoint. The GUI renders that
+projection rather than maintaining its own build catalog. Its generated TOML
+can be resolved through the same resolver and, only after successful
+resolution, atomically saved under `plans/drafts` with a compare-and-swap file
+hash. Saving remains non-executing and does not insert the draft into a queue.
+TOML and the CLI-resolved document remain the authority. `qemu` versus `local`
+is source-build routing and provenance, not a FID treatment. This path does not
+alter the existing native build dispatch.
+
+### Priority queue and complete-cell dispatch
+
+```text
+plans/priority-queue.toml
+> order batches by explicit batch_order
+> resolve and freeze each referenced fidb-plan/v1 request
+> persist planned and blocked entries in the local SQLite ledger
+> claim the first runnable entry with a fenced, renewable lease
+> create one isolated attempt root
+> re-resolve its reviewed recipe, pins, toolchain, adapter and executor
+> prepare and build/archive the analysis inputs
+> validate the target artifacts
+> ingest and analyze them in isolated Ghidra state
+> populate and validate the FID database
+> export both FIDB and FIDBF
+> atomically seal provenance, publish the attempt and mark it complete
+> continue to the next runnable entry
+```
+
+Every library-local execution step above is represented by a durable stage
+attempt. The worker emits UTC start/finish boundaries and monotonic durations
+for:
+
+```text
+request-validation -> authority-resolution
+source-acquire / toolchain-acquire -> input-verification
+executor-image-acquire (QEMU route only)
+source-extract / toolchain-extract -> patch -> configure -> compile
+archive-object-selection -> artifact-validation
+ghidra-startup -> ghidra-import-analysis -> fid-population -> fid-validation
+fidb-export -> fidbf-export -> provenance-seal -> publication
+```
+
+Stages that do not apply to a route are explicitly `skipped`; failures retain
+their measured duration and error type. Lease expiry closes an open span as a
+coordinator-wall-clock `interrupted` observation so it remains auditable but is
+not mixed into worker-monotonic performance percentiles. Stage metrics include
+cache state, bytes and produced-object/program/function counts where the stage
+can report them, plus process/child CPU and peak RSS readings for capacity
+review. The result seal embeds the worker timing document, while the ledger
+adds fenced publication and cross-attempt history.
+
+`fidb-poc queue sync` and `queue status` are non-executing. `queue run` consumes
+the list only when the TOML has `armed = true`; pause stops new claims without
+invalidating work already leased. Multiple local worker processes coordinate
+through transactional SQLite leases, while each attempt has independent work,
+Ghidra and artifact paths. Blocked entries stay visible and do not prevent later
+runnable entries from progressing. The current `library-local` worker pool
+atomically skips every cell except native libraries and source libraries routed
+through the explicit `local` executor; it never claims QEMU or malware work.
+
+The analyst/control path is deliberately separate from worker execution:
+
+```text
+Mac browser over Tailscale
+> control-panel same-origin /api/fidb/* route on reference-host
+> fixed server-side proxy to 127.0.0.1:8765
+> bounded local coordinator API
+> host-local SQLite ledger and read-only capability detection
+```
+
+The local API exposes health, status, snapshot, events, capabilities, the
+authoritative catalog and bounded timing history, plus typed
+sync/pause/resume and validated plan-draft resolve/save operations. The Timing
+workspace shows active clocks, retries/failures, measured distributions and
+throughput; it displays no ETA until the API has a defensible sample-backed
+model. The API cannot arm, claim or run a cell. Remote workers will require an
+authenticated worker-facing API rather than this local control API or direct
+access to SQLite.
+
 ## 2. Configuration and recipe resolution
 
 ```text
