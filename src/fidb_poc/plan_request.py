@@ -7,7 +7,6 @@ toolchains/registry.toml.  Resolution is deliberately separate from execution.
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import itertools
 import json
@@ -723,65 +722,71 @@ def _artifact_inventory(
     project_root: Path, cells: list[dict[str, object]]
 ) -> dict[str, object]:
     sealed: dict[str, list[str]] = {}
-    native_manifest = project_root / "artifacts/libs/fidb_manifest.csv"
-    if native_manifest.is_file():
-        with native_manifest.open(newline="", encoding="utf-8") as stream:
-            for row in csv.DictReader(stream):
-                if row.get("status") != "complete":
-                    continue
-                key = ":".join(
-                    (
-                        str(row.get("library", "")),
-                        str(row.get("version", "")),
-                        str(row.get("route", "")),
-                        str(row.get("treatment", "")),
-                    )
-                )
-                sealed.setdefault(key, []).append(
-                    str(native_manifest.relative_to(project_root))
-                )
-    for path in sorted((project_root / "artifacts/malware").glob("**/manifest.json")):
+    for path in sorted(
+        (project_root / "artifacts/runs").glob(
+            "job-*/attempt-*/artifacts/cell-seal.json"
+        )
+    ):
         try:
-            row = json.loads(path.read_text(encoding="utf-8"))
+            seal = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        key = ":".join(
-            (
-                str(row.get("family", "")),
-                str(row.get("version", "")),
-                str(row.get("variant", "")),
-            )
-        )
-        sealed.setdefault(key, []).append(str(path.relative_to(project_root)))
+        if (
+            not isinstance(seal, dict)
+            or seal.get("schema_version") != "fidb-cell-seal/v1"
+        ):
+            continue
+        identity = seal.get("cell")
+        artifacts = seal.get("artifacts")
+        if not isinstance(identity, dict) or not isinstance(artifacts, dict):
+            continue
+        cell_id = identity.get("id")
+        if not isinstance(cell_id, str) or not cell_id:
+            continue
+        attempt_root = path.parent.parent
+        valid = True
+        for key in ("fidb", "fidbf"):
+            record = artifacts.get(key)
+            if not isinstance(record, dict):
+                valid = False
+                break
+            relative = record.get("path")
+            digest = record.get("sha256")
+            size = record.get("bytes")
+            if (
+                not isinstance(relative, str)
+                or not relative
+                or relative.startswith("/")
+                or "\\" in relative
+                or any(part in {"", ".", ".."} for part in relative.split("/"))
+                or not isinstance(digest, str)
+                or not isinstance(size, int)
+                or isinstance(size, bool)
+                or size < 1
+            ):
+                valid = False
+                break
+            artifact = attempt_root / relative
+            try:
+                payload = artifact.read_bytes()
+            except OSError:
+                valid = False
+                break
+            if (
+                artifact.is_symlink()
+                or len(payload) != size
+                or hashlib.sha256(payload).hexdigest() != digest
+            ):
+                valid = False
+                break
+        if valid:
+            sealed.setdefault(cell_id, []).append(str(path.relative_to(project_root)))
 
     loose_fidbs = sorted((project_root / "artifacts/fidbs").glob("*.fidb"))
     coverage = {}
     for cell in cells:
         recipe = cell["recipe"]
-        toolchain = cell["toolchain"]
-        exact_keys = []
-        if cell["kind"] == "native":
-            exact_keys.append(
-                ":".join(
-                    (
-                        str(recipe["name"]),
-                        str(recipe["version"]),
-                        str(toolchain["route"]),
-                        str(cell["build"]["treatment"]),
-                    )
-                )
-            )
-        else:
-            exact_keys.append(
-                ":".join(
-                    (
-                        str(recipe["name"]),
-                        str(recipe["version"]),
-                        str(toolchain["variant"]),
-                    )
-                )
-            )
-        evidence = [path for key in exact_keys for path in sealed.get(key, [])]
+        evidence = list(sealed.get(str(cell["id"]), []))
         state = "built" if evidence else "not-built"
         if not evidence:
             tokens = (

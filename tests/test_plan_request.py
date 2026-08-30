@@ -1,4 +1,6 @@
 import json
+import hashlib
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -281,6 +283,49 @@ factor_variants = ["optimization:invented"]
             document = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(document["summary"]["desired_cells"], 6)
             self.assertIn("plan_digest", document)
+
+    def test_built_inventory_requires_a_valid_seal_and_both_artifacts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("worker.json", "pyproject.toml"):
+                shutil.copy2(self.root / name, root / name)
+            for name in ("plans", "recipes", "sensitivity", "toolchains"):
+                shutil.copytree(self.root / name, root / name)
+            attempt = root / "artifacts/runs/job-test/attempt-1"
+            artifacts = attempt / "artifacts"
+            artifacts.mkdir(parents=True)
+            fidb = artifacts / "library.fidb"
+            fidbf = artifacts / "library.fidbf"
+            fidb.write_bytes(b"packed-fidb")
+            fidbf.write_bytes(b"raw-fidbf")
+            cell_id = "bzip2-native:bzip2-1.0.7:" "linux-x86_64-gnu-gcc:baseline_o2"
+            seal = {
+                "schema_version": "fidb-cell-seal/v1",
+                "cell": {"id": cell_id},
+                "artifacts": {
+                    "fidb": {
+                        "path": "artifacts/library.fidb",
+                        "sha256": hashlib.sha256(fidb.read_bytes()).hexdigest(),
+                        "bytes": fidb.stat().st_size,
+                    },
+                    "fidbf": {
+                        "path": "artifacts/library.fidbf",
+                        "sha256": hashlib.sha256(fidbf.read_bytes()).hexdigest(),
+                        "bytes": fidbf.stat().st_size,
+                    },
+                },
+            }
+            seal_path = artifacts / "cell-seal.json"
+            seal_path.write_text(json.dumps(seal), encoding="utf-8")
+
+            built = resolve_plan(root / "plans/bzip2-native.toml", root)
+            self.assertEqual(built["inventory"]["cells"][cell_id]["state"], "built")
+
+            fidb.write_bytes(b"changed-after-seal")
+            invalid = resolve_plan(root / "plans/bzip2-native.toml", root)
+            self.assertEqual(
+                invalid["inventory"]["cells"][cell_id]["state"], "not-built"
+            )
 
 
 if __name__ == "__main__":
