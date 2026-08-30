@@ -1,9 +1,9 @@
 """Bounded local HTTP adapter for the FIDB coordinator.
 
 The API is intentionally narrower than the worker CLI.  It exposes durable
-state and read-only capability detection, and permits only three typed control
-transitions: sync the configured queue, pause new claims, and resume claims.
-It cannot arm a queue, claim a job, run a build, or accept a command string.
+state and reviewed authorities, plus typed coordinator controls and validated
+plan-draft resolution/persistence. It cannot arm a queue, claim a job, run a
+build, or accept a command string.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from .coordinator import (
     Coordinator,
     CoordinatorError,
 )
+from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
 
 API_SCHEMA = "fidb-local-api/v1"
 DEFAULT_BIND = "127.0.0.1"
@@ -53,6 +54,8 @@ _POST_PATHS = {
     "/api/v1/sync",
     "/api/v1/pause",
     "/api/v1/resume",
+    "/api/v1/plan-drafts/resolve",
+    "/api/v1/plan-drafts/save",
 }
 
 log = logging.getLogger(__name__)
@@ -654,7 +657,41 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 )
             raise ApiError(HTTPStatus.NOT_FOUND, "not-found", "endpoint not found")
         document = self._read_body()
-        if path == "/api/v1/sync":
+        if path == "/api/v1/plan-drafts/resolve":
+            self._only_fields(document, {"toml"})
+            try:
+                result = resolve_plan_draft(
+                    document.get("toml"),
+                    self.api_server.config.project_root,
+                )
+            except ValueError as error:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-plan-draft",
+                    str(error),
+                ) from error
+        elif path == "/api/v1/plan-drafts/save":
+            self._only_fields(document, {"name", "toml", "expected_sha256"})
+            try:
+                result = save_plan_draft(
+                    document.get("name"),
+                    document.get("toml"),
+                    self.api_server.config.project_root,
+                    expected_sha256=document.get("expected_sha256"),
+                )
+            except DraftConflictError as error:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "draft-conflict",
+                    str(error),
+                ) from error
+            except ValueError as error:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-plan-draft",
+                    str(error),
+                ) from error
+        elif path == "/api/v1/sync":
             self._only_fields(document, set())
             with Coordinator(
                 self.api_server.config.state_path,

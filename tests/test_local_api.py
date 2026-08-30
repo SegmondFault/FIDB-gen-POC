@@ -265,6 +265,42 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(document["error"]["code"], "not-found")
 
+    def test_plan_drafts_resolve_and_save_only_after_validation(self):
+        toml = (self.root / "plans/bzip2-native.toml").read_text(encoding="utf-8")
+
+        status, resolved, _ = self.request(
+            "POST",
+            "/api/v1/plan-drafts/resolve",
+            {"toml": toml},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(resolved["resolved"]["summary"]["planned_cells"], 1)
+        self.assertFalse((self.root / "plans/drafts").exists())
+
+        status, saved, _ = self.request(
+            "POST",
+            "/api/v1/plan-drafts/save",
+            {"name": "bzip2-native-baseline", "toml": toml},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["path"], "plans/drafts/bzip2-native-baseline.toml")
+
+        status, conflict, _ = self.request(
+            "POST",
+            "/api/v1/plan-drafts/save",
+            {"name": "bzip2-native-baseline", "toml": toml},
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(conflict["error"]["code"], "draft-conflict")
+
+        status, invalid, _ = self.request(
+            "POST",
+            "/api/v1/plan-drafts/resolve",
+            {"toml": toml + '\ncommand = "make anything"\n'},
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(invalid["error"]["code"], "invalid-plan-draft")
+
     def test_cors_is_exact_and_never_wildcard(self):
         status, _, headers = self.request(
             "GET", "/api/v1/health", origin="http://analyst.test:3000"
