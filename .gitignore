@@ -3,6 +3,7 @@ work/
 artifacts/libs/
 # compiled malware corpus never gets pushed -- fidb/fidbf output + recipes do
 artifacts/malware/
+var/
 dist/
 build/
 *.egg-info/

@@ -1,0 +1,32 @@
+schema_version = "fidb-queue/v1"
+name = "library-priority"
+
+[queue]
+# Intent and priority live here.  The first native commissioning run completed
+# and was drained on 2026-08-30.  A future run must be deliberately re-armed,
+# synchronized and inspected before any worker is started.
+armed = false
+# Initial host-safe cap. Raise only after the ledger has real Ghidra RSS and
+# stage-duration evidence; worker service instances above this remain idle.
+max_workers = 2
+batch_order = [
+  "batch-000",
+  "batch-005",
+]
+poll_seconds = 5
+lease_seconds = 3600
+max_attempts = 3
+
+[[batch]]
+id = "batch-000"
+name = "tier-0-runtime-foundations"
+plan = "plans/tier0-runtime-foundations.toml"
+# First overnight commissioning is native-only.  The reviewed PowerPC source
+# matrix remains in the plan but is not materialized by this queue until its
+# pinned acquisition/local cross-build path has a separate foreground canary.
+matrices = ["tier0-zlib-native"]
+
+[[batch]]
+id = "batch-005"
+name = "bzip2-native-baseline"
+plan = "plans/bzip2-native.toml"
