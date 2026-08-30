@@ -1,0 +1,30 @@
+[Unit]
+Description=FIDB local library queue worker %i
+PartOf=fidb-library-local-workers.target
+ConditionFileIsExecutable=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc
+ConditionFileNotEmpty=/home/fidb-operator/Projects/circl/FIDB-POC-unified/plans/priority-queue.toml
+
+[Service]
+Type=simple
+WorkingDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified
+Environment=PYTHONUNBUFFERED=1
+# Required and deliberately installed by the operator.  The repository copy is
+# operations/library-local-worker.env.example.
+EnvironmentFile=%h/.config/fidb-factory/library-local-worker.env
+ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc queue run --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --worker-id reference-host-library-local-%i --pool library-local
+# The CLI maps deliberate SIGINT/SIGTERM shutdown to conventional shell status.
+# Treat those operator stops as clean; build/configuration errors still fail.
+SuccessExitStatus=130 143
+Restart=on-abnormal
+RestartSec=5
+TimeoutStopSec=90
+
+# One build adapter uses four make jobs.  Give one worker no more than four CPU
+# equivalents and keep an unexpected Ghidra heap expansion inside a hard bound.
+CPUQuota=400%
+MemoryHigh=6G
+MemoryMax=8G
+TasksMax=512
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=FIDB loopback coordinator API
+ConditionFileIsExecutable=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc
+ConditionFileNotEmpty=/home/fidb-operator/Projects/circl/FIDB-POC-unified/plans/priority-queue.toml
+
+[Service]
+Type=simple
+WorkingDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified
+Environment=PYTHONUNBUFFERED=1
+# Reuse the operator-reviewed environment installed for local library workers.
+EnvironmentFile=%h/.config/fidb-factory/library-local-worker.env
+ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc api serve --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --bind 127.0.0.1 --port 8765
+Restart=on-abnormal
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+
+[Install]
+WantedBy=default.target
