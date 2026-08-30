@@ -15,6 +15,7 @@ export type CoordinatorBatch = {
   position: number;
   plan_path: string;
   plan_digest: string;
+  matrices: string[] | null;
   active: boolean;
 };
 
@@ -280,12 +281,13 @@ export type AuthorityToolchain = {
 
 export type AuthorityFactor = {
   id: string;
-  group: string;
+  stage: string;
   label: string;
-  description: string;
-  class: string;
+  control: string;
+  evidence: string;
   confidence: string;
-  authority: string;
+  impact: string;
+  coverage_action: string;
 };
 
 export type AuthorityFactorVariant = {
