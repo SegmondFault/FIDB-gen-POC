@@ -316,7 +316,7 @@ factor_variants = ["optimization:invented"]
     def test_built_inventory_requires_a_valid_seal_and_both_artifacts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for name in ("worker.json", "pyproject.toml"):
+            for name in ("worker.toml", "pyproject.toml"):
                 shutil.copy2(self.root / name, root / name)
             for name in ("plans", "recipes", "sensitivity", "toolchains"):
                 shutil.copytree(self.root / name, root / name)

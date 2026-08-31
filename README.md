@@ -115,7 +115,7 @@ GHIDRA_HEADLESS=/opt/ghidra/support/analyzeHeadless \
     --profile smoke
 ```
 
-With no `--library`, the worker uses the name-only request queue in `worker.json`
+With no `--library`, the worker uses the name-only request queue in `worker.toml`
 and builds both libraries. To build only zlib, add `--library zlib`. A successful
 two-library run ends with:
 
@@ -163,7 +163,7 @@ library, libc, or malware fork alike -- uses this same `fidb-recipe/v3` TOML
 schema; only the directory and `mode` differ. See **Hunting an unknown
 target** below for the other two.
 
-`worker.json` is trusted operator configuration for the single Linux route, one
+`worker.toml` is trusted operator configuration for the single Linux route, one
 treatment and one profile. It is not untrusted request data.
 
 ### Declarative plan requests

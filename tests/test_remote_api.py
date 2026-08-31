@@ -63,7 +63,7 @@ class RemoteApiTests(unittest.TestCase):
         self.directory = Path(self.temporary.name)
         self.root = self.directory / "project"
         self.root.mkdir()
-        for name in ("pyproject.toml", "worker.json"):
+        for name in ("pyproject.toml", "worker.toml"):
             shutil.copy2(self.source_root / name, self.root / name)
         for name in ("plans", "recipes", "sensitivity", "toolchains"):
             shutil.copytree(self.source_root / name, self.root / name)

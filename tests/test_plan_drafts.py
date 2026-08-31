@@ -19,7 +19,7 @@ class PlanDraftTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        for name in ("worker.json", "pyproject.toml"):
+        for name in ("worker.toml", "pyproject.toml"):
             shutil.copy2(self.source_root / name, self.root / name)
         for name in ("plans", "recipes", "sensitivity", "toolchains"):
             shutil.copytree(self.source_root / name, self.root / name)

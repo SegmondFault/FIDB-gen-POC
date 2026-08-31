@@ -50,7 +50,7 @@ binary_format = "ELF"
 endianness = "little"
 bits = 64
 catalog_state = "reviewed-route"
-evidence = ["worker.json"]
+evidence = ["worker.toml"]
 [[target]]
 id = "duplicate"
 label = "Second"
@@ -61,7 +61,7 @@ binary_format = "ELF"
 endianness = "little"
 bits = 64
 catalog_state = "reviewed-route"
-evidence = ["worker.json"]
+evidence = ["worker.toml"]
 """
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "targets.toml"

@@ -58,7 +58,7 @@ class LocalApiTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        for name in ("pyproject.toml", "worker.json"):
+        for name in ("pyproject.toml", "worker.toml"):
             shutil.copy2(self.source_root / name, self.root / name)
         for name in ("plans", "recipes", "sensitivity", "targets", "toolchains"):
             shutil.copytree(self.source_root / name, self.root / name)

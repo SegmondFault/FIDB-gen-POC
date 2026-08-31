@@ -44,7 +44,7 @@ class CommandLineTests(unittest.TestCase):
         source_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            shutil.copy(source_root / "worker.json", root / "worker.json")
+            shutil.copy(source_root / "worker.toml", root / "worker.toml")
             shutil.copytree(source_root / "recipes", root / "recipes")
             errors = io.StringIO()
             with contextlib.redirect_stderr(errors):
@@ -98,7 +98,7 @@ class CommandLineTests(unittest.TestCase):
         source_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            shutil.copy(source_root / "worker.json", root / "worker.json")
+            shutil.copy(source_root / "worker.toml", root / "worker.toml")
             shutil.copytree(source_root / "recipes", root / "recipes")
             errors = io.StringIO()
             with contextlib.redirect_stderr(errors):
@@ -121,7 +121,7 @@ class CommandLineTests(unittest.TestCase):
         source_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            shutil.copy(source_root / "worker.json", root / "worker.json")
+            shutil.copy(source_root / "worker.toml", root / "worker.toml")
             shutil.copytree(source_root / "recipes", root / "recipes")
             work_marker = root / "work/keep.txt"
             output_marker = root / "artifacts/libs/keep.txt"

@@ -128,7 +128,7 @@ class LocalApiConfig:
         root = Path(project_root).expanduser().resolve()
         required = (
             root / "pyproject.toml",
-            root / "worker.json",
+            root / "worker.toml",
             root / "recipes",
             root / "targets/registry.toml",
             root / "toolchains/registry.toml",

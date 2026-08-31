@@ -35,13 +35,13 @@ class LivePipelineSmokeTests(unittest.TestCase):
         repository = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
             project_root = Path(temporary)
-            shutil.copy(repository / "worker.json", project_root / "worker.json")
+            shutil.copy(repository / "worker.toml", project_root / "worker.toml")
             shutil.copytree(repository / "recipes", project_root / "recipes")
             shutil.copytree(
                 repository / "ghidra_scripts", project_root / "ghidra_scripts"
             )
             configuration = load_configuration(
-                project_root / "worker.json", request_override=("zlib",)
+                project_root / "worker.toml", request_override=("zlib",)
             )
             configuration = select_configuration(
                 configuration,

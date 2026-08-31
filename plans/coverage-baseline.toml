@@ -29,7 +29,7 @@ recipe_order = [
   "mirai@4889a6f79723",
 ]
 
-# Native cells use the reviewed recipes, route and treatment from worker.json.
+# Native cells use the reviewed recipes, route and treatment from worker.toml.
 [[matrix]]
 id = "native-libraries"
 kind = "native"

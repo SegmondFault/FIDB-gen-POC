@@ -63,7 +63,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--config",
         type=Path,
-        help="worker configuration JSON (default: PROJECT/worker.json)",
+        help="worker configuration TOML (default: PROJECT/worker.toml)",
     )
     result.add_argument(
         "--library",
@@ -71,7 +71,7 @@ def parser() -> argparse.ArgumentParser:
         dest="libraries",
         help=(
             "library request to resolve and fetch; repeat for multiple libraries "
-            "(default: requested_libraries in worker.json)"
+            "(default: requested_libraries in worker.toml)"
         ),
     )
     result.add_argument(
@@ -97,7 +97,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--profile",
         default="smoke",
-        help="frozen treatment profile from worker.json (default: smoke)",
+        help="frozen treatment profile from worker.toml (default: smoke)",
     )
     result.add_argument(
         "--route",
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     project_root = arguments.project_root.resolve()
-    config_path = (arguments.config or project_root / "worker.json").resolve()
+    config_path = (arguments.config or project_root / "worker.toml").resolve()
     try:
         for library in arguments.libraries or ():
             _validate_queue_token("--library", library)

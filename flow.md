@@ -3,7 +3,7 @@
 This document traces a normal build from the `fidb-poc` CLI command to the
 generated Function ID databases and provenance manifest.
 
-The current `worker.json` expands to two build cells:
+The current `worker.toml` expands to two build cells:
 
 ```text
 zlib x linux-x86_64-gnu-gcc x baseline_o2
@@ -222,10 +222,10 @@ Remote workers never access SQLite or submit raw commands.
 
 ```text
 cli.main()
-> load_configuration(worker.json)
+> load_configuration(worker.toml)
 > _resolve_requests()
 > _recipe_catalog()
-> _load_recipe(recipes/*.json)
+> _load_recipe(recipes/*.toml)
 > select_configuration()
 ```
 
@@ -239,7 +239,7 @@ Code:
 The trusted worker configuration currently selects:
 
 ```text
-worker.json
+worker.toml
 > requested libraries: zlib and bzip2
 > route: linux-x86_64-gnu-gcc
 > compiler: /usr/bin/gcc
@@ -249,7 +249,7 @@ worker.json
 > treatment: baseline_o2
 ```
 
-Configuration: [`worker.json`](worker.json)
+Configuration: [`worker.toml`](worker.toml)
 
 Library resolution is name-based:
 

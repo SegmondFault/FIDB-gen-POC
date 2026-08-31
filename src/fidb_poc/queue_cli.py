@@ -165,7 +165,7 @@ def _project_root(path: Path) -> Path:
     root = path.expanduser().resolve()
     required = (
         root / "pyproject.toml",
-        root / "worker.json",
+        root / "worker.toml",
         root / "recipes",
         root / "toolchains/registry.toml",
     )

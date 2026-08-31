@@ -213,7 +213,7 @@ def _validate_roots(project_root: Path, attempt_root: Path) -> tuple[Path, Path]
     project = project_root.expanduser().resolve()
     if not project.is_dir():
         raise CellResolutionError(f"project_root is not a directory: {project}")
-    for relative in ("worker.json", "recipes", "toolchains/registry.toml"):
+    for relative in ("worker.toml", "recipes", "toolchains/registry.toml"):
         if not (project / relative).exists():
             raise CellResolutionError(
                 f"project_root is missing reviewed authority {relative}: {project}"
@@ -335,7 +335,7 @@ def _resolve_native(
         )
     _reject_raw_commands(recipe_documents[0][1], f"recipe {recipe_documents[0][0]}")
     configuration = load_configuration(
-        project_root / "worker.json", request_override=(identity,)
+        project_root / "worker.toml", request_override=(identity,)
     )
     configuration = select_configuration(
         configuration,

@@ -15,7 +15,7 @@ class CapabilityDetectionTests(unittest.TestCase):
     def test_detection_never_mutates_toolchain_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             project_root = Path(temporary)
-            shutil.copy2(self.source_root / "worker.json", project_root / "worker.json")
+            shutil.copy2(self.source_root / "worker.toml", project_root / "worker.toml")
             shutil.copytree(self.source_root / "recipes", project_root / "recipes")
             shutil.copytree(
                 self.source_root / "toolchains", project_root / "toolchains"

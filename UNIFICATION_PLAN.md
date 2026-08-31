@@ -21,7 +21,7 @@ catalog blocks per architecture.
 Two loaders, two schemas, one gap:
 
 - `config.py` (`recipes/*.json`, `fidb-recipe/v2`): a Library says
-  *what* to build; arch/toolchain live externally in `worker.json`'s
+  *what* to build; arch/toolchain live externally in `worker.toml`'s
   Route/Treatment cross product. Native host toolchain only.
   Has duplicate-key checking (`_recipe_catalog`, config.py:161-165).
 - `libc_catalog.py` (`catalogs/default.toml`): each row is fully
@@ -282,7 +282,7 @@ CLIs, two matrices, two manifest schemas, two output trees, three separate
 "build this cell" functions for what's one operation (resolve recipe x
 toolchain -> build -> hash -> record).
 
-- `fidb-poc`/`cli.py`/`pipeline.py` (native, host build, `worker.json`
+- `fidb-poc`/`cli.py`/`pipeline.py` (native, host build, `worker.toml`
   Route x Treatment) and `fidb-hunt`/`hunt_cli.py` (archive/source/malware,
   VM-isolated, `toolchains/registry.toml` arch x era) are still fully
   separate code paths.
@@ -300,7 +300,7 @@ Decisions (confirmed):
    subcommands, or `fidb-poc` becomes a thin front-end over one shared
    `execute()`. One binary, one `--doctor`/`--plan` surface for every
    recipe category.
-2. **Fold `worker.json`'s Route/Treatment into `toolchains/registry.toml`**
+2. **Fold `worker.toml`'s Route/Treatment into `toolchains/registry.toml`**
    -- the single native x86_64 route becomes a toolchain row (or a
    distinguished host-native `era`), so there's one arch/toolchain lookup
    table, not two. Treatment (compiler-flag variant, e.g. `baseline_o2`)
@@ -324,7 +324,7 @@ Decisions (confirmed):
 Real-build findings feeding this phase (tested 2026-08-24, this checkout,
 no code changes):
 
-- `fidb-poc --plan` correctly expands `worker.json` x `recipes/*.toml` ->
+- `fidb-poc --plan` correctly expands `worker.toml` x `recipes/*.toml` ->
   2 cells (zlib, bzip2), no build.
 - `fidb-poc --library zlib --route linux-x86_64-gnu-gcc --fresh` ran a
   real build: download, sha256-verify, `configure --static`, full `make`,
@@ -337,7 +337,7 @@ no code changes):
   candidates (no false positive on an unrelated static-C-runtime object).
   Both Ghidra-free, both worked with a bare file-path argument.
 - Minimality gap found: `--route` is a *required* flag even when
-  `worker.json` defines exactly one route -- should default to "the only
+  `worker.toml` defines exactly one route -- should default to "the only
   route" (or disappear entirely once step 2 above folds routes into the
   toolchain registry and route selection becomes "which arches did the
   recipe/CLI invocation ask for").
@@ -386,7 +386,7 @@ Not attempted this pass -- both require actually merging two build engines
 that are today fully independent and independently trustworthy, which is a
 different order of risk than a CLI dispatch table or a directory rename:
 
-- **Decision 2** (fold `worker.json`'s Route into
+- **Decision 2** (fold `worker.toml`'s Route into
   `toolchains/registry.toml` as a host-native era) means teaching
   `libc_catalog.py`'s cell-prepare path (`prepare_recipe`/`select_recipes`,
   today: archive-extract or VM-isolated cross-compile) to also dispatch to
@@ -426,7 +426,7 @@ not a design gap:
   from the old catalog and haven't been re-audited for currency (Bootlin
   toolchain URLs move over years); they inherit whatever staleness the
   original catalog already had, not a new problem introduced here.
-- `worker.json` (the Route/Treatment build matrix for `fidb-poc`) is
-  intentionally still JSON, not TOML -- it's a different kind of
-  document (a build matrix, not a recipe/identity pin) and Python's
-  stdlib has no TOML writer, which the tests that mutate it would need.
+- `worker.toml` remains a separate Route/Treatment build matrix for
+  `fidb-poc`, but its authority is now TOML and is loaded through the standard
+  library's read-only parser. Tests construct mutated TOML fixtures directly;
+  no runtime TOML writer or caller-supplied command surface is required.

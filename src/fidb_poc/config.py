@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import tomllib
 from dataclasses import dataclass, replace
@@ -20,6 +19,39 @@ class RecipesNotFoundError(ValueError):
 
 
 SAFE_PATH_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
+WORKER_FIELDS = {
+    "schema_version",
+    "recipe_directory",
+    "requested_libraries",
+    "routes",
+    "treatments",
+    "profiles",
+}
+ROUTE_FIELDS = {
+    "id",
+    "target_os",
+    "architecture",
+    "binary_format",
+    "compiler",
+    "archiver",
+    "ranlib",
+    "compiler_flags",
+    "object_file_markers",
+    "linked_suffix",
+    "linked_file_markers",
+    "ghidra_language",
+    "ghidra_compiler_spec",
+    "compiler_version_markers",
+}
+TREATMENT_FIELDS = {
+    "id",
+    "factor",
+    "description",
+    "remove_flags",
+    "append_flags",
+    "supported_routes",
+    "phase",
+}
 
 
 def _path_component(value: object, context: str) -> str:
@@ -113,6 +145,12 @@ def _required(record: dict, field: str, context: str):
     return record[field]
 
 
+def _reject_unknown(record: dict, allowed: set[str], context: str) -> None:
+    unknown = set(record) - allowed
+    if unknown:
+        raise ValueError(f"{context} contains unknown fields: {sorted(unknown)}")
+
+
 def _load_recipe(path: Path) -> Library:
     row = tomllib.loads(path.read_text(encoding="utf-8"))
     if row.get("schema_version") != "fidb-recipe/v3":
@@ -201,11 +239,15 @@ def load_configuration(
     path: Path,
     request_override: tuple[str, ...] | None = None,
 ) -> Configuration:
-    document = json.loads(path.read_text(encoding="utf-8"))
-    if document.get("schema_version") != "fidb-worker/v2":
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    _reject_unknown(document, WORKER_FIELDS, "worker configuration")
+    if document.get("schema_version") != "fidb-worker/v3":
         raise ValueError("unsupported or missing schema_version")
 
     libraries = _resolve_requests(document, path, request_override)
+    route_rows = _required(document, "routes", "worker configuration")
+    for row in route_rows:
+        _reject_unknown(row, ROUTE_FIELDS, "route")
     routes = tuple(
         Route(
             id=_path_component(_required(row, "id", "route"), "route id"),
@@ -223,8 +265,11 @@ def load_configuration(
             ghidra_compiler_spec=row.get("ghidra_compiler_spec", "default"),
             compiler_version_markers=tuple(row.get("compiler_version_markers", [])),
         )
-        for row in _required(document, "routes", "worker configuration")
+        for row in route_rows
     )
+    treatment_rows = _required(document, "treatments", "worker configuration")
+    for row in treatment_rows:
+        _reject_unknown(row, TREATMENT_FIELDS, "treatment")
     treatments = tuple(
         Treatment(
             id=_path_component(_required(row, "id", "treatment"), "treatment id"),
@@ -235,7 +280,7 @@ def load_configuration(
             supported_routes=tuple(row.get("supported_routes", [])),
             phase=row.get("phase", "compile"),
         )
-        for row in _required(document, "treatments", "worker configuration")
+        for row in treatment_rows
     )
     profiles = {
         name: tuple(treatment_ids)

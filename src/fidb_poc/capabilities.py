@@ -235,7 +235,7 @@ def _registry_inventory(project_root: Path) -> list[dict[str, object]]:
 def _native_routes(
     project_root: Path, environment: Mapping[str, str]
 ) -> list[dict[str, object]]:
-    configuration = load_configuration(project_root / "worker.json")
+    configuration = load_configuration(project_root / "worker.toml")
     rows = []
     for route in configuration.routes:
         tools = {}

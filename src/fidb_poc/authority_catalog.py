@@ -32,7 +32,7 @@ def _native_authority(root: Path) -> tuple[list[dict[str, object]], dict[str, ob
     for path in recipe_paths:
         document = tomllib.loads(path.read_text(encoding="utf-8"))
         requests.append(f'{document["name"]}@{document["version"]}')
-    configuration = load_configuration(root / "worker.json", tuple(requests))
+    configuration = load_configuration(root / "worker.toml", tuple(requests))
     recipes = [
         {
             "id": f"{row.name}@{row.version}",
@@ -82,7 +82,7 @@ def _native_authority(root: Path) -> tuple[list[dict[str, object]], dict[str, ob
         "profiles": {
             name: list(values) for name, values in configuration.profiles.items()
         },
-        "authority_path": "worker.json",
+        "authority_path": "worker.toml",
     }
 
 
@@ -253,7 +253,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "plans": _plan_authority(root),
         "sources": {
             "recipes": "recipes/",
-            "routes": "worker.json",
+            "routes": "worker.toml",
             "targets": "targets/registry.toml",
             "toolchains": "toolchains/registry.toml",
             "factors": "sensitivity/factors.toml",

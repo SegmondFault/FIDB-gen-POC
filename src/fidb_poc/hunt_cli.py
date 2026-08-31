@@ -1,7 +1,7 @@
 """`fidb-hunt`: investigate an unknown target and match it against libc
 toolchain candidates, and separately build a known-source malware corpus
 from the same recipe/toolchain machinery. A separate entry point from
-`fidb-poc` (which only ever builds the reviewed recipes/ + worker.json
+`fidb-poc` (which only ever builds the reviewed recipes/ + worker.toml
 library matrix), mirroring the existing fidb-language-probe script --
 hunting an arbitrary target and shaping a ground-truth corpus are both a
 distinct concern from generating recipes for known-good libraries.

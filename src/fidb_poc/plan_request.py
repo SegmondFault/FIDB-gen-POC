@@ -1,7 +1,7 @@
 """Resolve a declarative build request against the reviewed project catalogs.
 
 The request contains identities and policy only.  URLs, hashes, compiler flags,
-commands, adapters and ABI details always come from worker.json, recipes/ and
+commands, adapters and ABI details always come from worker.toml, recipes/ and
 toolchains/registry.toml.  Resolution is deliberately separate from execution.
 """
 
@@ -611,7 +611,7 @@ def _native_cells(
     matrix: dict[str, object], project_root: Path
 ) -> list[dict[str, object]]:
     configuration = load_configuration(
-        project_root / "worker.json", tuple(matrix["recipes"])
+        project_root / "worker.toml", tuple(matrix["recipes"])
     )
     configuration = select_configuration(
         configuration,
