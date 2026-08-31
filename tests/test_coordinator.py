@@ -337,6 +337,72 @@ matrices = ["tier0-uclibc-powerpc"]
             attempts = coordinator.snapshot()["attempts"]
             self.assertEqual([row["state"] for row in attempts], ["expired", "expired"])
 
+    def test_retry_backoff_is_durable_exponential_and_capped(self):
+        path = self.write_queue(
+            batches=(("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),),
+            lease_seconds=10,
+            max_attempts=4,
+            queue_extra="retry_backoff_seconds = 30\nretry_backoff_max_seconds = 60",
+        )
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(path), now=10)
+            first = coordinator.claim("worker-one", now=20)
+            coordinator.fail(
+                first["job_id"],
+                first["lease_token"],
+                first["lease_generation"],
+                "transient one",
+                now=21,
+            )
+            waiting = coordinator.get_job(first["job_id"])
+            self.assertEqual(waiting["eligible_at"], 51)
+            self.assertIsNone(coordinator.claim("worker-two", now=50.999))
+
+        with Coordinator(self.database) as reopened:
+            second = reopened.claim("worker-two", now=51)
+            self.assertEqual(second["job_id"], first["job_id"])
+            reopened.fail(
+                second["job_id"],
+                second["lease_token"],
+                second["lease_generation"],
+                "transient two",
+                now=52,
+            )
+            self.assertEqual(reopened.get_job(first["job_id"])["eligible_at"], 112)
+            self.assertIsNone(reopened.claim("worker-three", now=111.999))
+            third = reopened.claim("worker-three", now=112)
+            reopened.fail(
+                third["job_id"],
+                third["lease_token"],
+                third["lease_generation"],
+                "transient three",
+                now=113,
+            )
+            self.assertEqual(reopened.get_job(first["job_id"])["eligible_at"], 173)
+            event = reopened.events()[-1]
+            self.assertEqual(event["payload"]["retry_delay_seconds"], 60)
+            self.assertEqual(event["payload"]["eligible_at"], 173)
+
+    def test_retry_backoff_configuration_fails_closed(self):
+        valid_batch = (("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),)
+        cases = (
+            ("negative", "retry_backoff_seconds = -1", "non-negative integer"),
+            (
+                "max below base",
+                "retry_backoff_seconds = 30\nretry_backoff_max_seconds = 10",
+                "must be at least",
+            ),
+        )
+        for label, extra, message in cases:
+            with self.subTest(label=label):
+                path = self.write_queue(
+                    filename=f"retry-{label}.toml",
+                    batches=valid_batch,
+                    queue_extra=extra,
+                )
+                with self.assertRaisesRegex(ValueError, message):
+                    QueueConfig.load(path, self.project_root)
+
     def test_stale_worker_is_fenced_after_requeue(self):
         path = self.write_queue(
             batches=(("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),),
@@ -409,6 +475,24 @@ matrices = ["tier0-uclibc-powerpc"]
                     "PRAGMA index_list(stage_attempts)"
                 ).fetchall()
             }
+            state_columns = {
+                row["name"]
+                for row in migrated.connection.execute(
+                    "PRAGMA table_info(coordinator_state)"
+                ).fetchall()
+            }
+            job_columns = {
+                row["name"]
+                for row in migrated.connection.execute(
+                    "PRAGMA table_info(jobs)"
+                ).fetchall()
+            }
+            job_indexes = {
+                row["name"]
+                for row in migrated.connection.execute(
+                    "PRAGMA index_list(jobs)"
+                ).fetchall()
+            }
 
         self.assertTrue(
             {
@@ -428,6 +512,41 @@ matrices = ["tier0-uclibc-powerpc"]
         self.assertIn("stage_attempts_one_open_per_attempt", indexes)
         self.assertTrue(indexes["stage_attempts_one_open_per_attempt"])
         self.assertIn("stage_attempts_stage_history", indexes)
+        self.assertTrue(
+            {"retry_backoff_seconds", "retry_backoff_max_seconds"}.issubset(
+                state_columns
+            )
+        )
+        self.assertIn("eligible_at", job_columns)
+        self.assertIn("jobs_claim_eligibility", job_indexes)
+
+    def test_retry_eligibility_migrates_a_pre_backoff_job_table(self):
+        with Coordinator(self.database):
+            pass
+        connection = sqlite3.connect(self.database)
+        try:
+            connection.execute("DROP INDEX jobs_claim_eligibility")
+            connection.execute("ALTER TABLE jobs DROP COLUMN eligible_at")
+            connection.commit()
+        finally:
+            connection.close()
+
+        with Coordinator(self.database) as migrated:
+            columns = {
+                row["name"]
+                for row in migrated.connection.execute(
+                    "PRAGMA table_info(jobs)"
+                ).fetchall()
+            }
+            indexes = {
+                row["name"]
+                for row in migrated.connection.execute(
+                    "PRAGMA index_list(jobs)"
+                ).fetchall()
+            }
+
+        self.assertIn("eligible_at", columns)
+        self.assertIn("jobs_claim_eligibility", indexes)
 
     def test_stage_spans_persist_monotonic_duration_details_and_metrics(self):
         path = self.write_queue(

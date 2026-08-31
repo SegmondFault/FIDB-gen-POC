@@ -175,10 +175,13 @@ the list only when the TOML has `armed = true`; pause stops new claims without
 invalidating work already leased. Multiple local worker processes coordinate
 through transactional SQLite leases, while each attempt has independent work,
 Ghidra and artifact paths. Blocked entries stay visible and do not prevent later
-runnable entries from progressing. The current `library-local` worker pool
-atomically skips every cell except native libraries, source libraries routed
-through the explicit `local` executor, and archive libraries routed through the
-fixed `archive-local` extractor; it never claims QEMU or malware work.
+runnable entries from progressing. Retryable failures receive a persisted,
+exponentially increasing next-eligible time capped by the queue's reviewed TOML
+policy; other workers cannot bypass that delay. The current `library-local`
+worker pool atomically skips every cell except native libraries, source libraries
+routed through the explicit `local` executor, and archive libraries routed
+through the fixed `archive-local` extractor; it never claims QEMU or malware
+work.
 
 The analyst/control path is deliberately separate from worker execution:
 

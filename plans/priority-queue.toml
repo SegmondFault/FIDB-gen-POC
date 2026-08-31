@@ -16,6 +16,10 @@ batch_order = [
 poll_seconds = 5
 lease_seconds = 3600
 max_attempts = 3
+# Retryable failures wait before they may be leased again.  The delay doubles
+# per failed attempt and is capped, so a broken cell cannot spin overnight.
+retry_backoff_seconds = 30
+retry_backoff_max_seconds = 900
 
 [[batch]]
 id = "batch-000"

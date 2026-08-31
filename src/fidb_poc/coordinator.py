@@ -78,6 +78,8 @@ class QueueConfig:
     poll_seconds: int
     lease_seconds: int
     max_attempts: int
+    retry_backoff_seconds: int
+    retry_backoff_max_seconds: int
     batches: tuple[BatchConfig, ...]
     project_root: Path
     source_path: Path
@@ -116,7 +118,12 @@ class QueueConfig:
             "lease_seconds",
             "max_attempts",
         }
-        _only_keys(queue, required_queue_fields, "queue table")
+        _only_keys(
+            queue,
+            required_queue_fields
+            | {"retry_backoff_seconds", "retry_backoff_max_seconds"},
+            "queue table",
+        )
         missing_queue_fields = required_queue_fields - set(queue)
         if missing_queue_fields:
             raise ValueError(
@@ -131,6 +138,18 @@ class QueueConfig:
         poll_seconds = _positive_integer(queue["poll_seconds"], "queue poll_seconds")
         lease_seconds = _positive_integer(queue["lease_seconds"], "queue lease_seconds")
         max_attempts = _positive_integer(queue["max_attempts"], "queue max_attempts")
+        retry_backoff_seconds = _nonnegative_integer(
+            queue.get("retry_backoff_seconds", 0), "queue retry_backoff_seconds"
+        )
+        retry_backoff_max_seconds = _nonnegative_integer(
+            queue.get("retry_backoff_max_seconds", retry_backoff_seconds),
+            "queue retry_backoff_max_seconds",
+        )
+        if retry_backoff_max_seconds < retry_backoff_seconds:
+            raise ValueError(
+                "queue retry_backoff_max_seconds must be at least "
+                "retry_backoff_seconds"
+            )
 
         raw_batches = document.get("batch")
         if not isinstance(raw_batches, list) or not raw_batches:
@@ -192,6 +211,8 @@ class QueueConfig:
             poll_seconds=poll_seconds,
             lease_seconds=lease_seconds,
             max_attempts=max_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            retry_backoff_max_seconds=retry_backoff_max_seconds,
             batches=ordered_batches,
             project_root=root,
             source_path=source_path,
@@ -239,6 +260,12 @@ def _identifiers(value: object, context: str) -> tuple[str, ...]:
 def _positive_integer(value: object, context: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         raise ValueError(f"{context} must be a positive integer")
+    return value
+
+
+def _nonnegative_integer(value: object, context: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{context} must be a non-negative integer")
     return value
 
 
@@ -441,6 +468,10 @@ class Coordinator:
                 poll_seconds INTEGER NOT NULL CHECK (poll_seconds > 0),
                 lease_seconds INTEGER NOT NULL CHECK (lease_seconds > 0),
                 max_attempts INTEGER NOT NULL CHECK (max_attempts > 0),
+                retry_backoff_seconds INTEGER NOT NULL DEFAULT 0
+                    CHECK (retry_backoff_seconds >= 0),
+                retry_backoff_max_seconds INTEGER NOT NULL DEFAULT 0
+                    CHECK (retry_backoff_max_seconds >= retry_backoff_seconds),
                 sync_generation INTEGER NOT NULL CHECK (sync_generation >= 0),
                 synced_at TEXT
             );
@@ -489,6 +520,7 @@ class Coordinator:
                 factor_variants_json TEXT NOT NULL,
                 queue_row_json TEXT NOT NULL,
                 attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+                eligible_at REAL NOT NULL DEFAULT 0,
                 lease_token TEXT,
                 lease_generation INTEGER NOT NULL DEFAULT 0
                     CHECK (lease_generation >= 0),
@@ -645,6 +677,31 @@ class Coordinator:
                 "ADD COLUMN max_workers INTEGER NOT NULL DEFAULT 4 "
                 "CHECK (max_workers > 0)"
             )
+        if "retry_backoff_seconds" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN retry_backoff_seconds "
+                "INTEGER NOT NULL DEFAULT 0 CHECK (retry_backoff_seconds >= 0)"
+            )
+        if "retry_backoff_max_seconds" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN retry_backoff_max_seconds "
+                "INTEGER NOT NULL DEFAULT 0 CHECK (retry_backoff_max_seconds >= 0)"
+            )
+        job_columns = {
+            str(row["name"])
+            for row in self._connection.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        if "eligible_at" not in job_columns:
+            self._connection.execute(
+                "ALTER TABLE jobs ADD COLUMN eligible_at REAL NOT NULL DEFAULT 0"
+            )
+        # Create this only after migrating older ledgers which predate the
+        # eligibility column; placing it in the initial script would make the
+        # migration fail before ALTER TABLE can run.
+        self._connection.execute(
+            "CREATE INDEX IF NOT EXISTS jobs_claim_eligibility "
+            "ON jobs(state, active, eligible_at, batch_id, position, job_id)"
+        )
         stage_columns = {
             str(row["name"])
             for row in self._connection.execute(
@@ -661,8 +718,9 @@ class Coordinator:
             INSERT OR IGNORE INTO coordinator_state (
                 singleton, config_name, config_path, armed, paused,
                 max_workers, poll_seconds, lease_seconds, max_attempts,
+                retry_backoff_seconds, retry_backoff_max_seconds,
                 sync_generation, synced_at
-            ) VALUES (1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, NULL)
+            ) VALUES (1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, 0, 0, NULL)
             """)
         # Keep the query planner's statistics current after migrations add the
         # timing-history indexes above.  This is safe on both new and old ledgers.
@@ -819,6 +877,7 @@ class Coordinator:
                 UPDATE coordinator_state
                 SET config_name = ?, config_path = ?, armed = ?,
                     max_workers = ?, poll_seconds = ?, lease_seconds = ?, max_attempts = ?,
+                    retry_backoff_seconds = ?, retry_backoff_max_seconds = ?,
                     sync_generation = ?, synced_at = ?
                 WHERE singleton = 1
                 """,
@@ -830,6 +889,8 @@ class Coordinator:
                     queue_config.poll_seconds,
                     queue_config.lease_seconds,
                     queue_config.max_attempts,
+                    queue_config.retry_backoff_seconds,
+                    queue_config.retry_backoff_max_seconds,
                     generation,
                     self._timestamp(timestamp),
                 ),
@@ -1176,6 +1237,10 @@ class Coordinator:
         for row in rows:
             retry = int(row["attempt_count"]) < int(state["max_attempts"])
             next_state = "queued" if retry else "failed"
+            retry_delay = (
+                self._retry_delay(state, int(row["attempt_count"])) if retry else 0
+            )
+            eligible_at = now + retry_delay if retry else 0
             error = "lease expired"
             # End a span at the lease fence, not at a potentially much later
             # recovery sweep, so coordinator delay is not counted as work.
@@ -1205,12 +1270,13 @@ class Coordinator:
                 UPDATE jobs
                 SET state = ?, lease_token = NULL, leased_by = NULL,
                     lease_expires_at = NULL, current_stage = NULL,
-                    error = ?, updated_at = ?
+                    error = ?, eligible_at = ?, updated_at = ?
                 WHERE job_id = ? AND lease_generation = ?
                 """,
                 (
                     next_state,
                     error,
+                    eligible_at,
                     self._timestamp(now),
                     row["job_id"],
                     row["lease_generation"],
@@ -1228,10 +1294,21 @@ class Coordinator:
                     "expired_generation": int(row["lease_generation"]),
                     "attempt_count": int(row["attempt_count"]),
                     "retry_cap_reached": not retry,
+                    "retry_delay_seconds": retry_delay,
+                    "eligible_at": eligible_at if retry else None,
                 },
             )
             recovered += 1
         return recovered
+
+    @staticmethod
+    def _retry_delay(state: sqlite3.Row, attempt_count: int) -> int:
+        base = int(state["retry_backoff_seconds"])
+        maximum = int(state["retry_backoff_max_seconds"])
+        if base == 0 or maximum == 0:
+            return 0
+        exponent = max(0, attempt_count - 1)
+        return min(maximum, base * (2**exponent))
 
     def recover_expired(
         self,
@@ -1281,6 +1358,7 @@ class Coordinator:
                  AND cells.cell_id = jobs.base_cell_id
                 WHERE jobs.active = 1 AND batches.active = 1
                   AND jobs.state = 'queued'
+                  AND jobs.eligible_at <= ?
                   AND jobs.attempt_count < ?
                 ORDER BY batches.position, jobs.position, jobs.job_id
                 """
@@ -1288,7 +1366,7 @@ class Coordinator:
                 claim_query += " LIMIT 1"
             candidates = self._connection.execute(
                 claim_query,
-                (int(state["max_attempts"]),),
+                (timestamp, int(state["max_attempts"])),
             ).fetchall()
             row = next(
                 (
@@ -1312,7 +1390,7 @@ class Coordinator:
                 UPDATE jobs
                 SET state = 'leased', attempt_count = ?, lease_token = ?,
                     lease_generation = ?, leased_by = ?, lease_expires_at = ?,
-                    current_stage = NULL, error = NULL, updated_at = ?
+                    current_stage = NULL, error = NULL, eligible_at = 0, updated_at = ?
                 WHERE job_id = ? AND state = 'queued' AND active = 1
                 """,
                 (
@@ -1892,6 +1970,12 @@ class Coordinator:
                 state["max_attempts"]
             )
             next_state = "queued" if should_retry else "failed"
+            retry_delay = (
+                self._retry_delay(state, int(row["attempt_count"]))
+                if should_retry
+                else 0
+            )
+            eligible_at = timestamp + retry_delay if should_retry else 0
             self._close_open_stage_attempts_locked(
                 row,
                 now=timestamp,
@@ -1903,12 +1987,13 @@ class Coordinator:
                 UPDATE jobs
                 SET state = ?, lease_token = NULL, leased_by = NULL,
                     lease_expires_at = NULL, current_stage = NULL,
-                    error = ?, updated_at = ?
+                    error = ?, eligible_at = ?, updated_at = ?
                 WHERE job_id = ? AND lease_token = ? AND lease_generation = ?
                 """,
                 (
                     next_state,
                     failure,
+                    eligible_at,
                     self._timestamp(timestamp),
                     job_id,
                     lease_token,
@@ -1941,6 +2026,8 @@ class Coordinator:
                     "attempt_count": int(row["attempt_count"]),
                     "retryable": retryable,
                     "retry_cap_reached": retryable and not should_retry,
+                    "retry_delay_seconds": retry_delay,
+                    "eligible_at": eligible_at if should_retry else None,
                 },
             )
         return self.get_job(job_id)
@@ -2022,6 +2109,7 @@ class Coordinator:
             "blockers": json.loads(row["blockers_json"]),
             "factor_variants": json.loads(row["factor_variants_json"]),
             "attempt_count": int(row["attempt_count"]),
+            "eligible_at": float(row["eligible_at"]),
             "lease_generation": int(row["lease_generation"]),
             "lease_token": row["lease_token"],
             "leased_by": row["leased_by"],
@@ -2123,6 +2211,17 @@ class Coordinator:
         counts = {job_state: 0 for job_state in sorted(_JOB_STATES)}
         counts.update({str(row["state"]): int(row["count"]) for row in rows})
         queued = counts["queued"]
+        now = self._now()
+        eligible = self._connection.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM jobs JOIN batches ON batches.batch_id = jobs.batch_id
+            WHERE jobs.active = 1 AND batches.active = 1
+              AND jobs.state = 'queued' AND jobs.eligible_at <= ?
+            """,
+            (now,),
+        ).fetchone()
+        claimable_jobs = int(eligible["count"])
         active_workers = counts["leased"] + counts["running"]
         max_workers = int(state["max_workers"])
         armed = bool(state["armed"])
@@ -2153,10 +2252,13 @@ class Coordinator:
             "poll_seconds": int(state["poll_seconds"]),
             "lease_seconds": int(state["lease_seconds"]),
             "max_attempts": int(state["max_attempts"]),
+            "retry_backoff_seconds": int(state["retry_backoff_seconds"]),
+            "retry_backoff_max_seconds": int(state["retry_backoff_max_seconds"]),
             "sync_generation": int(state["sync_generation"]),
             "synced_at": state["synced_at"],
             "counts": counts,
-            "claimable": queued if armed and not paused else 0,
+            "claimable": claimable_jobs if armed and not paused else 0,
+            "retry_wait": queued - claimable_jobs,
             "last_event_id": int(last_event["event_id"] or 0),
         }
 

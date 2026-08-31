@@ -29,6 +29,7 @@ export type CoordinatorJob = {
   current_stage: string | null;
   leased_by: string | null;
   attempt_count: number;
+  eligible_at?: number;
   blockers: string[];
   result: Record<string, unknown> | null;
   error: string | null;
@@ -92,10 +93,13 @@ export type CoordinatorSnapshot = {
   poll_seconds: number;
   lease_seconds: number;
   max_attempts: number;
+  retry_backoff_seconds?: number;
+  retry_backoff_max_seconds?: number;
   sync_generation: number;
   synced_at: string | null;
   counts: CoordinatorCounts;
   claimable: number;
+  retry_wait?: number;
   last_event_id: number;
   batches: CoordinatorBatch[];
   jobs: CoordinatorJob[];

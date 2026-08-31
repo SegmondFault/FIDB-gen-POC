@@ -280,6 +280,12 @@ SMB/NFS or opened directly by remote workers. The current loopback API is an
 operator/control-panel boundary and deliberately has no claim or run endpoint;
 remote workers still require a later authenticated worker API.
 
+Retryable failures are returned to the ordered queue with a durable exponential
+backoff. `retry_backoff_seconds` supplies the initial delay and
+`retry_backoff_max_seconds` caps it; the next eligible time is persisted in the
+ledger, so restarting or adding workers cannot turn a failing cell into a tight
+retry loop.
+
 Start the bounded API on `reference-host` without exposing SQLite or a coordinator
 port over Tailscale:
 
