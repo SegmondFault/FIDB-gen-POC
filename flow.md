@@ -131,6 +131,22 @@ plans/priority-queue.toml
 > continue to the next runnable entry
 ```
 
+Pinned cross-toolchain and archive-candidate payloads pass through a shared
+managed boundary before per-attempt preparation:
+
+```text
+reviewed registry identity
+> resolve fixed URL + SHA-256 from toolchains/registry.toml
+> lock var/fidb-toolchains/locks/<sha256>.lock
+> reuse only a verified var/fidb-toolchains/downloads/<sha256> entry
+> otherwise download with bounded timeout/retries and a byte limit
+> stream SHA-256; quarantine invalid old bytes; fsync + atomic rename
+> unlock, then extract/build only inside the isolated attempt root
+```
+
+The CLI exposes status/acquisition by registry identity only. It has no URL,
+hash, command or compiler override.
+
 Every library-local execution step above is represented by a durable stage
 attempt. The worker emits UTC start/finish boundaries and monotonic durations
 for:

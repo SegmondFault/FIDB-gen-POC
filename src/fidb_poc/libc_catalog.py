@@ -25,7 +25,6 @@ import shutil
 import subprocess
 import tarfile
 from typing import Callable, ContextManager, Mapping
-from urllib.request import Request, urlopen
 
 from .elf import ghidra_language
 from .investigate import Investigation
@@ -35,6 +34,7 @@ from .source_build import (
     run_local_source_build,
     run_qemu_source_build,
 )
+from .toolchain_cache import acquire_pinned, inspect_cached
 
 log = logging.getLogger(__name__)
 
@@ -178,55 +178,49 @@ def _download_url(
     skipped: Callable[[str, str, Mapping[str, object] | None], None] | None = None,
     input_kind: str = "source",
 ) -> Path:
-    archive = cache / expected
-    cache.mkdir(parents=True, exist_ok=True)
     acquisition_stage = _acquisition_stage(input_kind)
-    if archive.exists():
-        if _verify_input(archive, expected, timing, input_kind, fail_mismatch=False):
-            log.info("cache hit: %s (sha256=%s) -> %s", url, expected[:12], archive)
-            _skip(
-                skipped,
-                acquisition_stage,
-                f"using cached pinned {input_kind} archive",
-                {
-                    "input_kind": input_kind,
-                    "cache_hit": True,
-                    "bytes": archive.stat().st_size,
-                    "sha256": expected,
-                },
-            )
-            return archive
-        archive.unlink()
-
-    log.info("downloading %s -> %s", url, archive)
-    temporary = archive.with_suffix(".part")
-    request = Request(url, headers={"User-Agent": "fidb-poc/0.1"})
-    temporary.unlink(missing_ok=True)
-    try:
-        with _timed(
-            timing,
+    cached = inspect_cached(cache, expected)
+    if cached.state == "verified-cached":
+        archive = cached.path
+        _verify_input(archive, expected, timing, input_kind, fail_mismatch=True)
+        log.info("cache hit: %s (sha256=%s) -> %s", url, expected[:12], archive)
+        _skip(
+            skipped,
             acquisition_stage,
-            f"acquiring pinned {input_kind} archive",
+            f"using cached pinned {input_kind} archive",
             {
                 "input_kind": input_kind,
-                "cache_hit": False,
-                "url": url,
+                "cache_hit": True,
+                "bytes": archive.stat().st_size,
                 "sha256": expected,
             },
-        ) as metrics:
-            byte_count = 0
-            with urlopen(request) as response, temporary.open("wb") as output:
-                while chunk := response.read(1024 * 1024):
-                    output.write(chunk)
-                    byte_count += len(chunk)
-            metrics["bytes"] = byte_count
-        _verify_input(temporary, expected, timing, input_kind, fail_mismatch=True)
-    except BaseException:
-        temporary.unlink(missing_ok=True)
-        raise
-    temporary.replace(archive)
-    log.info("download OK: %s -> %s", url, archive)
-    return archive
+        )
+        return archive
+
+    log.info("acquiring pinned %s -> sha256:%s", input_kind, expected)
+    with _timed(
+        timing,
+        acquisition_stage,
+        f"acquiring pinned {input_kind} archive",
+        {
+            "input_kind": input_kind,
+            "cache_hit": False,
+            "url": url,
+            "sha256": expected,
+        },
+    ) as metrics:
+        result = acquire_pinned(url, expected, cache)
+        metrics.update(
+            {
+                "bytes": result.bytes,
+                "cache_hit": result.cache_hit,
+                "acquisition_attempts": result.attempts,
+                "quarantined_invalid_cache": result.quarantined is not None,
+            }
+        )
+    _verify_input(result.path, expected, timing, input_kind, fail_mismatch=True)
+    log.info("acquisition OK: %s -> %s", url, result.path)
+    return result.path
 
 
 def _extract_verified(

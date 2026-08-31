@@ -29,6 +29,7 @@ from .elf import ElfFacts, ghidra_language, inspect_elf
 from .hunt import _select_objects
 from .recipe_generator import generate_cells, load_recipes
 from .toolchain_registry import load_toolchains
+from .toolchain_cache import MANAGED_DOWNLOADS
 from .timing import (
     CellStage,
     ProgressCallback,
@@ -728,13 +729,14 @@ def _native_outputs(
 def _source_outputs(
     cell: dict[str, object],
     pins: dict[str, object],
+    project_root: Path,
     attempt_root: Path,
     timing: TimingRecorder,
 ) -> tuple[Path, dict[str, int], dict[str, object], dict[str, object]]:
     guess = libc_catalog.prepare_recipe(
         cell,
         attempt_root / "work/source",
-        attempt_root / "work/downloads",
+        project_root / MANAGED_DOWNLOADS,
         timing=timing.span,
         skipped=timing.skip,
     )
@@ -856,6 +858,7 @@ def _validate_malware_result(
 def _malware_outputs(
     cell: dict[str, object],
     pins: dict[str, object],
+    project_root: Path,
     attempt_root: Path,
     timing: TimingRecorder,
 ) -> tuple[Path, dict[str, int], dict[str, object], dict[str, object]]:
@@ -865,7 +868,7 @@ def _malware_outputs(
         {"executor": cell.get("executor"), "adapter": cell.get("build_adapter")},
     ):
         result = malware_build.build_malware_binary(
-            cell, attempt_root / "work/malware", attempt_root / "work/downloads"
+            cell, attempt_root / "work/malware", project_root / MANAGED_DOWNLOADS
         )
     with timing.span(
         CellStage.ARTIFACT_VALIDATION,
@@ -986,11 +989,11 @@ def run_cell(
         assert generated is not None
         if kind == "source-library":
             fidb, counts, runtime, evidence = _source_outputs(
-                generated, pins, attempt, timing
+                generated, pins, project, attempt, timing
             )
         else:
             fidb, counts, runtime, evidence = _malware_outputs(
-                generated, pins, attempt, timing
+                generated, pins, project, attempt, timing
             )
 
     fidb = _relative_artifact(fidb, attempt, "FIDB")

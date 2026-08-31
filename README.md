@@ -185,6 +185,23 @@ sensitivity catalog, and adds a deterministic plan digest. The plan's
 installation is a later readiness check: a reviewed but currently unavailable
 toolchain remains visible in the plan.
 
+Cross-toolchain and prebuilt-library inputs use one ignored, content-addressed
+cache at `var/fidb-toolchains/downloads/`. Inspect it without mutation, or
+acquire a reviewed registry identity explicitly:
+
+```sh
+uv run fidb-poc toolchain status \
+  --id uclibc@2017.05:powerpc-e500mc-bootlin-2017.05 --input toolchain
+uv run fidb-poc toolchain acquire \
+  --id uclibc@2017.05:powerpc-e500mc-bootlin-2017.05 --input toolchain
+```
+
+The command accepts registry identities, never caller-supplied URLs or hashes.
+Workers serialize acquisition by digest, apply bounded timeouts and retries,
+stream and verify SHA-256, quarantine invalid existing bytes, fsync the payload,
+and publish it by atomic rename. Extraction and compilation remain isolated in
+each attempt; only the immutable verified input is shared.
+
 The optional `[queue]` table controls deterministic materialization order. Its
 `recipe_order` is the left-hand build order; `strategy` chooses whether all
 factor variants for one recipe run together or one variant is swept across all
@@ -493,6 +510,8 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/hunt_cli.py` | hunt/malware subcommand boundary (`hunt`, `build-malware`, `doctor`, `investigate`, `inspect`), reached via `fidb-poc <subcommand>` or the `fidb-hunt` alias |
 | `src/fidb_poc/hunt.py` | investigate -> select -> prepare -> match -> export workflow |
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |
+| `src/fidb_poc/toolchain_cache.py` | locked, checksum-verified content-addressed acquisition |
+| `src/fidb_poc/toolchain_cli.py` | typed cache status/acquire commands over registry identities |
 | `src/fidb_poc/recipe_generator.py` | recipe x toolchain registry -> resolved build cells |
 | `src/fidb_poc/libc_catalog.py` | cell selection, download, extraction and VM-isolated source build |
 | `src/fidb_poc/malware_build.py` | cell -> linked malware binary + provenance manifest |

@@ -9,7 +9,6 @@ QEMU or malware requirements which do not belong to that pool.
 
 from __future__ import annotations
 
-import hashlib
 import importlib.metadata
 import json
 import os
@@ -24,9 +23,10 @@ from typing import Mapping
 from .config import load_configuration
 from .coordinator import worker_pool_accepts_cell
 from .toolchain_registry import load_toolchains
+from .toolchain_cache import MANAGED_DOWNLOADS, inspect_cached
 
 CAPABILITIES_SCHEMA = "fidb-worker-capabilities/v1"
-TOOLCHAIN_CACHE = Path("var/fidb-toolchains/downloads")
+TOOLCHAIN_CACHE = MANAGED_DOWNLOADS
 
 _HOST_TOOLS = (
     "file",
@@ -37,14 +37,6 @@ _HOST_TOOLS = (
     "qemu-img",
     "qemu-system-x86_64",
 )
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _executable(path: Path) -> bool:
@@ -184,26 +176,15 @@ def _pyghidra() -> dict[str, object]:
 
 def _cache_entry(cache_root: Path, digest: object) -> dict[str, object]:
     expected = str(digest)
-    path = cache_root / expected
+    inspected = inspect_cached(cache_root, expected)
     result: dict[str, object] = {
         "expected_sha256": expected,
-        "path": str(path),
-        "bytes": None,
-        "state": "missing",
+        "path": str(inspected.path),
+        "bytes": inspected.bytes,
+        "state": inspected.state,
     }
-    if not path.exists():
-        return result
-    if path.is_symlink() or not path.is_file():
-        result["state"] = "broken"
-        return result
-    try:
-        result["bytes"] = path.stat().st_size
-        observed = _sha256(path)
-    except OSError:
-        result["state"] = "broken"
-        return result
-    result["observed_sha256"] = observed
-    result["state"] = "verified-cached" if observed == expected else "broken"
+    if inspected.observed_sha256 is not None:
+        result["observed_sha256"] = inspected.observed_sha256
     return result
 
 
@@ -245,7 +226,7 @@ def _registry_inventory(project_root: Path) -> list[dict[str, object]]:
                 "state": state,
                 "archives": archives,
                 "cross_bin_prefix": row.get("cross_bin_prefix"),
-                "prepared_state": "not-managed",
+                "prepared_state": "per-attempt-extraction",
             }
         )
     return rows
@@ -388,10 +369,10 @@ def _job_readiness(
                             "managed toolchain cache failed digest verification"
                         )
                     elif toolchain_state == "verified-cached":
-                        acquisition_state = "prepare-required"
                         reasons.append(
-                            "pinned toolchain is cached but no managed prepared copy exists"
+                            "pinned toolchain is checksum-verified in the managed cache"
                         )
+                        acquisition_state = None
                     else:
                         acquisition_state = "download-required"
                         reasons.append(
@@ -519,7 +500,7 @@ def detect_capabilities(
         "toolchains": {
             "registry_path": str(root / "toolchains/registry.toml"),
             "managed_cache": str(root / TOOLCHAIN_CACHE),
-            "managed_preparation": False,
+            "managed_preparation": "per-attempt-extraction",
             "entries": registry,
         },
     }

@@ -193,6 +193,11 @@ class CellRunnerTests(unittest.TestCase):
                 self.assertEqual(result.seal_path, result.manifest_path)
                 self.assertEqual(events[-1].stage, CellStage.PROVENANCE_SEAL)
                 self.assertEqual(events[-1].status, ProgressStatus.COMPLETED)
+                managed_downloads = self.project_root / "var/fidb-toolchains/downloads"
+                if expected_prepare:
+                    self.assertEqual(prepare.call_args.args[2], managed_downloads)
+                if expected_malware:
+                    self.assertEqual(malware.call_args.args[2], managed_downloads)
 
     def test_local_source_execution_requires_resolved_local_route(self):
         cell = copy.deepcopy(self.source_cell)
