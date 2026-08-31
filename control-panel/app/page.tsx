@@ -18,7 +18,7 @@ const navItems = [
   ['02', 'Matrix'],
   ['03', 'Timing'],
   ['04', 'Batches'],
-  ['05', 'Toolchains'],
+  ['05', 'Targets & toolchains'],
   ['06', 'Evidence'],
 ];
 
@@ -496,7 +496,7 @@ export default function Home() {
                 )) : <div className="empty-state"><span>◇</span><strong>No capability scan</strong><p>Connect the local API to inspect this host.</p></div>}
                 {(factory.snapshot?.workers ?? []).map(worker => <div className="worker-row" key={worker.worker_id}><span className="worker-glyph ready">⌬</span><div><strong>{worker.worker_id}</strong><small>{worker.transport} · {worker.pools.join(', ')} · last seen {new Date(worker.last_seen_at).toLocaleString()}</small></div><span className="worker-state ready">{worker.state}</span></div>)}
               </div>
-              <button className="full-width-button" onClick={() => setActiveView('Toolchains')}>Manage workers</button>
+              <button className="full-width-button" onClick={() => setActiveView('Targets & toolchains')}>Inspect targets</button>
             </article>
 
             <article className="panel requirement-panel">
@@ -537,7 +537,7 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
   if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} />;
-  if (view === 'Toolchains') return <ToolchainsView factory={factory} />;
+  if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} />;
   if (view === 'Evidence') return <EvidenceView snapshot={factory.snapshot} />;
   if (view === 'Automation') return <AutomationView factory={factory} />;
   return <ActivityView events={factory.events} connection={factory.connection} />;
@@ -1326,23 +1326,86 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live }: { on
 
 function ToolchainsView({ factory }: { factory: FactoryApiState }) {
   const inventory = factory.capabilities?.toolchains.entries ?? [];
-  const pool = factory.capabilities?.worker_pools['library-local'];
-  const sourceRows = inventory.filter(row => row.capabilities.includes('source'));
+  const targets = factory.authority?.targets ?? [];
+  const nativeRoutes = factory.capabilities?.native_routes ?? [];
+  const [targetFilter, setTargetFilter] = useState<'all' | 'ready' | 'not-installed' | 'unregistered'>('all');
+  const [targetQuery, setTargetQuery] = useState('');
+  const [expandedTargets, setExpandedTargets] = useState<Set<string>>(new Set());
+  const capabilityById = new Map(inventory.map(row => [row.id, row]));
+  const nativeById = new Map(nativeRoutes.map(row => [row.id, row]));
+  const targetRows = targets.map(target => {
+    const targetToolchains = target.toolchain_ids.flatMap(id => {
+      const row = capabilityById.get(id);
+      return row ? [row] : [];
+    });
+    const sourceToolchains = target.source_capable_toolchain_ids.flatMap(id => {
+      const row = capabilityById.get(id);
+      return row ? [row] : [];
+    });
+    const targetNativeRoutes = target.native_route_ids.flatMap(id => {
+      const row = nativeById.get(id);
+      return row ? [row] : [];
+    });
+    const nativeInstalled = targetNativeRoutes.some(route => route.ready);
+    const sourceCached = sourceToolchains.some(toolchain => toolchain.state === 'verified-cached');
+    const cachedInputs = targetToolchains.filter(toolchain => toolchain.state === 'verified-cached').length;
+    const state = nativeInstalled
+      ? 'installed'
+      : sourceCached
+        ? 'cached'
+        : sourceToolchains.length
+          ? 'not-installed'
+          : target.archive_capable_toolchain_ids.length
+            ? 'archive-only'
+            : 'unregistered';
+    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, cachedInputs, state };
+  });
+  const normalizedQuery = targetQuery.trim().toLowerCase();
+  const visibleTargets = targetRows.filter(row => {
+    const matchesFilter = targetFilter === 'all'
+      || (targetFilter === 'ready' && (row.state === 'installed' || row.state === 'cached'))
+      || (targetFilter === 'not-installed' && (row.state === 'not-installed' || row.state === 'archive-only'))
+      || (targetFilter === 'unregistered' && row.state === 'unregistered');
+    const searchText = [row.target.id, row.target.label, row.target.platform, row.target.architecture, row.target.binary_format, ...row.targetToolchains.map(toolchain => toolchain.id)].join(' ').toLowerCase();
+    return matchesFilter && (!normalizedQuery || searchText.includes(normalizedQuery));
+  });
+  const readyTargets = targetRows.filter(row => row.state === 'installed' || row.state === 'cached').length;
+  const sourceTargets = targetRows.filter(row => row.target.native_route_ids.length || row.target.source_capable_toolchain_ids.length).length;
+  const gapTargets = targetRows.length - sourceTargets;
   return <div className="view-stack">
-    <ViewIntro kicker="LIVE CAPABILITY REGISTRY" title="Toolchain coverage for the library-local pool" copy="Detection is read-only. It distinguishes installed host tools, checksum-verified cached archives, exact queue eligibility, and unmet acquisition; QEMU and malware are excluded from this pool." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan again' : 'Retry connection'}</button>} />
+    <ViewIntro kicker="TARGET COVERAGE INVENTORY" title="Targets & toolchains" copy="Every reviewed or study-observed target remains visible, even when no compiler exists. Installed host tools, checksum-cached cross compilers, downloadable archive candidates and unregistered platform gaps are deliberately distinct." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
     <section className="toolchain-summary">
-      <article><span>REGISTRY ROWS</span><strong>{factory.capabilities ? inventory.length : '—'}</strong><small>reviewed pinned identities</small></article><article><span>SOURCE ROUTES</span><strong>{factory.capabilities ? sourceRows.length : '—'}</strong><small>local cross-build capable</small></article><article className="warn"><span>NEEDS SETUP</span><strong>{pool ? pool.eligible_jobs - pool.ready_now : '—'}</strong><small>active queue jobs</small></article><article><span>ACTIVE LEASES</span><strong>{pool?.active_workers ?? '—'}</strong><small>of {pool?.max_workers ?? '—'} current cap</small></article>
+      <article><span>KNOWN TARGETS</span><strong>{factory.authority ? targetRows.length : '—'}</strong><small>reviewed plus study-observed</small></article><article><span>READY LOCALLY</span><strong>{factory.capabilities ? readyTargets : '—'}</strong><small>host-installed or checksum-cached</small></article><article><span>SOURCE BUILD TARGETS</span><strong>{factory.authority ? sourceTargets : '—'}</strong><small>native or reviewed cross compiler</small></article><article className="warn"><span>NO SOURCE ROUTE</span><strong>{factory.authority ? gapTargets : '—'}</strong><small>{inventory.length} pinned toolchain/archive identities</small></article>
     </section>
     <section className="panel data-panel">
-      <div className="filterbar"><button className="filter active">All variants</button><button className="filter">Source capable</button><button className="filter">Unmet</button><div className="filter-search">⌕&nbsp; Search variant or ABI</div></div>
-      <div className="toolchain-table">
-        <div className="toolchain-head"><span>Variant</span><span>Family</span><span>Target ABI</span><span>Evidence</span><span>Workers</span><span>Action</span></div>
-        {inventory.map(row => {
-          const tone = row.state === 'verified-cached' ? 'ready' : row.state === 'broken' ? 'warning' : 'cold';
-          return <div className="toolchain-row" key={row.id}><div><span className={`cap-dot ${tone}`} /><strong>{row.variant}</strong></div><span>{row.family} {row.version}</span><code>{row.target.elf_class}-bit · {row.target.endianness}</code><span className={`evidence-badge ${tone}`}>{row.state}</span><strong>{row.capabilities.join(' + ')}</strong><button disabled>{row.state === 'missing' ? 'Needed' : 'Inspect'}</button></div>;
+      <div className="filterbar"><button className={targetFilter === 'all' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('all')}>All <span>{targetRows.length}</span></button><button className={targetFilter === 'ready' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('ready')}>Installed / cached <span>{readyTargets}</span></button><button className={targetFilter === 'not-installed' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('not-installed')}>Not installed <span>{targetRows.filter(row => row.state === 'not-installed' || row.state === 'archive-only').length}</span></button><button className={targetFilter === 'unregistered' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('unregistered')}>No route <span>{targetRows.filter(row => row.state === 'unregistered').length}</span></button><label className="filter-search">⌕<input value={targetQuery} onChange={event => setTargetQuery(event.target.value)} placeholder="Search target or toolchain" aria-label="Search target or toolchain" /></label></div>
+      <div className="target-inventory">
+        {visibleTargets.map(row => {
+          const tone = row.state === 'installed' || row.state === 'cached' ? 'ready' : row.state === 'unregistered' ? 'warning' : 'cold';
+          const stateLabel = row.state === 'installed' ? 'HOST INSTALLED' : row.state === 'cached' ? 'PINNED CACHE READY' : row.state === 'not-installed' ? 'SOURCE ROUTE NOT INSTALLED' : row.state === 'archive-only' ? 'ARCHIVE EXTRACTION ONLY' : 'NO REVIEWED ROUTE';
+          return <details className="target-inventory-card" key={row.target.id} open={expandedTargets.has(row.target.id)} onToggle={event => {
+            const isOpen = event.currentTarget.open;
+            setExpandedTargets(current => {
+              if (current.has(row.target.id) === isOpen) return current;
+              const next = new Set(current);
+              if (isOpen) next.add(row.target.id); else next.delete(row.target.id);
+              return next;
+            });
+          }}>
+            <summary><span className={`cap-dot ${tone}`} /><div><strong>{row.target.label}</strong><small>{row.target.id} · {row.target.catalog_state}</small></div><code>{row.target.bits}-bit · {row.target.endianness} · {row.target.binary_format}</code><span className={`evidence-badge ${tone}`}>{stateLabel}</span><p><b>{row.sourceToolchains.length + row.targetNativeRoutes.length}</b><small>source routes</small></p><p><b>{row.target.archive_capable_toolchain_ids.length}</b><small>archive candidates</small></p><p><b>{row.cachedInputs}</b><small>cached identities</small></p><i>⌄</i></summary>
+            <div className="target-detail">
+              <div className="target-evidence"><span>AUTHORITY</span><code>{row.target.evidence.join(' · ')}</code><small>{row.target.catalog_state === 'study-observed' ? 'Observed in the sensitivity study; no build route has been reviewed.' : 'Target identity is catalogued independently of installation state.'}</small></div>
+              {row.targetNativeRoutes.map(route => <div className="target-toolchain-row" key={route.id}><div><span className={`cap-dot ${route.ready ? 'ready' : 'warning'}`} /><strong>{route.id}</strong><small>native route</small></div><code>{Object.values(route.tools).map(tool => tool.path ?? tool.configured.join(' ')).join(' · ')}</code><span className={`evidence-badge ${route.ready ? 'ready' : 'warning'}`}>{route.ready ? 'installed' : 'missing tools'}</span><b>source build</b></div>)}
+              {row.targetToolchains.map(toolchain => {
+                const toolchainTone = toolchain.state === 'verified-cached' ? 'ready' : toolchain.state === 'broken' ? 'warning' : 'cold';
+                return <div className="target-toolchain-row" key={toolchain.id}><div><span className={`cap-dot ${toolchainTone}`} /><strong>{toolchain.variant}</strong><small>{toolchain.family} {toolchain.version}</small></div><code>{toolchain.id}</code><span className={`evidence-badge ${toolchainTone}`}>{toolchain.state === 'verified-cached' ? 'checksum-cached' : toolchain.state}</span><b>{toolchain.capabilities.map(value => value === 'source' ? 'cross compiler' : 'libc archive').join(' + ')}</b></div>;
+              })}
+              {!row.targetNativeRoutes.length && !row.targetToolchains.length && <div className="target-gap-row"><span>!</span><p><strong>No registered compiler or archive route</strong><small>The target remains visible so this gap cannot be mistaken for unsupported demand.</small></p></div>}
+            </div>
+          </details>;
         })}
-        {!inventory.length && <div className="empty-state"><span>◇</span><strong>No live toolchain inventory</strong><p>Start the loopback API service, then scan again.</p></div>}
+        {!visibleTargets.length && <div className="empty-state"><span>◇</span><strong>No targets match this view</strong><p>Clear the search or choose a different installation filter.</p></div>}
       </div>
     </section>
   </div>;

@@ -1,0 +1,138 @@
+schema_version = "fidb-targets/v1"
+
+# This catalogue records target coverage intent independently from installed
+# toolchains.  A target may be reviewed through the Linux/ELF registry or only
+# observed in the sensitivity study.  Runtime capability detection decides
+# whether a reviewed route is installed or checksum-cached on a worker.
+
+[[target]]
+id = "linux-aarch64-elf"
+label = "Linux AArch64"
+platform = "linux"
+architecture = "aarch64"
+machine = "AArch64"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-arm32-elf"
+label = "Linux ARM32"
+platform = "linux"
+architecture = "arm"
+machine = "ARM"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml", "sensitivity/factors.toml"]
+
+[[target]]
+id = "linux-m68k-elf"
+label = "Linux M68K"
+platform = "linux"
+architecture = "m68k"
+machine = "M68K"
+binary_format = "ELF"
+endianness = "big"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-mips32-be-elf"
+label = "Linux MIPS32 big-endian"
+platform = "linux"
+architecture = "mips"
+machine = "MIPS"
+binary_format = "ELF"
+endianness = "big"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-mips32-le-elf"
+label = "Linux MIPS32 little-endian"
+platform = "linux"
+architecture = "mipsel"
+machine = "MIPS"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-powerpc32-be-elf"
+label = "Linux PowerPC 32-bit"
+platform = "linux"
+architecture = "powerpc"
+machine = "PowerPC"
+binary_format = "ELF"
+endianness = "big"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-sh32-le-elf"
+label = "Linux SuperH 32-bit"
+platform = "linux"
+architecture = "sh4"
+machine = "SH"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-x86-32-elf"
+label = "Linux x86 32-bit"
+platform = "linux"
+architecture = "i686"
+machine = "x86"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/registry.toml"]
+
+[[target]]
+id = "linux-x86-64-elf"
+label = "Linux x86-64"
+platform = "linux"
+architecture = "x86_64"
+machine = "x86-64"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "reviewed-route"
+evidence = ["worker.json", "toolchains/registry.toml"]
+
+[[target]]
+id = "macos-arm64-macho"
+label = "macOS ARM64"
+platform = "macos"
+architecture = "arm64"
+machine = "AArch64"
+binary_format = "Mach-O"
+endianness = "little"
+bits = 64
+catalog_state = "study-observed"
+evidence = ["sensitivity/factors.toml"]
+
+[[target]]
+id = "windows-x86-64-pecoff"
+label = "Windows x86-64"
+platform = "windows"
+architecture = "x86_64"
+machine = "x86-64"
+binary_format = "PE/COFF"
+endianness = "little"
+bits = 64
+catalog_state = "study-observed"
+evidence = ["sensitivity/factors.toml"]

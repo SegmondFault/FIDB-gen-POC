@@ -16,9 +16,10 @@ from .plan_request import (
     resolve_plan,
 )
 from .recipe_generator import load_recipes as load_source_recipes
+from .target_registry import load_targets
 from .toolchain_registry import load_toolchains
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v1"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v2"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -142,6 +143,49 @@ def _toolchain_authority(root: Path) -> list[dict[str, object]]:
     return result
 
 
+def _target_authority(
+    root: Path,
+    native: dict[str, object],
+    toolchains: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    result = []
+    routes = native["routes"]
+    for target in load_targets(root / "targets/registry.toml"):
+        native_route_ids = [
+            str(route["id"])
+            for route in routes
+            if route["target_os"] == target["platform"]
+            and route["architecture"] == target["architecture"]
+            and route["binary_format"] == target["binary_format"]
+        ]
+        matching_toolchains = (
+            [
+                row
+                for row in toolchains
+                if row["machine"] == target["machine"]
+                and row["endianness"] == target["endianness"]
+                and row["elf_class"] == target["bits"]
+            ]
+            if target["platform"] == "linux"
+            and target["binary_format"] == "ELF"
+            else []
+        )
+        result.append(
+            {
+                **target,
+                "native_route_ids": native_route_ids,
+                "toolchain_ids": [row["id"] for row in matching_toolchains],
+                "source_capable_toolchain_ids": [
+                    row["id"] for row in matching_toolchains if row["source_capable"]
+                ],
+                "archive_capable_toolchain_ids": [
+                    row["id"] for row in matching_toolchains if row["archive_capable"]
+                ],
+            }
+        )
+    return result
+
+
 def _sensitivity_authority(
     root: Path,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, str]]:
@@ -195,24 +239,31 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
 
     root = Path(project_root).expanduser().resolve()
     native_recipes, native = _native_authority(root)
+    toolchains = _toolchain_authority(root)
     factors, variants, sensitivity_digests = _sensitivity_authority(root)
+    target_path = root / "targets/registry.toml"
     body = {
         "schema_version": AUTHORITY_SCHEMA,
         "recipes": [*native_recipes, *_source_authority(root)],
         "native": native,
-        "toolchains": _toolchain_authority(root),
+        "targets": _target_authority(root, native, toolchains),
+        "toolchains": toolchains,
         "factors": factors,
         "factor_variants": variants,
         "plans": _plan_authority(root),
         "sources": {
             "recipes": "recipes/",
             "routes": "worker.json",
+            "targets": "targets/registry.toml",
             "toolchains": "toolchains/registry.toml",
             "factors": "sensitivity/factors.toml",
             "factor_variants": "sensitivity/variants.toml",
             "plans": "plans/",
         },
-        "source_digests": sensitivity_digests,
+        "source_digests": {
+            **sensitivity_digests,
+            "targets_sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),
+        },
     }
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     return {**body, "authority_digest": hashlib.sha256(canonical).hexdigest()}

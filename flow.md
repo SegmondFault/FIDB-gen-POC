@@ -144,6 +144,11 @@ reviewed registry identity
 > unlock, then extract/build only inside the isolated attempt root
 ```
 
+`targets/registry.toml` is the independent coverage inventory above this
+execution path. It records reviewed Linux ABI shapes and study-observed
+platform gaps even when no route exists; live capability detection overlays
+installed, checksum-cached, missing and archive-only states.
+
 The CLI exposes status/acquisition by registry identity only. It has no URL,
 hash, command or compiler override.
 

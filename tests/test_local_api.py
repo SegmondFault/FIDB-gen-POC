@@ -60,7 +60,7 @@ class LocalApiTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         for name in ("pyproject.toml", "worker.json"):
             shutil.copy2(self.source_root / name, self.root / name)
-        for name in ("plans", "recipes", "sensitivity", "toolchains"):
+        for name in ("plans", "recipes", "sensitivity", "targets", "toolchains"):
             shutil.copytree(self.source_root / name, self.root / name)
         self.state = self.root / "var/fidb-coordinator/ledger.sqlite3"
         self.queue = self.root / "plans/priority-queue.toml"
@@ -392,8 +392,9 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v1")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v2")
         self.assertEqual(len(document["recipes"]), 4)
+        self.assertEqual(len(document["targets"]), 11)
         self.assertEqual(len(document["toolchains"]), 41)
         self.assertEqual(len(document["factors"]), 41)
         self.assertTrue(document["plans"])

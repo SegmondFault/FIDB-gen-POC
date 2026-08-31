@@ -310,10 +310,14 @@ uv run fidb-poc api serve --bind 127.0.0.1 --port 8765
 The control panel's same-origin `/api/fidb/*` route runs server-side on
 `reference-host` and forwards only a fixed route set to that loopback API. Read
 routes expose the ledger, timings, detected capabilities and one validated
-projection of recipes, native routes, treatments, toolchains, sensitivity
-factors, variants and plans. The matrix therefore does not maintain a second
-hard-coded build catalog. Its `built` markers use the sealed inventory from
-that projection.
+projection of recipes, targets, native routes, treatments, toolchains,
+sensitivity factors, variants and plans. `targets/registry.toml` keeps every
+reviewed or study-observed platform/ABI visible independently of whether this
+host has a compiler. The **Targets & toolchains** view then overlays installed
+native tools and checksum-cached registry inputs without confusing an
+archive-only libc candidate with a source-build compiler. The matrix therefore
+does not maintain a second hard-coded build catalog. Its `built` markers use
+the sealed inventory from that projection.
 
 The panel can submit its generated TOML to a resolve-only endpoint, then save a
 successfully resolved request under `plans/drafts/`. Updates use the previous

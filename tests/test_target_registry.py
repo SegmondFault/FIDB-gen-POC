@@ -1,0 +1,60 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from fidb_poc.target_registry import load_targets
+
+
+class TargetRegistryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(__file__).resolve().parents[1]
+
+    def test_repository_registry_records_reviewed_and_observed_targets(self):
+        rows = load_targets(self.root / "targets/registry.toml")
+
+        self.assertEqual(len(rows), 11)
+        self.assertEqual(
+            {row["catalog_state"] for row in rows},
+            {"reviewed-route", "reviewed-abi", "study-observed"},
+        )
+        self.assertEqual(
+            {(row["platform"], row["binary_format"]) for row in rows},
+            {("linux", "ELF"), ("macos", "Mach-O"), ("windows", "PE/COFF")},
+        )
+
+    def test_unknown_fields_and_duplicate_ids_fail_closed(self):
+        document = """\
+schema_version = "fidb-targets/v1"
+[[target]]
+id = "duplicate"
+label = "First"
+platform = "linux"
+architecture = "x86_64"
+machine = "x86-64"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "reviewed-route"
+evidence = ["worker.json"]
+[[target]]
+id = "duplicate"
+label = "Second"
+platform = "linux"
+architecture = "x86_64"
+machine = "x86-64"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "reviewed-route"
+evidence = ["worker.json"]
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "targets.toml"
+            path.write_text(document, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                load_targets(path)
+
+
+if __name__ == "__main__":
+    unittest.main()

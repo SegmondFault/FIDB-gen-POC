@@ -246,6 +246,15 @@ export type ToolchainCapability = {
     elf_class: number;
     cross_arch: string | null;
   };
+  archives: Record<string, {
+    expected_sha256: string;
+    observed_sha256?: string;
+    path: string;
+    bytes: number | null;
+    state: string;
+  }>;
+  cross_bin_prefix?: string | null;
+  prepared_state?: string;
 };
 
 export type FactoryCapabilities = {
@@ -278,6 +287,12 @@ export type FactoryCapabilities = {
     };
   };
   active_job_readiness: CapabilityReadiness[];
+  native_routes: Array<{
+    id: string;
+    target: { os: string; architecture: string; binary_format: string };
+    tools: Record<string, { configured: string[]; available: boolean; path: string | null }>;
+    ready: boolean;
+  }>;
   toolchains: {
     registry_path: string;
     managed_cache: string;
@@ -327,6 +342,23 @@ export type AuthorityToolchain = {
   cross_bin_prefix: string | null;
 };
 
+export type AuthorityTarget = {
+  id: string;
+  label: string;
+  platform: string;
+  architecture: string;
+  machine: string;
+  binary_format: string;
+  endianness: string;
+  bits: number;
+  catalog_state: 'reviewed-route' | 'reviewed-abi' | 'study-observed' | string;
+  evidence: string[];
+  native_route_ids: string[];
+  toolchain_ids: string[];
+  source_capable_toolchain_ids: string[];
+  archive_capable_toolchain_ids: string[];
+};
+
 export type AuthorityFactor = {
   id: string;
   stage: string;
@@ -364,7 +396,7 @@ export type AuthorityPlan = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v1';
+  schema_version: 'fidb-authority-catalog/v2';
   authority_digest: string;
   recipes: AuthorityRecipe[];
   native: {
@@ -373,6 +405,7 @@ export type FactoryAuthority = {
     profiles: Record<string, string[]>;
     authority_path: string;
   };
+  targets: AuthorityTarget[];
   toolchains: AuthorityToolchain[];
   factors: AuthorityFactor[];
   factor_variants: AuthorityFactorVariant[];

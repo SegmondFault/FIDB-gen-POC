@@ -12,8 +12,9 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v1")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v2")
         self.assertEqual(len(document["recipes"]), 4)
+        self.assertEqual(len(document["targets"]), 11)
         self.assertEqual(len(document["toolchains"]), 41)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
@@ -27,6 +28,19 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertTrue(all(len(row["toml_sha256"]) == 64 for row in document["plans"]))
         self.assertEqual(len(document["authority_digest"]), 64)
+
+        targets = {row["id"]: row for row in document["targets"]}
+        self.assertEqual(
+            targets["linux-x86-64-elf"]["native_route_ids"],
+            ["linux-x86_64-gnu-gcc"],
+        )
+        self.assertEqual(
+            len(targets["linux-powerpc32-be-elf"]["source_capable_toolchain_ids"]),
+            1,
+        )
+        self.assertEqual(
+            targets["windows-x86-64-pecoff"]["toolchain_ids"], []
+        )
 
     def test_catalog_contains_no_caller_supplied_command_field(self):
         document = authority_catalog(self.root)

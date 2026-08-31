@@ -130,6 +130,7 @@ class LocalApiConfig:
             root / "pyproject.toml",
             root / "worker.json",
             root / "recipes",
+            root / "targets/registry.toml",
             root / "toolchains/registry.toml",
         )
         if not root.is_dir() or any(not path.exists() for path in required):
