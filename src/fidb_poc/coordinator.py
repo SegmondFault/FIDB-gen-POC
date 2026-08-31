@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator, Mapping
 
+from .operations_policy import OperationsPolicy, load_operations_policy
 from .plan_request import RESOLVED_SCHEMA, resolve_plan
 
 QUEUE_SCHEMA = "fidb-queue/v1"
@@ -80,6 +81,7 @@ class QueueConfig:
     max_attempts: int
     retry_backoff_seconds: int
     retry_backoff_max_seconds: int
+    operations: OperationsPolicy
     batches: tuple[BatchConfig, ...]
     project_root: Path
     source_path: Path
@@ -98,7 +100,15 @@ class QueueConfig:
         document = tomllib.loads(source_path.read_text(encoding="utf-8"))
         _only_keys(
             document,
-            {"schema_version", "name", "queue", "batch"},
+            {
+                "schema_version",
+                "name",
+                "queue",
+                "batch",
+                "schedule",
+                "resources",
+                "notifications",
+            },
             "queue document",
         )
         if document.get("schema_version") != QUEUE_SCHEMA:
@@ -150,6 +160,7 @@ class QueueConfig:
                 "queue retry_backoff_max_seconds must be at least "
                 "retry_backoff_seconds"
             )
+        operations = load_operations_policy(document, root)
 
         raw_batches = document.get("batch")
         if not isinstance(raw_batches, list) or not raw_batches:
@@ -213,6 +224,7 @@ class QueueConfig:
             max_attempts=max_attempts,
             retry_backoff_seconds=retry_backoff_seconds,
             retry_backoff_max_seconds=retry_backoff_max_seconds,
+            operations=operations,
             batches=ordered_batches,
             project_root=root,
             source_path=source_path,
@@ -472,6 +484,7 @@ class Coordinator:
                     CHECK (retry_backoff_seconds >= 0),
                 retry_backoff_max_seconds INTEGER NOT NULL DEFAULT 0
                     CHECK (retry_backoff_max_seconds >= retry_backoff_seconds),
+                operations_json TEXT NOT NULL DEFAULT '{}',
                 sync_generation INTEGER NOT NULL CHECK (sync_generation >= 0),
                 synced_at TEXT
             );
@@ -687,6 +700,11 @@ class Coordinator:
                 "ALTER TABLE coordinator_state ADD COLUMN retry_backoff_max_seconds "
                 "INTEGER NOT NULL DEFAULT 0 CHECK (retry_backoff_max_seconds >= 0)"
             )
+        if "operations_json" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN operations_json "
+                "TEXT NOT NULL DEFAULT '{}'"
+            )
         job_columns = {
             str(row["name"])
             for row in self._connection.execute("PRAGMA table_info(jobs)").fetchall()
@@ -719,8 +737,9 @@ class Coordinator:
                 singleton, config_name, config_path, armed, paused,
                 max_workers, poll_seconds, lease_seconds, max_attempts,
                 retry_backoff_seconds, retry_backoff_max_seconds,
+                operations_json,
                 sync_generation, synced_at
-            ) VALUES (1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, 0, 0, NULL)
+            ) VALUES (1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, 0, '{}', 0, NULL)
             """)
         # Keep the query planner's statistics current after migrations add the
         # timing-history indexes above.  This is safe on both new and old ledgers.
@@ -878,6 +897,7 @@ class Coordinator:
                 SET config_name = ?, config_path = ?, armed = ?,
                     max_workers = ?, poll_seconds = ?, lease_seconds = ?, max_attempts = ?,
                     retry_backoff_seconds = ?, retry_backoff_max_seconds = ?,
+                    operations_json = ?,
                     sync_generation = ?, synced_at = ?
                 WHERE singleton = 1
                 """,
@@ -891,6 +911,7 @@ class Coordinator:
                     queue_config.max_attempts,
                     queue_config.retry_backoff_seconds,
                     queue_config.retry_backoff_max_seconds,
+                    _canonical_json(queue_config.operations.document()),
                     generation,
                     self._timestamp(timestamp),
                 ),
@@ -2254,6 +2275,7 @@ class Coordinator:
             "max_attempts": int(state["max_attempts"]),
             "retry_backoff_seconds": int(state["retry_backoff_seconds"]),
             "retry_backoff_max_seconds": int(state["retry_backoff_max_seconds"]),
+            "operations": json.loads(state["operations_json"]),
             "sync_generation": int(state["sync_generation"]),
             "synced_at": state["synced_at"],
             "counts": counts,

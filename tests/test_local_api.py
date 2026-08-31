@@ -147,6 +147,24 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn("events", snapshot)
         self.assertTrue(all("lease_token" not in row for row in snapshot["jobs"]))
 
+    def test_preflight_exposes_enforced_schedule_and_live_resource_gates(self):
+        status, document, _ = self.request("GET", "/api/v1/preflight")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(document["schema_version"], "fidb-operations-preflight/v1")
+        self.assertFalse(document["queue_armed"])
+        self.assertFalse(document["ready"])
+        self.assertEqual(
+            document["policy"]["schedule"]["timezone"], "Europe/Luxembourg"
+        )
+        self.assertEqual(document["policy"]["schedule"]["hard_cutoff"], "06:15")
+        self.assertIn("available_memory_gib", document["resources"]["metrics"])
+        self.assertIn("temperature_c", document["resources"]["metrics"])
+
+        status, error, _ = self.request("GET", "/api/v1/preflight?extra=true")
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "invalid-query")
+
     def test_events_are_cursor_paginated_and_bounded(self):
         self.sync()
         status, first, _ = self.request("GET", "/api/v1/events?after=0&limit=1")

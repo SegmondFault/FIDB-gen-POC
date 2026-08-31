@@ -513,9 +513,11 @@ matrices = ["tier0-uclibc-powerpc"]
         self.assertTrue(indexes["stage_attempts_one_open_per_attempt"])
         self.assertIn("stage_attempts_stage_history", indexes)
         self.assertTrue(
-            {"retry_backoff_seconds", "retry_backoff_max_seconds"}.issubset(
-                state_columns
-            )
+            {
+                "retry_backoff_seconds",
+                "retry_backoff_max_seconds",
+                "operations_json",
+            }.issubset(state_columns)
         )
         self.assertIn("eligible_at", job_columns)
         self.assertIn("jobs_claim_eligibility", job_indexes)

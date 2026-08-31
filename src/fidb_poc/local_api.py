@@ -27,7 +27,9 @@ from .coordinator import (
     MAX_TIMING_LIMIT,
     Coordinator,
     CoordinatorError,
+    QueueConfig,
 )
+from .operations_policy import evaluate_operations
 from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
 
 API_SCHEMA = "fidb-local-api/v1"
@@ -49,6 +51,7 @@ _GET_PATHS = {
     "/api/v1/capabilities",
     "/api/v1/authority",
     "/api/v1/timings",
+    "/api/v1/preflight",
 }
 _POST_PATHS = {
     "/api/v1/sync",
@@ -553,6 +556,23 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 authority_catalog(self.api_server.config.project_root),
                 origin=origin,
             )
+            return
+
+        if path == "/api/v1/preflight":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST, "invalid-query", "preflight takes no query"
+                )
+            queue = QueueConfig.load(
+                self.api_server.config.queue_path,
+                self.api_server.config.project_root,
+            )
+            result = evaluate_operations(
+                queue.operations, self.api_server.config.project_root
+            )
+            result["queue_armed"] = queue.armed
+            result["ready"] = bool(result["ready"]) and queue.armed
+            self._json_response(HTTPStatus.OK, result, origin=origin)
             return
 
         with self._coordinator() as coordinator:

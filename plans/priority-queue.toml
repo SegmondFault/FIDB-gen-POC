@@ -21,6 +21,37 @@ max_attempts = 3
 retry_backoff_seconds = 30
 retry_backoff_max_seconds = 900
 
+[schedule]
+enabled = true
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "22:00"
+stop_claiming = "05:45"
+hard_cutoff = "06:15"
+
+[resources]
+# Admission is checked immediately before every claim. Values describe the
+# Linux resources visible to this worker pool, not nominal installed hardware.
+min_available_memory_gib = 12
+min_free_disk_gib = 200
+max_load_per_cpu = 1.0
+max_temperature_c = 90
+
+[notifications]
+events = [
+  "job-failed",
+  "job-requeued",
+  "queue-drained",
+  "resource-blocked",
+  "schedule-cutoff",
+]
+outbox = "var/fidb-notifications/events.jsonl"
+# Optional delivery is enabled only when this named variable contains an HTTPS
+# endpoint. The outbox remains the durable local notification record.
+webhook_url_env = "FIDB_NOTIFICATION_WEBHOOK_URL"
+webhook_bearer_env = "FIDB_NOTIFICATION_BEARER_TOKEN"
+timeout_seconds = 10
+
 [[batch]]
 id = "batch-000"
 name = "tier-0-runtime-foundations"

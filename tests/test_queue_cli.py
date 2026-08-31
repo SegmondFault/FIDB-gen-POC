@@ -188,6 +188,58 @@ matrices = ["native-libraries"]
         self.assertIn("queue is disarmed", errors.getvalue())
         self.assertIn("no build was started", errors.getvalue())
 
+    def test_preflight_reports_schedule_and_resources_without_state_mutation(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        arguments = self._arguments(
+            "preflight", self.project_root / "plans/priority-queue.toml"
+        )
+        with contextlib.redirect_stdout(output):
+            status = main(arguments)
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 1)
+        self.assertEqual(document["schema_version"], "fidb-operations-preflight/v1")
+        self.assertFalse(document["queue_armed"])
+        self.assertIn("claims_allowed", document["schedule"])
+        self.assertIn("available_memory_gib", document["resources"]["metrics"])
+        self.assertFalse(self.database.exists())
+
+    def test_hard_cutoff_requeues_once_worker_without_becoming_operator_interrupt(
+        self,
+    ) -> None:
+        class ImmediateTimer:
+            daemon = False
+
+            def __init__(self, _delay, callback):
+                self.callback = callback
+
+            def start(self):
+                self.callback()
+
+            def cancel(self):
+                return None
+
+        arguments = self._arguments("run", self._queue(armed=True))
+        arguments.extend(("--worker-id", "cutoff-worker", "--once"))
+        preflight = {
+            "schedule": {
+                "claims_allowed": True,
+                "hard_cutoff_at": "2099-01-01T00:00:00+00:00",
+            },
+            "resources": {"passed": True, "reasons": [], "metrics": {}},
+        }
+        with (
+            patch("fidb_poc.queue_cli.evaluate_operations", return_value=preflight),
+            patch("fidb_poc.queue_cli.threading.Timer", ImmediateTimer),
+            patch("fidb_poc.queue_cli.os.kill"),
+            patch("fidb_poc.queue_cli._execute_claim", side_effect=KeyboardInterrupt),
+        ):
+            status = main(arguments)
+
+        self.assertEqual(status, 1)
+
     def test_staging_root_has_no_hidden_components_for_ghidra(self) -> None:
         staging, final = _staging_root(
             self.directory,

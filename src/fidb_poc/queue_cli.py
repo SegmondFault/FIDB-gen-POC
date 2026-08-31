@@ -37,6 +37,11 @@ from .coordinator import (
     QueueConfig,
     WORKER_POOLS,
 )
+from .operations_policy import (
+    NotificationPolicy,
+    emit_notification,
+    evaluate_operations,
+)
 from .timing import CellStage, ProgressStatus, TIMING_SCHEMA, TimingRecorder
 
 DEFAULT_QUEUE = Path("plans/priority-queue.toml")
@@ -122,6 +127,12 @@ def parser() -> argparse.ArgumentParser:
         help="resume claims when the TOML queue is armed",
     )
 
+    commands.add_parser(
+        "preflight",
+        parents=[_common_parser(queue=True)],
+        help="evaluate schedule and host resource gates without claiming work",
+    )
+
     worker = commands.add_parser(
         "run",
         parents=[_common_parser(queue=True)],
@@ -199,6 +210,25 @@ def _existing_state(state: Path) -> None:
 
 def _print_json(value: object) -> None:
     print(json.dumps(value, indent=2, sort_keys=True))
+
+
+def _notify(
+    policy: NotificationPolicy,
+    event: str,
+    payload: dict[str, object],
+) -> None:
+    try:
+        delivery = emit_notification(policy, event, payload)
+        if delivery and delivery.get("webhook_error"):
+            print(
+                f"warning: notification delivery failed: {delivery['webhook_error']}",
+                file=sys.stderr,
+                flush=True,
+            )
+    except (OSError, ValueError) as error:
+        print(
+            f"warning: notification outbox failed: {error}", file=sys.stderr, flush=True
+        )
 
 
 def _sha256(path: Path) -> str:
@@ -671,6 +701,7 @@ def _execute_claim(
     lease_seconds: int,
     *,
     verbose: bool,
+    notifications: NotificationPolicy = NotificationPolicy(),
 ) -> bool:
     staging, final = _staging_root(root, lease)
     token = str(lease["lease_token"])
@@ -746,12 +777,21 @@ def _execute_claim(
         return True
     except KeyboardInterrupt:
         try:
-            coordinator.fail(
+            failed = coordinator.fail(
                 job_id,
                 token,
                 generation,
                 "worker interrupted",
                 retryable=True,
+            )
+            _notify(
+                notifications,
+                "job-requeued" if failed["state"] == "queued" else "job-failed",
+                {
+                    "job_id": job_id,
+                    "reason": "worker interrupted",
+                    "state": failed["state"],
+                },
             )
         except LeaseConflictError:
             pass
@@ -759,12 +799,21 @@ def _execute_claim(
     except Exception as error:
         retryable = not isinstance(error, (CellResolutionError, ValueError))
         try:
-            coordinator.fail(
+            failed = coordinator.fail(
                 job_id,
                 token,
                 generation,
                 f"{type(error).__name__}: {error}",
                 retryable=retryable,
+            )
+            _notify(
+                notifications,
+                "job-requeued" if failed["state"] == "queued" else "job-failed",
+                {
+                    "job_id": job_id,
+                    "reason": f"{type(error).__name__}: {error}",
+                    "state": failed["state"],
+                },
             )
         except LeaseConflictError:
             pass
@@ -817,6 +866,17 @@ def _resume(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _preflight(arguments: argparse.Namespace) -> int:
+    root, _, queue_path = _paths(arguments, require_queue=True)
+    assert queue_path is not None
+    config = QueueConfig.load(queue_path, root)
+    document = evaluate_operations(config.operations, root)
+    document["queue_armed"] = config.armed
+    document["ready"] = bool(document["ready"]) and config.armed
+    _print_json(document)
+    return 0 if document["ready"] else 1
+
+
 def _run_worker(arguments: argparse.Namespace) -> int:
     root, state, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
@@ -833,17 +893,88 @@ def _run_worker(arguments: argparse.Namespace) -> int:
     try:
         with Coordinator(state, root) as coordinator:
             coordinator.sync_queue(config, actor=arguments.worker_id)
+            last_resource_block: tuple[str, ...] | None = None
+            drained_notified = False
             while True:
+                operations = evaluate_operations(config.operations, root)
+                schedule = operations["schedule"]
+                resources = operations["resources"]
+                assert isinstance(schedule, dict) and isinstance(resources, dict)
+                if not bool(schedule["claims_allowed"]):
+                    if arguments.once:
+                        _print_json(operations)
+                        return 0
+                    time.sleep(config.poll_seconds)
+                    continue
+                if not bool(resources["passed"]):
+                    reasons = tuple(str(value) for value in resources["reasons"])
+                    if reasons != last_resource_block:
+                        _notify(
+                            config.operations.notifications,
+                            "resource-blocked",
+                            {
+                                "worker_id": arguments.worker_id,
+                                "reasons": list(reasons),
+                                "metrics": resources["metrics"],
+                            },
+                        )
+                    last_resource_block = reasons
+                    if arguments.once:
+                        _print_json(operations)
+                        return 0
+                    time.sleep(config.poll_seconds)
+                    continue
+                last_resource_block = None
                 lease = coordinator.claim(arguments.worker_id, pool=arguments.pool)
                 if lease is not None:
-                    succeeded = _execute_claim(
-                        coordinator,
-                        state,
-                        root,
-                        lease,
-                        config.lease_seconds,
-                        verbose=arguments.verbose,
-                    )
+                    drained_notified = False
+                    cutoff_triggered = threading.Event()
+                    timer = None
+                    cutoff_value = schedule.get("hard_cutoff_at")
+                    if isinstance(cutoff_value, str):
+                        cutoff = datetime.fromisoformat(cutoff_value)
+                        delay = max(0.0, cutoff.timestamp() - time.time())
+
+                        def interrupt_at_cutoff() -> None:
+                            cutoff_triggered.set()
+                            os.kill(os.getpid(), signal.SIGTERM)
+
+                        timer = threading.Timer(delay, interrupt_at_cutoff)
+                        timer.daemon = True
+                        timer.start()
+                    cutoff_interrupted = False
+                    try:
+                        succeeded = _execute_claim(
+                            coordinator,
+                            state,
+                            root,
+                            lease,
+                            config.lease_seconds,
+                            verbose=arguments.verbose,
+                            notifications=config.operations.notifications,
+                        )
+                    except KeyboardInterrupt:
+                        if cutoff_triggered.is_set():
+                            _notify(
+                                config.operations.notifications,
+                                "schedule-cutoff",
+                                {
+                                    "worker_id": arguments.worker_id,
+                                    "job_id": lease["job_id"],
+                                    "hard_cutoff_at": cutoff_value,
+                                },
+                            )
+                            cutoff_interrupted = True
+                            succeeded = False
+                        else:
+                            raise
+                    finally:
+                        if timer is not None:
+                            timer.cancel()
+                    if cutoff_interrupted:
+                        if arguments.once:
+                            return 1
+                        continue
                     if arguments.once:
                         return 0 if succeeded else 1
                     continue
@@ -851,6 +982,21 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                 if arguments.once:
                     _print_json(coordinator.status())
                     return 0
+                status = coordinator.status()
+                counts = status["counts"]
+                if (
+                    isinstance(counts, dict)
+                    and not drained_notified
+                    and counts.get("queued") == 0
+                    and counts.get("leased") == 0
+                    and counts.get("running") == 0
+                ):
+                    _notify(
+                        config.operations.notifications,
+                        "queue-drained",
+                        {"worker_id": arguments.worker_id, "counts": counts},
+                    )
+                    drained_notified = True
                 time.sleep(config.poll_seconds)
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
@@ -864,6 +1010,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "events": _events,
         "pause": _pause,
         "resume": _resume,
+        "preflight": _preflight,
         "run": _run_worker,
     }
     try:

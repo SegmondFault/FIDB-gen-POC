@@ -183,6 +183,13 @@ routed through the explicit `local` executor, and archive libraries routed
 through the fixed `archive-local` extractor; it never claims QEMU or malware
 work.
 
+Before each claim, the worker evaluates the queue's timezone-aware schedule and
+live host gates. New claims stop at the configured morning boundary; a timer
+returns an over-running attempt to the fenced queue at hard cutoff. Memory,
+filesystem, normalized load and thermal failures prevent a claim without
+consuming an attempt. Typed operational events are appended to the durable
+notification outbox, with optional HTTPS delivery isolated from queue state.
+
 The analyst/control path is deliberately separate from worker execution:
 
 ```text

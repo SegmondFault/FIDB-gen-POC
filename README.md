@@ -286,6 +286,17 @@ backoff. `retry_backoff_seconds` supplies the initial delay and
 ledger, so restarting or adding workers cannot turn a failing cell into a tight
 retry loop.
 
+The same queue document owns the unattended operating envelope. `[schedule]`
+defines an IANA-timezone claim window, a morning stop-claiming boundary and a
+hard cutoff. `[resources]` gates every new lease on available Linux memory,
+project-filesystem space, load per logical CPU and the highest detected thermal
+zone. `[notifications]` writes typed failure, retry, drain, resource-block and
+cutoff events to an ignored, fsynced JSONL outbox; an optional HTTPS webhook is
+resolved only from named worker environment variables. Notification delivery
+failure is reported but cannot alter a lease transition. Inspect the live
+decision without creating or claiming a job with `fidb-poc queue preflight` or
+`GET /api/v1/preflight`.
+
 Start the bounded API on `reference-host` without exposing SQLite or a coordinator
 port over Tailscale:
 

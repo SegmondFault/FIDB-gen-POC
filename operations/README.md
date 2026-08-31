@@ -49,8 +49,20 @@ The units deliberately do not name `network.target` or
 the `fidb-operator` user manager.  Before starting workers that may acquire an
 input, check connectivity explicitly (for example with
 `/usr/bin/nm-online -q --timeout=60`).  This first native-only commissioning
-run uses already reviewed public source URLs; a future boot-time scheduler
-still needs a bounded acquisition retry/deadline policy.
+run uses already reviewed public source URLs. Managed acquisition has bounded
+timeouts, checksum verification, retry and a content-addressed cache. The queue
+worker also enforces the TOML schedule, hard cutoff, durable retry backoff and
+claim-time memory/disk/load/temperature gates.
+
+Inspect that decision without mutating the ledger:
+
+```sh
+.venv/bin/fidb-poc queue preflight --queue plans/priority-queue.toml
+```
+
+The command returns nonzero while the queue is disarmed, outside its claim
+window, or blocked by a resource threshold. The control panel reads the same
+evaluation from the loopback API rather than inventing a second policy.
 
 ## Deliberately manual installation
 
@@ -126,6 +138,12 @@ draft does not enqueue or execute it. The GUI cannot arm the queue or broaden
 it to QEMU or malware. Leave `armed = false` in
 `plans/priority-queue.toml` until the resolved library-only queue and worker
 prerequisites have been reviewed.
+
+Operational notifications are always appended to the ignored local outbox
+configured in the queue TOML. To add external delivery, set the named
+`FIDB_NOTIFICATION_WEBHOOK_URL` to a reviewed HTTPS endpoint in the installed
+0600 environment file; set `FIDB_NOTIFICATION_BEARER_TOKEN` only if that
+endpoint requires it. Neither value is stored in TOML or the ledger.
 
 When execution is deliberately approved, change `armed = false` to
 `armed = true`, synchronize the queue again, and verify the resolved cells

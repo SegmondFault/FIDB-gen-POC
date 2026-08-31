@@ -100,6 +100,7 @@ export type CoordinatorSnapshot = {
   counts: CoordinatorCounts;
   claimable: number;
   retry_wait?: number;
+  operations?: Record<string, unknown>;
   last_event_id: number;
   batches: CoordinatorBatch[];
   jobs: CoordinatorJob[];
@@ -107,6 +108,38 @@ export type CoordinatorSnapshot = {
   stage_attempts?: StageSpan[];
   stage_attempts_total?: number;
   stage_attempts_truncated?: boolean;
+};
+
+export type OperationsPreflight = {
+  schema_version: string;
+  checked_at: string;
+  ready: boolean;
+  queue_armed: boolean;
+  schedule: {
+    claims_allowed: boolean;
+    reason: string;
+    window_started_at: string | null;
+    stop_claiming_at: string | null;
+    hard_cutoff_at: string | null;
+    next_window_at: string | null;
+  };
+  resources: {
+    passed: boolean;
+    reasons: string[];
+    metrics: {
+      available_memory_gib: number;
+      free_disk_gib: number;
+      load_1m: number;
+      logical_cpus: number;
+      load_per_cpu: number;
+      temperature_c: number | null;
+    };
+  };
+  policy: {
+    schedule: Record<string, unknown>;
+    resources: Record<string, number>;
+    notifications: Record<string, unknown>;
+  };
 };
 
 export type TimingDistribution = {
@@ -385,6 +418,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [authority, setAuthority] = useState<FactoryAuthority | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
+  const [preflight, setPreflight] = useState<OperationsPreflight | null>(null);
   const [timingsError, setTimingsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -466,7 +500,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setAuthority(authorityResult);
       }
       if (health.coordinator.state === 'ready') {
-        const [snapshotResult, timingResult] = await Promise.all([
+        const [snapshotResult, timingResult, preflightResult] = await Promise.all([
           json<CoordinatorSnapshot>('snapshot'),
           json<TimingSnapshot>('timings?limit=200')
             .then(value => ({ value, error: null }))
@@ -474,14 +508,17 @@ export function useFactoryApi(pollMilliseconds = 5000) {
               value: null,
               error: caught instanceof Error ? caught.message : 'Timing API unavailable',
             })),
+          json<OperationsPreflight>('preflight'),
         ]);
         setSnapshot(snapshotResult);
+        setPreflight(preflightResult);
         setTimings(timingResult.value);
         setTimingsError(timingResult.error);
         await refreshEvents(snapshotResult);
       } else {
         setSnapshot(null);
         setTimings(null);
+        setPreflight(null);
         setTimingsError(null);
         resetEvents();
       }
@@ -562,6 +599,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     authority,
     events,
     timings,
+    preflight,
     timingsError,
     eventHistoryLimited: Boolean(snapshot && snapshot.last_event_id > events.length),
     error,
