@@ -40,7 +40,7 @@ from .timing import (
 
 SEAL_SCHEMA = "fidb-cell-seal/v1"
 VARIANTS_SCHEMA = "fidb-factor-variants/v1"
-SUPPORTED_KINDS = frozenset({"native", "source-library", "malware"})
+SUPPORTED_KINDS = frozenset({"native", "source-library", "archive-library", "malware"})
 RAW_COMMAND_FIELDS = frozenset(
     {
         "argv",
@@ -530,6 +530,102 @@ def _resolve_source(
     }
 
 
+def _resolve_archive(
+    cell: dict[str, object], project_root: Path
+) -> tuple[dict[str, object], dict[str, object]]:
+    recipe_pin = _mapping(_required(cell, "recipe", "archive cell"), "cell.recipe")
+    target = _mapping(_required(cell, "target", "archive cell"), "cell.target")
+    toolchain_pin = _mapping(
+        _required(cell, "toolchain", "archive cell"), "cell.toolchain"
+    )
+    build = _mapping(_required(cell, "build", "archive cell"), "cell.build")
+    analysis = _mapping(_required(cell, "analysis", "archive cell"), "cell.analysis")
+    routing = _mapping(_required(cell, "routing", "archive cell"), "cell.routing")
+
+    matches = [
+        row
+        for row in load_toolchains(project_root / "toolchains/registry.toml")
+        if (
+            str(row.get("family")),
+            str(row.get("version")),
+            str(row.get("variant")),
+        )
+        == (
+            str(toolchain_pin.get("family")),
+            str(toolchain_pin.get("version")),
+            str(toolchain_pin.get("variant")),
+        )
+    ]
+    if len(matches) != 1:
+        raise CellResolutionError(
+            f"archive identity resolved to {len(matches)} reviewed registry rows"
+        )
+    exact = matches[0]
+    _reject_raw_commands(exact, "reviewed archive registry row")
+    for field in ("url", "sha256", "library_member"):
+        if field not in exact:
+            raise CellResolutionError(
+                f"reviewed archive registry row has no {field}: {exact.get('variant')}"
+            )
+    members = None
+    if "members_file" in exact:
+        members_path = Path(str(exact["members_file"])).resolve()
+        try:
+            relative = str(members_path.relative_to(project_root.resolve()))
+        except ValueError as error:
+            raise CellResolutionError(
+                f"reviewed archive members file escaped project root: {members_path}"
+            ) from error
+        members = {"path": relative, "sha256": exact["members_sha256"]}
+    reviewed_recipe = {
+        "name": exact["family"],
+        "version": str(exact["version"]),
+        "url": exact["url"],
+        "sha256": exact["sha256"],
+    }
+    reviewed_toolchain = {
+        "family": exact["family"],
+        "version": str(exact["version"]),
+        "variant": exact["variant"],
+        "capability": "archive",
+    }
+    reviewed_build = {
+        "adapter": "archive-extract",
+        "output": exact["library_member"],
+        "members": members,
+        "compiler_flags": None,
+    }
+    reviewed_target = {
+        "machine": exact["machine"],
+        "endianness": exact["endianness"],
+        "elf_class": int(exact["elf_class"]),
+    }
+    language = ghidra_language(
+        str(exact["machine"]), str(exact["endianness"]), int(exact["elf_class"])
+    )
+    if language is None:
+        raise CellResolutionError("reviewed archive target has no Ghidra language")
+    reviewed_analysis = {
+        "ghidra_language": language,
+        "ghidra_compiler_spec": ghidra_fid.compiler_spec_for_language(language),
+        "ghidra_version": "execution-probed",
+        "analysis_profile": "fid-safe-default",
+    }
+    _expect(recipe_pin, reviewed_recipe, "archive recipe pins")
+    _expect(toolchain_pin, reviewed_toolchain, "archive registry identity")
+    _expect(build, reviewed_build, "archive extraction adapter")
+    _expect(target, reviewed_target, "archive target ABI")
+    _expect(analysis, reviewed_analysis, "archive analysis route")
+    _expect(routing, {"executor": "archive-local"}, "archive executor")
+    return exact, {
+        "recipe": reviewed_recipe,
+        "toolchain": reviewed_toolchain,
+        "build": reviewed_build,
+        "target": reviewed_target,
+        "analysis": reviewed_analysis,
+    }
+
+
 def _initialize_ghidra(attempt_root: Path) -> GhidraRuntime:
     headless, ghidra_home = pipeline.find_ghidra()
     pipeline._require_executable_file(headless, "Ghidra analyzeHeadless")
@@ -740,15 +836,16 @@ def _source_outputs(
         timing=timing.span,
         skipped=timing.skip,
     )
-    expected_guess = {
+    expected_guess: dict[str, object] = {
         "family": cell["family"],
         "version": str(cell["version"]),
         "variant": cell["variant"],
         "language": _mapping(pins["analysis"], "pins.analysis")["ghidra_language"],
-        "source_url": cell["source_url"],
-        "source_sha256": cell["source_sha256"],
-        "executor": cell["executor"],
+        "source_url": cell.get("source_url", cell.get("url")),
+        "source_sha256": cell.get("source_sha256", cell.get("sha256")),
     }
+    if cell.get("mode") == "source":
+        expected_guess["executor"] = cell["executor"]
     for field, expected in expected_guess.items():
         _expect(guess.get(field), expected, f"prepared source {field}")
     _expect(
@@ -969,6 +1066,10 @@ def run_cell(
             configuration, pins = _resolve_native(plain, project)
             generated = None
             executor = "native-local"
+        elif kind == "archive-library":
+            generated, pins = _resolve_archive(plain, project)
+            configuration = None
+            executor = "archive-local"
         else:
             generated, pins = _resolve_source(plain, project, kind)
             configuration = None
@@ -987,7 +1088,7 @@ def run_cell(
         )
     else:
         assert generated is not None
-        if kind == "source-library":
+        if kind in {"source-library", "archive-library"}:
             fidb, counts, runtime, evidence = _source_outputs(
                 generated, pins, project, attempt, timing
             )

@@ -321,7 +321,11 @@ def _job_readiness(
             reasons.append(f"native cell is routed to {executor}, not native-local")
         elif kind == "source-library" and executor != "local":
             reasons.append(f"source-library cell is routed to {executor}, not local")
-        elif kind not in {"native", "source-library", "malware"}:
+        elif kind == "archive-library" and executor != "archive-local":
+            reasons.append(
+                f"archive-library cell is routed to {executor}, not archive-local"
+            )
+        elif kind not in {"native", "source-library", "archive-library", "malware"}:
             reasons.append(f"unsupported cell kind: {kind}")
 
         readiness = "not-applicable"
@@ -345,7 +349,7 @@ def _job_readiness(
                 if not route_ready.get(route, False):
                     missing_dependency = True
                     reasons.append(f"configured native route is not ready: {route}")
-            else:
+            elif kind == "source-library":
                 toolchain = cell.get("toolchain")
                 variant = (
                     str(toolchain.get("variant")) if isinstance(toolchain, dict) else ""
@@ -377,6 +381,28 @@ def _job_readiness(
                         acquisition_state = "download-required"
                         reasons.append(
                             "pinned toolchain archive is not in the managed cache"
+                        )
+            else:
+                toolchain = cell.get("toolchain")
+                variant = (
+                    str(toolchain.get("variant")) if isinstance(toolchain, dict) else ""
+                )
+                inventory = registry_by_variant.get(variant)
+                if inventory is None:
+                    hard_blocker = True
+                    reasons.append(f"no reviewed archive registry row: {variant}")
+                else:
+                    archive_cache = inventory["archives"].get("archive_candidate", {})
+                    archive_state = archive_cache.get("state")
+                    if archive_state == "broken":
+                        hard_blocker = True
+                        reasons.append(
+                            "managed archive cache failed digest verification"
+                        )
+                    elif archive_state != "verified-cached":
+                        acquisition_state = "download-required"
+                        reasons.append(
+                            "pinned archive candidate is not in the managed cache"
                         )
 
             if hard_blocker:
@@ -486,7 +512,7 @@ def detect_capabilities(
         },
         "worker_pools": {
             "library-local": {
-                "cell_kinds": ["native", "source-library"],
+                "cell_kinds": ["native", "source-library", "archive-library"],
                 "source_executor": "local",
                 "excluded_cell_kinds": ["malware"],
                 "qemu_required": False,

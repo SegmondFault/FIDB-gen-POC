@@ -261,10 +261,12 @@ uv run fidb-poc queue run --pool library-local --worker-id reference-host-1
 uv run fidb-poc queue run --pool library-local --worker-id reference-host-2
 ```
 
-The active queue is deliberately library-only: native cells and source-library
-cells with the explicit `local` executor. The typed `library-local` worker pool
-fails closed against QEMU and malware cells even if a later queue edit places
-one before an eligible library cell. `max_workers = 2` is the initial active
+The active queue is deliberately library-only: native cells, source-library
+cells with the explicit `local` executor, and typed `archive-library` cells
+which only extract objects from a pinned static archive. Archive cells have no
+source executor choice and record `archive-local` routing. The typed
+`library-local` worker pool fails closed against QEMU and malware cells even if
+a later queue edit places one before an eligible library cell. `max_workers = 2` is the initial active
 lease cap for this 16-core/32-thread host; raise it only after the ledger has
 representative build and Ghidra memory/timing evidence. A worker may invoke
 four compiler jobs and one Ghidra JVM, so hardware-thread count is not a safe
@@ -309,6 +311,12 @@ population, non-empty FIDB and FIDBF export, and an atomic provenance seal.
 Successful attempts are published under `artifacts/runs/`; incomplete attempts
 cannot become completed ledger entries. No queue or plan field accepts a raw
 command.
+
+[`plans/archive-uclibc-powerpc.toml`](plans/archive-uclibc-powerpc.toml)
+demonstrates the archive route as ordinary plan authority. The registry supplies
+the URL, digest, static-library member and reviewed object allowlist; the plan
+supplies only the library and registry identities. This is extraction and Ghidra
+analysis, not cross-compilation.
 
 Each `library-local` attempt now records durable, fenced stage spans for request and authority
 validation, pinned source/toolchain acquisition and verification, extraction,

@@ -46,6 +46,9 @@ class CellRunnerTests(unittest.TestCase):
             for cell in plan["cells"]
             if cell["kind"] == "malware" and cell["status"] == "planned"
         )
+        cls.archive_cell = resolve_plan(
+            cls.project_root / "plans/archive-uclibc-powerpc.toml", cls.project_root
+        )["cells"][0]
 
     @staticmethod
     def _fake_export(packed: Path, output: Path) -> Path:
@@ -84,7 +87,7 @@ class CellRunnerTests(unittest.TestCase):
         objects = work / "prepared/objects"
         objects.mkdir(parents=True, exist_ok=True)
         (objects / "one.o").write_bytes(b"object")
-        return {
+        result = {
             "family": cell["family"],
             "version": str(cell["version"]),
             "variant": cell["variant"],
@@ -97,10 +100,12 @@ class CellRunnerTests(unittest.TestCase):
             "pattern": ".*",
             "limit": None,
             "recipe_digest": libc_catalog._digest(cell),
-            "source_url": cell["source_url"],
-            "source_sha256": cell["source_sha256"],
-            "executor": cell["executor"],
+            "source_url": cell.get("source_url", cell.get("url")),
+            "source_sha256": cell.get("source_sha256", cell.get("sha256")),
         }
+        if cell.get("mode") == "source":
+            result["executor"] = cell["executor"]
+        return result
 
     @staticmethod
     def _fake_malware_build(cell, work: Path, _downloads: Path):
@@ -175,6 +180,7 @@ class CellRunnerTests(unittest.TestCase):
     def test_source_and_malware_dispatch_through_complete_paths(self):
         for cell, expected_prepare, expected_malware in (
             (self.source_cell, 1, 0),
+            (self.archive_cell, 1, 0),
             (self.malware_cell, 0, 1),
         ):
             with self.subTest(kind=cell["kind"]), tempfile.TemporaryDirectory() as tmp:

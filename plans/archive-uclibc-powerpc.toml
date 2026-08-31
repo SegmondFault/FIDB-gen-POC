@@ -1,0 +1,19 @@
+schema_version = "fidb-plan/v1"
+name = "archive-uclibc-powerpc"
+
+[policy]
+max_cells = 1
+priority = "high"
+
+[coverage]
+factor_variants = []
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["uclibc@0.9.30.1"]
+
+[[matrix]]
+id = "archive-uclibc-powerpc"
+kind = "archive-library"
+recipes = ["uclibc@0.9.30.1"]
+toolchains = ["uclibc@0.9.30.1:powerpc-default-core"]

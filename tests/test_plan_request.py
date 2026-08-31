@@ -96,6 +96,35 @@ executor = "qemu"
             with self.assertRaisesRegex(ValueError, "unknown toolchain variants"):
                 resolve_plan(path, self.root)
 
+    def test_archive_library_resolves_as_runnable_without_executor_choice(self):
+        plan = resolve_plan(self.root / "plans/archive-uclibc-powerpc.toml", self.root)
+
+        self.assertEqual(plan["summary"]["planned_cells"], 1)
+        cell = plan["cells"][0]
+        self.assertEqual(cell["kind"], "archive-library")
+        self.assertEqual(cell["routing"], {"executor": "archive-local"})
+        self.assertEqual(cell["toolchain"]["capability"], "archive")
+        self.assertEqual(cell["build"]["adapter"], "archive-extract")
+        self.assertEqual(plan["queue_preview"][0]["state"], "planned")
+
+    def test_archive_library_rejects_source_executor_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "bad-archive.toml"
+            path.write_text(
+                """schema_version = "fidb-plan/v1"
+name = "bad-archive"
+[[matrix]]
+id = "archive"
+kind = "archive-library"
+recipes = ["uclibc@0.9.30.1"]
+toolchains = ["uclibc@0.9.30.1:powerpc-default-core"]
+executor = "local"
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "cannot set.*executor"):
+                load_plan_request(path)
+
     def test_unknown_factor_variant_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "unknown-factor.toml"

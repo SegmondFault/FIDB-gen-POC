@@ -374,8 +374,10 @@ def worker_pool_accepts_cell(pool: str, cell: object) -> bool:
     kind = cell.get("kind")
     executor = routing.get("executor")
     if pool == "library-local":
-        return (kind == "native" and executor == "native-local") or (
-            kind == "source-library" and executor == "local"
+        return (
+            (kind == "native" and executor == "native-local")
+            or (kind == "source-library" and executor == "local")
+            or (kind == "archive-library" and executor == "archive-local")
         )
     return False
 

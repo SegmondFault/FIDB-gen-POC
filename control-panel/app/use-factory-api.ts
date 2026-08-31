@@ -233,7 +233,7 @@ export type FactoryCapabilities = {
   toolchains: {
     registry_path: string;
     managed_cache: string;
-    managed_preparation: boolean;
+    managed_preparation: boolean | 'per-attempt-extraction';
     entries: ToolchainCapability[];
   };
 };

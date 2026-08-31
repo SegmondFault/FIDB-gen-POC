@@ -28,7 +28,7 @@ REQUEST_SCHEMA = "fidb-plan/v1"
 RESOLVED_SCHEMA = "fidb-resolved-plan/v1"
 SENSITIVITY_SCHEMA = "fidb-sensitivity/v1"
 VARIANTS_SCHEMA = "fidb-factor-variants/v1"
-MATRIX_KINDS = {"native", "source-library", "malware"}
+MATRIX_KINDS = {"native", "source-library", "archive-library", "malware"}
 PRIORITIES = {"background", "normal", "high"}
 QUEUE_STRATEGIES = {"recipe-then-variant", "variant-then-recipe"}
 
@@ -164,6 +164,15 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
             if forbidden:
                 raise ValueError(
                     f"native matrix {matrix_id} cannot set: {sorted(forbidden)}"
+                )
+        elif kind == "archive-library":
+            row["toolchains"] = _tokens(
+                matrix.get("toolchains"), f"matrix {matrix_id} toolchains"
+            )
+            forbidden = {"routes", "treatments", "executor"} & set(matrix)
+            if forbidden:
+                raise ValueError(
+                    f"archive-library matrix {matrix_id} cannot set: {sorted(forbidden)}"
                 )
         else:
             row["toolchains"] = _tokens(
@@ -476,6 +485,120 @@ def _source_cell(
             "ghidra-application": {"state": "execution-probed", "value": None},
             "pyghidra-version": {"state": "execution-probed", "value": None},
             "java-runtime": {"state": "execution-probed", "value": None},
+            "analysis-configuration": {
+                "state": "controlled",
+                "value": "fid-safe-default",
+            },
+        },
+    }
+
+
+def _archive_cell(
+    matrix: dict[str, object],
+    toolchain: dict[str, object],
+    project_root: Path,
+) -> dict[str, object]:
+    variant = str(toolchain["variant"])
+    identity = f'{toolchain["family"]}@{toolchain["version"]}'
+    reasons = []
+    if identity not in matrix["recipes"]:
+        reasons.append("archive identity is incompatible with requested library")
+    archive_capable = all(
+        key in toolchain for key in ("url", "sha256", "library_member")
+    )
+    if not archive_capable:
+        reasons.append("registry row has no pinned archive candidate")
+    analysis = _analysis(
+        str(toolchain["machine"]),
+        str(toolchain["endianness"]),
+        int(toolchain["elf_class"]),
+    )
+    if analysis["ghidra_language"] is None:
+        reasons.append("target ABI has no Ghidra language mapping")
+    members = None
+    if "members_file" in toolchain:
+        members_path = Path(str(toolchain["members_file"])).resolve()
+        try:
+            relative = str(members_path.relative_to(project_root))
+        except ValueError as error:
+            raise ValueError(
+                f"archive members file is outside project root: {members_path}"
+            ) from error
+        members = {
+            "path": relative,
+            "sha256": toolchain["members_sha256"],
+        }
+    status = "blocked" if reasons else "planned"
+    target = {
+        "machine": toolchain["machine"],
+        "endianness": toolchain["endianness"],
+        "elf_class": int(toolchain["elf_class"]),
+    }
+    return {
+        "id": f'{matrix["id"]}:{identity}:{variant}',
+        "matrix": matrix["id"],
+        "kind": "archive-library",
+        "status": status,
+        "blockers": reasons,
+        "readiness": "unprobed" if status == "planned" else "unmet",
+        "recipe": {
+            "name": toolchain["family"],
+            "version": str(toolchain["version"]),
+            "url": toolchain.get("url"),
+            "sha256": toolchain.get("sha256"),
+        },
+        "target": target,
+        "toolchain": {
+            "family": toolchain["family"],
+            "version": str(toolchain["version"]),
+            "variant": variant,
+            "capability": "archive" if archive_capable else "source-only",
+        },
+        "build": {
+            "adapter": "archive-extract",
+            "output": toolchain.get("library_member"),
+            "members": members,
+            "compiler_flags": None,
+        },
+        "analysis": analysis,
+        "routing": {"executor": "archive-local"},
+        "sensitivity": {
+            "source-identity": {
+                "state": "controlled",
+                "value": f'{identity}:{str(toolchain.get("sha256", ""))[:12]}',
+            },
+            "target-platform-format": {
+                "state": "controlled",
+                "value": "linux:ELF",
+            },
+            "target-abi": {
+                "state": "controlled",
+                "value": f'{target["machine"]}:{target["endianness"]}:{target["elf_class"]}',
+            },
+            "compiler-family": {
+                "state": "archive-provenance-only",
+                "value": variant,
+            },
+            "compiler-version": {
+                "state": "archive-provenance-only",
+                "value": str(toolchain["version"]),
+            },
+            "build-shape": {
+                "state": "controlled",
+                "value": "archive-extract",
+            },
+            "link-shape": {
+                "state": "controlled",
+                "value": toolchain.get("library_member"),
+            },
+            "ghidra-language": {
+                "state": "controlled",
+                "value": analysis["ghidra_language"],
+            },
+            "ghidra-compiler-spec": {
+                "state": "controlled",
+                "value": analysis["ghidra_compiler_spec"],
+            },
             "analysis-configuration": {
                 "state": "controlled",
                 "value": "fid-safe-default",
@@ -864,6 +987,25 @@ def resolve_plan(
     for matrix in request["matrices"]:
         if matrix["kind"] == "native":
             cells.extend(_native_cells(matrix, root))
+            continue
+        if matrix["kind"] == "archive-library":
+            missing = set(matrix["toolchains"]) - set(toolchains_by_identity)
+            if missing:
+                raise ValueError(f"unknown toolchain variants: {sorted(missing)}")
+            requested = set(matrix["recipes"])
+            known = {
+                f'{toolchains_by_identity[variant]["family"]}@{toolchains_by_identity[variant]["version"]}'
+                for variant in matrix["toolchains"]
+            }
+            if requested != known:
+                raise ValueError(
+                    "archive-library recipes must exactly match selected registry "
+                    f"families/versions: requested={sorted(requested)}, selected={sorted(known)}"
+                )
+            for variant in matrix["toolchains"]:
+                cells.append(
+                    _archive_cell(matrix, toolchains_by_identity[variant], root)
+                )
             continue
         recipe_directory = (
             "recipes/libs" if matrix["kind"] == "source-library" else "recipes/malware"

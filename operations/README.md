@@ -24,9 +24,10 @@ threads as 32 safe end-to-end workers.
 
 ## Before activation
 
-The queue must remain library-only: resolved cells must have `kind = "native"`
-or `kind = "source-library"`, and source-library cells must have
-`executor = "local"`.  Do not add a malware batch or a QEMU route to the queue
+The queue must remain library-only: resolved cells must have `kind = "native"`,
+`kind = "source-library"` with `executor = "local"`, or
+`kind = "archive-library"` with `executor = "archive-local"`. Do not add a
+malware batch or a QEMU route to the queue
 used by these units.  The worker unit also passes `--pool library-local`, so it
 must fail closed if a future queue attempts to offer either kind of work.
 Inspect the complete resolution while it is still disarmed:

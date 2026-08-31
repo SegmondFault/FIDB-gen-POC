@@ -9,6 +9,7 @@ from fidb_poc.coordinator import (
     LeaseConflictError,
     QueueConfig,
     load_queue_config,
+    worker_pool_accepts_cell,
 )
 
 
@@ -283,6 +284,23 @@ matrices = ["tier0-uclibc-powerpc"]
             lease = coordinator.claim("general-worker", now=20)
             self.assertEqual(lease["batch_id"], "batch-qemu")
             self.assertEqual(lease["cell"]["routing"]["executor"], "qemu")
+
+    def test_library_local_pool_accepts_typed_archive_extraction(self):
+        self.assertTrue(
+            worker_pool_accepts_cell(
+                "library-local",
+                {
+                    "kind": "archive-library",
+                    "routing": {"executor": "archive-local"},
+                },
+            )
+        )
+        self.assertFalse(
+            worker_pool_accepts_cell(
+                "library-local",
+                {"kind": "archive-library", "routing": {"executor": "local"}},
+            )
+        )
 
     def test_unknown_worker_pool_fails_without_mutating_jobs(self):
         path = self.write_mixed_pool_queue()

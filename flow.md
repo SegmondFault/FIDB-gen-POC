@@ -176,8 +176,9 @@ invalidating work already leased. Multiple local worker processes coordinate
 through transactional SQLite leases, while each attempt has independent work,
 Ghidra and artifact paths. Blocked entries stay visible and do not prevent later
 runnable entries from progressing. The current `library-local` worker pool
-atomically skips every cell except native libraries and source libraries routed
-through the explicit `local` executor; it never claims QEMU or malware work.
+atomically skips every cell except native libraries, source libraries routed
+through the explicit `local` executor, and archive libraries routed through the
+fixed `archive-local` extractor; it never claims QEMU or malware work.
 
 The analyst/control path is deliberately separate from worker execution:
 

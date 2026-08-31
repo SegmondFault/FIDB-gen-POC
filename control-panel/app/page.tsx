@@ -1396,7 +1396,7 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
           <div className="two-fields"><label><span>Start window · design only</span><input type="time" defaultValue="22:00" disabled /></label><label><span>Stop scheduling · design only</span><input type="time" defaultValue="06:15" disabled /></label></div>
           <div className="two-fields"><label><span>Maximum active leases · TOML</span><input type="number" value={snapshot?.max_workers ?? 2} readOnly /></label><label><span>Retry ceiling · TOML</span><input type="number" value={snapshot?.max_attempts ?? 3} readOnly /></label></div>
           <div className="toggle-list">
-            <label><div><strong>Library-local pool only</strong><small>Native plus explicitly local source-library routes. QEMU and malware are excluded.</small></div><input type="checkbox" checked readOnly /></label>
+            <label><div><strong>Library-local pool only</strong><small>Native, explicitly local source-library, and pinned archive-extraction routes. QEMU and malware are excluded.</small></div><input type="checkbox" checked readOnly /></label>
             <label><div><strong>Stop after blocking integrity alert</strong><small>Digest, compiler identity, or ABI mismatch.</small></div><input type="checkbox" defaultChecked /></label>
             <label><div><strong>Prepare pinned requirements</strong><small>Only during the configured network window.</small></div><input type="checkbox" defaultChecked /></label>
           </div>
