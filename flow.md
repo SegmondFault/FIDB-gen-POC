@@ -205,9 +205,12 @@ authoritative catalog and bounded timing history, plus typed
 sync/pause/resume and validated plan-draft resolve/save operations. The Timing
 workspace shows active clocks, retries/failures, measured distributions and
 throughput; it displays no ETA until the API has a defensible sample-backed
-model. The API cannot arm, claim or run a cell. Remote workers will require an
-authenticated worker-facing API rather than this local control API or direct
-access to SQLite.
+model. The API cannot arm, claim or run a cell. Remote workers use a separate
+loopback worker API published only through reviewed HTTPS. A named credential
+authorizes a typed pool; the worker receives a fenced lease, streams stage
+transitions, and uploads only its seal, FIDB and FIDBF. The host binds those
+files and timing back to the leased resolved cell before durable publication.
+Remote workers never access SQLite or submit raw commands.
 
 ## 2. Configuration and recipe resolution
 

@@ -584,6 +584,16 @@ class Coordinator:
                 UNIQUE (job_id, lease_generation)
             );
 
+            CREATE TABLE IF NOT EXISTS workers (
+                worker_id TEXT PRIMARY KEY,
+                transport TEXT NOT NULL CHECK (transport IN ('local', 'remote-http')),
+                pools_json TEXT NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('online', 'offline')),
+                metadata_json TEXT NOT NULL,
+                registered_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS stage_attempts (
                 stage_attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 attempt_id INTEGER NOT NULL REFERENCES attempts(attempt_id),
@@ -2219,6 +2229,80 @@ class Coordinator:
             raise KeyError(job_id)
         return self._job_payload(row)
 
+    def touch_worker(
+        self,
+        worker_id: str,
+        *,
+        transport: str,
+        pools: tuple[str, ...],
+        metadata: Mapping[str, object] | None = None,
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Register or heartbeat one authenticated, typed worker identity."""
+
+        worker = _text(worker_id, "worker id")
+        if transport not in {"local", "remote-http"}:
+            raise ValueError(f"unsupported worker transport: {transport}")
+        if not pools or any(pool not in WORKER_POOLS for pool in pools):
+            raise ValueError("worker pools contain an unsupported pool")
+        if len(set(pools)) != len(pools):
+            raise ValueError("worker pools contain duplicates")
+        metadata_document = dict(metadata or {})
+        metadata_json = _canonical_json(metadata_document)
+        timestamp = self._now(now)
+        occurred_at = self._timestamp(timestamp)
+        with self._transaction():
+            existing = self._connection.execute(
+                "SELECT * FROM workers WHERE worker_id = ?", (worker,)
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO workers (
+                    worker_id, transport, pools_json, state, metadata_json,
+                    registered_at, last_seen_at
+                ) VALUES (?, ?, ?, 'online', ?, ?, ?)
+                ON CONFLICT(worker_id) DO UPDATE SET
+                    transport = excluded.transport,
+                    pools_json = excluded.pools_json,
+                    state = 'online',
+                    metadata_json = excluded.metadata_json,
+                    last_seen_at = excluded.last_seen_at
+                """,
+                (
+                    worker,
+                    transport,
+                    _canonical_json(list(pools)),
+                    metadata_json,
+                    occurred_at,
+                    occurred_at,
+                ),
+            )
+            if existing is None:
+                self._event_locked(
+                    "worker.registered",
+                    now=timestamp,
+                    actor=worker,
+                    payload={"transport": transport, "pools": list(pools)},
+                )
+        row = self._connection.execute(
+            "SELECT * FROM workers WHERE worker_id = ?", (worker,)
+        ).fetchone()
+        return self._worker_payload(row)
+
+    @staticmethod
+    def _worker_payload(row: sqlite3.Row) -> dict[str, object]:
+        last_seen = datetime.fromisoformat(str(row["last_seen_at"]))
+        age = (datetime.now(timezone.utc) - last_seen).total_seconds()
+        return {
+            "worker_id": str(row["worker_id"]),
+            "transport": str(row["transport"]),
+            "pools": json.loads(row["pools_json"]),
+            "state": "online" if age <= 180 else "offline",
+            "metadata": json.loads(row["metadata_json"]),
+            "registered_at": str(row["registered_at"]),
+            "last_seen_at": str(row["last_seen_at"]),
+        }
+
     def status(self) -> dict[str, object]:
         """Return compact queue status and active-state counts."""
 
@@ -2548,6 +2632,9 @@ class Coordinator:
             """,
             (int(include_inactive),),
         ).fetchall()
+        workers = self._connection.execute(
+            "SELECT * FROM workers ORDER BY worker_id"
+        ).fetchall()
         stage_count = int(
             self._connection.execute(
                 """
@@ -2594,6 +2681,7 @@ class Coordinator:
                 for row in jobs
             ],
             "attempts": [self._attempt_payload(row) for row in attempts],
+            "workers": [self._worker_payload(row) for row in workers],
             "stage_attempts": [
                 self._stage_attempt_payload(row) for row in stage_attempts
             ],

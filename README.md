@@ -277,8 +277,11 @@ SQLite ledger at `var/fidb-coordinator/ledger.sqlite3` records only runtime
 state: claims, fenced leases, attempts, stages, failures and completions. It is
 safe for multiple worker processes on this Linux host; it must not be placed on
 SMB/NFS or opened directly by remote workers. The current loopback API is an
-operator/control-panel boundary and deliberately has no claim or run endpoint;
-remote workers still require a later authenticated worker API.
+operator/control-panel boundary and deliberately has no claim or run endpoint.
+A separate worker-only API authenticates each named worker by a SHA-256 token
+digest, authorizes its typed pool, and exposes only claim, renew, stage, fail,
+artifact-upload and completion operations. Remote workers therefore never open
+SQLite and never submit a command string.
 
 Retryable failures are returned to the ordered queue with a durable exponential
 backoff. `retry_backoff_seconds` supplies the initial delay and
@@ -320,6 +323,15 @@ priority queue and no build starts. Thus a Mac browser may use the
 Tailscale-served control panel without treating the Mac's own `localhost` as
 the execution host. The API cannot arm a queue, claim a job, accept a command,
 or start a build.
+
+The remote-worker API is a separate process and port. It binds to loopback only;
+publish it to another machine only through a reviewed HTTPS reverse proxy. A
+remote client requires HTTPS, re-resolves the frozen cell against its local
+reviewed checkout, keeps the lease alive while executing, uploads the
+seal/FIDB/FIDBF with digests, and asks the host to publish. The host rechecks
+lease ownership, resolved cell identity, seal contents, artifact sizes/digests
+and timing before fenced completion. Worker tokens live only in mode-0600
+environment/credential files; TOML and SQLite contain no plaintext token.
 
 Every worker uses a fixed typed dispatcher and re-resolves the reviewed recipe,
 pins, target, toolchain, adapter and executor before running. A terminal success

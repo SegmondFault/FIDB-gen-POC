@@ -81,6 +81,16 @@ export type StageSpan = {
   error: string | null;
 };
 
+export type CoordinatorWorker = {
+  worker_id: string;
+  transport: 'local' | 'remote-http';
+  pools: string[];
+  state: 'online' | 'offline';
+  metadata: Record<string, unknown>;
+  registered_at: string;
+  last_seen_at: string;
+};
+
 export type CoordinatorSnapshot = {
   schema_version: string;
   status: 'disarmed' | 'paused' | 'ready' | 'active' | 'idle';
@@ -105,6 +115,7 @@ export type CoordinatorSnapshot = {
   batches: CoordinatorBatch[];
   jobs: CoordinatorJob[];
   attempts?: CoordinatorAttempt[];
+  workers?: CoordinatorWorker[];
   stage_attempts?: StageSpan[];
   stage_attempts_total?: number;
   stage_attempts_truncated?: boolean;

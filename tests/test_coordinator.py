@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -314,6 +315,42 @@ matrices = ["tier0-uclibc-powerpc"]
             after = coordinator.snapshot()
         self.assertEqual(before["counts"], after["counts"])
         self.assertEqual(before["attempts"], after["attempts"])
+
+    def test_worker_registration_and_heartbeat_are_persistent_and_credential_free(self):
+        with Coordinator(self.database) as coordinator:
+            registered = coordinator.touch_worker(
+                "remote-linux-1",
+                transport="remote-http",
+                pools=("library-local",),
+                metadata={"last_operation": "claim"},
+                now=10,
+            )
+            heartbeat = coordinator.touch_worker(
+                "remote-linux-1",
+                transport="remote-http",
+                pools=("library-local",),
+                metadata={"last_operation": "renew"},
+                now=20,
+            )
+
+        with Coordinator(self.database) as reopened:
+            snapshot = reopened.snapshot()
+
+        self.assertEqual(registered["registered_at"], "1970-01-01T00:00:10+00:00")
+        self.assertEqual(heartbeat["last_seen_at"], "1970-01-01T00:00:20+00:00")
+        self.assertEqual(heartbeat["metadata"]["last_operation"], "renew")
+        self.assertEqual(len(snapshot["workers"]), 1)
+        self.assertNotIn("token", json.dumps(snapshot["workers"]))
+        self.assertEqual(
+            len(
+                [
+                    event
+                    for event in snapshot["events"]
+                    if event["event_type"] == "worker.registered"
+                ]
+            ),
+            1,
+        )
 
     def test_expired_lease_requeues_then_stops_at_retry_cap(self):
         path = self.write_queue(

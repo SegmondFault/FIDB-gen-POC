@@ -1,0 +1,10 @@
+{
+  "schema_version": "fidb-remote-worker-credentials/v1",
+  "workers": [
+    {
+      "worker_id": "replace-with-reviewed-worker-id",
+      "token_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pools": ["library-local"]
+    }
+  ]
+}

@@ -200,6 +200,14 @@ def main(argv: list[str] | None = None) -> int:
         from .toolchain_cli import main as toolchain_main
 
         return toolchain_main(tokens[1:])
+    if tokens and tokens[0] == "worker-api":
+        from .remote_api import main as remote_api_main
+
+        return remote_api_main(tokens[1:])
+    if tokens and tokens[0] == "remote-worker":
+        from .remote_worker import main as remote_worker_main
+
+        return remote_worker_main(tokens[1:])
     if tokens and tokens[0] in _HUNT_SUBCOMMANDS:
         from .hunt_cli import main as hunt_main
 

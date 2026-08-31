@@ -476,7 +476,7 @@ export default function Home() {
                   <p className="panel-kicker">EXECUTION</p>
                   <h3>Worker pool</h3>
                 </div>
-                <button className="round-add" aria-label="Add worker">+</button>
+                <button className="round-add" aria-label="Worker enrollment is configured on the coordinator" disabled>+</button>
               </div>
               <div className="worker-list">
                 {factory.capabilities ? [{
@@ -494,6 +494,7 @@ export default function Home() {
                     <span className={`worker-state ${worker.tone}`}>{worker.state}</span>
                   </div>
                 )) : <div className="empty-state"><span>◇</span><strong>No capability scan</strong><p>Connect the local API to inspect this host.</p></div>}
+                {(factory.snapshot?.workers ?? []).map(worker => <div className="worker-row" key={worker.worker_id}><span className="worker-glyph ready">⌬</span><div><strong>{worker.worker_id}</strong><small>{worker.transport} · {worker.pools.join(', ')} · last seen {new Date(worker.last_seen_at).toLocaleString()}</small></div><span className="worker-state ready">{worker.state}</span></div>)}
               </div>
               <button className="full-width-button" onClick={() => setActiveView('Toolchains')}>Manage workers</button>
             </article>
@@ -1416,7 +1417,7 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
 
 function ActivityView({ events, connection }: { events: CoordinatorEvent[]; connection: string }) {
   const displayed = [...events].reverse();
-  return <div className="view-stack"><ViewIntro kicker="DURABLE TELEMETRY" title="Activity stream" copy="Append-only coordinator events from the local SQLite ledger. This view reports queue and stage transitions only; worker heartbeats are not claimed until registration is implemented." action={<button className="secondary-action" disabled>{connection === 'live' ? `${events.length} events` : 'Coordinator offline'}</button>} />
+  return <div className="view-stack"><ViewIntro kicker="DURABLE TELEMETRY" title="Activity stream" copy="Append-only coordinator events from the local SQLite ledger. Queue, stage and authenticated worker-registration transitions remain auditable here." action={<button className="secondary-action" disabled>{connection === 'live' ? `${events.length} events` : 'Coordinator offline'}</button>} />
     <section className="panel terminal-panel"><div className="terminal-toolbar"><div><span /><span /><span /></div><code>var/fidb-coordinator/ledger.sqlite3 / events</code><button disabled>{connection === 'live' ? 'Live poll' : 'Not live'}</button></div><div className="terminal-events">{displayed.map(event => <div key={event.event_id}><time>{eventTime(event, true)}</time><span className={`event-dot ${eventTone(event)}`} /><strong>{event.event_type}</strong><p>{eventDetail(event)}</p></div>)}{!displayed.length && <div className="empty-state"><time>—</time><span className="event-dot info"/><strong>No events</strong><p>Synchronize the queue to begin the ledger.</p></div>}</div></section>
   </div>;
 }

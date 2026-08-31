@@ -197,3 +197,48 @@ the KDE login remains active.  They do not survive the final logout or start
 at boot until lingering is deliberately enabled for `fidb-operator`.  Enabling
 linger is a host-level policy decision and also affects the user's other
 enabled units; it is not performed merely by installing these templates.
+
+## Authenticated remote workers
+
+Remote machines must not mount or copy `var/fidb-coordinator/ledger.sqlite3`.
+The reviewed `fidb-remote-worker-api.service` instead binds a worker-only API to
+`127.0.0.1:8766`. It has no operator, plan-editing or raw-command endpoint. Do
+not bind it to a wildcard or Tailscale address directly: publish only the
+`/api/v1/worker/*` path through a reviewed, tailnet-restricted HTTPS reverse
+proxy. The remote client rejects plain HTTP except loopback test mode.
+
+Create a high-entropy token for each worker, give the plaintext only to that
+worker, and put only its SHA-256 digest in a private coordinator file based on
+`operations/remote-workers.json.example`:
+
+```sh
+install -m 0600 operations/remote-workers.json.example \
+  "$HOME/.config/fidb-factory/remote-workers.json"
+install -m 0644 operations/fidb-remote-worker-api.service \
+  "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+```
+
+Replace the example identity and all-zero digest before starting the service.
+Every credential has an explicit pool allowlist. Credential changes require an
+API restart; the file must remain mode 0600. After the HTTPS proxy is
+independently reviewed, start and inspect the worker API:
+
+```sh
+systemctl --user enable --now fidb-remote-worker-api.service
+systemctl --user status fidb-remote-worker-api.service
+```
+
+On a remote Linux worker with the same reviewed repository authorities and
+tooling, install `remote-worker.env.example` as mode 0600, then review and
+install `fidb-remote-library-worker.service`. The environment supplies the HTTPS
+origin, worker identity and plaintext token. The client checks its own schedule
+and resource gates, re-resolves every leased cell locally, renews the fence,
+streams timing, and uploads only the three material sealed outputs. The
+coordinator repeats identity, timing, path, size and digest checks before it can
+mark the job complete.
+
+The current authorized pool is still `library-local`: native Linux libraries,
+explicit-local source cross-builds and archive extraction. This transport is
+ready for remote Linux workers, but it does not invent macOS/Windows recipes or
+make the present Linux-only cells portable to those hosts.

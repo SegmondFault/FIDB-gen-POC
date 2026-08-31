@@ -1,0 +1,23 @@
+[Unit]
+Description=FIDB authenticated remote library worker
+Documentation=file:///home/fidb-operator/Projects/circl/FIDB-POC-unified/operations/README.md
+ConditionFileIsExecutable=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc
+ConditionFileNotEmpty=%h/.config/fidb-factory/remote-worker.env
+
+[Service]
+Type=simple
+WorkingDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=%h/.config/fidb-factory/remote-worker.env
+ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc remote-worker run --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --queue plans/priority-queue.toml --coordinator ${FIDB_REMOTE_COORDINATOR} --worker-id ${FIDB_REMOTE_WORKER_ID} --token-env FIDB_REMOTE_WORKER_TOKEN --pool library-local
+SuccessExitStatus=130 143
+Restart=always
+RestartSec=5
+TimeoutStopSec=90
+CPUQuota=400%
+MemoryHigh=6G
+MemoryMax=8G
+TasksMax=512
+
+[Install]
+WantedBy=default.target
