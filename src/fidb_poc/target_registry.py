@@ -23,7 +23,12 @@ TARGET_FIELDS = {
     "catalog_state",
     "evidence",
 }
-CATALOG_STATES = {"reviewed-route", "reviewed-abi", "study-observed"}
+CATALOG_STATES = {
+    "reviewed-route",
+    "reviewed-abi",
+    "study-observed",
+    "coverage-intent",
+}
 ENDIANNESS = {"little", "big"}
 
 

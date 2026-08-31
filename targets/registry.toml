@@ -2,8 +2,9 @@ schema_version = "fidb-targets/v1"
 
 # This catalogue records target coverage intent independently from installed
 # toolchains.  A target may be reviewed through the Linux/ELF registry or only
-# observed in the sensitivity study.  Runtime capability detection decides
-# whether a reviewed route is installed or checksum-cached on a worker.
+# observed in the sensitivity study, or retained as explicit coverage intent.
+# Runtime capability detection decides whether a reviewed route is installed
+# or checksum-cached on a worker.
 
 [[target]]
 id = "linux-aarch64-elf"
@@ -112,6 +113,57 @@ endianness = "little"
 bits = 64
 catalog_state = "reviewed-route"
 evidence = ["worker.json", "toolchains/registry.toml"]
+
+# Android remains viewer-only coverage intent.  These rows do not add recipes,
+# NDK routes, queue cells or claims that a compatible toolchain is installed.
+
+[[target]]
+id = "android-arm64-v8a-elf"
+label = "Android ARM64 (arm64-v8a)"
+platform = "android"
+architecture = "aarch64"
+machine = "AArch64"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["targets/registry.toml"]
+
+[[target]]
+id = "android-armeabi-v7a-elf"
+label = "Android ARM32 (armeabi-v7a)"
+platform = "android"
+architecture = "arm"
+machine = "ARM"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "coverage-intent"
+evidence = ["targets/registry.toml"]
+
+[[target]]
+id = "android-x86-64-elf"
+label = "Android x86-64"
+platform = "android"
+architecture = "x86_64"
+machine = "x86-64"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["targets/registry.toml"]
+
+[[target]]
+id = "android-x86-32-elf"
+label = "Android x86 32-bit"
+platform = "android"
+architecture = "i686"
+machine = "x86"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "coverage-intent"
+evidence = ["targets/registry.toml"]
 
 [[target]]
 id = "macos-arm64-macho"

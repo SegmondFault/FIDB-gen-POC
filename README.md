@@ -312,8 +312,9 @@ The control panel's same-origin `/api/fidb/*` route runs server-side on
 routes expose the ledger, timings, detected capabilities and one validated
 projection of recipes, targets, native routes, treatments, toolchains,
 sensitivity factors, variants and plans. `targets/registry.toml` keeps every
-reviewed or study-observed platform/ABI visible independently of whether this
-host has a compiler. The **Targets & toolchains** view then overlays installed
+reviewed, study-observed or planned platform/ABI visible independently of
+whether this host has a compiler. Android ABI rows are coverage inventory only;
+they do not add an NDK route or queue work. The **Targets & toolchains** view then overlays installed
 native tools and checksum-cached registry inputs without confusing an
 archive-only libc candidate with a source-build compiler. The matrix therefore
 does not maintain a second hard-coded build catalog. Its `built` markers use

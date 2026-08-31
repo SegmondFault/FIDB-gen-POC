@@ -13,15 +13,29 @@ class TargetRegistryTests(unittest.TestCase):
     def test_repository_registry_records_reviewed_and_observed_targets(self):
         rows = load_targets(self.root / "targets/registry.toml")
 
-        self.assertEqual(len(rows), 11)
+        self.assertEqual(len(rows), 15)
         self.assertEqual(
             {row["catalog_state"] for row in rows},
-            {"reviewed-route", "reviewed-abi", "study-observed"},
+            {
+                "reviewed-route",
+                "reviewed-abi",
+                "study-observed",
+                "coverage-intent",
+            },
         )
         self.assertEqual(
             {(row["platform"], row["binary_format"]) for row in rows},
-            {("linux", "ELF"), ("macos", "Mach-O"), ("windows", "PE/COFF")},
+            {
+                ("android", "ELF"),
+                ("linux", "ELF"),
+                ("macos", "Mach-O"),
+                ("windows", "PE/COFF"),
+            },
         )
+
+        android = [row for row in rows if row["platform"] == "android"]
+        self.assertEqual(len(android), 4)
+        self.assertTrue(all(row["catalog_state"] == "coverage-intent" for row in android))
 
     def test_unknown_fields_and_duplicate_ids_fail_closed(self):
         document = """\

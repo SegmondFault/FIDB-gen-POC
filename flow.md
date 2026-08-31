@@ -145,9 +145,10 @@ reviewed registry identity
 ```
 
 `targets/registry.toml` is the independent coverage inventory above this
-execution path. It records reviewed Linux ABI shapes and study-observed
-platform gaps even when no route exists; live capability detection overlays
-installed, checksum-cached, missing and archive-only states.
+execution path. It records reviewed Linux ABI shapes, study-observed platform
+gaps and viewer-only Android coverage intent even when no route exists; live
+capability detection overlays installed, checksum-cached, missing and
+archive-only states.
 
 The CLI exposes status/acquisition by registry identity only. It has no URL,
 hash, command or compiler override.

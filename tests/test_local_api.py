@@ -394,7 +394,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(document["schema_version"], "fidb-authority-catalog/v2")
         self.assertEqual(len(document["recipes"]), 4)
-        self.assertEqual(len(document["targets"]), 11)
+        self.assertEqual(len(document["targets"]), 15)
         self.assertEqual(len(document["toolchains"]), 41)
         self.assertEqual(len(document["factors"]), 41)
         self.assertTrue(document["plans"])

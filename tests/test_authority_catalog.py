@@ -14,7 +14,7 @@ class AuthorityCatalogTests(unittest.TestCase):
 
         self.assertEqual(document["schema_version"], "fidb-authority-catalog/v2")
         self.assertEqual(len(document["recipes"]), 4)
-        self.assertEqual(len(document["targets"]), 11)
+        self.assertEqual(len(document["targets"]), 15)
         self.assertEqual(len(document["toolchains"]), 41)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
@@ -41,6 +41,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             targets["windows-x86-64-pecoff"]["toolchain_ids"], []
         )
+        self.assertEqual(targets["android-arm64-v8a-elf"]["toolchain_ids"], [])
 
     def test_catalog_contains_no_caller_supplied_command_field(self):
         document = authority_catalog(self.root)
