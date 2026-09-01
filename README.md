@@ -202,6 +202,33 @@ stream and verify SHA-256, quarantine invalid existing bytes, fsync the payload,
 and publish it by atomic rename. Extraction and compilation remain isolated in
 each attempt; only the immutable verified input is shared.
 
+### Portable toolchain profiles
+
+The broader width study uses language-scoped profiles rather than a collection
+of machine-local installation notes. The complete C top-ten profile contains
+all ten ordered routes: eight checksum-pinned Bootlin GCC/binutils/glibc SDK
+archives downloadable on Linux x86-64, plus explicit macOS/Apple Clang and
+Windows/MSVC external-worker requirements. Inspect or pull it with:
+
+```sh
+./scripts/toolchains/plan.sh c-top10-linux
+./scripts/toolchains/status.sh c-top10-linux
+./scripts/toolchains/pull.sh c-top10-linux
+```
+
+All three operations emit stable JSON. `plan` and `status` are read-only;
+`pull` is the typed mutation boundary and accepts a reviewed profile ID, never a
+URL or digest. The full profile is 669,585,280 bytes (638.6 MiB) compressed.
+Its current 2,678,341,120-byte (2.49 GiB) expanded footprint is explicitly a
+planning estimate, not measured installation evidence. Pulling caches the
+verified archives only; it does not yet extract, activate, or qualify the
+compilers. The Targets & toolchains GUI projects the same state and offers
+copyable commands but cannot install anything.
+
+See [`toolchains/README.md`](toolchains/README.md) for the authority layers,
+extension workflow, state vocabulary, safety contract, and machine/LLM-facing
+interface.
+
 The optional `[queue]` table controls deterministic materialization order. Its
 `recipe_order` is the left-hand build order; `strategy` chooses whether all
 factor variants for one recipe run together or one variant is swept across all
@@ -553,7 +580,9 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/hunt.py` | investigate -> select -> prepare -> match -> export workflow |
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |
 | `src/fidb_poc/toolchain_cache.py` | locked, checksum-verified content-addressed acquisition |
+| `src/fidb_poc/toolchain_packs.py` | strict pack/route/profile authority and read-only profile resolution |
 | `src/fidb_poc/toolchain_cli.py` | typed cache status/acquire commands over registry identities |
+| `toolchains/packs.toml`, `routes.toml`, `profiles/` | portable Linux x86-64 pack definitions and language-owned route profiles |
 | `src/fidb_poc/recipe_generator.py` | recipe x toolchain registry -> resolved build cells |
 | `src/fidb_poc/libc_catalog.py` | cell selection, download, extraction and VM-isolated source build |
 | `src/fidb_poc/malware_build.py` | cell -> linked malware binary + provenance manifest |
