@@ -8,6 +8,7 @@ from fidb_poc.toolchain_cache import CacheInspection
 from fidb_poc.toolchain_packs import (
     load_toolchain_pack_catalog,
     resolve_toolchain_profile,
+    resolve_toolchain_profiles,
 )
 
 
@@ -110,6 +111,39 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 if row["provisioning"] == "downloadable-pack"
             )
         )
+
+    def test_profile_digest_does_not_depend_on_local_cache_state(self):
+        with patch(
+            "fidb_poc.toolchain_packs.inspect_cached",
+            return_value=CacheInspection(path=Path("/cache/missing"), state="missing"),
+        ):
+            missing = resolve_toolchain_profile(self.root, "c-canary")
+        with patch(
+            "fidb_poc.toolchain_packs.inspect_cached",
+            side_effect=lambda downloads, digest: CacheInspection(
+                path=downloads / digest,
+                state="verified-cached",
+                bytes=1,
+                observed_sha256=digest,
+            ),
+        ):
+            verified = resolve_toolchain_profile(self.root, "c-canary")
+
+        self.assertEqual(missing["profile_digest"], verified["profile_digest"])
+
+    def test_all_profiles_share_one_cache_inspection_per_digest(self):
+        def missing(downloads: Path, digest: str) -> CacheInspection:
+            return CacheInspection(path=downloads / digest, state="missing")
+
+        with patch(
+            "fidb_poc.toolchain_packs.inspect_cached", side_effect=missing
+        ) as inspect:
+            plans = resolve_toolchain_profiles(self.root)
+
+        self.assertEqual(
+            {row["profile"]["id"] for row in plans}, {"c-canary", "c-top10-linux"}
+        )
+        self.assertEqual(inspect.call_count, 8)
 
     def test_incompatible_host_is_a_structured_blocker(self):
         with patch(

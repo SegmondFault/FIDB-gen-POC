@@ -17,7 +17,7 @@ import tomllib
 
 from .coverage_universe import load_coverage_universe
 from .target_registry import load_targets
-from .toolchain_cache import MANAGED_DOWNLOADS, inspect_cached
+from .toolchain_cache import CacheInspection, MANAGED_DOWNLOADS, inspect_cached
 
 PACKS_SCHEMA = "fidb-toolchain-packs/v1"
 ROUTES_SCHEMA = "fidb-toolchain-routes/v1"
@@ -345,11 +345,13 @@ def resolve_toolchain_profile(
     *,
     host_system: str | None = None,
     host_architecture: str | None = None,
+    _catalog: dict[str, object] | None = None,
+    _inspections: dict[str, CacheInspection] | None = None,
 ) -> dict[str, object]:
     """Resolve one profile and inspect its cache without mutating the host."""
 
     root = Path(project_root).expanduser().resolve()
-    catalog = load_toolchain_pack_catalog(root)
+    catalog = _catalog or load_toolchain_pack_catalog(root)
     profiles = {str(row["id"]): row for row in catalog["profiles"]}
     if profile_id not in profiles:
         raise ValueError(f"unknown toolchain profile: {profile_id}")
@@ -391,9 +393,14 @@ def resolve_toolchain_profile(
     downloads = root / MANAGED_DOWNLOADS
     pack_rows: list[dict[str, object]] = []
     cache_state_by_pack: dict[str, str] = {}
+    inspections = {} if _inspections is None else _inspections
     for pack_id in selected_pack_ids:
         pack = packs[pack_id]
-        inspection = inspect_cached(downloads, str(pack["sha256"]))
+        digest = str(pack["sha256"])
+        inspection = inspections.get(digest)
+        if inspection is None:
+            inspection = inspect_cached(downloads, digest)
+            inspections[digest] = inspection
         cache_state_by_pack[pack_id] = inspection.state
         pack_rows.append(
             {
@@ -497,7 +504,10 @@ def resolve_toolchain_profile(
             json.dumps(
                 {
                     "profile": profile,
-                    "routes": route_rows,
+                    "routes": [
+                        {key: value for key, value in row.items() if key != "state"}
+                        for row in route_rows
+                    ],
                     "packs": [
                         {
                             key: value
@@ -565,3 +575,20 @@ def resolve_toolchain_profile(
             "profile_authority": profile["authority"],
         },
     }
+
+
+def resolve_toolchain_profiles(project_root: str | Path) -> list[dict[str, object]]:
+    """Resolve every reviewed profile with one catalogue load and cache scan."""
+
+    root = Path(project_root).expanduser().resolve()
+    catalog = load_toolchain_pack_catalog(root)
+    inspections: dict[str, CacheInspection] = {}
+    return [
+        resolve_toolchain_profile(
+            root,
+            str(profile["id"]),
+            _catalog=catalog,
+            _inspections=inspections,
+        )
+        for profile in catalog["profiles"]
+    ]
