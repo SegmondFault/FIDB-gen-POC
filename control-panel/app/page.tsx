@@ -172,6 +172,10 @@ function formatBytes(value: number | null) {
   return `${amount < 10 ? amount.toFixed(1) : Math.round(amount)} ${units[unit]}`;
 }
 
+function lifecycleTone(state: string) {
+  return state === 'qualified' || state === 'prepared' || state === 'bound-verified' || state === 'composed' || state === 'verified-cached' ? 'ready' : state.includes('broken') ? 'warning' : 'cold';
+}
+
 function numericMetric(span: StageSpan, key: string) {
   const value = span.metrics?.[key];
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
@@ -1556,8 +1560,8 @@ function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfileP
   </section>;
 
   const externalRoutes = selected.routes.filter(route => route.provisioning === 'external-worker');
-  const inputRoutes = selected.routes.filter(route => route.input_ids.length > 0);
-  const profileTone = selected.state === 'blocked' || selected.summary.broken_packs ? 'warning' : selected.summary.missing_packs ? 'cold' : 'ready';
+  const localRoutes = selected.routes.filter(route => route.provisioning !== 'external-worker');
+  const profileTone = selected.state === 'blocked' || selected.summary.broken_packs || selected.summary.broken_routes ? 'warning' : selected.state === 'qualified' ? 'ready' : 'cold';
   return <section className="panel toolchain-pack-panel">
     <div className="pack-panel-header">
       <div><p className="panel-kicker">PORTABLE TOOLCHAIN PACK · {selected.profile.language_id.toUpperCase()}</p><h3>{selected.profile.label}</h3><p>{selected.profile.purpose}</p></div>
@@ -1567,24 +1571,32 @@ function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfileP
       <article><span>PROFILE STATE</span><strong className={profileTone}>{selected.state.replaceAll('-', ' ')}</strong><small>next: {selected.recommended_next_action.replaceAll('-', ' ')}</small></article>
       <article><span>TARGET REQUIREMENTS</span><strong>{selected.summary.coverage_requirements}</strong><small>{selected.summary.primary_routes} primary · {selected.summary.cross_build_routes} cross-build · {selected.summary.native_reference_routes} native reference</small></article>
       <article><span>VERIFIED CACHE</span><strong>{selected.summary.verified_cached_packs} / {selected.summary.packs}</strong><small>{formatBytes(selected.summary.cached_download_bytes)} already present</small></article>
+      <article><span>SAFELY PREPARED</span><strong>{selected.summary.prepared_packs} / {selected.summary.packs}</strong><small>{selected.summary.missing_preparations} still require extraction</small></article>
+      <article><span>ROUTES QUALIFIED</span><strong>{selected.summary.qualified_routes} / {selected.summary.downloadable_routes}</strong><small>{selected.summary.composed_routes} composed · {selected.summary.missing_qualifications} await probes</small></article>
       <article><span>DOWNLOAD REMAINING</span><strong>{formatBytes(selected.summary.remaining_download_bytes)}</strong><small>{formatBytes(selected.summary.download_bytes)} full compressed pack</small></article>
       <article><span>INSTALLED ESTIMATE</span><strong>{formatBytes(selected.summary.installed_bytes_estimate)}</strong><small>planning estimate · measure after preparation</small></article>
       <article><span>HOST CONTRACT</span><strong className={selected.host.compatible ? 'ready' : 'warning'}>{selected.host.required_system} / {selected.host.required_architecture}</strong><small>detected {selected.host.detected_system} / {selected.host.detected_architecture}</small></article>
     </div>
     <div className="pack-command-grid">
-      <div><span>CLI MUTATION BOUNDARY</span><p>The GUI remains read-only. Plan and status inspect; pull downloads only reviewed SHA-256 payloads into the managed cache.</p></div>
+      <div><span>CLI LIFECYCLE BOUNDARY</span><p>The GUI remains read-only. Pull verifies reviewed SHA-256 payloads; prepare extracts safely; compose builds the fixed osxcross route; qualify runs fixed C and C++17 target probes.</p></div>
       {selected.cli_examples.map(example => <article key={example.action}><span>{example.action.toUpperCase()}</span><code>{example.shell}</code><button onClick={() => void copyCommand(example.action, example.shell)}>{copiedAction === example.action ? 'Copied' : 'Copy command'}</button></article>)}
     </div>
     <div className="pack-ledger">
       <div className="pack-ledger-head"><span>Pack / target</span><span>Compiler composition</span><span>Download / installed estimate</span><span>Integrity + licence</span><span>State</span></div>
       {selected.packs.map(pack => {
-        const tone = pack.state === 'verified-cached' ? 'ready' : pack.state === 'broken' ? 'warning' : 'cold';
-        return <article key={pack.id}><div><strong>{pack.label}</strong><small>{pack.target_ids.join(' · ')}</small><code>{pack.id}</code></div><div><strong>{pack.compiler_family} {pack.compiler_version}</strong><small>{pack.linker_family} {pack.linker_version} · {pack.runtime} {pack.runtime_version.split('-')[0]}</small><code>{pack.compiler_driver}</code></div><div><strong>{formatBytes(pack.download_bytes)}</strong><small>→ ≈ {formatBytes(pack.installed_bytes_estimate)}</small><code>{pack.size_evidence}</code></div><div><strong>{pack.sha256.slice(0, 16)}…</strong><small>{pack.license_ids.join(' · ')}</small><code>SHA-256 pinned</code></div><span className={`evidence-badge ${tone}`}>{pack.state === 'verified-cached' ? 'verified cached' : pack.state}</span></article>;
+        const tone = lifecycleTone(pack.preparation.state === 'prepared' ? 'prepared' : pack.preparation.state === 'broken' ? 'broken' : pack.state);
+        const stateLabel = `${pack.state === 'verified-cached' ? 'cached' : pack.state} · ${pack.preparation.state}`;
+        return <article key={pack.id}><div><strong>{pack.label}</strong><small>{pack.target_ids.join(' · ')}</small><code>{pack.id}</code></div><div><strong>{pack.compiler_family} {pack.compiler_version}</strong><small>{pack.linker_family} {pack.linker_version} · {pack.runtime} {pack.runtime_version.split('-')[0]}</small><code>{pack.compiler_driver}</code></div><div><strong>{formatBytes(pack.download_bytes)}</strong><small>→ ≈ {formatBytes(pack.installed_bytes_estimate)}</small><code>{pack.size_evidence}</code></div><div><strong>{pack.sha256.slice(0, 16)}…</strong><small>{pack.license_ids.join(' · ')}</small><code>SHA-256 pinned</code></div><span className={`evidence-badge ${tone}`}>{stateLabel}</span></article>;
       })}
     </div>
-    {inputRoutes.length > 0 && <div className="external-route-ledger"><header><span>USER-SUPPLIED, PINNED INPUTS</span><p>These are part of the reproducibility contract but are not redistributed by the project.</p></header>{inputRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.evidence_role}</small></div><code>{route.input_ids.join(' + ')}</code><span className="evidence-badge warning">{route.state.replaceAll('-', ' ')}</span></article>)}</div>}
+    {selected.inputs.length > 0 && <div className="external-route-ledger"><header><span>USER-SUPPLIED, PINNED INPUTS</span><p>These are part of the reproducibility contract but are privately bound and never redistributed by the project.</p></header>{selected.inputs.map(input => <article key={input.id}><div><strong>{input.label}</strong><small>{input.kind} · {input.target_ids.join(' · ')}</small></div><code>{input.required_metadata.join(' + ')}</code><span className={`evidence-badge ${lifecycleTone(input.binding.state)}`}>{input.binding.state.replaceAll('-', ' ')}</span></article>)}</div>}
+    <div className="route-lifecycle-ledger"><header><span>ROUTE COMPOSITION + QUALIFICATION</span><p>A route becomes usable only after its exact compiler identity emits the expected C and C++ object format and a static archive.</p></header>{localRoutes.map(route => {
+      const definition = route.qualification?.definition;
+      const composition = route.qualification?.composition?.state;
+      return <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.evidence_role}</small></div><code>{definition ? `${definition.tool_pack_id} · ${definition.version_contains} · ${definition.smoke_languages.join('+')}` : 'qualification authority unavailable'}</code><small>{composition ? `composition: ${composition}` : definition?.composition === 'none' ? 'direct prepared pack' : 'blocked by prerequisites'}</small><span className={`evidence-badge ${lifecycleTone(route.state)}`}>{route.state.replaceAll('-', ' ')}</span></article>;
+    })}</div>
     {externalRoutes.length > 0 && <div className="external-route-ledger"><header><span>NATIVE REFERENCE ROUTES</span><p>Cross-built C/C++ evidence does not substitute for these separately pinned native compilers and workers.</p></header>{externalRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.worker_class}</small></div><code>{route.external_requirements.join(' + ')}</code><span className="evidence-badge warning">native definition required</span></article>)}</div>}
-    <footer className="pack-trace"><div><span>PROFILE DIGEST</span><code>{selected.profile_digest}</code></div><div><span>AUTHORITY CHAIN</span><code>{selected.profile.authority_path} → toolchains/routes.toml → inputs.toml + packs.toml</code></div><div><span>MANAGED CACHE</span><code>{selected.managed_downloads}</code></div></footer>
+    <footer className="pack-trace"><div><span>PROFILE DIGEST</span><code>{selected.profile_digest}</code></div><div><span>AUTHORITY CHAIN</span><code>{selected.profile.authority_path} → routes.toml → inputs.toml + packs.toml → qualifications.toml</code></div><div><span>LIFECYCLE STORES</span><code>{selected.managed_downloads} → {selected.managed_prepared} → {selected.managed_composed} → {selected.managed_qualified}</code></div></footer>
   </section>;
 }
 
@@ -1628,18 +1640,18 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
     });
     const nativeInstalled = targetNativeRoutes.some(route => route.ready);
     const sourceCached = sourceToolchains.some(toolchain => toolchain.state === 'verified-cached');
-    const packCached = targetPackRoutes.some(route => route.state === 'verified-cached');
-    const cachedInputs = targetToolchains.filter(toolchain => toolchain.state === 'verified-cached').length + targetPackRoutes.filter(route => route.state === 'verified-cached').length;
+    const packQualified = targetPackRoutes.some(route => route.state === 'qualified');
+    const cachedInputs = targetToolchains.filter(toolchain => toolchain.state === 'verified-cached').length + targetPackRoutes.filter(route => route.state === 'qualified').length;
     const state = nativeInstalled
       ? 'installed'
-      : sourceCached || packCached
+      : sourceCached || packQualified
         ? 'cached'
         : sourceToolchains.length || targetPackRoutes.length
           ? 'not-installed'
           : target.archive_capable_toolchain_ids.length
             ? 'archive-only'
             : 'unregistered';
-    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, targetPackRoutes, cachedInputs, state, requirement: requirementByTarget.get(target.id) };
+    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, targetPackRoutes, cachedInputs, state, packQualified, requirement: requirementByTarget.get(target.id) };
   });
   const normalizedQuery = targetQuery.trim().toLowerCase();
   const visibleTargets = targetRows.filter(row => {
@@ -1705,7 +1717,7 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
       <div className="target-inventory">
         {visibleTargets.map(row => {
           const tone = row.state === 'installed' || row.state === 'cached' ? 'ready' : row.state === 'unregistered' ? 'warning' : 'cold';
-          const stateLabel = row.state === 'installed' ? 'HOST INSTALLED' : row.state === 'cached' ? 'PINNED CACHE READY' : row.state === 'not-installed' ? 'SOURCE ROUTE NOT INSTALLED' : row.state === 'archive-only' ? 'ARCHIVE EXTRACTION ONLY' : 'NO REVIEWED ROUTE';
+          const stateLabel = row.state === 'installed' ? 'HOST INSTALLED' : row.state === 'cached' ? row.packQualified ? 'QUALIFIED ROUTE READY' : 'PINNED CACHE READY' : row.state === 'not-installed' ? 'SOURCE ROUTE NOT QUALIFIED' : row.state === 'archive-only' ? 'ARCHIVE EXTRACTION ONLY' : 'NO REVIEWED ROUTE';
           return <details className="target-inventory-card" key={row.target.id} open={expandedTargets.has(row.target.id)} onToggle={event => {
             const isOpen = event.currentTarget.open;
             setExpandedTargets(current => {
@@ -1721,7 +1733,7 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
               {row.requirement && <div className="target-demand-row"><b>W{String(row.requirement.order).padStart(2, '0')}</b><p><strong>{row.requirement.compiler_label} · {row.requirement.wave}</strong><small>{row.requirement.rationale}</small></p><code>{row.requirement.version_policy}</code><span className={`route-requirement-state ${row.requirement.route_state}`}>{row.requirement.route_state.replaceAll('-', ' ')}</span></div>}
               {row.targetNativeRoutes.map(route => <div className="target-toolchain-row" key={route.id}><div><span className={`cap-dot ${route.ready ? 'ready' : 'warning'}`} /><strong>{route.id}</strong><small>native route</small></div><code>{Object.values(route.tools).map(tool => tool.path ?? tool.configured.join(' ')).join(' · ')}</code><span className={`evidence-badge ${route.ready ? 'ready' : 'warning'}`}>{route.ready ? 'installed' : 'missing tools'}</span><b>source build</b></div>)}
               {row.targetPackRoutes.map(route => {
-                const routeTone = route.state === 'verified-cached' ? 'ready' : route.state === 'broken' ? 'warning' : 'cold';
+                const routeTone = lifecycleTone(route.state);
                 return <div className="target-toolchain-row" key={route.id}><div><span className={`cap-dot ${routeTone}`} /><strong>{route.label}</strong><small>{route.compiler_family} · {route.evidence_role}</small></div><code>{route.target_triple}</code><span className={`evidence-badge ${routeTone}`}>{route.state.replaceAll('-', ' ')}</span><b>{route.provisioning.replaceAll('-', ' ')}</b></div>;
               })}
               {row.targetToolchains.map(toolchain => {

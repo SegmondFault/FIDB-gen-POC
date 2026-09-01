@@ -291,6 +291,34 @@ export type ToolchainPackInput = {
   authority: string;
 };
 
+export type ToolchainQualification = {
+  id: string;
+  route_id: string;
+  tool_source: 'pack' | 'composed-route';
+  tool_pack_id: string;
+  driver_pattern: string;
+  cxx_driver_pattern: string;
+  archiver_pattern: string;
+  version_contains: string;
+  smoke_languages: Array<'c' | 'cpp'>;
+  composition: 'none' | 'osxcross-llvm';
+};
+
+export type ToolchainRouteQualification = {
+  definition: ToolchainQualification;
+  state: 'blocked-by-prerequisites' | 'composition-required' | 'missing' | 'qualified' | 'broken' | 'broken-composition';
+  route_material_digest: string | null;
+  path: string | null;
+  record: Record<string, unknown> | null;
+  composition?: {
+    state: 'missing' | 'composed' | 'broken';
+    path: string;
+    root: string;
+    manifest: Record<string, unknown> | null;
+    host_dependencies: Array<{ name: string; path: string | null; available: boolean }>;
+  };
+};
+
 export type ToolchainPackRoute = {
   id: string;
   label: string;
@@ -324,12 +352,12 @@ export type ToolchainPackProfile = {
 };
 
 export type ToolchainProfilePlan = {
-  schema_version: 'fidb-toolchain-profile-plan/v2';
-  operation: 'plan' | 'status' | 'pull';
+  schema_version: 'fidb-toolchain-profile-plan/v3';
+  operation: 'plan' | 'status' | 'pull' | 'prepare' | 'compose' | 'qualify';
   profile: ToolchainPackProfile;
   catalog_digest: string;
   profile_digest: string;
-  state: 'blocked' | 'acquisition-required' | 'downloadable-ready-input-required' | 'downloadable-ready-external-required' | 'downloadable-ready-input-and-external-required' | 'verified-cached';
+  state: 'blocked' | 'acquisition-required' | 'preparation-required' | 'input-required' | 'input-and-external-required' | 'composition-required' | 'qualification-required' | 'qualified-external-required' | 'qualified';
   host: {
     required_system: string;
     required_architecture: string;
@@ -338,6 +366,11 @@ export type ToolchainProfilePlan = {
     compatible: boolean;
   };
   managed_downloads: string;
+  managed_prepared: string;
+  managed_inputs: string;
+  managed_bindings: string;
+  managed_composed: string;
+  managed_qualified: string;
   summary: {
     routes: number;
     coverage_requirements: number;
@@ -351,6 +384,18 @@ export type ToolchainProfilePlan = {
     verified_cached_packs: number;
     missing_packs: number;
     broken_packs: number;
+    prepared_packs: number;
+    missing_preparations: number;
+    broken_preparations: number;
+    inputs: number;
+    bound_inputs: number;
+    missing_inputs: number;
+    broken_inputs: number;
+    composed_routes: number;
+    missing_compositions: number;
+    qualified_routes: number;
+    missing_qualifications: number;
+    broken_routes: number;
     download_bytes: number;
     cached_download_bytes: number;
     remaining_download_bytes: number;
@@ -359,12 +404,28 @@ export type ToolchainProfilePlan = {
     installed_bytes_estimate: number;
     installed_size_evidence: string;
   };
-  routes: Array<ToolchainPackRoute & { state: string }>;
+  routes: Array<ToolchainPackRoute & {
+    state: string;
+    qualification?: ToolchainRouteQualification;
+  }>;
   packs: Array<ToolchainPack & {
     state: 'missing' | 'verified-cached' | 'broken';
     cache: { path: string; bytes: number | null; observed_sha256: string | null };
+    preparation: {
+      state: 'missing' | 'prepared' | 'broken';
+      path: string;
+      root: string;
+      manifest: Record<string, unknown> | null;
+    };
   }>;
-  inputs: ToolchainPackInput[];
+  inputs: Array<ToolchainPackInput & {
+    binding: {
+      state: 'missing' | 'bound-verified' | 'broken';
+      path: string;
+      material_path: string | null;
+      document: Record<string, unknown> | null;
+    };
+  }>;
   requirements: Array<{
     code: string;
     severity: 'action' | 'constraint' | 'blocker';
@@ -375,7 +436,7 @@ export type ToolchainProfilePlan = {
     details?: string[] | { source_policy: string; required_metadata: string[] };
   }>;
   recommended_next_action: string;
-  cli_examples: Array<{ action: 'plan' | 'status' | 'pull'; argv: string[]; shell: string }>;
+  cli_examples: Array<{ action: 'plan' | 'status' | 'pull' | 'prepare' | 'compose' | 'qualify'; argv: string[]; shell: string }>;
   trace: {
     sources: Record<string, string>;
     source_digests: Record<string, string>;
@@ -384,13 +445,14 @@ export type ToolchainProfilePlan = {
 };
 
 export type ToolchainPackCatalog = {
-  schema_version: 'fidb-toolchain-pack-catalog/v2';
+  schema_version: 'fidb-toolchain-pack-catalog/v3';
   host: { system: string; architecture: string };
   source_authority: string;
   cache_policy: string;
   packs: ToolchainPack[];
   inputs: ToolchainPackInput[];
   routes: ToolchainPackRoute[];
+  qualifications: ToolchainQualification[];
   profiles: ToolchainPackProfile[];
   sources: Record<string, string>;
   source_digests: Record<string, string>;
@@ -743,7 +805,7 @@ export type WidthStudy = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v5';
+  schema_version: 'fidb-authority-catalog/v6';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
