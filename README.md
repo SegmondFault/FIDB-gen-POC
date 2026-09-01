@@ -218,20 +218,28 @@ separately supplied, pinned Apple SDK requirement. Inspect or pull it with:
 ./scripts/toolchains/plan.sh c-top10-linux
 ./scripts/toolchains/status.sh c-top10-linux
 ./scripts/toolchains/pull.sh c-top10-linux
+./scripts/toolchains/prepare.sh c-top10-linux
+./scripts/toolchains/bind-apple-sdk.sh \
+  /path/to/MacOSX.sdk.tar.xz SHA256 BYTES XCODE_VERSION SDK_VERSION DEPLOYMENT_TARGET
+./scripts/toolchains/compose.sh c-top10-linux
+./scripts/toolchains/qualify.sh c-top10-linux
 ```
 
-All three operations emit stable JSON. `plan` and `status` are read-only;
-`pull` is the typed mutation boundary and accepts a reviewed profile ID, never a
-URL or digest. The 11 archives total 2,692,424,622 bytes (about 2.51 GiB)
-compressed. The current 15,064,665,784-byte (about 14.03 GiB) prepared-footprint
-estimate includes pack expansion plus a conservative osxcross/SDK allowance;
-it is not measured installation evidence. Pulling caches verified archives
-only—it does not obtain the Apple SDK, extract, activate, or qualify compilers.
+All operations emit stable JSON. `plan` and `status` are read-only. The mutation
+commands form a fixed lifecycle: checksum-pinned pull, traversal-safe
+preparation, private SDK binding, reviewed LLVM-flavour osxcross composition,
+and fixed C/C++17 target-format qualification. They accept reviewed IDs and
+metadata, never caller-supplied URLs or commands. The 11 archives total
+2,692,424,622 bytes (about 2.51 GiB) compressed. The current
+15,064,665,784-byte (about 14.03 GiB) prepared/composed estimate is planning
+evidence, not a measurement. A fresh checkout has downloaded none of these
+materials; the Apple SDK is never redistributed by the project.
 
 The optional `c-top10-reference` profile keeps the same ten cross-build target
 requirements and adds native Apple Clang and MSVC implementations as separate
-reference evidence. The Targets & toolchains GUI shows that distinction and
-offers copyable commands but cannot install anything.
+reference evidence. The Targets & toolchains GUI shows cache, preparation,
+input-binding, composition and qualification as separate states, offers
+copyable commands, and remains read-only.
 
 See [`toolchains/README.md`](toolchains/README.md) for the authority layers,
 extension workflow, state vocabulary, safety contract, and machine/LLM-facing
@@ -588,9 +596,11 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/hunt.py` | investigate -> select -> prepare -> match -> export workflow |
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |
 | `src/fidb_poc/toolchain_cache.py` | locked, checksum-verified content-addressed acquisition |
-| `src/fidb_poc/toolchain_packs.py` | strict pack/route/profile authority and read-only profile resolution |
-| `src/fidb_poc/toolchain_cli.py` | typed cache status/acquire commands over registry identities |
-| `toolchains/packs.toml`, `routes.toml`, `profiles/` | portable Linux x86-64 pack definitions and language-owned route profiles |
+| `src/fidb_poc/toolchain_prepare.py`, `toolchain_inputs.py` | safe prepared roots and private non-redistributed input binding |
+| `src/fidb_poc/toolchain_qualification.py` | reviewed osxcross composition and fixed C-family target smoke qualification |
+| `src/fidb_poc/toolchain_packs.py` | strict pack/input/route/qualification/profile authority and read-only lifecycle resolution |
+| `src/fidb_poc/toolchain_cli.py` | typed registry acquisition and profile lifecycle commands |
+| `toolchains/packs.toml`, `inputs.toml`, `routes.toml`, `qualifications.toml`, `profiles/` | portable Linux x86-64 acquisition and qualification authority |
 | `src/fidb_poc/recipe_generator.py` | recipe x toolchain registry -> resolved build cells |
 | `src/fidb_poc/libc_catalog.py` | cell selection, download, extraction and VM-isolated source build |
 | `src/fidb_poc/malware_build.py` | cell -> linked malware binary + provenance manifest |
