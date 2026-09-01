@@ -18,6 +18,7 @@ import tomllib
 from .coverage_universe import load_coverage_universe
 from .target_registry import load_targets
 from .toolchain_cache import CacheInspection, MANAGED_DOWNLOADS, inspect_cached
+from .toolchain_prepare import MANAGED_PREPARED, inspect_prepared
 
 PACKS_SCHEMA = "fidb-toolchain-packs/v2"
 ROUTES_SCHEMA = "fidb-toolchain-routes/v2"
@@ -521,8 +522,10 @@ def resolve_toolchain_profile(
     input_rows = [inputs[input_id] for input_id in selected_input_ids]
 
     downloads = root / MANAGED_DOWNLOADS
+    prepared = root / MANAGED_PREPARED
     pack_rows: list[dict[str, object]] = []
     cache_state_by_pack: dict[str, str] = {}
+    preparation_state_by_pack: dict[str, str] = {}
     inspections = {} if _inspections is None else _inspections
     for pack_id in selected_pack_ids:
         pack = packs[pack_id]
@@ -532,6 +535,12 @@ def resolve_toolchain_profile(
             inspection = inspect_cached(downloads, digest)
             inspections[digest] = inspection
         cache_state_by_pack[pack_id] = inspection.state
+        preparation = inspect_prepared(
+            prepared,
+            digest,
+            str(pack["archive_root"]),
+        )
+        preparation_state_by_pack[pack_id] = preparation.state
         pack_rows.append(
             {
                 **pack,
@@ -540,6 +549,12 @@ def resolve_toolchain_profile(
                     "path": str(inspection.path),
                     "bytes": inspection.bytes,
                     "observed_sha256": inspection.observed_sha256,
+                },
+                "preparation": {
+                    "state": preparation.state,
+                    "path": str(preparation.path),
+                    "root": str(preparation.root),
+                    "manifest": preparation.manifest,
                 },
             }
         )
@@ -561,11 +576,32 @@ def resolve_toolchain_profile(
                     "message": f"{pack['label']} failed cache integrity inspection",
                 }
             )
+        elif preparation.state == "missing":
+            requirements.append(
+                {
+                    "code": "pack-preparation-required",
+                    "severity": "action",
+                    "pack_id": pack_id,
+                    "message": f"{pack['label']} is cached but not safely prepared",
+                }
+            )
+        if preparation.state == "broken":
+            requirements.append(
+                {
+                    "code": "preparation-integrity-failure",
+                    "severity": "blocker",
+                    "pack_id": pack_id,
+                    "message": f"{pack['label']} has a broken preparation record",
+                }
+            )
 
     for route in route_rows:
         if route["provisioning"] == "external-worker":
             continue
         states = [cache_state_by_pack[str(pack_id)] for pack_id in route["pack_ids"]]
+        preparation_states = [
+            preparation_state_by_pack[str(pack_id)] for pack_id in route["pack_ids"]
+        ]
         if "broken" in states:
             route["state"] = "broken"
         elif not all(state == "verified-cached" for state in states):
@@ -574,9 +610,17 @@ def resolve_toolchain_profile(
                 if route["input_ids"]
                 else "download-required"
             )
+        elif "broken" in preparation_states:
+            route["state"] = "broken"
+        elif not all(state == "prepared" for state in preparation_states):
+            route["state"] = (
+                "preparation-and-input-required"
+                if route["input_ids"]
+                else "preparation-required"
+            )
         else:
             route["state"] = (
-                "input-required" if route["input_ids"] else "verified-cached"
+                "input-required" if route["input_ids"] else "prepared-unqualified"
             )
 
     if not host_compatible:
@@ -596,12 +640,18 @@ def resolve_toolchain_profile(
         state: sum(row["state"] == state for row in pack_rows)
         for state in ("missing", "verified-cached", "broken")
     }
+    preparation_counts = {
+        state: sum(row["preparation"]["state"] == state for row in pack_rows)
+        for state in ("missing", "prepared", "broken")
+    }
     input_required = any(row["input_ids"] for row in route_rows)
     external_required = any(row["state"] == "external-required" for row in route_rows)
-    if not host_compatible or state_counts["broken"]:
+    if not host_compatible or state_counts["broken"] or preparation_counts["broken"]:
         state = "blocked"
     elif state_counts["missing"]:
         state = "acquisition-required"
+    elif preparation_counts["missing"]:
+        state = "preparation-required"
     elif input_required and external_required:
         state = "downloadable-ready-input-and-external-required"
     elif input_required:
@@ -609,7 +659,7 @@ def resolve_toolchain_profile(
     elif external_required:
         state = "downloadable-ready-external-required"
     else:
-        state = "verified-cached"
+        state = "prepared-unqualified"
 
     total_download = sum(int(row["download_bytes"]) for row in pack_rows)
     pack_installed = sum(int(row["installed_bytes_estimate"]) for row in pack_rows)
@@ -636,7 +686,7 @@ def resolve_toolchain_profile(
             ],
             "shell": f"./scripts/toolchains/{action}.sh {profile_id}",
         }
-        for action in ("plan", "status", "pull")
+        for action in ("plan", "status", "pull", "prepare")
     ]
     return {
         "schema_version": PROFILE_PLAN_SCHEMA,
@@ -655,7 +705,7 @@ def resolve_toolchain_profile(
                         {
                             key: value
                             for key, value in row.items()
-                            if key not in {"state", "cache"}
+                            if key not in {"state", "cache", "preparation"}
                         }
                         for row in pack_rows
                     ],
@@ -674,6 +724,7 @@ def resolve_toolchain_profile(
             "compatible": host_compatible,
         },
         "managed_downloads": str(downloads),
+        "managed_prepared": str(prepared),
         "summary": {
             "routes": len(route_rows),
             "coverage_requirements": len(
@@ -699,6 +750,9 @@ def resolve_toolchain_profile(
             "verified_cached_packs": state_counts["verified-cached"],
             "missing_packs": state_counts["missing"],
             "broken_packs": state_counts["broken"],
+            "prepared_packs": preparation_counts["prepared"],
+            "missing_preparations": preparation_counts["missing"],
+            "broken_preparations": preparation_counts["broken"],
             "download_bytes": total_download,
             "cached_download_bytes": cached_download,
             "remaining_download_bytes": total_download - cached_download,
@@ -715,21 +769,31 @@ def resolve_toolchain_profile(
             "repair-cache"
             if state == "blocked" and state_counts["broken"]
             else (
-                "use-compatible-host"
-                if not host_compatible
+                "repair-preparation"
+                if state == "blocked" and preparation_counts["broken"]
                 else (
-                    "pull"
-                    if state == "acquisition-required"
+                    "use-compatible-host"
+                    if not host_compatible
                     else (
-                        "supply-user-input-and-define-external-workers"
-                        if state == "downloadable-ready-input-and-external-required"
+                        "pull"
+                        if state == "acquisition-required"
                         else (
-                            "supply-user-input"
-                            if state == "downloadable-ready-input-required"
+                            "prepare"
+                            if state == "preparation-required"
                             else (
-                                "define-external-workers"
-                                if state == "downloadable-ready-external-required"
-                                else "prepare-and-qualify"
+                                "supply-user-input-and-define-external-workers"
+                                if state
+                                == "downloadable-ready-input-and-external-required"
+                                else (
+                                    "supply-user-input"
+                                    if state == "downloadable-ready-input-required"
+                                    else (
+                                        "define-external-workers"
+                                        if state
+                                        == "downloadable-ready-external-required"
+                                        else "qualify"
+                                    )
+                                )
                             )
                         )
                     )

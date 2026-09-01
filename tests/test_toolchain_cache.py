@@ -16,6 +16,7 @@ from fidb_poc.toolchain_cache import (
     acquire_pinned,
     inspect_cached,
 )
+from fidb_poc.toolchain_prepare import PreparationResult
 
 
 class _Response(io.BytesIO):
@@ -305,9 +306,78 @@ class ToolchainCommandTests(unittest.TestCase):
             "refusing profile pull on an incompatible host", errors.getvalue()
         )
 
+    def test_profile_prepare_extracts_only_verified_resolved_packs(self):
+        archive = Path("/project/var/fidb-toolchains/downloads") / ("c" * 64)
+        pack = {
+            "id": "pack-one",
+            "sha256": "c" * 64,
+            "download_bytes": 123,
+            "installed_bytes_estimate": 400,
+            "archive_root": "toolchain",
+            "state": "verified-cached",
+            "cache": {"path": str(archive)},
+        }
+        before = {
+            "host": {
+                "compatible": True,
+                "required_system": "linux",
+                "required_architecture": "x86_64",
+            },
+            "packs": [pack],
+        }
+        after = {"state": "prepared-unqualified", "host": {"compatible": True}}
+        preparation = PreparationResult(
+            path=Path("/project/var/fidb-toolchains/prepared") / ("c" * 64),
+            root=Path("/project/var/fidb-toolchains/prepared")
+            / ("c" * 64)
+            / "toolchain",
+            archive_sha256="c" * 64,
+            archive_bytes=123,
+            extracted_bytes=300,
+            members=3,
+            files=2,
+            directories=1,
+            symlinks=0,
+            cache_hit=False,
+        )
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.resolve_toolchain_profile",
+                side_effect=[before, after],
+            ),
+            patch(
+                "fidb_poc.toolchain_cli.prepare_pinned_archive",
+                return_value=preparation,
+            ) as prepare,
+            contextlib.redirect_stdout(output),
+        ):
+            status = toolchain_cli.main(
+                [
+                    "profile",
+                    "prepare",
+                    "c-canary",
+                    "--project-root",
+                    "/project",
+                ]
+            )
+
+        self.assertEqual(status, 0)
+        prepare.assert_called_once_with(
+            archive,
+            "c" * 64,
+            123,
+            "toolchain",
+            Path("/project/var/fidb-toolchains/prepared"),
+            max_extracted_bytes=984,
+        )
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["operation"], "prepare")
+        self.assertEqual(document["preparations"][0]["pack_id"], "pack-one")
+
     def test_profile_wrappers_are_executable_and_default_to_top_ten(self):
         project_root = Path(__file__).resolve().parents[1]
-        for operation in ("plan", "status", "pull"):
+        for operation in ("plan", "status", "pull", "prepare"):
             path = project_root / f"scripts/toolchains/{operation}.sh"
             self.assertTrue(path.stat().st_mode & 0o111)
             source = path.read_text(encoding="utf-8")

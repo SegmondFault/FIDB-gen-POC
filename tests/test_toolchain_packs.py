@@ -110,17 +110,19 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 host_architecture="x86_64",
             )
 
-        self.assertEqual(plan["state"], "downloadable-ready-input-required")
+        self.assertEqual(plan["state"], "preparation-required")
         self.assertEqual(plan["summary"]["verified_cached_packs"], 11)
+        self.assertEqual(plan["summary"]["prepared_packs"], 0)
+        self.assertEqual(plan["summary"]["missing_preparations"], 11)
         self.assertEqual(plan["summary"]["remaining_download_bytes"], 0)
-        self.assertEqual(plan["recommended_next_action"], "supply-user-input")
+        self.assertEqual(plan["recommended_next_action"], "prepare")
         self.assertEqual(
             next(
                 row
                 for row in plan["routes"]
                 if row["id"] == "macos-arm64-osxcross-clang"
             )["state"],
-            "input-required",
+            "preparation-and-input-required",
         )
         self.assertTrue(
             all(

@@ -16,6 +16,11 @@ from .toolchain_cache import (
 )
 from .toolchain_registry import load_toolchains
 from .toolchain_packs import resolve_toolchain_profile
+from .toolchain_prepare import (
+    MANAGED_PREPARED,
+    PreparationError,
+    prepare_pinned_archive,
+)
 
 CACHE_STATUS_SCHEMA = "fidb-toolchain-cache-status/v1"
 
@@ -91,13 +96,13 @@ def _profile_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fidb-poc toolchain profile",
         description=(
-            "Plan, inspect, or pull every checksum-pinned archive in a reviewed "
+            "Plan, inspect, pull, or safely prepare every checksum-pinned archive in a reviewed "
             "toolchain profile. External worker requirements are reported, never hidden."
         ),
     )
     parser.add_argument(
         "command",
-        choices=("plan", "status", "pull"),
+        choices=("plan", "status", "pull", "prepare"),
         help="typed profile operation",
     )
     parser.add_argument("profile", help="reviewed profile id")
@@ -111,7 +116,7 @@ def _profile_main(argv: list[str]) -> int:
     try:
         before = resolve_toolchain_profile(project_root, arguments.profile)
         before["operation"] = arguments.command
-        if arguments.command != "pull":
+        if arguments.command in {"plan", "status"}:
             print(json.dumps(before, indent=2, sort_keys=True))
             return 0
         if not before["host"]["compatible"]:
@@ -121,28 +126,65 @@ def _profile_main(argv: list[str]) -> int:
                 f"{before['host']['required_architecture']}"
             )
 
-        downloads = project_root / MANAGED_DOWNLOADS
-        acquisitions = []
-        for pack in before["packs"]:
-            result = acquire_pinned(str(pack["url"]), str(pack["sha256"]), downloads)
-            if result.bytes != int(pack["download_bytes"]):
-                raise CacheError(
-                    f"reviewed size mismatch for {pack['id']}: expected "
-                    f"{pack['download_bytes']}, observed {result.bytes}"
+        if arguments.command == "pull":
+            downloads = project_root / MANAGED_DOWNLOADS
+            acquisitions = []
+            for pack in before["packs"]:
+                result = acquire_pinned(
+                    str(pack["url"]), str(pack["sha256"]), downloads
                 )
-            values = asdict(result)
-            values["path"] = str(result.path)
-            values["quarantined"] = (
-                str(result.quarantined) if result.quarantined is not None else None
-            )
-            acquisitions.append({"pack_id": pack["id"], **values})
-
-        after = resolve_toolchain_profile(project_root, arguments.profile)
-        after["operation"] = "pull"
-        after["acquisitions"] = acquisitions
+                if result.bytes != int(pack["download_bytes"]):
+                    raise CacheError(
+                        f"reviewed size mismatch for {pack['id']}: expected "
+                        f"{pack['download_bytes']}, observed {result.bytes}"
+                    )
+                values = asdict(result)
+                values["path"] = str(result.path)
+                values["quarantined"] = (
+                    str(result.quarantined) if result.quarantined is not None else None
+                )
+                acquisitions.append({"pack_id": pack["id"], **values})
+            after = resolve_toolchain_profile(project_root, arguments.profile)
+            after["operation"] = "pull"
+            after["acquisitions"] = acquisitions
+        else:
+            unavailable = [
+                str(pack["id"])
+                for pack in before["packs"]
+                if pack["state"] != "verified-cached"
+            ]
+            if unavailable:
+                raise PreparationError(
+                    "refusing preparation until every archive is verified-cached: "
+                    + ", ".join(unavailable)
+                )
+            preparations = []
+            prepared = project_root / MANAGED_PREPARED
+            for pack in before["packs"]:
+                result = prepare_pinned_archive(
+                    Path(str(pack["cache"]["path"])),
+                    str(pack["sha256"]),
+                    int(pack["download_bytes"]),
+                    str(pack["archive_root"]),
+                    prepared,
+                    max_extracted_bytes=max(
+                        int(pack["installed_bytes_estimate"]) * 2,
+                        int(pack["download_bytes"]) * 8,
+                    ),
+                )
+                values = asdict(result)
+                values["path"] = str(result.path)
+                values["root"] = str(result.root)
+                values["quarantined"] = (
+                    str(result.quarantined) if result.quarantined is not None else None
+                )
+                preparations.append({"pack_id": pack["id"], **values})
+            after = resolve_toolchain_profile(project_root, arguments.profile)
+            after["operation"] = "prepare"
+            after["preparations"] = preparations
         print(json.dumps(after, indent=2, sort_keys=True))
         return 0
-    except (CacheError, OSError, ValueError) as error:
+    except (CacheError, OSError, PreparationError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
