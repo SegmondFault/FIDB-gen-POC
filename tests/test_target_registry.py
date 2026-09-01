@@ -13,7 +13,7 @@ class TargetRegistryTests(unittest.TestCase):
     def test_repository_registry_records_reviewed_and_observed_targets(self):
         rows = load_targets(self.root / "targets/registry.toml")
 
-        self.assertEqual(len(rows), 15)
+        self.assertEqual(len(rows), 22)
         self.assertEqual(
             {row["catalog_state"] for row in rows},
             {
@@ -36,6 +36,10 @@ class TargetRegistryTests(unittest.TestCase):
         android = [row for row in rows if row["platform"] == "android"]
         self.assertEqual(len(android), 4)
         self.assertTrue(all(row["catalog_state"] == "coverage-intent" for row in android))
+        self.assertTrue(
+            {"linux-sparc32-be-elf", "linux-riscv64-elf", "linux-loongarch64-elf"}
+            <= {row["id"] for row in rows}
+        )
 
     def test_unknown_fields_and_duplicate_ids_fail_closed(self):
         document = """\

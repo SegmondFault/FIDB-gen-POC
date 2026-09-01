@@ -8,6 +8,7 @@ from pathlib import Path
 import tomllib
 
 from .config import load_configuration
+from .coverage_universe import load_coverage_universe
 from .plan_request import (
     REQUEST_SCHEMA,
     _factor_variants,
@@ -18,8 +19,9 @@ from .plan_request import (
 from .recipe_generator import load_recipes as load_source_recipes
 from .target_registry import load_targets
 from .toolchain_registry import load_toolchains
+from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v2"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v3"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -234,6 +236,162 @@ def _plan_authority(root: Path) -> list[dict[str, object]]:
     return plans
 
 
+def _width_study_authority(
+    root: Path,
+    recipes: list[dict[str, object]],
+    native: dict[str, object],
+    targets: list[dict[str, object]],
+    coverage_universe: dict[str, object],
+) -> list[dict[str, object]]:
+    studies = []
+    language_ids = {
+        str(row["id"]) for row in coverage_universe["languages"]
+    }
+    compiler_by_id = {
+        str(row["id"]): row for row in coverage_universe["compiler_families"]
+    }
+    target_by_id = {str(row["id"]): row for row in targets}
+    for path in sorted((root / "coverage").glob("*-width-study.toml")):
+        study = load_width_study(path)
+        if study["language_id"] not in language_ids:
+            raise ValueError(
+                f"width study {study['id']} uses unknown language {study['language_id']}"
+            )
+        projected_requirements = []
+        for requirement in study["toolchain_requirements"]:
+            target_id = str(requirement["target_id"])
+            compiler_id = str(requirement["compiler_family"])
+            target = target_by_id.get(target_id)
+            compiler = compiler_by_id.get(compiler_id)
+            if target is None:
+                raise ValueError(
+                    f"width study {study['id']} uses unknown target {target_id}"
+                )
+            if compiler is None:
+                raise ValueError(
+                    f"width study {study['id']} uses unknown compiler family {compiler_id}"
+                )
+            if study["language_id"] not in compiler["language_ids"]:
+                raise ValueError(
+                    f"width study {study['id']} compiler {compiler_id} does not support {study['language_id']}"
+                )
+            native_route_ids = list(target["native_route_ids"])
+            source_ids = list(target["source_capable_toolchain_ids"])
+            archive_ids = list(target["archive_capable_toolchain_ids"])
+            if native_route_ids:
+                route_state = "installed"
+            elif requirement["acquisition"] == "remote-worker":
+                route_state = "remote-required"
+            elif source_ids:
+                route_state = "pinned-source"
+            elif archive_ids:
+                route_state = "archive-only"
+            else:
+                route_state = "definition-required"
+            projected_requirements.append(
+                {
+                    **requirement,
+                    "target_label": target["label"],
+                    "target_catalog_state": target["catalog_state"],
+                    "compiler_label": compiler["label"],
+                    "route_state": route_state,
+                    "native_route_ids": native_route_ids,
+                    "source_capable_toolchain_ids": source_ids,
+                    "archive_capable_toolchain_ids": archive_ids,
+                }
+            )
+        reviewed_recipe_releases = 0
+        reviewed_recipe_families = 0
+        source_evidence_families = 0
+        projected_families = []
+        for family in study["families"]:
+            matches = [
+                str(recipe["id"])
+                for recipe in recipes
+                if recipe["kind"] != "malware"
+                and recipe["name"] == family["id"]
+            ]
+            reviewed_recipe_releases += len(matches)
+            reviewed_recipe_families += bool(matches)
+            source_evidence = family["source_state"] == "pinned-study-archive"
+            source_evidence_families += source_evidence
+            projected_families.append(
+                {
+                    **family,
+                    "recipe_ids": matches,
+                    "recipe_state": (
+                        "reviewed-recipe"
+                        if matches
+                        else "source-evidence"
+                        if source_evidence
+                        else "recipe-required"
+                    ),
+                }
+            )
+
+        registered_routes = sum(
+            bool(target["native_route_ids"] or target["source_capable_toolchain_ids"])
+            for target in targets
+        )
+        executable_treatments = len(native["treatments"])
+        default = next(
+            row for row in study["presets"] if row["id"] == study["default_preset"]
+        )
+        blockers = []
+        default_requirements = projected_requirements[: int(default["routes"])]
+        default_route_state_counts = {
+            state: sum(
+                requirement["route_state"] == state
+                for requirement in default_requirements
+            )
+            for state in (
+                "installed",
+                "pinned-source",
+                "archive-only",
+                "remote-required",
+                "definition-required",
+            )
+        }
+        missing_recipe_families = int(study["family_count"]) - reviewed_recipe_families
+        required_release_pins = (
+            int(study["family_count"]) * int(default["releases"])
+        )
+        if missing_recipe_families:
+            blockers.append(
+                f"{missing_recipe_families} of {study['family_count']} families need a reviewed recipe"
+            )
+        if reviewed_recipe_releases < required_release_pins:
+            blockers.append(
+                f"{required_release_pins - reviewed_recipe_releases} release recipe pins remain"
+            )
+        if registered_routes < int(default["routes"]):
+            blockers.append(
+                f"default width needs {default['routes']} registered routes; {registered_routes} are catalogued with source capability"
+            )
+        if executable_treatments < int(default["build_profiles"]):
+            blockers.append(
+                f"default width needs {default['build_profiles']} executable build profiles; {executable_treatments} is registered"
+            )
+
+        study["families"] = projected_families
+        study["toolchain_requirements"] = projected_requirements
+        study["authority_path"] = _relative(root, path)
+        study["readiness"] = {
+            "reviewed_recipe_families": reviewed_recipe_families,
+            "reviewed_recipe_releases": reviewed_recipe_releases,
+            "source_evidence_families": source_evidence_families,
+            "missing_recipe_families": missing_recipe_families,
+            "catalogued_target_contexts": len(targets),
+            "registered_route_contexts": registered_routes,
+            "default_route_state_counts": default_route_state_counts,
+            "executable_treatments": executable_treatments,
+            "queue_state": "not-materialized",
+            "blockers": blockers,
+        }
+        studies.append(study)
+    return studies
+
+
 def authority_catalog(project_root: str | Path) -> dict[str, object]:
     """Return one validated, JSON-safe view of all planning authorities."""
 
@@ -242,11 +400,22 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     toolchains = _toolchain_authority(root)
     factors, variants, sensitivity_digests = _sensitivity_authority(root)
     target_path = root / "targets/registry.toml"
+    coverage_path = root / "coverage/universe.toml"
+    coverage_universe = load_coverage_universe(coverage_path)
+    coverage_universe["authority_path"] = _relative(root, coverage_path)
+    recipes = [*native_recipes, *_source_authority(root)]
+    targets = _target_authority(root, native, toolchains)
+    width_studies = _width_study_authority(
+        root, recipes, native, targets, coverage_universe
+    )
+    width_paths = [root / str(row["authority_path"]) for row in width_studies]
     body = {
         "schema_version": AUTHORITY_SCHEMA,
-        "recipes": [*native_recipes, *_source_authority(root)],
+        "coverage_universe": coverage_universe,
+        "width_studies": width_studies,
+        "recipes": recipes,
         "native": native,
-        "targets": _target_authority(root, native, toolchains),
+        "targets": targets,
         "toolchains": toolchains,
         "factors": factors,
         "factor_variants": variants,
@@ -258,11 +427,19 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "toolchains": "toolchains/registry.toml",
             "factors": "sensitivity/factors.toml",
             "factor_variants": "sensitivity/variants.toml",
+            "coverage_universe": "coverage/universe.toml",
+            "width_studies": "coverage/*-width-study.toml",
             "plans": "plans/",
         },
         "source_digests": {
             **sensitivity_digests,
             "targets_sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),
+            "coverage_universe_sha256": hashlib.sha256(
+                coverage_path.read_bytes()
+            ).hexdigest(),
+            "width_studies_sha256": hashlib.sha256(
+                b"".join(path.read_bytes() for path in width_paths)
+            ).hexdigest(),
         },
     }
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()

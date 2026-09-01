@@ -114,6 +114,70 @@ bits = 64
 catalog_state = "reviewed-route"
 evidence = ["worker.toml", "toolchains/registry.toml"]
 
+# Priority and deferred Linux/ELF coverage contexts remain explicit even before
+# a compiler/sysroot route is reviewed.  These are possibility-space rows, not
+# claims that this host can build them today.
+
+[[target]]
+id = "linux-sparc32-be-elf"
+label = "Linux SPARC 32-bit big-endian"
+platform = "linux"
+architecture = "sparc"
+machine = "SPARC"
+binary_format = "ELF"
+endianness = "big"
+bits = 32
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]
+
+[[target]]
+id = "linux-mips64-le-elf"
+label = "Linux MIPS64 little-endian"
+platform = "linux"
+architecture = "mips64el"
+machine = "MIPS"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]
+
+[[target]]
+id = "linux-riscv32-elf"
+label = "Linux RISC-V 32-bit"
+platform = "linux"
+architecture = "riscv32"
+machine = "RISC-V"
+binary_format = "ELF"
+endianness = "little"
+bits = 32
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]
+
+[[target]]
+id = "linux-riscv64-elf"
+label = "Linux RISC-V 64-bit"
+platform = "linux"
+architecture = "riscv64"
+machine = "RISC-V"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]
+
+[[target]]
+id = "linux-loongarch64-elf"
+label = "Linux LoongArch 64-bit"
+platform = "linux"
+architecture = "loongarch64"
+machine = "LoongArch"
+binary_format = "ELF"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]
+
 # Android remains viewer-only coverage intent.  These rows do not add recipes,
 # NDK routes, queue cells or claims that a compatible toolchain is installed.
 
@@ -178,6 +242,18 @@ catalog_state = "study-observed"
 evidence = ["sensitivity/factors.toml"]
 
 [[target]]
+id = "macos-x86-64-macho"
+label = "macOS x86-64"
+platform = "macos"
+architecture = "x86_64"
+machine = "x86-64"
+binary_format = "Mach-O"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]
+
+[[target]]
 id = "windows-x86-64-pecoff"
 label = "Windows x86-64"
 platform = "windows"
@@ -188,3 +264,15 @@ endianness = "little"
 bits = 64
 catalog_state = "study-observed"
 evidence = ["sensitivity/factors.toml"]
+
+[[target]]
+id = "windows-x86-32-pecoff"
+label = "Windows x86 32-bit"
+platform = "windows"
+architecture = "i686"
+machine = "x86"
+binary_format = "PE/COFF"
+endianness = "little"
+bits = 32
+catalog_state = "coverage-intent"
+evidence = ["coverage/universe.toml"]

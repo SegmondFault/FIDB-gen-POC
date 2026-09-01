@@ -1,0 +1,439 @@
+schema_version = "fidb-coverage-universe/v2"
+
+[population]
+published_four_source_n80_families = 276
+tier_zero_families = 7
+published_priority_head_families = 283
+nine_source_candidate_spine_keys = 25019
+nine_source_shared_frontier_keys = 7801
+nine_source_n80_candidate_rank = 1005
+global_family_lower_estimate = 800000
+global_family_central_estimate = 1400000
+global_family_upper_estimate = 2500000
+population_caveat = "The four-source 276-family N80 and its 283-family Tier-0 campaign total are a published priority-head proxy, not global C80. The nine-source 1,005 value is an N80 rank cutoff inside a 7,801-key shared frontier and still requires canonical-family, reusable-native and C-language screening. The 0.8-2.5 million global range is provisional."
+
+[[dimension]]
+id = "library-source"
+label = "Library & source identity"
+layer = "subject"
+description = "Which reusable code family and exact source bytes are being represented."
+matrix_role = "multiplier"
+facets = ["canonical family", "source release", "exact bytes or revision", "build adapter", "static/shared shape", "library component"]
+factor_ids = ["source-release", "source-archive", "build-system", "archive-member-shape"]
+
+[[dimension]]
+id = "target-route"
+label = "Target, ISA & ABI"
+layer = "build"
+description = "Where the code is meant to execute and the binary contract emitted by the toolchain."
+matrix_role = "applicability"
+facets = ["platform", "object format", "ISA", "word size", "endianness", "OS ABI", "runtime or sysroot", "calling convention"]
+factor_ids = ["architecture", "binary-format", "endianness", "word-size", "abi"]
+
+[[dimension]]
+id = "compiler-toolchain"
+label = "Compiler & toolchain"
+layer = "build"
+description = "Compiler family and pinned toolchain identity, including the other binary-producing tools."
+matrix_role = "multiplier"
+facets = ["compiler family", "exact and adjacent version", "compiler runtime", "assembler", "linker", "archiver", "SDK or sysroot", "CPU target"]
+factor_ids = ["compiler-family", "compiler-version", "cpu-tuning"]
+
+[[dimension]]
+id = "compile-treatment"
+label = "Compile treatment"
+layer = "build"
+description = "A bounded set of code-generation changes, sampled as named profiles rather than a blind Cartesian product."
+matrix_role = "bounded-profile"
+facets = ["optimization", "frame pointer", "stack protector", "LTO", "sanitizer", "PAC/BTI", "PIC", "debug information", "dead-code policy"]
+factor_ids = ["optimization", "frame-pointer", "stack-protector", "lto", "sanitizer", "pac-bti", "pic", "debug-info", "dead-code-elimination"]
+
+[[dimension]]
+id = "artifact-analysis"
+label = "Artifact & analysis"
+layer = "analysis"
+description = "How one compile artifact is packaged and interpreted; analysis profiles can reuse a build."
+matrix_role = "analysis-reuse"
+facets = ["archive or linked shape", "stripping", "symbol availability", "Ghidra language", "compiler specification", "Ghidra version", "recovery profile"]
+factor_ids = ["strip", "analysis-tool-version", "analysis-language", "analysis-recovery"]
+
+[[dimension]]
+id = "matching-admission"
+label = "Matching & admission"
+layer = "truth"
+description = "FID database construction, match thresholds, collision handling, and evidence admission policy."
+matrix_role = "policy-control"
+facets = ["FID database set", "minimum function size", "parent/child relationships", "score thresholds", "collision policy", "owner identity", "admission decision"]
+factor_ids = ["fid-database-set", "minimum-function-size", "matching-threshold", "collision-policy", "truth-admission"]
+
+[[dimension]]
+id = "evidence-operations"
+label = "Evidence & operations"
+layer = "operations"
+description = "What makes a result reproducible, comparable, schedulable, and retainable at scale."
+matrix_role = "policy-control"
+facets = ["build repeat", "analysis repeat", "source and tool digests", "worker environment", "replay", "resource envelope", "storage", "retention"]
+factor_ids = ["provenance", "repeatability", "worker-environment", "resource-policy"]
+
+# One shared census and route/admission model feeds language-owned build
+# policies.  Only C is an active executable programme scope today; the other
+# rows make their distinct denominators and treatment axes visible without
+# inventing family counts or executable coverage.
+
+[[language]]
+id = "c"
+label = "C"
+state = "active-scope"
+scope = "Reusable native C library components; C++-only libraries and language bindings are excluded from this denominator."
+denominator = "Canonical reusable native C library families × every eligible or unresolved hard route whose route-specific C treatment profile must be complete."
+treatment_axes = ["compiler family and exact/adjacent version", "O0/O1/O2/O3/Os/Oz optimisation", "PIC and link shape", "LTO", "frame-pointer policy", "CPU target", "stack protection", "sanitizers", "PAC/BTI where applicable", "debug and symbol state"]
+toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc", "zig-clang"]
+caveat = "The native-C eligibility screen and frozen global route census are not complete; popularity N80 is only a priority head."
+authority = "mapping-the-tail/MAPPING_CONTRACT.md + FIDB sensitivity study"
+
+[[language]]
+id = "cpp"
+label = "C++"
+state = "designed"
+scope = "Reusable native C++ components, including mixed C/C++ outputs when C++ ABI-bearing code is emitted."
+denominator = "Canonical native C++ families/components × eligible or unresolved hard routes × the approved C++ ABI and treatment policy."
+treatment_axes = ["compiler family and version", "language dialect", "standard library and ABI", "exceptions", "RTTI", "optimisation", "LTO", "visibility and symbol state", "sanitizers", "CPU target"]
+toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc", "zig-clang"]
+caveat = "C++ must not inherit the C profile count: standard-library, dialect and ABI choices create additional route-local cells."
+authority = "mapping-the-tail/MAPPING_CONTRACT.md"
+
+[[language]]
+id = "rust"
+label = "Rust"
+state = "designed"
+scope = "Rust crates that contribute reusable native machine-code functions on an eligible route."
+denominator = "Canonical native-eligible Rust families/components × eligible or unresolved hard routes × approved rustc treatment profiles."
+treatment_axes = ["rustc version and channel", "opt-level", "LTO", "codegen units", "panic strategy", "target features", "linker and runtime", "debug and strip state"]
+toolchain_family_ids = ["rustc"]
+caveat = "No screened Rust family denominator or executable FID profile pack is registered yet."
+authority = "mapping-the-tail/MAPPING_CONTRACT.md"
+
+[[language]]
+id = "go"
+label = "Go"
+state = "designed"
+scope = "Go modules or components that contribute reusable native machine-code functions, with CGO state explicit."
+denominator = "Canonical native-eligible Go families/components × eligible or unresolved hard routes × approved Go treatment profiles."
+treatment_axes = ["Go toolchain version", "optimisation/debug controls", "build tags", "CGO", "internal/external link mode", "trimpath and symbol state", "target features"]
+toolchain_family_ids = ["go-toolchain"]
+caveat = "No screened Go family denominator or executable FID profile pack is registered yet."
+authority = "mapping-the-tail/MAPPING_CONTRACT.md"
+
+[[language]]
+id = "swift"
+label = "Swift"
+state = "designed"
+scope = "Swift packages and components emitting reusable native machine code."
+denominator = "Canonical native-eligible Swift families/components × eligible or unresolved Apple/runtime routes × approved Swift treatment profiles."
+treatment_axes = ["Swift compiler version", "Onone/O/Osize", "whole-module optimisation", "SDK and deployment target", "runtime identity", "library evolution mode", "debug and strip state"]
+toolchain_family_ids = ["swiftc"]
+caveat = "No screened Swift family denominator or executable FID profile pack is registered yet."
+authority = "mapping-the-tail/MAPPING_CONTRACT.md"
+
+[[language]]
+id = "other"
+label = "Other native"
+state = "vocabulary-only"
+scope = "Zig, Fortran, Ada, D, Nim, Pascal, assembly, and native Python, Node, Ruby or JNI extension components."
+denominator = "A separately frozen canonical family/component census and reviewed finite treatment policy for each language or extension ABI."
+treatment_axes = ["language/compiler version", "language-specific optimisation", "runtime and extension ABI", "linker and object format", "target features", "symbol state"]
+toolchain_family_ids = ["gcc", "llvm-clang", "zig-clang"]
+caveat = "Vocabulary coverage records discoverability only; it does not assert that these matrices or build routes are implemented."
+authority = "mapping-the-tail/MAPPING_CONTRACT.md"
+
+[[compiler_family]]
+id = "gcc"
+label = "GCC"
+route_scope = "GNU/Linux, ELF cross targets, and compatible embedded runtimes"
+state = "catalogued"
+language_ids = ["c", "cpp", "other"]
+version_strategy = "Pin an exact current release and one adjacent/previous release per supported route."
+settings = ["O0", "O2", "O3", "Os", "frame-pointer", "stack-protector-strong", "CPU tuning", "guarded LTO"]
+
+[[compiler_family]]
+id = "llvm-clang"
+label = "Clang / LLVM"
+route_scope = "ELF and Android routes where a reviewed sysroot exists"
+state = "desired"
+language_ids = ["c", "cpp", "other"]
+version_strategy = "Pin current and adjacent LLVM releases; pair with exact linker and runtime identities."
+settings = ["O0", "O2", "O3", "Oz", "frame-pointer", "stack protection", "CPU tuning", "guarded LTO"]
+
+[[compiler_family]]
+id = "apple-clang"
+label = "Apple Clang"
+route_scope = "Mach-O macOS routes with a pinned SDK"
+state = "study-observed"
+language_ids = ["c", "cpp"]
+version_strategy = "Treat Xcode, Apple Clang, SDK, and deployment target as one pinned route identity."
+settings = ["O0", "O2", "O3", "Os", "dead stripping", "deployment target", "guarded LTO"]
+
+[[compiler_family]]
+id = "msvc"
+label = "MSVC"
+route_scope = "PE/COFF Windows routes with pinned MSVC, SDK, linker, and CRT"
+state = "study-observed"
+language_ids = ["c", "cpp"]
+version_strategy = "Pin compiler toolset, Windows SDK, linker, CRT, and target architecture together."
+settings = ["Od", "O2", "Ox", "Os", "runtime selection", "incremental linking off", "guarded LTCG"]
+
+[[compiler_family]]
+id = "mingw-gcc"
+label = "MinGW GCC"
+route_scope = "PE/COFF Windows routes with a pinned MinGW runtime and linker"
+state = "study-observed"
+language_ids = ["c", "cpp"]
+version_strategy = "Pin GCC, binutils, MinGW runtime, Windows target and exception/runtime model together."
+settings = ["O0", "O2", "O3", "Os", "runtime model", "link shape", "guarded LTO"]
+
+[[compiler_family]]
+id = "zig-clang"
+label = "Zig / Clang driver"
+route_scope = "Reviewed Zig/Clang cross routes with exact bundled LLVM and sysroot identity"
+state = "study-observed"
+language_ids = ["c", "cpp", "other"]
+version_strategy = "Pin the Zig release, bundled LLVM, target triple, libc/sysroot and linker as one toolchain identity."
+settings = ["O0", "O2", "O3", "Os", "target triple", "CPU tuning", "link mode"]
+
+[[compiler_family]]
+id = "rustc"
+label = "rustc"
+route_scope = "Rust target triples with pinned rustc, LLVM backend, linker, runtime and target features"
+state = "desired"
+language_ids = ["rust"]
+version_strategy = "Pin rustc release/channel, target specification, LLVM backend and linker/runtime identity."
+settings = ["opt-level", "LTO", "codegen units", "panic strategy", "target features", "debug/strip"]
+
+[[compiler_family]]
+id = "go-toolchain"
+label = "Go compiler / linker"
+route_scope = "Supported GOOS/GOARCH routes with CGO and external-linker state explicit"
+state = "desired"
+language_ids = ["go"]
+version_strategy = "Pin the Go release, GOOS/GOARCH, build tags, CGO toolchain and linker mode."
+settings = ["optimisation/debug", "build tags", "CGO", "link mode", "trimpath", "target features"]
+
+[[compiler_family]]
+id = "swiftc"
+label = "Swift compiler"
+route_scope = "Apple and reviewed non-Apple Swift routes with pinned SDK and runtime"
+state = "desired"
+language_ids = ["swift"]
+version_strategy = "Pin Swift compiler, SDK, deployment target, runtime and library-evolution mode."
+settings = ["Onone", "O", "Osize", "whole-module", "library evolution", "debug/strip"]
+
+# The calibration pack is intentionally bounded. Route-specific Apple Clang
+# and MSVC equivalents replace incompatible GCC/Clang profiles; they do not
+# multiply every route indiscriminately.
+
+[[profile]]
+id = "gcc-current-o2"
+label = "GCC current · O2"
+compiler_family = "gcc"
+optimization = "O2"
+controls = ["route default hardening", "exact toolchain pin"]
+route_scope = "GCC-compatible routes"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-adjacent-o2"
+label = "GCC adjacent · O2"
+compiler_family = "gcc"
+optimization = "O2"
+controls = ["adjacent pinned compiler", "same route policy"]
+route_scope = "GCC-compatible routes"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "clang-current-o2"
+label = "Clang current · O2"
+compiler_family = "llvm-clang"
+optimization = "O2"
+controls = ["route default hardening", "exact toolchain pin"]
+route_scope = "Clang-compatible ELF and Android routes"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "clang-adjacent-o2"
+label = "Clang adjacent · O2"
+compiler_family = "llvm-clang"
+optimization = "O2"
+controls = ["adjacent pinned compiler", "same route policy"]
+route_scope = "Clang-compatible ELF and Android routes"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-o0"
+label = "GCC · O0"
+compiler_family = "gcc"
+optimization = "O0"
+controls = ["baseline debug-style code generation", "no LTO"]
+route_scope = "GCC-compatible routes"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "clang-o0"
+label = "Clang · O0"
+compiler_family = "llvm-clang"
+optimization = "O0"
+controls = ["compiler-by-optimization interaction", "no LTO"]
+route_scope = "Clang-compatible routes"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-o3"
+label = "GCC · O3"
+compiler_family = "gcc"
+optimization = "O3"
+controls = ["aggressive optimization", "no LTO"]
+route_scope = "GCC-compatible routes"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-os"
+label = "GCC · Os"
+compiler_family = "gcc"
+optimization = "Os"
+controls = ["size optimization", "no LTO"]
+route_scope = "GCC-compatible routes"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-o2-frame-omit"
+label = "GCC O2 · omit frame pointer"
+compiler_family = "gcc"
+optimization = "O2"
+controls = ["omit frame pointer", "route default hardening"]
+route_scope = "routes where the flag is meaningful"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-o2-stack-strong"
+label = "GCC O2 · stack protector strong"
+compiler_family = "gcc"
+optimization = "O2"
+controls = ["stack protector strong", "route default frame policy"]
+route_scope = "routes with compatible runtime support"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "gcc-o2-cpu-tuned"
+label = "GCC O2 · CPU tuned"
+compiler_family = "gcc"
+optimization = "O2"
+controls = ["explicit CPU target", "generic route retained as control"]
+route_scope = "ISA routes with reviewed CPU levels"
+state = "desired"
+language_id = "c"
+evidence_class = "assumption"
+
+[[profile]]
+id = "guarded-lto"
+label = "Guarded LTO lane"
+compiler_family = "gcc"
+optimization = "O2"
+controls = ["LTO", "matching linker/plugin", "separate truth lane"]
+route_scope = "routes with a validated compiler-linker-plugin tuple"
+state = "guarded"
+language_id = "c"
+evidence_class = "assumption"
+
+[[scenario]]
+id = "c-campaign-a-calibration"
+label = "Campaign A · calibration"
+library_families = 8
+releases = 1
+routes = 2
+profiles = 3
+unique_executions = 48
+replay_multiplier = 2
+scope = "Bounded C implementation of the proposed overnight calibration shape"
+caveat = "This is a calibration run for throughput, eligibility, failures and treatment yield—not a coverage claim."
+language_id = "c"
+evidence_class = "proposed"
+authority = "FIDB Factory Engineering Specification · Campaign A"
+
+[[scenario]]
+id = "c-campaign-b-four-source-n80"
+label = "Campaign B · published priority head"
+library_families = 283
+releases = 2
+routes = 3
+profiles = 3
+unique_executions = 5094
+replay_multiplier = 2
+scope = "Published four-source N80 plus Tier 0 across the proposed 18-cell-equivalent ceiling"
+caveat = "This is 80% of a popularity proxy, not C80 contract coverage or a global C-family census."
+language_id = "c"
+evidence_class = "proposed"
+authority = "FIDB Factory Engineering Specification · Campaign B"
+
+[[scenario]]
+id = "c-appendix-h-lean-42"
+label = "Appendix H · lean 42-cell pack"
+library_families = 283
+releases = 1
+routes = 7
+profiles = 6
+unique_executions = 11886
+replay_multiplier = 2
+scope = "Average route applicability within the proposed 12-route priority pack"
+caveat = "Seven eligible routes and six retained route-specific treatments are deliberately lean hypotheses Campaign A must test."
+language_id = "c"
+evidence_class = "provisional"
+authority = "FIDB Factory Engineering Specification · Appendix H"
+
+[[scenario]]
+id = "c-two-release-lean-extension"
+label = "What-if · two-release lean pack"
+library_families = 283
+releases = 2
+routes = 7
+profiles = 6
+unique_executions = 23772
+replay_multiplier = 2
+scope = "Two-release extension of Appendix H's 42-cell-per-family hypothesis"
+caveat = "Useful for capacity exploration, but this exact combined figure is an assumption rather than a canonical campaign total."
+language_id = "c"
+evidence_class = "assumption"
+authority = "Derived from Campaign B version policy + Appendix H lean pack"
+
+[[scenario]]
+id = "c-stress-envelope"
+label = "Appendix H · literal stress envelope"
+library_families = 283
+releases = 3
+routes = 20
+profiles = 20
+unique_executions = 339600
+replay_multiplier = 2
+scope = "Capacity and storage stress case"
+caveat = "A literal 20-route × 20-treatment × three-release storage model, not a recommended substantive run."
+language_id = "c"
+evidence_class = "provisional"
+authority = "FIDB Factory Engineering Specification · Appendix H"
