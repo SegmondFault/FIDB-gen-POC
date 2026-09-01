@@ -399,12 +399,13 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v4")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v5")
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["toolchains"]), 41)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 8)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 11)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 1)
         self.assertEqual(len(document["factors"]), 41)
         self.assertEqual(document["width_studies"][0]["id"], "batch-010")
         self.assertEqual(
@@ -420,7 +421,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(managed_cache.exists())
         self.assertEqual(result["detection_mode"], "read-only")
         self.assertTrue(result["toolchains"]["entries"])
-        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 2)
+        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 3)
         self.assertTrue(
             all(row["state"] == "missing" for row in result["toolchains"]["entries"])
         )

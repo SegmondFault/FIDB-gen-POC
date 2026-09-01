@@ -19,7 +19,7 @@ class CoverageUniverseTests(unittest.TestCase):
             {row["id"] for row in document["languages"]},
             {"c", "cpp", "rust", "go", "swift", "other"},
         )
-        self.assertEqual(len(document["compiler_families"]), 9)
+        self.assertEqual(len(document["compiler_families"]), 8)
         self.assertEqual(len(document["profiles"]), 12)
         self.assertTrue(all(row["language_id"] == "c" for row in document["profiles"]))
         self.assertEqual(

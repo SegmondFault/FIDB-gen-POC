@@ -12,13 +12,14 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v4")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v5")
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["toolchains"]), 41)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 8)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 10)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 2)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 11)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 1)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 12)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 3)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
         self.assertEqual(

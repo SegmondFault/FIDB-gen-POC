@@ -22,7 +22,7 @@ from .toolchain_registry import load_toolchains
 from .toolchain_packs import load_toolchain_pack_catalog
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v4"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v5"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -420,7 +420,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "routes": "worker.toml",
             "targets": "targets/registry.toml",
             "toolchains": "toolchains/registry.toml",
-            "toolchain_packs": "toolchains/packs.toml + routes.toml + profiles/",
+            "toolchain_packs": "toolchains/packs.toml + routes.toml + inputs.toml + profiles/",
             "factors": "sensitivity/factors.toml",
             "factor_variants": "sensitivity/variants.toml",
             "coverage_universe": "coverage/universe.toml",

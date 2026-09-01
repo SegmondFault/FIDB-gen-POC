@@ -1,107 +1,209 @@
-schema_version = "fidb-toolchain-routes/v1"
+schema_version = "fidb-toolchain-routes/v2"
 
-# A route is a target/compiler composition.  Downloadable routes reference
-# immutable packs; external-worker routes remain part of the same profile so
-# host constraints cannot disappear from the planning denominator.
+# A route is a concrete C/C++ target/compiler composition.  Cross-build routes
+# cover target and binary-format breadth; native-reference routes remain
+# separate evidence and are never silently treated as compiler-equivalent.
 
 [[route]]
 id = "linux-x86-64-gcc"
 label = "Linux x86-64 · GCC 14.3"
 target_id = "linux-x86-64-elf"
+coverage_requirement_id = "linux-x86-64-gcc"
 compiler_family = "gcc"
+target_triple = "x86_64-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-x86-64-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "macos-arm64-osxcross-clang"
+label = "macOS ARM64 · LLVM/Clang + osxcross"
+target_id = "macos-arm64-macho"
+coverage_requirement_id = "macos-arm64-apple-clang"
+compiler_family = "llvm-clang"
+target_triple = "arm64-apple-darwin"
+evidence_role = "cross-build"
+provisioning = "pack-plus-user-input"
+pack_ids = ["llvm-linux-x86-64-22.1.8", "osxcross-source-27d21e4977c9"]
+input_ids = ["apple-macos-sdk"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-and-sdk-definition-reviewed"
+additional_installed_bytes_estimate = 4294967296
+additional_size_evidence = "planning-estimate-osxcross-build-plus-user-supplied-sdk"
+external_requirements = []
+
+[[route]]
+id = "windows-x86-64-llvm-mingw"
+label = "Windows x86-64 · llvm-mingw UCRT"
+target_id = "windows-x86-64-pecoff"
+coverage_requirement_id = "windows-x86-64-msvc"
+compiler_family = "llvm-clang"
+target_triple = "x86_64-w64-mingw32"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["llvm-mingw-ucrt-x86-64-linux-20260826"]
+input_ids = []
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "macos-arm64-apple-clang"
-label = "macOS ARM64 · Apple Clang"
+label = "macOS ARM64 · native Apple Clang reference"
 target_id = "macos-arm64-macho"
+coverage_requirement_id = "macos-arm64-apple-clang"
 compiler_family = "apple-clang"
+target_triple = "arm64-apple-darwin"
+evidence_role = "native-reference"
 provisioning = "external-worker"
 pack_ids = []
+input_ids = []
 worker_class = "macos-native-remote"
 qualification_state = "external-definition-required"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "external-worker-not-estimated"
 external_requirements = ["Xcode build", "Apple Clang build", "macOS SDK", "deployment target"]
 
 [[route]]
 id = "windows-x86-64-msvc"
-label = "Windows x86-64 · MSVC"
+label = "Windows x86-64 · native MSVC reference"
 target_id = "windows-x86-64-pecoff"
+coverage_requirement_id = "windows-x86-64-msvc"
 compiler_family = "msvc"
+target_triple = "x86_64-pc-windows-msvc"
+evidence_role = "native-reference"
 provisioning = "external-worker"
 pack_ids = []
+input_ids = []
 worker_class = "windows-native-or-validated-vm"
 qualification_state = "external-definition-required"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "external-worker-not-estimated"
 external_requirements = ["MSVC toolset", "Windows SDK", "linker", "CRT"]
 
 [[route]]
 id = "linux-arm32-gcc"
 label = "Linux ARMv7 EABIhf · GCC 14.3"
 target_id = "linux-arm32-elf"
+coverage_requirement_id = "linux-arm32-gcc"
 compiler_family = "gcc"
+target_triple = "arm-buildroot-linux-gnueabihf"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-armv7-eabihf-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "linux-aarch64-gcc"
 label = "Linux AArch64 · GCC 14.3"
 target_id = "linux-aarch64-elf"
+coverage_requirement_id = "linux-aarch64-gcc"
 compiler_family = "gcc"
+target_triple = "aarch64-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-aarch64-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "linux-mips32-be-gcc"
 label = "Linux MIPS32 big-endian · GCC 14.3"
 target_id = "linux-mips32-be-elf"
+coverage_requirement_id = "linux-mips32-be-gcc"
 compiler_family = "gcc"
+target_triple = "mips-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-mips32-be-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "linux-mips32-le-gcc"
 label = "Linux MIPS32 little-endian · GCC 14.3"
 target_id = "linux-mips32-le-elf"
+coverage_requirement_id = "linux-mips32-le-gcc"
 compiler_family = "gcc"
+target_triple = "mipsel-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-mips32-le-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "linux-powerpc32-be-gcc"
 label = "Linux PowerPC e500mc · GCC 14.3"
 target_id = "linux-powerpc32-be-elf"
+coverage_requirement_id = "linux-powerpc32-be-gcc"
 compiler_family = "gcc"
+target_triple = "powerpc-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-powerpc-e500mc-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "linux-sh32-gcc"
 label = "Linux SuperH SH4 · GCC 14.3"
 target_id = "linux-sh32-le-elf"
+coverage_requirement_id = "linux-sh32-gcc"
 compiler_family = "gcc"
+target_triple = "sh4-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-sh4-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
 
 [[route]]
 id = "linux-m68k-gcc"
 label = "Linux M68K 68xxx · GCC 14.3"
 target_id = "linux-m68k-elf"
+coverage_requirement_id = "linux-m68k-gcc"
 compiler_family = "gcc"
+target_triple = "m68k-buildroot-linux-gnu"
+evidence_role = "primary"
 provisioning = "downloadable-pack"
 pack_ids = ["bootlin-m68k-68xxx-glibc-stable-2025.08-1"]
+input_ids = []
 worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []

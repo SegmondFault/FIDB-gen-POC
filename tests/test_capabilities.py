@@ -32,14 +32,14 @@ class CapabilityDetectionTests(unittest.TestCase):
             self.assertFalse(cache.exists())
             self.assertEqual(result["detection_mode"], "read-only")
             self.assertTrue(result["toolchains"]["entries"])
-            self.assertEqual(len(result["toolchain_profiles"]["plans"]), 2)
+            self.assertEqual(len(result["toolchain_profiles"]["plans"]), 3)
             self.assertEqual(
                 next(
                     row
                     for row in result["toolchain_profiles"]["plans"]
                     if row["profile"]["id"] == "c-top10-linux"
                 )["summary"]["missing_packs"],
-                8,
+                11,
             )
             self.assertTrue(
                 all(

@@ -20,11 +20,12 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
     def test_catalog_cross_validates_complete_top_ten_profile(self):
         catalog = load_toolchain_pack_catalog(self.root)
 
-        self.assertEqual(catalog["schema_version"], "fidb-toolchain-pack-catalog/v1")
+        self.assertEqual(catalog["schema_version"], "fidb-toolchain-pack-catalog/v2")
         self.assertEqual(catalog["host"], {"system": "linux", "architecture": "x86_64"})
-        self.assertEqual(len(catalog["packs"]), 8)
-        self.assertEqual(len(catalog["routes"]), 10)
-        self.assertEqual(len(catalog["profiles"]), 2)
+        self.assertEqual(len(catalog["packs"]), 11)
+        self.assertEqual(len(catalog["inputs"]), 1)
+        self.assertEqual(len(catalog["routes"]), 12)
+        self.assertEqual(len(catalog["profiles"]), 3)
         self.assertEqual(len(catalog["catalog_digest"]), 64)
         self.assertTrue(all(len(row["sha256"]) == 64 for row in catalog["packs"]))
 
@@ -36,8 +37,8 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             profile["route_ids"],
             [
                 "linux-x86-64-gcc",
-                "macos-arm64-apple-clang",
-                "windows-x86-64-msvc",
+                "macos-arm64-osxcross-clang",
+                "windows-x86-64-llvm-mingw",
                 "linux-arm32-gcc",
                 "linux-aarch64-gcc",
                 "linux-mips32-be-gcc",
@@ -48,7 +49,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             ],
         )
 
-    def test_profile_plan_reports_sizes_cache_and_external_constraints(self):
+    def test_profile_plan_reports_sizes_cache_and_user_input_constraint(self):
         def missing(downloads: Path, digest: str) -> CacheInspection:
             return CacheInspection(path=downloads / digest, state="missing")
 
@@ -60,31 +61,39 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 host_architecture="x86_64",
             )
 
-        self.assertEqual(plan["schema_version"], "fidb-toolchain-profile-plan/v1")
+        self.assertEqual(plan["schema_version"], "fidb-toolchain-profile-plan/v2")
         self.assertEqual(plan["state"], "acquisition-required")
         self.assertTrue(plan["host"]["compatible"])
         self.assertEqual(plan["summary"]["routes"], 10)
-        self.assertEqual(plan["summary"]["downloadable_routes"], 8)
-        self.assertEqual(plan["summary"]["external_routes"], 2)
-        self.assertEqual(plan["summary"]["packs"], 8)
-        self.assertEqual(plan["summary"]["download_bytes"], 669_585_280)
-        self.assertEqual(plan["summary"]["installed_bytes_estimate"], 2_678_341_120)
+        self.assertEqual(plan["summary"]["coverage_requirements"], 10)
+        self.assertEqual(plan["summary"]["downloadable_routes"], 10)
+        self.assertEqual(plan["summary"]["user_input_routes"], 1)
+        self.assertEqual(plan["summary"]["external_routes"], 0)
+        self.assertEqual(plan["summary"]["primary_routes"], 8)
+        self.assertEqual(plan["summary"]["cross_build_routes"], 2)
+        self.assertEqual(plan["summary"]["packs"], 11)
+        self.assertEqual(plan["summary"]["download_bytes"], 2_692_424_622)
+        self.assertEqual(
+            plan["summary"]["pack_installed_bytes_estimate"], 10_769_698_488
+        )
+        self.assertEqual(
+            plan["summary"]["route_additional_installed_bytes_estimate"],
+            4_294_967_296,
+        )
+        self.assertEqual(plan["summary"]["installed_bytes_estimate"], 15_064_665_784)
         self.assertEqual(plan["recommended_next_action"], "pull")
         self.assertEqual(
-            sum(
-                row["code"] == "external-worker-required"
-                for row in plan["requirements"]
-            ),
-            2,
+            sum(row["code"] == "user-input-required" for row in plan["requirements"]),
+            1,
         )
         self.assertEqual(
             sum(
                 row["code"] == "pack-download-required" for row in plan["requirements"]
             ),
-            8,
+            11,
         )
 
-    def test_verified_downloads_do_not_claim_preparation_or_external_readiness(self):
+    def test_verified_downloads_do_not_claim_sdk_or_preparation_readiness(self):
         def verified(downloads: Path, digest: str) -> CacheInspection:
             return CacheInspection(
                 path=downloads / digest,
@@ -101,10 +110,18 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 host_architecture="x86_64",
             )
 
-        self.assertEqual(plan["state"], "downloadable-ready-external-required")
-        self.assertEqual(plan["summary"]["verified_cached_packs"], 8)
+        self.assertEqual(plan["state"], "downloadable-ready-input-required")
+        self.assertEqual(plan["summary"]["verified_cached_packs"], 11)
         self.assertEqual(plan["summary"]["remaining_download_bytes"], 0)
-        self.assertEqual(plan["recommended_next_action"], "define-external-workers")
+        self.assertEqual(plan["recommended_next_action"], "supply-user-input")
+        self.assertEqual(
+            next(
+                row
+                for row in plan["routes"]
+                if row["id"] == "macos-arm64-osxcross-clang"
+            )["state"],
+            "input-required",
+        )
         self.assertTrue(
             all(
                 row["qualification_state"] == "acquisition-reviewed"
@@ -142,9 +159,30 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             plans = resolve_toolchain_profiles(self.root)
 
         self.assertEqual(
-            {row["profile"]["id"] for row in plans}, {"c-canary", "c-top10-linux"}
+            {row["profile"]["id"] for row in plans},
+            {"c-canary", "c-top10-linux", "c-top10-reference"},
         )
-        self.assertEqual(inspect.call_count, 8)
+        self.assertEqual(inspect.call_count, 11)
+
+    def test_reference_profile_keeps_native_compilers_separate(self):
+        with patch(
+            "fidb_poc.toolchain_packs.inspect_cached",
+            return_value=CacheInspection(path=Path("/cache/missing"), state="missing"),
+        ):
+            plan = resolve_toolchain_profile(self.root, "c-top10-reference")
+
+        self.assertEqual(plan["summary"]["routes"], 12)
+        self.assertEqual(plan["summary"]["coverage_requirements"], 10)
+        self.assertEqual(plan["summary"]["cross_build_routes"], 2)
+        self.assertEqual(plan["summary"]["native_reference_routes"], 2)
+        self.assertEqual(plan["summary"]["external_routes"], 2)
+        self.assertEqual(
+            sum(
+                row["code"] == "external-worker-required"
+                for row in plan["requirements"]
+            ),
+            2,
+        )
 
     def test_incompatible_host_is_a_structured_blocker(self):
         with patch(

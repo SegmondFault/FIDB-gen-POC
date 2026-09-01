@@ -84,10 +84,10 @@ factor_ids = ["provenance", "repeatability", "worker-environment", "resource-pol
 id = "c"
 label = "C"
 state = "active-scope"
-scope = "Reusable native C library components; C++-only libraries and language bindings are excluded from this denominator."
-denominator = "Canonical reusable native C library families × every eligible or unresolved hard route whose route-specific C treatment profile must be complete."
-treatment_axes = ["compiler family and exact/adjacent version", "O0/O1/O2/O3/Os/Oz optimisation", "PIC and link shape", "LTO", "frame-pointer policy", "CPU target", "stack protection", "sanitizers", "PAC/BTI where applicable", "debug and symbol state"]
-toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc", "zig-clang"]
+scope = "Reusable native C-family library components: C libraries and C APIs are in scope even when part of their implementation requires C++; unrelated language ecosystems are excluded."
+denominator = "Canonical reusable native C-family library families × every eligible or unresolved hard route whose route-specific C/C++ treatment profile must be complete."
+treatment_axes = ["compiler family and exact/adjacent version", "O0/O1/O2/O3/Os/Oz optimisation", "PIC and link shape", "LTO", "frame-pointer policy", "CPU target", "stack protection", "sanitizers", "PAC/BTI where applicable", "debug and symbol state", "C++ dialect/runtime/ABI only where the C library requires it"]
+toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc"]
 caveat = "The native-C eligibility screen and frozen global route census are not complete; popularity N80 is only a priority head."
 authority = "mapping-the-tail/MAPPING_CONTRACT.md + FIDB sensitivity study"
 
@@ -98,7 +98,7 @@ state = "designed"
 scope = "Reusable native C++ components, including mixed C/C++ outputs when C++ ABI-bearing code is emitted."
 denominator = "Canonical native C++ families/components × eligible or unresolved hard routes × the approved C++ ABI and treatment policy."
 treatment_axes = ["compiler family and version", "language dialect", "standard library and ABI", "exceptions", "RTTI", "optimisation", "LTO", "visibility and symbol state", "sanitizers", "CPU target"]
-toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc", "zig-clang"]
+toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc"]
 caveat = "C++ must not inherit the C profile count: standard-library, dialect and ABI choices create additional route-local cells."
 authority = "mapping-the-tail/MAPPING_CONTRACT.md"
 
@@ -139,10 +139,10 @@ authority = "mapping-the-tail/MAPPING_CONTRACT.md"
 id = "other"
 label = "Other native"
 state = "vocabulary-only"
-scope = "Zig, Fortran, Ada, D, Nim, Pascal, assembly, and native Python, Node, Ruby or JNI extension components."
+scope = "Fortran, Ada, D, Nim, Pascal, assembly, and native Python, Node, Ruby or JNI extension components."
 denominator = "A separately frozen canonical family/component census and reviewed finite treatment policy for each language or extension ABI."
 treatment_axes = ["language/compiler version", "language-specific optimisation", "runtime and extension ABI", "linker and object format", "target features", "symbol state"]
-toolchain_family_ids = ["gcc", "llvm-clang", "zig-clang"]
+toolchain_family_ids = ["gcc", "llvm-clang"]
 caveat = "Vocabulary coverage records discoverability only; it does not assert that these matrices or build routes are implemented."
 authority = "mapping-the-tail/MAPPING_CONTRACT.md"
 
@@ -158,7 +158,7 @@ settings = ["O0", "O2", "O3", "Os", "frame-pointer", "stack-protector-strong", "
 [[compiler_family]]
 id = "llvm-clang"
 label = "Clang / LLVM"
-route_scope = "ELF and Android routes where a reviewed sysroot exists"
+route_scope = "Reviewed ELF, Android, Mach-O and PE/COFF C/C++ routes with an exact sysroot or SDK identity"
 state = "desired"
 language_ids = ["c", "cpp", "other"]
 version_strategy = "Pin current and adjacent LLVM releases; pair with exact linker and runtime identities."
@@ -190,15 +190,6 @@ state = "study-observed"
 language_ids = ["c", "cpp"]
 version_strategy = "Pin GCC, binutils, MinGW runtime, Windows target and exception/runtime model together."
 settings = ["O0", "O2", "O3", "Os", "runtime model", "link shape", "guarded LTO"]
-
-[[compiler_family]]
-id = "zig-clang"
-label = "Zig / Clang driver"
-route_scope = "Reviewed Zig/Clang cross routes with exact bundled LLVM and sysroot identity"
-state = "study-observed"
-language_ids = ["c", "cpp", "other"]
-version_strategy = "Pin the Zig release, bundled LLVM, target triple, libc/sysroot and linker as one toolchain identity."
-settings = ["O0", "O2", "O3", "Os", "target triple", "CPU tuning", "link mode"]
 
 [[compiler_family]]
 id = "rustc"
