@@ -94,12 +94,12 @@ authority = "mapping-the-tail/MAPPING_CONTRACT.md + FIDB sensitivity study"
 [[language]]
 id = "cpp"
 label = "C++"
-state = "designed"
-scope = "Reusable native C++ components, including mixed C/C++ outputs when C++ ABI-bearing code is emitted."
-denominator = "Canonical native C++ families/components × eligible or unresolved hard routes × the approved C++ ABI and treatment policy."
+state = "vocabulary-only"
+scope = "No separate C++ campaign is active. C++ needed to build an in-scope C library or C API is accounted for inside that C-family route and treatment profile."
+denominator = "No independent C++ library denominator is active in the current programme."
 treatment_axes = ["compiler family and version", "language dialect", "standard library and ABI", "exceptions", "RTTI", "optimisation", "LTO", "visibility and symbol state", "sanitizers", "CPU target"]
 toolchain_family_ids = ["gcc", "llvm-clang", "apple-clang", "msvc", "mingw-gcc"]
-caveat = "C++ must not inherit the C profile count: standard-library, dialect and ABI choices create additional route-local cells."
+caveat = "A future standalone C++-library campaign would need its own screened family denominator and ABI policy; it is not part of the present work."
 authority = "mapping-the-tail/MAPPING_CONTRACT.md"
 
 [[language]]

@@ -194,7 +194,7 @@ class ToolchainCommandTests(unittest.TestCase):
 
     def test_profile_plan_is_read_only_json(self):
         plan = {
-            "schema_version": "fidb-toolchain-profile-plan/v1",
+            "schema_version": "fidb-toolchain-profile-plan/v2",
             "operation": "status",
             "profile": {"id": "c-canary"},
             "host": {"compatible": True},

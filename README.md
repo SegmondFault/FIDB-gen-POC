@@ -204,11 +204,15 @@ each attempt; only the immutable verified input is shared.
 
 ### Portable toolchain profiles
 
-The broader width study uses language-scoped profiles rather than a collection
-of machine-local installation notes. The complete C top-ten profile contains
-all ten ordered routes: eight checksum-pinned Bootlin GCC/binutils/glibc SDK
-archives downloadable on Linux x86-64, plus explicit macOS/Apple Clang and
-Windows/MSVC external-worker requirements. Inspect or pull it with:
+The broader width study uses C-family profiles rather than a collection of
+machine-local installation notes. C libraries are the active scope; C++ is
+included only where an in-scope C library or C API requires it. No other
+language ecosystem is part of the current campaign.
+
+The `c-top10-linux` profile implements all ten ordered target requirements from
+a Linux x86-64 acquisition host: eight Bootlin GCC routes, an llvm-mingw Windows
+route, and an LLVM/Clang + osxcross macOS route. The macOS route also reports a
+separately supplied, pinned Apple SDK requirement. Inspect or pull it with:
 
 ```sh
 ./scripts/toolchains/plan.sh c-top10-linux
@@ -218,12 +222,16 @@ Windows/MSVC external-worker requirements. Inspect or pull it with:
 
 All three operations emit stable JSON. `plan` and `status` are read-only;
 `pull` is the typed mutation boundary and accepts a reviewed profile ID, never a
-URL or digest. The full profile is 669,585,280 bytes (638.6 MiB) compressed.
-Its current 2,678,341,120-byte (2.49 GiB) expanded footprint is explicitly a
-planning estimate, not measured installation evidence. Pulling caches the
-verified archives only; it does not yet extract, activate, or qualify the
-compilers. The Targets & toolchains GUI projects the same state and offers
-copyable commands but cannot install anything.
+URL or digest. The 11 archives total 2,692,424,622 bytes (about 2.51 GiB)
+compressed. The current 15,064,665,784-byte (about 14.03 GiB) prepared-footprint
+estimate includes pack expansion plus a conservative osxcross/SDK allowance;
+it is not measured installation evidence. Pulling caches verified archives
+only—it does not obtain the Apple SDK, extract, activate, or qualify compilers.
+
+The optional `c-top10-reference` profile keeps the same ten cross-build target
+requirements and adds native Apple Clang and MSVC implementations as separate
+reference evidence. The Targets & toolchains GUI shows that distinction and
+offers copyable commands but cannot install anything.
 
 See [`toolchains/README.md`](toolchains/README.md) for the authority layers,
 extension workflow, state vocabulary, safety contract, and machine/LLM-facing
