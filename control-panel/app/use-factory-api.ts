@@ -260,11 +260,13 @@ export type ToolchainCapability = {
 export type ToolchainPack = {
   id: string;
   label: string;
-  kind: 'compiler-sysroot';
+  kind: 'compiler-sysroot' | 'compiler-tooling' | 'toolchain-builder-source';
   target_ids: string[];
   compiler_family: string;
   compiler_version: string;
-  binutils_version: string;
+  compiler_driver: string;
+  linker_family: string;
+  linker_version: string;
   runtime: string;
   runtime_version: string;
   url: string;
@@ -274,17 +276,36 @@ export type ToolchainPack = {
   size_evidence: string;
   license_ids: string[];
   upstream_release: string;
+  upstream_authority: string;
+  archive_root: string;
+};
+
+export type ToolchainPackInput = {
+  id: string;
+  label: string;
+  kind: 'user-supplied-sdk';
+  target_ids: string[];
+  source_policy: string;
+  required_metadata: string[];
+  state: string;
+  authority: string;
 };
 
 export type ToolchainPackRoute = {
   id: string;
   label: string;
   target_id: string;
+  coverage_requirement_id: string;
   compiler_family: string;
-  provisioning: 'downloadable-pack' | 'external-worker';
+  target_triple: string;
+  evidence_role: 'primary' | 'cross-build' | 'native-reference';
+  provisioning: 'downloadable-pack' | 'pack-plus-user-input' | 'external-worker';
   pack_ids: string[];
+  input_ids: string[];
   worker_class: string;
   qualification_state: string;
+  additional_installed_bytes_estimate: number;
+  additional_size_evidence: string;
   external_requirements: string[];
 };
 
@@ -303,12 +324,12 @@ export type ToolchainPackProfile = {
 };
 
 export type ToolchainProfilePlan = {
-  schema_version: 'fidb-toolchain-profile-plan/v1';
+  schema_version: 'fidb-toolchain-profile-plan/v2';
   operation: 'plan' | 'status' | 'pull';
   profile: ToolchainPackProfile;
   catalog_digest: string;
   profile_digest: string;
-  state: 'blocked' | 'acquisition-required' | 'downloadable-ready-external-required' | 'verified-cached';
+  state: 'blocked' | 'acquisition-required' | 'downloadable-ready-input-required' | 'downloadable-ready-external-required' | 'downloadable-ready-input-and-external-required' | 'verified-cached';
   host: {
     required_system: string;
     required_architecture: string;
@@ -319,8 +340,13 @@ export type ToolchainProfilePlan = {
   managed_downloads: string;
   summary: {
     routes: number;
+    coverage_requirements: number;
     downloadable_routes: number;
+    user_input_routes: number;
     external_routes: number;
+    primary_routes: number;
+    cross_build_routes: number;
+    native_reference_routes: number;
     packs: number;
     verified_cached_packs: number;
     missing_packs: number;
@@ -328,6 +354,8 @@ export type ToolchainProfilePlan = {
     download_bytes: number;
     cached_download_bytes: number;
     remaining_download_bytes: number;
+    pack_installed_bytes_estimate: number;
+    route_additional_installed_bytes_estimate: number;
     installed_bytes_estimate: number;
     installed_size_evidence: string;
   };
@@ -336,13 +364,15 @@ export type ToolchainProfilePlan = {
     state: 'missing' | 'verified-cached' | 'broken';
     cache: { path: string; bytes: number | null; observed_sha256: string | null };
   }>;
+  inputs: ToolchainPackInput[];
   requirements: Array<{
     code: string;
     severity: 'action' | 'constraint' | 'blocker';
     route_id?: string;
     pack_id?: string;
+    input_id?: string;
     message: string;
-    details?: string[];
+    details?: string[] | { source_policy: string; required_metadata: string[] };
   }>;
   recommended_next_action: string;
   cli_examples: Array<{ action: 'plan' | 'status' | 'pull'; argv: string[]; shell: string }>;
@@ -354,11 +384,12 @@ export type ToolchainProfilePlan = {
 };
 
 export type ToolchainPackCatalog = {
-  schema_version: 'fidb-toolchain-pack-catalog/v1';
+  schema_version: 'fidb-toolchain-pack-catalog/v2';
   host: { system: string; architecture: string };
   source_authority: string;
   cache_policy: string;
   packs: ToolchainPack[];
+  inputs: ToolchainPackInput[];
   routes: ToolchainPackRoute[];
   profiles: ToolchainPackProfile[];
   sources: Record<string, string>;
@@ -712,7 +743,7 @@ export type WidthStudy = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v4';
+  schema_version: 'fidb-authority-catalog/v5';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];

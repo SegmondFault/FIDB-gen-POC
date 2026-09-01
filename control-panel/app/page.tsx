@@ -590,7 +590,8 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
 }
 
 function LanguageScopeSelector({ languages, selectedId, onSelect }: { languages: CoverageLanguage[]; selectedId: string; onSelect: (id: string) => void }) {
-  return <section className="language-scope-selector" aria-label="Coverage language scope"><div><span>LANGUAGE MATRIX</span><strong>One census · language-owned treatment policies</strong></div><div>{languages.map(language => <button key={language.id} className={selectedId === language.id ? 'active' : ''} onClick={() => onSelect(language.id)} aria-pressed={selectedId === language.id}><b>{language.label}</b><small>{language.state.replaceAll('-', ' ')}</small></button>)}</div></section>;
+  const activeLanguages = languages.filter(language => language.state === 'active-scope');
+  return <section className="language-scope-selector" aria-label="Active library language scope"><div><span>ACTIVE LIBRARY MATRIX</span><strong>C-family scope · C++ only where a C library requires it</strong></div><div>{activeLanguages.map(language => <button key={language.id} className={selectedId === language.id ? 'active' : ''} onClick={() => onSelect(language.id)} aria-pressed={selectedId === language.id}><b>{language.label}</b><small>{language.state.replaceAll('-', ' ')}</small></button>)}</div></section>;
 }
 
 function WidthStudyPanel({ study, capabilities }: { study: WidthStudy; capabilities: FactoryCapabilities | null }) {
@@ -1555,15 +1556,16 @@ function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfileP
   </section>;
 
   const externalRoutes = selected.routes.filter(route => route.provisioning === 'external-worker');
+  const inputRoutes = selected.routes.filter(route => route.input_ids.length > 0);
   const profileTone = selected.state === 'blocked' || selected.summary.broken_packs ? 'warning' : selected.summary.missing_packs ? 'cold' : 'ready';
   return <section className="panel toolchain-pack-panel">
     <div className="pack-panel-header">
       <div><p className="panel-kicker">PORTABLE TOOLCHAIN PACK · {selected.profile.language_id.toUpperCase()}</p><h3>{selected.profile.label}</h3><p>{selected.profile.purpose}</p></div>
-      <div className="pack-profile-tabs">{plans.map(plan => <button className={plan.profile.id === selected.profile.id ? 'active' : ''} key={plan.profile.id} onClick={() => setSelectedProfileId(plan.profile.id)}><strong>{plan.profile.label}</strong><small>{plan.summary.routes} routes · {plan.summary.packs} packs</small></button>)}</div>
+      <div className="pack-profile-tabs">{plans.map(plan => <button className={plan.profile.id === selected.profile.id ? 'active' : ''} key={plan.profile.id} onClick={() => setSelectedProfileId(plan.profile.id)}><strong>{plan.profile.label}</strong><small>{plan.summary.coverage_requirements} requirements · {plan.summary.routes} implementations · {plan.summary.packs} packs</small></button>)}</div>
     </div>
     <div className="pack-state-strip">
       <article><span>PROFILE STATE</span><strong className={profileTone}>{selected.state.replaceAll('-', ' ')}</strong><small>next: {selected.recommended_next_action.replaceAll('-', ' ')}</small></article>
-      <article><span>COMPLETE ROUTES</span><strong>{selected.summary.routes}</strong><small>{selected.summary.downloadable_routes} Linux downloadable · {selected.summary.external_routes} external</small></article>
+      <article><span>TARGET REQUIREMENTS</span><strong>{selected.summary.coverage_requirements}</strong><small>{selected.summary.primary_routes} primary · {selected.summary.cross_build_routes} cross-build · {selected.summary.native_reference_routes} native reference</small></article>
       <article><span>VERIFIED CACHE</span><strong>{selected.summary.verified_cached_packs} / {selected.summary.packs}</strong><small>{formatBytes(selected.summary.cached_download_bytes)} already present</small></article>
       <article><span>DOWNLOAD REMAINING</span><strong>{formatBytes(selected.summary.remaining_download_bytes)}</strong><small>{formatBytes(selected.summary.download_bytes)} full compressed pack</small></article>
       <article><span>INSTALLED ESTIMATE</span><strong>{formatBytes(selected.summary.installed_bytes_estimate)}</strong><small>planning estimate · measure after preparation</small></article>
@@ -1577,11 +1579,12 @@ function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfileP
       <div className="pack-ledger-head"><span>Pack / target</span><span>Compiler composition</span><span>Download / installed estimate</span><span>Integrity + licence</span><span>State</span></div>
       {selected.packs.map(pack => {
         const tone = pack.state === 'verified-cached' ? 'ready' : pack.state === 'broken' ? 'warning' : 'cold';
-        return <article key={pack.id}><div><strong>{pack.label}</strong><small>{pack.target_ids.join(' · ')}</small><code>{pack.id}</code></div><div><strong>GCC {pack.compiler_version}</strong><small>binutils {pack.binutils_version} · {pack.runtime} {pack.runtime_version.split('-')[0]}</small><code>{pack.upstream_release}</code></div><div><strong>{formatBytes(pack.download_bytes)}</strong><small>→ ≈ {formatBytes(pack.installed_bytes_estimate)}</small><code>{pack.size_evidence}</code></div><div><strong>{pack.sha256.slice(0, 16)}…</strong><small>{pack.license_ids.join(' · ')}</small><code>SHA-256 pinned</code></div><span className={`evidence-badge ${tone}`}>{pack.state === 'verified-cached' ? 'verified cached' : pack.state}</span></article>;
+        return <article key={pack.id}><div><strong>{pack.label}</strong><small>{pack.target_ids.join(' · ')}</small><code>{pack.id}</code></div><div><strong>{pack.compiler_family} {pack.compiler_version}</strong><small>{pack.linker_family} {pack.linker_version} · {pack.runtime} {pack.runtime_version.split('-')[0]}</small><code>{pack.compiler_driver}</code></div><div><strong>{formatBytes(pack.download_bytes)}</strong><small>→ ≈ {formatBytes(pack.installed_bytes_estimate)}</small><code>{pack.size_evidence}</code></div><div><strong>{pack.sha256.slice(0, 16)}…</strong><small>{pack.license_ids.join(' · ')}</small><code>SHA-256 pinned</code></div><span className={`evidence-badge ${tone}`}>{pack.state === 'verified-cached' ? 'verified cached' : pack.state}</span></article>;
       })}
     </div>
-    {externalRoutes.length > 0 && <div className="external-route-ledger"><header><span>EXTERNAL ROUTES RETAINED IN DENOMINATOR</span><p>These cannot be downloaded as Linux packs; they need separately pinned native workers.</p></header>{externalRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_id} · {route.worker_class}</small></div><code>{route.external_requirements.join(' + ')}</code><span className="evidence-badge warning">external definition required</span></article>)}</div>}
-    <footer className="pack-trace"><div><span>PROFILE DIGEST</span><code>{selected.profile_digest}</code></div><div><span>AUTHORITY CHAIN</span><code>{selected.profile.authority_path} → toolchains/routes.toml → toolchains/packs.toml</code></div><div><span>MANAGED CACHE</span><code>{selected.managed_downloads}</code></div></footer>
+    {inputRoutes.length > 0 && <div className="external-route-ledger"><header><span>USER-SUPPLIED, PINNED INPUTS</span><p>These are part of the reproducibility contract but are not redistributed by the project.</p></header>{inputRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.evidence_role}</small></div><code>{route.input_ids.join(' + ')}</code><span className="evidence-badge warning">{route.state.replaceAll('-', ' ')}</span></article>)}</div>}
+    {externalRoutes.length > 0 && <div className="external-route-ledger"><header><span>NATIVE REFERENCE ROUTES</span><p>Cross-built C/C++ evidence does not substitute for these separately pinned native compilers and workers.</p></header>{externalRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.worker_class}</small></div><code>{route.external_requirements.join(' + ')}</code><span className="evidence-badge warning">native definition required</span></article>)}</div>}
+    <footer className="pack-trace"><div><span>PROFILE DIGEST</span><code>{selected.profile_digest}</code></div><div><span>AUTHORITY CHAIN</span><code>{selected.profile.authority_path} → toolchains/routes.toml → inputs.toml + packs.toml</code></div><div><span>MANAGED CACHE</span><code>{selected.managed_downloads}</code></div></footer>
   </section>;
 }
 
@@ -1597,6 +1600,9 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
   const languageProfiles = (universe?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const languageScenarios = (universe?.scenarios ?? []).filter(scenario => scenario.language_id === selectedLanguageId);
   const languagePackPlans = (factory.capabilities?.toolchain_profiles?.plans ?? []).filter(plan => plan.profile.language_id === selectedLanguageId);
+  const languagePackRouteIds = new Set(languagePackPlans.flatMap(plan => plan.profile.route_ids));
+  const packRoutes = (factory.authority?.toolchain_pack_catalog.routes ?? []).filter(route => languagePackRouteIds.has(route.id));
+  const plannedPackRouteById = new Map(languagePackPlans.flatMap(plan => plan.routes).map(route => [route.id, route]));
   const nativeRoutes = factory.capabilities?.native_routes ?? [];
   const [targetFilter, setTargetFilter] = useState<'all' | 'study' | 'ready' | 'not-installed' | 'unregistered'>('all');
   const [targetQuery, setTargetQuery] = useState('');
@@ -1616,19 +1622,24 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
       const row = nativeById.get(id);
       return row ? [row] : [];
     });
+    const targetPackRoutes = packRoutes.flatMap(route => {
+      if (route.target_id !== target.id) return [];
+      return [plannedPackRouteById.get(route.id) ?? { ...route, state: 'definition-required' }];
+    });
     const nativeInstalled = targetNativeRoutes.some(route => route.ready);
     const sourceCached = sourceToolchains.some(toolchain => toolchain.state === 'verified-cached');
-    const cachedInputs = targetToolchains.filter(toolchain => toolchain.state === 'verified-cached').length;
+    const packCached = targetPackRoutes.some(route => route.state === 'verified-cached');
+    const cachedInputs = targetToolchains.filter(toolchain => toolchain.state === 'verified-cached').length + targetPackRoutes.filter(route => route.state === 'verified-cached').length;
     const state = nativeInstalled
       ? 'installed'
-      : sourceCached
+      : sourceCached || packCached
         ? 'cached'
-        : sourceToolchains.length
+        : sourceToolchains.length || targetPackRoutes.length
           ? 'not-installed'
           : target.archive_capable_toolchain_ids.length
             ? 'archive-only'
             : 'unregistered';
-    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, cachedInputs, state, requirement: requirementByTarget.get(target.id) };
+    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, targetPackRoutes, cachedInputs, state, requirement: requirementByTarget.get(target.id) };
   });
   const normalizedQuery = targetQuery.trim().toLowerCase();
   const visibleTargets = targetRows.filter(row => {
@@ -1637,20 +1648,20 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
       || (targetFilter === 'ready' && (row.state === 'installed' || row.state === 'cached'))
       || (targetFilter === 'not-installed' && (row.state === 'not-installed' || row.state === 'archive-only'))
       || (targetFilter === 'unregistered' && row.state === 'unregistered');
-    const searchText = [row.target.id, row.target.label, row.target.platform, row.target.architecture, row.target.binary_format, row.requirement?.compiler_label, row.requirement?.wave, ...row.targetToolchains.map(toolchain => toolchain.id)].join(' ').toLowerCase();
+    const searchText = [row.target.id, row.target.label, row.target.platform, row.target.architecture, row.target.binary_format, row.requirement?.compiler_label, row.requirement?.wave, ...row.targetToolchains.map(toolchain => toolchain.id), ...row.targetPackRoutes.flatMap(route => [route.id, route.label, route.compiler_family, route.target_triple])].join(' ').toLowerCase();
     return matchesFilter && (!normalizedQuery || searchText.includes(normalizedQuery));
   });
   const readyTargets = targetRows.filter(row => row.state === 'installed' || row.state === 'cached').length;
-  const sourceTargets = targetRows.filter(row => row.target.native_route_ids.length || row.target.source_capable_toolchain_ids.length).length;
+  const sourceTargets = targetRows.filter(row => row.target.native_route_ids.length || row.target.source_capable_toolchain_ids.length || row.targetPackRoutes.length).length;
   const gapTargets = targetRows.length - sourceTargets;
   const campaignScenario = languageScenarios.find(row => row.id === 'c-campaign-b-four-source-n80');
   return <div className="view-stack">
-    <ViewIntro kicker="COVERAGE POSSIBILITY SPACE" title="Targets, toolchains & language matrices" copy="One shared census and hard-route model feeds separate language-owned compiler and treatment policies. The readiness inventory remains an overlay: conceptual scope never implies that this host can execute it." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
+    <ViewIntro kicker="C-FAMILY COVERAGE POSSIBILITY SPACE" title="C libraries, targets & toolchains" copy="The active campaign covers C libraries, including C++ only when their implementation requires it. Cross-build routes expose target breadth from this host while native compiler references remain separate evidence." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
 
     <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
-    {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} requirements; widening the Matrix page reveals later compiler and platform waves.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + compiler-family pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>REMOTE WORKERS</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>macOS / Windows acquisition</small></article><article className="warn"><span>PIN / DEFINITION GATES</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'definition-required' || row.route_state === 'archive-only').length}</strong><small>not installable yet</small></article></div><footer>Installation remains a reviewed follow-on: exact compiler, SDK/sysroot, linker, version, digest and licence must be frozen before an action is enabled.</footer></section>}
+    {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered C-family install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} target requirements; implementation routes can be cross-build, native reference, or both.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + reference compiler pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>CROSS-BUILD ROUTES</span><strong>{languagePackPlans.find(plan => plan.profile.id === 'c-top10-linux')?.summary.cross_build_routes ?? 0}</strong><small>Mach-O + PE/COFF from Linux</small></article><article className="warn"><span>NATIVE REFERENCES</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>Apple Clang + MSVC remain distinct</small></article></div><footer>Every route keeps compiler, SDK/sysroot, linker, runtime, target triple, version, digest and licence explicit. Cross-built evidence does not claim native-compiler equivalence.</footer></section>}
 
     <ToolchainPackPanel plans={languagePackPlans} languageLabel={selectedLanguage?.label ?? selectedLanguageId} />
 
@@ -1704,16 +1715,20 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
               return next;
             });
           }}>
-            <summary><span className={`cap-dot ${tone}`} /><div><strong>{row.target.label}</strong><small>{row.target.id} · {row.target.catalog_state}{row.requirement ? ` · W${String(row.requirement.order).padStart(2, '0')} ${row.requirement.order <= (widthDefault?.routes ?? 0) ? 'ACTIVE' : 'LATER'}` : ''}</small></div><code>{row.target.bits}-bit · {row.target.endianness} · {row.target.binary_format}</code><span className={`evidence-badge ${tone}`}>{stateLabel}</span><p><b>{row.sourceToolchains.length + row.targetNativeRoutes.length}</b><small>source routes</small></p><p><b>{row.target.archive_capable_toolchain_ids.length}</b><small>archive candidates</small></p><p><b>{row.cachedInputs}</b><small>cached identities</small></p><i>⌄</i></summary>
+            <summary><span className={`cap-dot ${tone}`} /><div><strong>{row.target.label}</strong><small>{row.target.id} · {row.target.catalog_state}{row.requirement ? ` · W${String(row.requirement.order).padStart(2, '0')} ${row.requirement.order <= (widthDefault?.routes ?? 0) ? 'ACTIVE' : 'LATER'}` : ''}</small></div><code>{row.target.bits}-bit · {row.target.endianness} · {row.target.binary_format}</code><span className={`evidence-badge ${tone}`}>{stateLabel}</span><p><b>{row.sourceToolchains.length + row.targetNativeRoutes.length + row.targetPackRoutes.length}</b><small>source routes</small></p><p><b>{row.target.archive_capable_toolchain_ids.length}</b><small>archive candidates</small></p><p><b>{row.cachedInputs}</b><small>cached identities</small></p><i>⌄</i></summary>
             <div className="target-detail">
               <div className="target-evidence"><span>AUTHORITY</span><code>{row.target.evidence.join(' · ')}</code><small>{row.target.catalog_state === 'study-observed' ? 'Observed in the sensitivity study; no build route has been reviewed.' : 'Target identity is catalogued independently of installation state.'}</small></div>
               {row.requirement && <div className="target-demand-row"><b>W{String(row.requirement.order).padStart(2, '0')}</b><p><strong>{row.requirement.compiler_label} · {row.requirement.wave}</strong><small>{row.requirement.rationale}</small></p><code>{row.requirement.version_policy}</code><span className={`route-requirement-state ${row.requirement.route_state}`}>{row.requirement.route_state.replaceAll('-', ' ')}</span></div>}
               {row.targetNativeRoutes.map(route => <div className="target-toolchain-row" key={route.id}><div><span className={`cap-dot ${route.ready ? 'ready' : 'warning'}`} /><strong>{route.id}</strong><small>native route</small></div><code>{Object.values(route.tools).map(tool => tool.path ?? tool.configured.join(' ')).join(' · ')}</code><span className={`evidence-badge ${route.ready ? 'ready' : 'warning'}`}>{route.ready ? 'installed' : 'missing tools'}</span><b>source build</b></div>)}
+              {row.targetPackRoutes.map(route => {
+                const routeTone = route.state === 'verified-cached' ? 'ready' : route.state === 'broken' ? 'warning' : 'cold';
+                return <div className="target-toolchain-row" key={route.id}><div><span className={`cap-dot ${routeTone}`} /><strong>{route.label}</strong><small>{route.compiler_family} · {route.evidence_role}</small></div><code>{route.target_triple}</code><span className={`evidence-badge ${routeTone}`}>{route.state.replaceAll('-', ' ')}</span><b>{route.provisioning.replaceAll('-', ' ')}</b></div>;
+              })}
               {row.targetToolchains.map(toolchain => {
                 const toolchainTone = toolchain.state === 'verified-cached' ? 'ready' : toolchain.state === 'broken' ? 'warning' : 'cold';
                 return <div className="target-toolchain-row" key={toolchain.id}><div><span className={`cap-dot ${toolchainTone}`} /><strong>{toolchain.variant}</strong><small>{toolchain.family} {toolchain.version}</small></div><code>{toolchain.id}</code><span className={`evidence-badge ${toolchainTone}`}>{toolchain.state === 'verified-cached' ? 'checksum-cached' : toolchain.state}</span><b>{toolchain.capabilities.map(value => value === 'source' ? 'cross compiler' : 'libc archive').join(' + ')}</b></div>;
               })}
-              {!row.targetNativeRoutes.length && !row.targetToolchains.length && <div className="target-gap-row"><span>!</span><p><strong>No registered compiler or archive route</strong><small>The target remains visible so this gap cannot be mistaken for unsupported demand.</small></p></div>}
+              {!row.targetNativeRoutes.length && !row.targetToolchains.length && !row.targetPackRoutes.length && <div className="target-gap-row"><span>!</span><p><strong>No registered compiler or archive route</strong><small>The target remains visible so this gap cannot be mistaken for unsupported demand.</small></p></div>}
             </div>
           </details>;
         })}
