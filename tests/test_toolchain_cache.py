@@ -192,6 +192,128 @@ class ToolchainCommandTests(unittest.TestCase):
         acquire.assert_not_called()
         self.assertIn("unknown reviewed toolchain identity", errors.getvalue())
 
+    def test_profile_plan_is_read_only_json(self):
+        plan = {
+            "schema_version": "fidb-toolchain-profile-plan/v1",
+            "operation": "status",
+            "profile": {"id": "c-canary"},
+            "host": {"compatible": True},
+            "packs": [],
+        }
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.resolve_toolchain_profile",
+                return_value=plan,
+            ) as resolve,
+            patch("fidb_poc.toolchain_cli.acquire_pinned") as acquire,
+            contextlib.redirect_stdout(output),
+        ):
+            status = toolchain_cli.main(
+                [
+                    "profile",
+                    "plan",
+                    "c-canary",
+                    "--project-root",
+                    "/project",
+                ]
+            )
+
+        self.assertEqual(status, 0)
+        resolve.assert_called_once_with(Path("/project"), "c-canary")
+        acquire.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue())["operation"], "plan")
+
+    def test_profile_pull_acquires_only_resolved_packs(self):
+        pack = {
+            "id": "pack-one",
+            "url": "https://authority.invalid/pack.tar.xz",
+            "sha256": "b" * 64,
+            "download_bytes": 123,
+        }
+        before = {
+            "host": {
+                "compatible": True,
+                "required_system": "linux",
+                "required_architecture": "x86_64",
+            },
+            "packs": [pack],
+        }
+        after = {"state": "verified-cached", "host": {"compatible": True}}
+        acquisition = AcquisitionResult(
+            path=Path("/project/var/fidb-toolchains/downloads") / ("b" * 64),
+            sha256="b" * 64,
+            bytes=123,
+            cache_hit=False,
+            attempts=1,
+        )
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.resolve_toolchain_profile",
+                side_effect=[before, after],
+            ) as resolve,
+            patch(
+                "fidb_poc.toolchain_cli.acquire_pinned", return_value=acquisition
+            ) as acquire,
+            contextlib.redirect_stdout(output),
+        ):
+            status = toolchain_cli.main(
+                [
+                    "profile",
+                    "pull",
+                    "c-canary",
+                    "--project-root",
+                    "/project",
+                ]
+            )
+
+        self.assertEqual(status, 0)
+        self.assertEqual(resolve.call_count, 2)
+        acquire.assert_called_once_with(
+            pack["url"],
+            pack["sha256"],
+            Path("/project/var/fidb-toolchains/downloads"),
+        )
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["operation"], "pull")
+        self.assertEqual(document["acquisitions"][0]["pack_id"], "pack-one")
+
+    def test_profile_pull_refuses_incompatible_host(self):
+        before = {
+            "host": {
+                "compatible": False,
+                "required_system": "linux",
+                "required_architecture": "x86_64",
+            },
+            "packs": [],
+        }
+        errors = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.resolve_toolchain_profile",
+                return_value=before,
+            ),
+            patch("fidb_poc.toolchain_cli.acquire_pinned") as acquire,
+            contextlib.redirect_stderr(errors),
+        ):
+            status = toolchain_cli.main(["profile", "pull", "c-canary"])
+
+        self.assertEqual(status, 1)
+        acquire.assert_not_called()
+        self.assertIn(
+            "refusing profile pull on an incompatible host", errors.getvalue()
+        )
+
+    def test_profile_wrappers_are_executable_and_default_to_top_ten(self):
+        project_root = Path(__file__).resolve().parents[1]
+        for operation in ("plan", "status", "pull"):
+            path = project_root / f"scripts/toolchains/{operation}.sh"
+            self.assertTrue(path.stat().st_mode & 0o111)
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("profile=${1:-c-top10-linux}", source)
+            self.assertIn(f"toolchain profile {operation}", source)
+
 
 if __name__ == "__main__":
     unittest.main()

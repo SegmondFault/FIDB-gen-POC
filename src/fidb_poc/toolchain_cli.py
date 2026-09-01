@@ -15,6 +15,7 @@ from .toolchain_cache import (
     inspect_cached,
 )
 from .toolchain_registry import load_toolchains
+from .toolchain_packs import resolve_toolchain_profile
 
 CACHE_STATUS_SCHEMA = "fidb-toolchain-cache-status/v1"
 
@@ -86,8 +87,71 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _profile_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc toolchain profile",
+        description=(
+            "Plan, inspect, or pull every checksum-pinned archive in a reviewed "
+            "toolchain profile. External worker requirements are reported, never hidden."
+        ),
+    )
+    parser.add_argument(
+        "command",
+        choices=("plan", "status", "pull"),
+        help="typed profile operation",
+    )
+    parser.add_argument("profile", help="reviewed profile id")
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    return parser
+
+
+def _profile_main(argv: list[str]) -> int:
+    arguments = _profile_parser().parse_args(argv)
+    project_root = arguments.project_root.resolve()
+    try:
+        before = resolve_toolchain_profile(project_root, arguments.profile)
+        before["operation"] = arguments.command
+        if arguments.command != "pull":
+            print(json.dumps(before, indent=2, sort_keys=True))
+            return 0
+        if not before["host"]["compatible"]:
+            raise ValueError(
+                "refusing profile pull on an incompatible host: "
+                f"requires {before['host']['required_system']}/"
+                f"{before['host']['required_architecture']}"
+            )
+
+        downloads = project_root / MANAGED_DOWNLOADS
+        acquisitions = []
+        for pack in before["packs"]:
+            result = acquire_pinned(str(pack["url"]), str(pack["sha256"]), downloads)
+            if result.bytes != int(pack["download_bytes"]):
+                raise CacheError(
+                    f"reviewed size mismatch for {pack['id']}: expected "
+                    f"{pack['download_bytes']}, observed {result.bytes}"
+                )
+            values = asdict(result)
+            values["path"] = str(result.path)
+            values["quarantined"] = (
+                str(result.quarantined) if result.quarantined is not None else None
+            )
+            acquisitions.append({"pack_id": pack["id"], **values})
+
+        after = resolve_toolchain_profile(project_root, arguments.profile)
+        after["operation"] = "pull"
+        after["acquisitions"] = acquisitions
+        print(json.dumps(after, indent=2, sort_keys=True))
+        return 0
+    except (CacheError, OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
-    arguments = _parser().parse_args(argv)
+    tokens = sys.argv[1:] if argv is None else argv
+    if tokens and tokens[0] == "profile":
+        return _profile_main(tokens[1:])
+    arguments = _parser().parse_args(tokens)
     project_root = arguments.project_root.resolve()
     downloads = project_root / MANAGED_DOWNLOADS
     try:
