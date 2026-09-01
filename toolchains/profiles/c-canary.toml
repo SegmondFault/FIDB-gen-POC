@@ -1,0 +1,9 @@
+schema_version = "fidb-toolchain-profile/v1"
+id = "c-canary"
+label = "C canary · Linux x86-64"
+host_system = "linux"
+host_architecture = "x86_64"
+route_ids = ["linux-x86-64-gcc"]
+external_policy = "report"
+purpose = "Small reproducible acquisition check before pulling the complete top-ten Linux width."
+authority = "coverage/c-top10-width-study.toml"

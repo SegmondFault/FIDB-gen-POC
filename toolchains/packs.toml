@@ -1,0 +1,154 @@
+schema_version = "fidb-toolchain-packs/v1"
+host_system = "linux"
+host_architecture = "x86_64"
+source_authority = "https://toolchains.bootlin.com/"
+cache_policy = "Content-addressed by reviewed SHA-256; archives remain immutable and are never silently substituted."
+
+# These are portable compiler + binutils + glibc sysroot SDK archives for an
+# x86-64 Linux host.  Download size is the exact upstream Content-Length.
+# Installed size is deliberately an explicit planning estimate (4x compressed)
+# until preparation/qualification records replace it with measured evidence.
+
+[[pack]]
+id = "bootlin-x86-64-glibc-stable-2025.08-1"
+label = "Bootlin x86-64 glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-x86-64-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/x86-64/tarballs/x86-64--glibc--stable-2025.08-1.tar.xz"
+sha256 = "760acd5c3159448b618e237b61935335baada74fe0cdc0d7611826cb49b41c8c"
+download_bytes = 93215060
+installed_bytes_estimate = 372860240
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-armv7-eabihf-glibc-stable-2025.08-1"
+label = "Bootlin ARMv7 EABIhf glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-arm32-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/armv7-eabihf/tarballs/armv7-eabihf--glibc--stable-2025.08-1.tar.xz"
+sha256 = "97d6fbaf19832002f3d6aa8fd31b2d29c1dc7b0752f4ae8ed35860fd33c1f9b4"
+download_bytes = 83490352
+installed_bytes_estimate = 333961408
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-aarch64-glibc-stable-2025.08-1"
+label = "Bootlin AArch64 glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-aarch64-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--glibc--stable-2025.08-1.tar.xz"
+sha256 = "dfb47eee874eef9e8a7fc042eee4e0a183f444b6bcde6a82fef8f009918389c9"
+download_bytes = 91735136
+installed_bytes_estimate = 366940544
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-mips32-be-glibc-stable-2025.08-1"
+label = "Bootlin MIPS32 big-endian glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-mips32-be-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/mips32/tarballs/mips32--glibc--stable-2025.08-1.tar.xz"
+sha256 = "23d0f36aa7962230ef43338ba14ac2a7fa6eb68e15ef39cb9114ac711b907f70"
+download_bytes = 81218960
+installed_bytes_estimate = 324875840
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-mips32-le-glibc-stable-2025.08-1"
+label = "Bootlin MIPS32 little-endian glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-mips32-le-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/mips32el/tarballs/mips32el--glibc--stable-2025.08-1.tar.xz"
+sha256 = "1085fe6b13d74205ef6e92d1d40fb3960bf6e4bad50555c723fa07416cb53c1c"
+download_bytes = 81479648
+installed_bytes_estimate = 325918592
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-powerpc-e500mc-glibc-stable-2025.08-1"
+label = "Bootlin PowerPC e500mc glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-powerpc32-be-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/powerpc-e500mc/tarballs/powerpc-e500mc--glibc--stable-2025.08-1.tar.xz"
+sha256 = "0232c110f2e47dcab4834ab375015a1a7a19379b059c352e5a95b5578f74a0a9"
+download_bytes = 84512228
+installed_bytes_estimate = 338048912
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-sh4-glibc-stable-2025.08-1"
+label = "Bootlin SuperH SH4 glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-sh32-le-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/sh-sh4/tarballs/sh-sh4--glibc--stable-2025.08-1.tar.xz"
+sha256 = "0bf080d351d4a97a412a7068baf75e036f071de323c5e04a71be6992576f79ce"
+download_bytes = 79139788
+installed_bytes_estimate = 316559152
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"
+
+[[pack]]
+id = "bootlin-m68k-68xxx-glibc-stable-2025.08-1"
+label = "Bootlin M68K 68xxx glibc stable 2025.08-1"
+kind = "compiler-sysroot"
+target_ids = ["linux-m68k-elf"]
+compiler_family = "gcc"
+compiler_version = "14.3.0"
+binutils_version = "2.43.1"
+runtime = "glibc"
+runtime_version = "2.41-70-g1502c248d58cb99a203731707987a4342926e830"
+url = "https://toolchains.bootlin.com/downloads/releases/toolchains/m68k-68xxx/tarballs/m68k-68xxx--glibc--stable-2025.08-1.tar.xz"
+sha256 = "0ad3bde066917d3d57b05b89fd13529acd401f4bef4a2afdd0c14452d039ca77"
+download_bytes = 74794108
+installed_bytes_estimate = 299176432
+size_evidence = "planning-estimate-4x-compressed"
+license_ids = ["GPL-3.0-or-later", "LGPL-2.1-or-later", "various-open-source"]
+upstream_release = "toolchains.bootlin.com-2025.08.1"

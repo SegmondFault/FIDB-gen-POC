@@ -1,0 +1,107 @@
+schema_version = "fidb-toolchain-routes/v1"
+
+# A route is a target/compiler composition.  Downloadable routes reference
+# immutable packs; external-worker routes remain part of the same profile so
+# host constraints cannot disappear from the planning denominator.
+
+[[route]]
+id = "linux-x86-64-gcc"
+label = "Linux x86-64 · GCC 14.3"
+target_id = "linux-x86-64-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-x86-64-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "macos-arm64-apple-clang"
+label = "macOS ARM64 · Apple Clang"
+target_id = "macos-arm64-macho"
+compiler_family = "apple-clang"
+provisioning = "external-worker"
+pack_ids = []
+worker_class = "macos-native-remote"
+qualification_state = "external-definition-required"
+external_requirements = ["Xcode build", "Apple Clang build", "macOS SDK", "deployment target"]
+
+[[route]]
+id = "windows-x86-64-msvc"
+label = "Windows x86-64 · MSVC"
+target_id = "windows-x86-64-pecoff"
+compiler_family = "msvc"
+provisioning = "external-worker"
+pack_ids = []
+worker_class = "windows-native-or-validated-vm"
+qualification_state = "external-definition-required"
+external_requirements = ["MSVC toolset", "Windows SDK", "linker", "CRT"]
+
+[[route]]
+id = "linux-arm32-gcc"
+label = "Linux ARMv7 EABIhf · GCC 14.3"
+target_id = "linux-arm32-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-armv7-eabihf-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "linux-aarch64-gcc"
+label = "Linux AArch64 · GCC 14.3"
+target_id = "linux-aarch64-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-aarch64-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "linux-mips32-be-gcc"
+label = "Linux MIPS32 big-endian · GCC 14.3"
+target_id = "linux-mips32-be-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-mips32-be-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "linux-mips32-le-gcc"
+label = "Linux MIPS32 little-endian · GCC 14.3"
+target_id = "linux-mips32-le-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-mips32-le-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "linux-powerpc32-be-gcc"
+label = "Linux PowerPC e500mc · GCC 14.3"
+target_id = "linux-powerpc32-be-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-powerpc-e500mc-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "linux-sh32-gcc"
+label = "Linux SuperH SH4 · GCC 14.3"
+target_id = "linux-sh32-le-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-sh4-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
+
+[[route]]
+id = "linux-m68k-gcc"
+label = "Linux M68K 68xxx · GCC 14.3"
+target_id = "linux-m68k-elf"
+compiler_family = "gcc"
+provisioning = "downloadable-pack"
+pack_ids = ["bootlin-m68k-68xxx-glibc-stable-2025.08-1"]
+worker_class = "linux-x86_64"
+qualification_state = "acquisition-reviewed"
