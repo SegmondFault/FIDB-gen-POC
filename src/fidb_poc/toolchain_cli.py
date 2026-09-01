@@ -15,7 +15,8 @@ from .toolchain_cache import (
     inspect_cached,
 )
 from .toolchain_registry import load_toolchains
-from .toolchain_packs import resolve_toolchain_profile
+from .toolchain_inputs import InputBindingError, bind_input, inspect_input_binding
+from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_profile
 from .toolchain_prepare import (
     MANAGED_PREPARED,
     PreparationError,
@@ -23,6 +24,7 @@ from .toolchain_prepare import (
 )
 
 CACHE_STATUS_SCHEMA = "fidb-toolchain-cache-status/v1"
+INPUT_STATUS_SCHEMA = "fidb-toolchain-input-status/v1"
 
 
 def _identity(row: dict[str, object]) -> str:
@@ -110,6 +112,96 @@ def _profile_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _input_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc toolchain input",
+        description="Inspect or privately bind one reviewed non-redistributable input.",
+    )
+    parser.add_argument("command", choices=("status", "bind"))
+    parser.add_argument("input_id", help="reviewed input id")
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    parser.add_argument("--path", type=Path, help="local package to verify and copy")
+    parser.add_argument("--sha256", help="declared package SHA-256")
+    parser.add_argument("--bytes", type=int, dest="byte_count", help="declared bytes")
+    parser.add_argument(
+        "--metadata",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="reviewed metadata field; repeat for every required key",
+    )
+    return parser
+
+
+def _metadata(values: list[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for value in values:
+        if "=" not in value:
+            raise ValueError("metadata must use KEY=VALUE")
+        key, item = value.split("=", 1)
+        if not key or not item:
+            raise ValueError("metadata keys and values must be non-empty")
+        if key in result:
+            raise ValueError(f"duplicate metadata key: {key}")
+        result[key] = item
+    return result
+
+
+def _input_main(argv: list[str]) -> int:
+    arguments = _input_parser().parse_args(argv)
+    project_root = arguments.project_root.resolve()
+    try:
+        catalog = load_toolchain_pack_catalog(project_root)
+        inputs = {str(row["id"]): row for row in catalog["inputs"]}
+        if arguments.input_id not in inputs:
+            raise ValueError(f"unknown reviewed toolchain input: {arguments.input_id}")
+        authority = inputs[arguments.input_id]
+        if arguments.command == "status":
+            inspection = inspect_input_binding(project_root, authority)
+            document = asdict(inspection)
+            document["binding_path"] = str(inspection.binding_path)
+            document["material_path"] = (
+                str(inspection.material_path)
+                if inspection.material_path is not None
+                else None
+            )
+            result = {
+                "schema_version": INPUT_STATUS_SCHEMA,
+                "operation": "status",
+                "authority": authority,
+                "binding": document,
+            }
+        else:
+            if (
+                arguments.path is None
+                or arguments.sha256 is None
+                or arguments.byte_count is None
+            ):
+                raise ValueError("bind requires --path, --sha256, and --bytes")
+            binding = bind_input(
+                project_root,
+                authority,
+                arguments.path.expanduser().resolve(),
+                arguments.sha256,
+                arguments.byte_count,
+                _metadata(arguments.metadata),
+            )
+            document = asdict(binding)
+            document["binding_path"] = str(binding.binding_path)
+            document["material_path"] = str(binding.material_path)
+            result = {
+                "schema_version": INPUT_STATUS_SCHEMA,
+                "operation": "bind",
+                "authority": authority,
+                "binding": document,
+            }
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    except (InputBindingError, OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _profile_main(argv: list[str]) -> int:
     arguments = _profile_parser().parse_args(argv)
     project_root = arguments.project_root.resolve()
@@ -191,6 +283,8 @@ def _profile_main(argv: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     tokens = sys.argv[1:] if argv is None else argv
+    if tokens and tokens[0] == "input":
+        return _input_main(tokens[1:])
     if tokens and tokens[0] == "profile":
         return _profile_main(tokens[1:])
     arguments = _parser().parse_args(tokens)

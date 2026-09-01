@@ -17,6 +17,7 @@ from fidb_poc.toolchain_cache import (
     inspect_cached,
 )
 from fidb_poc.toolchain_prepare import PreparationResult
+from fidb_poc.toolchain_inputs import InputBindingResult
 
 
 class _Response(io.BytesIO):
@@ -195,7 +196,7 @@ class ToolchainCommandTests(unittest.TestCase):
 
     def test_profile_plan_is_read_only_json(self):
         plan = {
-            "schema_version": "fidb-toolchain-profile-plan/v2",
+            "schema_version": "fidb-toolchain-profile-plan/v3",
             "operation": "status",
             "profile": {"id": "c-canary"},
             "host": {"compatible": True},
@@ -383,6 +384,76 @@ class ToolchainCommandTests(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             self.assertIn("profile=${1:-c-top10-linux}", source)
             self.assertIn(f"toolchain profile {operation}", source)
+
+    def test_input_bind_resolves_authority_and_passes_exact_metadata(self):
+        authority = {
+            "id": "apple-macos-sdk",
+            "kind": "user-supplied-sdk",
+            "target_ids": ["macos-arm64-macho"],
+            "authority": "https://authority.invalid/sdk",
+            "required_metadata": ["sdk_version", "sha256", "bytes"],
+        }
+        binding = InputBindingResult(
+            input_id="apple-macos-sdk",
+            binding_path=Path(
+                "/project/var/fidb-toolchains/bindings/apple-macos-sdk.json"
+            ),
+            material_path=Path("/project/var/fidb-toolchains/inputs") / ("d" * 64),
+            sha256="d" * 64,
+            bytes=123,
+            metadata={"sdk_version": "26.0", "sha256": "d" * 64, "bytes": "123"},
+            material_cache_hit=False,
+        )
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.load_toolchain_pack_catalog",
+                return_value={"inputs": [authority]},
+            ),
+            patch("fidb_poc.toolchain_cli.bind_input", return_value=binding) as bind,
+            contextlib.redirect_stdout(output),
+        ):
+            status = toolchain_cli.main(
+                [
+                    "input",
+                    "bind",
+                    "apple-macos-sdk",
+                    "--project-root",
+                    "/project",
+                    "--path",
+                    "/tmp/MacOSX.sdk.tar.xz",
+                    "--sha256",
+                    "d" * 64,
+                    "--bytes",
+                    "123",
+                    "--metadata",
+                    "sdk_version=26.0",
+                    "--metadata",
+                    f"sha256={'d' * 64}",
+                    "--metadata",
+                    "bytes=123",
+                ]
+            )
+
+        self.assertEqual(status, 0)
+        bind.assert_called_once_with(
+            Path("/project"),
+            authority,
+            Path("/tmp/MacOSX.sdk.tar.xz"),
+            "d" * 64,
+            123,
+            {"sdk_version": "26.0", "sha256": "d" * 64, "bytes": "123"},
+        )
+        self.assertEqual(json.loads(output.getvalue())["operation"], "bind")
+
+    def test_apple_sdk_wrapper_is_typed_and_executable(self):
+        project_root = Path(__file__).resolve().parents[1]
+        path = project_root / "scripts/toolchains/bind-apple-sdk.sh"
+        self.assertTrue(path.stat().st_mode & 0o111)
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("toolchain input bind apple-macos-sdk", source)
+        self.assertIn('if [ "$#" -ne 6 ]', source)
+        self.assertNotIn("eval", source)
 
 
 if __name__ == "__main__":

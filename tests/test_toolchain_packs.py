@@ -5,11 +5,13 @@ import unittest
 from unittest.mock import patch
 
 from fidb_poc.toolchain_cache import CacheInspection
+from fidb_poc.toolchain_inputs import InputBindingInspection
 from fidb_poc.toolchain_packs import (
     load_toolchain_pack_catalog,
     resolve_toolchain_profile,
     resolve_toolchain_profiles,
 )
+from fidb_poc.toolchain_prepare import PreparationInspection
 
 
 class ToolchainPackAuthorityTests(unittest.TestCase):
@@ -61,7 +63,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 host_architecture="x86_64",
             )
 
-        self.assertEqual(plan["schema_version"], "fidb-toolchain-profile-plan/v2")
+        self.assertEqual(plan["schema_version"], "fidb-toolchain-profile-plan/v3")
         self.assertEqual(plan["state"], "acquisition-required")
         self.assertTrue(plan["host"]["compatible"])
         self.assertEqual(plan["summary"]["routes"], 10)
@@ -184,6 +186,68 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 for row in plan["requirements"]
             ),
             2,
+        )
+
+    def test_private_sdk_binding_advances_only_the_gated_route(self):
+        def cached(downloads: Path, digest: str) -> CacheInspection:
+            return CacheInspection(
+                path=downloads / digest,
+                state="verified-cached",
+                bytes=1,
+                observed_sha256=digest,
+            )
+
+        def prepared(directory: Path, digest: str, archive_root: str):
+            path = directory / digest
+            return PreparationInspection(
+                path=path,
+                root=path / archive_root,
+                state="prepared",
+                manifest={"archive_root": archive_root},
+            )
+
+        missing_binding = InputBindingInspection(
+            input_id="apple-macos-sdk",
+            state="missing",
+            binding_path=Path("/bindings/apple-macos-sdk.json"),
+        )
+        bound_binding = InputBindingInspection(
+            input_id="apple-macos-sdk",
+            state="bound-verified",
+            binding_path=Path("/bindings/apple-macos-sdk.json"),
+            material_path=Path("/inputs/sdk"),
+            document={"metadata": {}},
+        )
+        with (
+            patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
+            patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
+            patch(
+                "fidb_poc.toolchain_packs.inspect_input_binding",
+                return_value=missing_binding,
+            ),
+        ):
+            missing = resolve_toolchain_profile(self.root, "c-top10-linux")
+        with (
+            patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
+            patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
+            patch(
+                "fidb_poc.toolchain_packs.inspect_input_binding",
+                return_value=bound_binding,
+            ),
+        ):
+            bound = resolve_toolchain_profile(self.root, "c-top10-linux")
+
+        self.assertEqual(missing["state"], "input-required")
+        self.assertEqual(missing["summary"]["missing_inputs"], 1)
+        self.assertEqual(bound["state"], "prepared-unqualified")
+        self.assertEqual(bound["summary"]["bound_inputs"], 1)
+        self.assertEqual(
+            next(
+                row
+                for row in bound["routes"]
+                if row["id"] == "macos-arm64-osxcross-clang"
+            )["state"],
+            "prepared-unqualified",
         )
 
     def test_incompatible_host_is_a_structured_blocker(self):

@@ -18,6 +18,11 @@ import tomllib
 from .coverage_universe import load_coverage_universe
 from .target_registry import load_targets
 from .toolchain_cache import CacheInspection, MANAGED_DOWNLOADS, inspect_cached
+from .toolchain_inputs import (
+    MANAGED_BINDINGS,
+    MANAGED_INPUTS,
+    inspect_input_binding,
+)
 from .toolchain_prepare import MANAGED_PREPARED, inspect_prepared
 
 PACKS_SCHEMA = "fidb-toolchain-packs/v2"
@@ -25,7 +30,7 @@ ROUTES_SCHEMA = "fidb-toolchain-routes/v2"
 INPUTS_SCHEMA = "fidb-toolchain-inputs/v1"
 PROFILE_SCHEMA = "fidb-toolchain-profile/v1"
 CATALOG_SCHEMA = "fidb-toolchain-pack-catalog/v2"
-PROFILE_PLAN_SCHEMA = "fidb-toolchain-profile-plan/v2"
+PROFILE_PLAN_SCHEMA = "fidb-toolchain-profile-plan/v3"
 
 _PACK_FIELDS = {
     "id",
@@ -503,23 +508,51 @@ def resolve_toolchain_profile(
             for input_id in route["input_ids"]:
                 if input_id not in selected_input_ids:
                     selected_input_ids.append(str(input_id))
-                toolchain_input = inputs[str(input_id)]
-                requirements.append(
-                    {
-                        "code": "user-input-required",
-                        "severity": "constraint",
-                        "route_id": route_id,
-                        "input_id": input_id,
-                        "message": f"{route['label']} requires {toolchain_input['label']}",
-                        "details": {
-                            "source_policy": toolchain_input["source_policy"],
-                            "required_metadata": toolchain_input["required_metadata"],
-                        },
-                    }
-                )
         route_rows.append({**route, "state": state})
 
-    input_rows = [inputs[input_id] for input_id in selected_input_ids]
+    input_rows: list[dict[str, object]] = []
+    input_state_by_id: dict[str, str] = {}
+    for input_id in selected_input_ids:
+        toolchain_input = inputs[input_id]
+        binding = inspect_input_binding(root, toolchain_input)
+        input_state_by_id[input_id] = binding.state
+        input_rows.append(
+            {
+                **toolchain_input,
+                "binding": {
+                    "state": binding.state,
+                    "path": str(binding.binding_path),
+                    "material_path": (
+                        str(binding.material_path)
+                        if binding.material_path is not None
+                        else None
+                    ),
+                    "document": binding.document,
+                },
+            }
+        )
+        if binding.state == "missing":
+            requirements.append(
+                {
+                    "code": "user-input-required",
+                    "severity": "constraint",
+                    "input_id": input_id,
+                    "message": f"{toolchain_input['label']} must be privately bound",
+                    "details": {
+                        "source_policy": toolchain_input["source_policy"],
+                        "required_metadata": toolchain_input["required_metadata"],
+                    },
+                }
+            )
+        elif binding.state == "broken":
+            requirements.append(
+                {
+                    "code": "input-binding-integrity-failure",
+                    "severity": "blocker",
+                    "input_id": input_id,
+                    "message": f"{toolchain_input['label']} binding failed integrity inspection",
+                }
+            )
 
     downloads = root / MANAGED_DOWNLOADS
     prepared = root / MANAGED_PREPARED
@@ -602,6 +635,9 @@ def resolve_toolchain_profile(
         preparation_states = [
             preparation_state_by_pack[str(pack_id)] for pack_id in route["pack_ids"]
         ]
+        input_states = [
+            input_state_by_id[str(input_id)] for input_id in route["input_ids"]
+        ]
         if "broken" in states:
             route["state"] = "broken"
         elif not all(state == "verified-cached" for state in states):
@@ -618,10 +654,12 @@ def resolve_toolchain_profile(
                 if route["input_ids"]
                 else "preparation-required"
             )
+        elif "broken" in input_states:
+            route["state"] = "broken"
+        elif not all(state == "bound-verified" for state in input_states):
+            route["state"] = "input-required"
         else:
-            route["state"] = (
-                "input-required" if route["input_ids"] else "prepared-unqualified"
-            )
+            route["state"] = "prepared-unqualified"
 
     if not host_compatible:
         requirements.insert(
@@ -644,20 +682,29 @@ def resolve_toolchain_profile(
         state: sum(row["preparation"]["state"] == state for row in pack_rows)
         for state in ("missing", "prepared", "broken")
     }
-    input_required = any(row["input_ids"] for row in route_rows)
+    input_counts = {
+        state: sum(row["binding"]["state"] == state for row in input_rows)
+        for state in ("missing", "bound-verified", "broken")
+    }
+    input_required = bool(input_counts["missing"])
     external_required = any(row["state"] == "external-required" for row in route_rows)
-    if not host_compatible or state_counts["broken"] or preparation_counts["broken"]:
+    if (
+        not host_compatible
+        or state_counts["broken"]
+        or preparation_counts["broken"]
+        or input_counts["broken"]
+    ):
         state = "blocked"
     elif state_counts["missing"]:
         state = "acquisition-required"
     elif preparation_counts["missing"]:
         state = "preparation-required"
     elif input_required and external_required:
-        state = "downloadable-ready-input-and-external-required"
+        state = "input-and-external-required"
     elif input_required:
-        state = "downloadable-ready-input-required"
+        state = "input-required"
     elif external_required:
-        state = "downloadable-ready-external-required"
+        state = "external-required"
     else:
         state = "prepared-unqualified"
 
@@ -709,7 +756,10 @@ def resolve_toolchain_profile(
                         }
                         for row in pack_rows
                     ],
-                    "inputs": input_rows,
+                    "inputs": [
+                        {key: value for key, value in row.items() if key != "binding"}
+                        for row in input_rows
+                    ],
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -725,6 +775,8 @@ def resolve_toolchain_profile(
         },
         "managed_downloads": str(downloads),
         "managed_prepared": str(prepared),
+        "managed_inputs": str(root / MANAGED_INPUTS),
+        "managed_bindings": str(root / MANAGED_BINDINGS),
         "summary": {
             "routes": len(route_rows),
             "coverage_requirements": len(
@@ -734,6 +786,10 @@ def resolve_toolchain_profile(
                 row["provisioning"] != "external-worker" for row in route_rows
             ),
             "user_input_routes": sum(bool(row["input_ids"]) for row in route_rows),
+            "inputs": len(input_rows),
+            "bound_inputs": input_counts["bound-verified"],
+            "missing_inputs": input_counts["missing"],
+            "broken_inputs": input_counts["broken"],
             "external_routes": sum(
                 row["provisioning"] == "external-worker" for row in route_rows
             ),
@@ -772,26 +828,28 @@ def resolve_toolchain_profile(
                 "repair-preparation"
                 if state == "blocked" and preparation_counts["broken"]
                 else (
-                    "use-compatible-host"
-                    if not host_compatible
+                    "repair-input-binding"
+                    if state == "blocked" and input_counts["broken"]
                     else (
-                        "pull"
-                        if state == "acquisition-required"
+                        "use-compatible-host"
+                        if not host_compatible
                         else (
-                            "prepare"
-                            if state == "preparation-required"
+                            "pull"
+                            if state == "acquisition-required"
                             else (
-                                "supply-user-input-and-define-external-workers"
-                                if state
-                                == "downloadable-ready-input-and-external-required"
+                                "prepare"
+                                if state == "preparation-required"
                                 else (
-                                    "supply-user-input"
-                                    if state == "downloadable-ready-input-required"
+                                    "supply-user-input-and-define-external-workers"
+                                    if state == "input-and-external-required"
                                     else (
-                                        "define-external-workers"
-                                        if state
-                                        == "downloadable-ready-external-required"
-                                        else "qualify"
+                                        "supply-user-input"
+                                        if state == "input-required"
+                                        else (
+                                            "define-external-workers"
+                                            if state == "external-required"
+                                            else "qualify"
+                                        )
                                     )
                                 )
                             )
