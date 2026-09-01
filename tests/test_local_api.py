@@ -399,7 +399,7 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v5")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v6")
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)

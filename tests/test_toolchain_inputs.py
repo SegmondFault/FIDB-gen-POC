@@ -22,6 +22,7 @@ AUTHORITY = {
         "xcode_version",
         "sdk_version",
         "deployment_target",
+        "package_format",
         "sha256",
         "bytes",
     ],
@@ -33,6 +34,7 @@ def _metadata(digest: str, byte_count: int) -> dict[str, str]:
         "xcode_version": "26.0",
         "sdk_version": "26.0",
         "deployment_target": "13.0",
+        "package_format": "tar-xz",
         "sha256": digest,
         "bytes": str(byte_count),
     }

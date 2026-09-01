@@ -24,12 +24,21 @@ from .toolchain_inputs import (
     inspect_input_binding,
 )
 from .toolchain_prepare import MANAGED_PREPARED, inspect_prepared
+from .toolchain_qualification import (
+    MANAGED_COMPOSED,
+    MANAGED_QUALIFIED,
+    composition_dependencies,
+    inspect_composition,
+    inspect_qualification,
+    route_material_digest,
+)
 
 PACKS_SCHEMA = "fidb-toolchain-packs/v2"
 ROUTES_SCHEMA = "fidb-toolchain-routes/v2"
 INPUTS_SCHEMA = "fidb-toolchain-inputs/v1"
+QUALIFICATIONS_SCHEMA = "fidb-toolchain-qualifications/v1"
 PROFILE_SCHEMA = "fidb-toolchain-profile/v1"
-CATALOG_SCHEMA = "fidb-toolchain-pack-catalog/v2"
+CATALOG_SCHEMA = "fidb-toolchain-pack-catalog/v3"
 PROFILE_PLAN_SCHEMA = "fidb-toolchain-profile-plan/v3"
 
 _PACK_FIELDS = {
@@ -80,6 +89,17 @@ _INPUT_FIELDS = {
     "required_metadata",
     "state",
     "authority",
+}
+_QUALIFICATION_FIELDS = {
+    "route_id",
+    "tool_source",
+    "tool_pack_id",
+    "driver_pattern",
+    "cxx_driver_pattern",
+    "archiver_pattern",
+    "version_contains",
+    "smoke_languages",
+    "composition",
 }
 _PROFILE_FIELDS = {
     "schema_version",
@@ -286,6 +306,40 @@ def _load_inputs(path: Path) -> list[dict[str, object]]:
     return rows
 
 
+def _load_qualifications(path: Path) -> list[dict[str, object]]:
+    document = _read_toml(path)
+    if set(document) != {"schema_version", "qualification"}:
+        raise ValueError("toolchain qualifications authority has unexpected fields")
+    if document.get("schema_version") != QUALIFICATIONS_SCHEMA:
+        raise ValueError(
+            "unsupported toolchain qualifications schema: "
+            f"{document.get('schema_version')}"
+        )
+    raw_rows = document.get("qualification")
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("toolchain authority requires qualifications")
+    rows: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(raw_rows):
+        if not isinstance(raw, dict) or set(raw) != _QUALIFICATION_FIELDS:
+            raise ValueError(
+                f"qualification row {index} has unexpected or missing fields"
+            )
+        row = dict(raw)
+        route_id = _identifier(row["route_id"], f"qualification row {index} route_id")
+        if route_id in seen:
+            raise ValueError(f"duplicate qualification route: {route_id}")
+        seen.add(route_id)
+        for field in _QUALIFICATION_FIELDS - {"smoke_languages"}:
+            _string(row[field], f"qualification {route_id} {field}")
+        row["smoke_languages"] = _strings(
+            row["smoke_languages"], f"qualification {route_id} smoke_languages"
+        )
+        row["id"] = route_id
+        rows.append(row)
+    return rows
+
+
 def _load_profiles(directory: Path) -> tuple[list[dict[str, object]], list[Path]]:
     result: list[dict[str, object]] = []
     paths = sorted(directory.glob("*.toml"))
@@ -322,10 +376,12 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
     packs_path = root / "toolchains/packs.toml"
     routes_path = root / "toolchains/routes.toml"
     inputs_path = root / "toolchains/inputs.toml"
+    qualifications_path = root / "toolchains/qualifications.toml"
     profiles_directory = root / "toolchains/profiles"
     header, packs = _load_packs(packs_path)
     routes = _load_routes(routes_path)
     inputs = _load_inputs(inputs_path)
+    qualifications = _load_qualifications(qualifications_path)
     profiles, profile_paths = _load_profiles(profiles_directory)
 
     targets = load_targets(root / "targets/registry.toml")
@@ -336,6 +392,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
     pack_by_id = {str(row["id"]): row for row in packs}
     input_by_id = {str(row["id"]): row for row in inputs}
     route_by_id = {str(row["id"]): row for row in routes}
+    qualification_by_id = {str(row["id"]): row for row in qualifications}
 
     for pack in packs:
         unknown_targets = set(pack["target_ids"]) - target_ids
@@ -387,6 +444,51 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
                     f"route {route_id} target is not provided by input {input_id}"
                 )
 
+    host_route_ids = {
+        str(route["id"])
+        for route in routes
+        if route["provisioning"] != "external-worker"
+    }
+    if set(qualification_by_id) != host_route_ids:
+        raise ValueError(
+            "qualification routes must equal non-external routes: "
+            f"missing {sorted(host_route_ids - qualification_by_id.keys())}, "
+            f"extra {sorted(qualification_by_id.keys() - host_route_ids)}"
+        )
+    for qualification in qualifications:
+        route_id = str(qualification["route_id"])
+        route = route_by_id[route_id]
+        if (
+            set(qualification["smoke_languages"])
+            - {
+                "c",
+                "cpp",
+            }
+            or "c" not in qualification["smoke_languages"]
+        ):
+            raise ValueError(
+                f"qualification {route_id} must contain only C-family smoke languages and include c"
+            )
+        if qualification["tool_source"] == "pack":
+            if (
+                qualification["tool_pack_id"] not in route["pack_ids"]
+                or qualification["composition"] != "none"
+            ):
+                raise ValueError(
+                    f"qualification {route_id} pack source does not match its route"
+                )
+        elif qualification["tool_source"] == "composed-route":
+            if (
+                qualification["tool_pack_id"] != "osxcross-composed"
+                or qualification["composition"] != "osxcross-llvm"
+                or not route["input_ids"]
+            ):
+                raise ValueError(
+                    f"qualification {route_id} composition does not match its route"
+                )
+        else:
+            raise ValueError(f"qualification {route_id} has invalid tool_source")
+
     for profile in profiles:
         if profile["language_id"] not in language_ids:
             raise ValueError(
@@ -417,12 +519,14 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "packs": "toolchains/packs.toml",
         "routes": "toolchains/routes.toml",
         "inputs": "toolchains/inputs.toml",
+        "qualifications": "toolchains/qualifications.toml",
         "profiles": "toolchains/profiles/*.toml",
     }
     source_digests = {
         "packs_sha256": _sha256(packs_path),
         "routes_sha256": _sha256(routes_path),
         "inputs_sha256": _sha256(inputs_path),
+        "qualifications_sha256": _sha256(qualifications_path),
         "profiles_sha256": hashlib.sha256(
             b"".join(path.read_bytes() for path in profile_paths)
         ).hexdigest(),
@@ -438,6 +542,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "packs": packs,
         "inputs": inputs,
         "routes": routes,
+        "qualifications": qualifications,
         "profiles": profiles,
         "sources": sources,
         "source_digests": source_digests,
@@ -474,6 +579,7 @@ def resolve_toolchain_profile(
     packs = {str(row["id"]): row for row in catalog["packs"]}
     inputs = {str(row["id"]): row for row in catalog["inputs"]}
     routes = {str(row["id"]): row for row in catalog["routes"]}
+    qualifications = {str(row["route_id"]): row for row in catalog["qualifications"]}
 
     detected_system, detected_architecture = _host_identity()
     actual_system = (host_system or detected_system).lower()
@@ -661,6 +767,99 @@ def resolve_toolchain_profile(
         else:
             route["state"] = "prepared-unqualified"
 
+    for route in route_rows:
+        if route["provisioning"] == "external-worker":
+            continue
+        definition = qualifications[str(route["id"])]
+        projection: dict[str, object] = {
+            "definition": definition,
+            "state": "blocked-by-prerequisites",
+            "route_material_digest": None,
+            "path": None,
+            "record": None,
+        }
+        route["qualification"] = projection
+        if route["state"] != "prepared-unqualified":
+            continue
+        material_digest = route_material_digest(
+            route,
+            definition,
+            pack_rows,
+            input_rows,
+        )
+        projection["route_material_digest"] = material_digest
+        if definition["composition"] == "osxcross-llvm":
+            composition = inspect_composition(
+                root,
+                str(route["id"]),
+                material_digest,
+            )
+            projection["composition"] = {
+                "state": composition.state,
+                "path": str(composition.path),
+                "root": str(composition.root),
+                "manifest": composition.manifest,
+                "host_dependencies": composition_dependencies(),
+            }
+            if composition.state == "broken":
+                route["state"] = "broken"
+                projection["state"] = "broken-composition"
+                requirements.append(
+                    {
+                        "code": "composition-integrity-failure",
+                        "severity": "blocker",
+                        "route_id": route["id"],
+                        "message": f"{route['label']} composition failed integrity inspection",
+                    }
+                )
+                continue
+            if composition.state != "composed":
+                route["state"] = "composition-required"
+                projection["state"] = "composition-required"
+                requirements.append(
+                    {
+                        "code": "route-composition-required",
+                        "severity": "action",
+                        "route_id": route["id"],
+                        "message": f"{route['label']} must be composed from LLVM, osxcross, and the bound SDK",
+                    }
+                )
+                continue
+        inspection = inspect_qualification(
+            root,
+            str(route["id"]),
+            material_digest,
+        )
+        projection.update(
+            {
+                "state": inspection.state,
+                "path": str(inspection.path),
+                "record": inspection.record,
+            }
+        )
+        if inspection.state == "qualified":
+            route["state"] = "qualified"
+        elif inspection.state == "broken":
+            route["state"] = "broken"
+            requirements.append(
+                {
+                    "code": "qualification-integrity-failure",
+                    "severity": "blocker",
+                    "route_id": route["id"],
+                    "message": f"{route['label']} qualification failed integrity inspection",
+                }
+            )
+        else:
+            route["state"] = "qualification-required"
+            requirements.append(
+                {
+                    "code": "route-qualification-required",
+                    "severity": "action",
+                    "route_id": route["id"],
+                    "message": f"{route['label']} requires fixed C/C++ smoke qualification",
+                }
+            )
+
     if not host_compatible:
         requirements.insert(
             0,
@@ -686,13 +885,24 @@ def resolve_toolchain_profile(
         state: sum(row["binding"]["state"] == state for row in input_rows)
         for state in ("missing", "bound-verified", "broken")
     }
+    route_counts = {
+        state: sum(row["state"] == state for row in route_rows)
+        for state in (
+            "broken",
+            "composition-required",
+            "qualification-required",
+            "qualified",
+            "external-required",
+        )
+    }
     input_required = bool(input_counts["missing"])
-    external_required = any(row["state"] == "external-required" for row in route_rows)
+    external_required = bool(route_counts["external-required"])
     if (
         not host_compatible
         or state_counts["broken"]
         or preparation_counts["broken"]
         or input_counts["broken"]
+        or route_counts["broken"]
     ):
         state = "blocked"
     elif state_counts["missing"]:
@@ -703,10 +913,14 @@ def resolve_toolchain_profile(
         state = "input-and-external-required"
     elif input_required:
         state = "input-required"
+    elif route_counts["composition-required"]:
+        state = "composition-required"
+    elif route_counts["qualification-required"]:
+        state = "qualification-required"
     elif external_required:
-        state = "external-required"
+        state = "qualified-external-required"
     else:
-        state = "prepared-unqualified"
+        state = "qualified"
 
     total_download = sum(int(row["download_bytes"]) for row in pack_rows)
     pack_installed = sum(int(row["installed_bytes_estimate"]) for row in pack_rows)
@@ -733,7 +947,7 @@ def resolve_toolchain_profile(
             ],
             "shell": f"./scripts/toolchains/{action}.sh {profile_id}",
         }
-        for action in ("plan", "status", "pull", "prepare")
+        for action in ("plan", "status", "pull", "prepare", "compose", "qualify")
     ]
     return {
         "schema_version": PROFILE_PLAN_SCHEMA,
@@ -745,7 +959,14 @@ def resolve_toolchain_profile(
                 {
                     "profile": profile,
                     "routes": [
-                        {key: value for key, value in row.items() if key != "state"}
+                        {
+                            **{
+                                key: value
+                                for key, value in row.items()
+                                if key not in {"state", "qualification"}
+                            },
+                            "qualification": qualifications.get(str(row["id"])),
+                        }
                         for row in route_rows
                     ],
                     "packs": [
@@ -777,6 +998,8 @@ def resolve_toolchain_profile(
         "managed_prepared": str(prepared),
         "managed_inputs": str(root / MANAGED_INPUTS),
         "managed_bindings": str(root / MANAGED_BINDINGS),
+        "managed_composed": str(root / MANAGED_COMPOSED),
+        "managed_qualified": str(root / MANAGED_QUALIFIED),
         "summary": {
             "routes": len(route_rows),
             "coverage_requirements": len(
@@ -809,6 +1032,15 @@ def resolve_toolchain_profile(
             "prepared_packs": preparation_counts["prepared"],
             "missing_preparations": preparation_counts["missing"],
             "broken_preparations": preparation_counts["broken"],
+            "composed_routes": sum(
+                row.get("qualification", {}).get("composition", {}).get("state")
+                == "composed"
+                for row in route_rows
+            ),
+            "missing_compositions": route_counts["composition-required"],
+            "qualified_routes": route_counts["qualified"],
+            "missing_qualifications": route_counts["qualification-required"],
+            "broken_routes": route_counts["broken"],
             "download_bytes": total_download,
             "cached_download_bytes": cached_download,
             "remaining_download_bytes": total_download - cached_download,
@@ -822,33 +1054,46 @@ def resolve_toolchain_profile(
         "inputs": input_rows,
         "requirements": requirements,
         "recommended_next_action": (
-            "repair-cache"
-            if state == "blocked" and state_counts["broken"]
+            "use-compatible-host"
+            if not host_compatible
             else (
-                "repair-preparation"
-                if state == "blocked" and preparation_counts["broken"]
+                "repair-cache"
+                if state == "blocked" and state_counts["broken"]
                 else (
-                    "repair-input-binding"
-                    if state == "blocked" and input_counts["broken"]
+                    "repair-preparation"
+                    if state == "blocked" and preparation_counts["broken"]
                     else (
-                        "use-compatible-host"
-                        if not host_compatible
+                        "repair-input-binding"
+                        if state == "blocked" and input_counts["broken"]
                         else (
-                            "pull"
-                            if state == "acquisition-required"
+                            "repair-route"
+                            if state == "blocked"
                             else (
-                                "prepare"
-                                if state == "preparation-required"
+                                "pull"
+                                if state == "acquisition-required"
                                 else (
-                                    "supply-user-input-and-define-external-workers"
-                                    if state == "input-and-external-required"
+                                    "prepare"
+                                    if state == "preparation-required"
                                     else (
-                                        "supply-user-input"
-                                        if state == "input-required"
+                                        "supply-user-input-and-define-external-workers"
+                                        if state == "input-and-external-required"
                                         else (
-                                            "define-external-workers"
-                                            if state == "external-required"
-                                            else "qualify"
+                                            "supply-user-input"
+                                            if state == "input-required"
+                                            else (
+                                                "compose"
+                                                if state == "composition-required"
+                                                else (
+                                                    "qualify"
+                                                    if state == "qualification-required"
+                                                    else (
+                                                        "define-external-workers"
+                                                        if state
+                                                        == "qualified-external-required"
+                                                        else "done"
+                                                    )
+                                                )
+                                            )
                                         )
                                     )
                                 )

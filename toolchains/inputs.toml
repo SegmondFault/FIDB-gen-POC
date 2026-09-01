@@ -10,6 +10,6 @@ label = "Apple macOS SDK"
 kind = "user-supplied-sdk"
 target_ids = ["macos-arm64-macho"]
 source_policy = "Obtain from licensed Xcode or Apple Command Line Tools; the project does not redistribute Apple SDK payloads."
-required_metadata = ["xcode_version", "sdk_version", "deployment_target", "sha256", "bytes"]
+required_metadata = ["xcode_version", "sdk_version", "deployment_target", "package_format", "sha256", "bytes"]
 state = "operator-supplied-unbound"
 authority = "https://github.com/tpoechtrager/osxcross/blob/master/README.SDK.md"

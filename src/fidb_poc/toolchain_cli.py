@@ -22,6 +22,12 @@ from .toolchain_prepare import (
     PreparationError,
     prepare_pinned_archive,
 )
+from .toolchain_qualification import (
+    QualificationError,
+    compose_osxcross,
+    qualify_route,
+)
+from .target_registry import load_targets
 
 CACHE_STATUS_SCHEMA = "fidb-toolchain-cache-status/v1"
 INPUT_STATUS_SCHEMA = "fidb-toolchain-input-status/v1"
@@ -98,13 +104,14 @@ def _profile_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fidb-poc toolchain profile",
         description=(
-            "Plan, inspect, pull, or safely prepare every checksum-pinned archive in a reviewed "
-            "toolchain profile. External worker requirements are reported, never hidden."
+            "Run the reviewed pull, preparation, composition, and C-family "
+            "qualification lifecycle for a toolchain profile. External worker "
+            "requirements are reported, never hidden."
         ),
     )
     parser.add_argument(
         "command",
-        choices=("plan", "status", "pull", "prepare"),
+        choices=("plan", "status", "pull", "prepare", "compose", "qualify"),
         help="typed profile operation",
     )
     parser.add_argument("profile", help="reviewed profile id")
@@ -213,7 +220,7 @@ def _profile_main(argv: list[str]) -> int:
             return 0
         if not before["host"]["compatible"]:
             raise ValueError(
-                "refusing profile pull on an incompatible host: "
+                f"refusing profile {arguments.command} on an incompatible host: "
                 f"requires {before['host']['required_system']}/"
                 f"{before['host']['required_architecture']}"
             )
@@ -239,7 +246,7 @@ def _profile_main(argv: list[str]) -> int:
             after = resolve_toolchain_profile(project_root, arguments.profile)
             after["operation"] = "pull"
             after["acquisitions"] = acquisitions
-        else:
+        elif arguments.command == "prepare":
             unavailable = [
                 str(pack["id"])
                 for pack in before["packs"]
@@ -274,9 +281,89 @@ def _profile_main(argv: list[str]) -> int:
             after = resolve_toolchain_profile(project_root, arguments.profile)
             after["operation"] = "prepare"
             after["preparations"] = preparations
+        elif arguments.command == "compose":
+            composable = [
+                route
+                for route in before["routes"]
+                if route.get("qualification", {})
+                .get("definition", {})
+                .get("composition")
+                != "none"
+            ]
+            unavailable = [
+                str(route["id"])
+                for route in composable
+                if route["state"]
+                not in {"composition-required", "qualification-required", "qualified"}
+            ]
+            if unavailable:
+                raise QualificationError(
+                    "refusing composition until route prerequisites are ready: "
+                    + ", ".join(unavailable)
+                )
+            compositions = []
+            for route in composable:
+                definition = route["qualification"]["definition"]
+                result = compose_osxcross(
+                    project_root,
+                    route,
+                    definition,
+                    before["packs"],
+                    before["inputs"],
+                )
+                values = asdict(result)
+                values["path"] = str(result.path)
+                values["root"] = str(result.root)
+                compositions.append(values)
+            after = resolve_toolchain_profile(project_root, arguments.profile)
+            after["operation"] = "compose"
+            after["compositions"] = compositions
+        else:
+            host_routes = [
+                route
+                for route in before["routes"]
+                if route["provisioning"] != "external-worker"
+            ]
+            unavailable = [
+                str(route["id"])
+                for route in host_routes
+                if route["state"] not in {"qualification-required", "qualified"}
+            ]
+            if unavailable:
+                raise QualificationError(
+                    "refusing qualification until every host route is ready: "
+                    + ", ".join(unavailable)
+                )
+            targets = {
+                str(row["id"]): row
+                for row in load_targets(project_root / "targets/registry.toml")
+            }
+            qualifications = []
+            for route in host_routes:
+                definition = route["qualification"]["definition"]
+                result = qualify_route(
+                    project_root,
+                    route,
+                    definition,
+                    targets[str(route["target_id"])],
+                    before["packs"],
+                    before["inputs"],
+                )
+                values = asdict(result)
+                values["path"] = str(result.path)
+                qualifications.append(values)
+            after = resolve_toolchain_profile(project_root, arguments.profile)
+            after["operation"] = "qualify"
+            after["qualifications"] = qualifications
         print(json.dumps(after, indent=2, sort_keys=True))
         return 0
-    except (CacheError, OSError, PreparationError, ValueError) as error:
+    except (
+        CacheError,
+        OSError,
+        PreparationError,
+        QualificationError,
+        ValueError,
+    ) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

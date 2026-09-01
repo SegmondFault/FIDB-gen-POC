@@ -17,5 +17,6 @@ exec uv run --project "$project_root" fidb-poc toolchain input bind apple-macos-
   --metadata "xcode_version=$4" \
   --metadata "sdk_version=$5" \
   --metadata "deployment_target=$6" \
+  --metadata "package_format=tar-xz" \
   --metadata "sha256=$2" \
   --metadata "bytes=$3"

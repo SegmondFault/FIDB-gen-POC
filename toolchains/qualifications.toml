@@ -1,0 +1,115 @@
+schema_version = "fidb-toolchain-qualifications/v1"
+
+# Qualification rows permit only fixed C-family smoke operations. Patterns are
+# resolved beneath reviewed prepared roots (or a reviewed composed route), must
+# match exactly one executable, and never accept caller-supplied commands.
+
+[[qualification]]
+route_id = "linux-x86-64-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-x86-64-glibc-stable-2025.08-1"
+driver_pattern = "bin/x86_64-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/x86_64-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/x86_64-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "macos-arm64-osxcross-clang"
+tool_source = "composed-route"
+tool_pack_id = "osxcross-composed"
+driver_pattern = "bin/arm64-apple-darwin*-clang"
+cxx_driver_pattern = "bin/arm64-apple-darwin*-clang++"
+archiver_pattern = "bin/arm64-apple-darwin*-ar"
+version_contains = "22.1.8"
+smoke_languages = ["c", "cpp"]
+composition = "osxcross-llvm"
+
+[[qualification]]
+route_id = "windows-x86-64-llvm-mingw"
+tool_source = "pack"
+tool_pack_id = "llvm-mingw-ucrt-x86-64-linux-20260826"
+driver_pattern = "bin/x86_64-w64-mingw32-clang"
+cxx_driver_pattern = "bin/x86_64-w64-mingw32-clang++"
+archiver_pattern = "bin/llvm-ar"
+version_contains = "23.1.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-arm32-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-armv7-eabihf-glibc-stable-2025.08-1"
+driver_pattern = "bin/arm-buildroot-linux-gnueabihf-gcc"
+cxx_driver_pattern = "bin/arm-buildroot-linux-gnueabihf-g++"
+archiver_pattern = "bin/arm-buildroot-linux-gnueabihf-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-aarch64-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-aarch64-glibc-stable-2025.08-1"
+driver_pattern = "bin/aarch64-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/aarch64-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/aarch64-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-mips32-be-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-mips32-be-glibc-stable-2025.08-1"
+driver_pattern = "bin/mips-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/mips-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/mips-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-mips32-le-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-mips32-le-glibc-stable-2025.08-1"
+driver_pattern = "bin/mipsel-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/mipsel-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/mipsel-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-powerpc32-be-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-powerpc-e500mc-glibc-stable-2025.08-1"
+driver_pattern = "bin/powerpc-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/powerpc-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/powerpc-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-sh32-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-sh4-glibc-stable-2025.08-1"
+driver_pattern = "bin/sh4-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/sh4-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/sh4-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "linux-m68k-gcc"
+tool_source = "pack"
+tool_pack_id = "bootlin-m68k-68xxx-glibc-stable-2025.08-1"
+driver_pattern = "bin/m68k-buildroot-linux-gnu-gcc"
+cxx_driver_pattern = "bin/m68k-buildroot-linux-gnu-g++"
+archiver_pattern = "bin/m68k-buildroot-linux-gnu-ar"
+version_contains = "14.3.0"
+smoke_languages = ["c", "cpp"]
+composition = "none"

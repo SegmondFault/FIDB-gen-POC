@@ -18,6 +18,10 @@ from fidb_poc.toolchain_cache import (
 )
 from fidb_poc.toolchain_prepare import PreparationResult
 from fidb_poc.toolchain_inputs import InputBindingResult
+from fidb_poc.toolchain_qualification import (
+    CompositionResult,
+    QualificationResult,
+)
 
 
 class _Response(io.BytesIO):
@@ -376,9 +380,116 @@ class ToolchainCommandTests(unittest.TestCase):
         self.assertEqual(document["operation"], "prepare")
         self.assertEqual(document["preparations"][0]["pack_id"], "pack-one")
 
+    def test_profile_compose_uses_only_reviewed_composed_routes(self):
+        definition = {"composition": "osxcross-llvm"}
+        route = {
+            "id": "macos-arm64-osxcross-clang",
+            "state": "composition-required",
+            "qualification": {"definition": definition},
+        }
+        before = {
+            "host": {
+                "compatible": True,
+                "required_system": "linux",
+                "required_architecture": "x86_64",
+            },
+            "routes": [route],
+            "packs": [{"id": "llvm"}],
+            "inputs": [{"id": "apple-macos-sdk"}],
+        }
+        after = {"state": "qualification-required", "host": {"compatible": True}}
+        result = CompositionResult(
+            path=Path("/project/var/fidb-toolchains/composed/route/digest"),
+            root=Path("/project/var/fidb-toolchains/composed/route/digest/toolchain"),
+            route_id=route["id"],
+            route_material_digest="a" * 64,
+            log_sha256="b" * 64,
+            log_bytes=123,
+            cache_hit=False,
+        )
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.resolve_toolchain_profile",
+                side_effect=[before, after],
+            ),
+            patch(
+                "fidb_poc.toolchain_cli.compose_osxcross", return_value=result
+            ) as compose,
+            contextlib.redirect_stdout(output),
+        ):
+            status = toolchain_cli.main(
+                ["profile", "compose", "c-top10-linux", "--project-root", "/project"]
+            )
+
+        self.assertEqual(status, 0)
+        compose.assert_called_once_with(
+            Path("/project"),
+            route,
+            definition,
+            before["packs"],
+            before["inputs"],
+        )
+        self.assertEqual(json.loads(output.getvalue())["operation"], "compose")
+
+    def test_profile_qualify_runs_fixed_smoke_for_every_ready_host_route(self):
+        definition = {"composition": "none"}
+        route = {
+            "id": "linux-x86-64-gcc",
+            "target_id": "linux-x86-64-elf",
+            "provisioning": "downloadable-pack",
+            "state": "qualification-required",
+            "qualification": {"definition": definition},
+        }
+        before = {
+            "host": {
+                "compatible": True,
+                "required_system": "linux",
+                "required_architecture": "x86_64",
+            },
+            "routes": [route],
+            "packs": [{"id": "gcc"}],
+            "inputs": [],
+        }
+        after = {"state": "qualified", "host": {"compatible": True}}
+        target = {"id": "linux-x86-64-elf"}
+        result = QualificationResult(
+            path=Path("/project/var/fidb-toolchains/qualified/route/digest"),
+            route_id=route["id"],
+            route_material_digest="a" * 64,
+            record_digest="b" * 64,
+            cache_hit=False,
+        )
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.toolchain_cli.resolve_toolchain_profile",
+                side_effect=[before, after],
+            ),
+            patch("fidb_poc.toolchain_cli.load_targets", return_value=[target]),
+            patch(
+                "fidb_poc.toolchain_cli.qualify_route", return_value=result
+            ) as qualify,
+            contextlib.redirect_stdout(output),
+        ):
+            status = toolchain_cli.main(
+                ["profile", "qualify", "c-canary", "--project-root", "/project"]
+            )
+
+        self.assertEqual(status, 0)
+        qualify.assert_called_once_with(
+            Path("/project"),
+            route,
+            definition,
+            target,
+            before["packs"],
+            before["inputs"],
+        )
+        self.assertEqual(json.loads(output.getvalue())["operation"], "qualify")
+
     def test_profile_wrappers_are_executable_and_default_to_top_ten(self):
         project_root = Path(__file__).resolve().parents[1]
-        for operation in ("plan", "status", "pull", "prepare"):
+        for operation in ("plan", "status", "pull", "prepare", "compose", "qualify"):
             path = project_root / f"scripts/toolchains/{operation}.sh"
             self.assertTrue(path.stat().st_mode & 0o111)
             source = path.read_text(encoding="utf-8")
