@@ -395,9 +395,214 @@ export type AuthorityPlan = {
   };
 };
 
+export type CoverageDimension = {
+  id: string;
+  label: string;
+  layer: string;
+  description: string;
+  matrix_role: 'multiplier' | 'applicability' | 'bounded-profile' | 'analysis-reuse' | 'policy-control';
+  facets: string[];
+  factor_ids?: string[];
+};
+
+export type CoverageCompilerFamily = {
+  id: string;
+  label: string;
+  route_scope: string;
+  state: 'catalogued' | 'desired' | 'guarded' | 'study-observed';
+  language_ids: string[];
+  version_strategy: string;
+  settings: string[];
+};
+
+export type CoverageLanguage = {
+  id: string;
+  label: string;
+  state: 'active-scope' | 'designed' | 'vocabulary-only';
+  scope: string;
+  denominator: string;
+  treatment_axes: string[];
+  toolchain_family_ids: string[];
+  caveat: string;
+  authority: string;
+};
+
+export type CoverageProfile = {
+  id: string;
+  label: string;
+  compiler_family: string;
+  optimization: string;
+  controls: string[];
+  route_scope: string;
+  state: 'catalogued' | 'desired' | 'guarded' | 'study-observed';
+  language_id: string;
+  evidence_class: 'measured' | 'proposed' | 'provisional' | 'assumption';
+};
+
+export type CoverageScenario = {
+  id: string;
+  label: string;
+  library_families: number;
+  releases: number;
+  routes: number;
+  profiles: number;
+  unique_executions: number;
+  replay_multiplier: number;
+  replayed_executions: number;
+  scope: string;
+  caveat: string;
+  language_id: string;
+  evidence_class: 'measured' | 'proposed' | 'provisional' | 'assumption';
+  authority: string;
+};
+
+export type CoverageUniverse = {
+  schema_version: 'fidb-coverage-universe/v2';
+  authority_path: string;
+  population: {
+    published_four_source_n80_families: number;
+    tier_zero_families: number;
+    published_priority_head_families: number;
+    nine_source_candidate_spine_keys: number;
+    nine_source_shared_frontier_keys: number;
+    nine_source_n80_candidate_rank: number;
+    global_family_lower_estimate: number;
+    global_family_central_estimate: number;
+    global_family_upper_estimate: number;
+    population_caveat: string;
+  };
+  dimensions: CoverageDimension[];
+  languages: CoverageLanguage[];
+  compiler_families: CoverageCompilerFamily[];
+  profiles: CoverageProfile[];
+  scenarios: CoverageScenario[];
+};
+
+export type WidthAxisId =
+  | 'releases'
+  | 'routes'
+  | 'build_profiles'
+  | 'artifact_shapes'
+  | 'analysis_profiles'
+  | 'admission_profiles'
+  | 'replay';
+
+export type WidthStudyAxis = {
+  id: WidthAxisId;
+  label: string;
+  layer: 'build-cell' | 'analysis-reuse' | 'policy-reuse' | 'repeat';
+  minimum: number;
+  default: number;
+  maximum: number;
+  unit: string;
+  description: string;
+};
+
+export type WidthStudyMetrics = {
+  build_width_per_family: number;
+  build_cells: number;
+  analysis_runs: number;
+  replayed_executions: number;
+  policy_evaluations: number;
+};
+
+export type WidthStudyPreset = Record<WidthAxisId, number> & {
+  id: string;
+  label: string;
+  evidence_class: 'measured' | 'proposed' | 'provisional' | 'assumption';
+  description: string;
+  metrics: WidthStudyMetrics;
+};
+
+export type WidthStudyFamily = {
+  rank: number;
+  id: string;
+  label: string;
+  source_url: string;
+  source_state: string;
+  selection_evidence: string;
+  recipe_ids: string[];
+  recipe_state: 'reviewed-recipe' | 'source-evidence' | 'recipe-required';
+};
+
+export type WidthStudyToolchainRequirement = {
+  order: number;
+  id: string;
+  target_id: string;
+  target_label: string;
+  target_catalog_state: string;
+  compiler_family: string;
+  compiler_label: string;
+  wave: string;
+  worker_class: string;
+  acquisition: string;
+  version_policy: string;
+  rationale: string;
+  route_state: 'installed' | 'pinned-source' | 'archive-only' | 'remote-required' | 'definition-required';
+  native_route_ids: string[];
+  source_capable_toolchain_ids: string[];
+  archive_capable_toolchain_ids: string[];
+};
+
+export type WidthStudy = {
+  schema_version: 'fidb-width-study/v1';
+  id: string;
+  name: string;
+  label: string;
+  language_id: string;
+  state: 'defined-disarmed' | string;
+  selection_status: string;
+  family_count: number;
+  default_preset: string;
+  purpose: string;
+  ranking_authority: string;
+  ranking_snapshot: string;
+  queue_policy: string;
+  caveat: string;
+  authority_path: string;
+  scaling: {
+    comparison_family_counts: number[];
+    default_target_families: number;
+    default_workers: number;
+    maximum_workers: number;
+    model: string;
+  };
+  calibration: {
+    evidence_class: 'measured';
+    sample_count: number;
+    successful_wall_ns_min: number;
+    successful_wall_ns_p50: number;
+    successful_wall_ns_max: number;
+    retained_bundle_bytes_p50: number;
+    compact_output_bytes_p50: number;
+    peak_worker_rss_bytes_p50: number;
+    scratch_peak_state: string;
+    basis: string;
+    caveat: string;
+  };
+  toolchain_requirements: WidthStudyToolchainRequirement[];
+  families: WidthStudyFamily[];
+  axes: WidthStudyAxis[];
+  presets: WidthStudyPreset[];
+  readiness: {
+    reviewed_recipe_families: number;
+    reviewed_recipe_releases: number;
+    source_evidence_families: number;
+    missing_recipe_families: number;
+    catalogued_target_contexts: number;
+    registered_route_contexts: number;
+    default_route_state_counts: Record<WidthStudyToolchainRequirement['route_state'], number>;
+    executable_treatments: number;
+    queue_state: 'not-materialized' | string;
+    blockers: string[];
+  };
+};
+
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v2';
+  schema_version: 'fidb-authority-catalog/v3';
   authority_digest: string;
+  coverage_universe: CoverageUniverse;
+  width_studies: WidthStudy[];
   recipes: AuthorityRecipe[];
   native: {
     routes: Array<Record<string, unknown> & { id: string }>;

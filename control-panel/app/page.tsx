@@ -11,6 +11,10 @@ import {
   type StageSpan,
   type TimingEta,
   type PlanDraftResult,
+  type CoverageLanguage,
+  type FactoryCapabilities,
+  type WidthAxisId,
+  type WidthStudy,
 } from './use-factory-api';
 
 const navItems = [
@@ -121,6 +125,15 @@ function formatDurationNs(value: number | null | undefined) {
   return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} h`;
 }
 
+function formatPlanningDurationNs(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value) || value < 0) return '—';
+  const days = value / 86_400_000_000_000;
+  if (days < 1) return formatDurationNs(value);
+  if (days < 365) return `${days < 10 ? days.toFixed(1) : Math.round(days)} d`;
+  const years = days / 365.25;
+  return `${years < 10 ? years.toFixed(1) : Math.round(years)} y`;
+}
+
 function elapsedNs(startedAt: string, now: number, endedAt?: string | null) {
   const start = Date.parse(startedAt);
   const end = endedAt ? Date.parse(endedAt) : now;
@@ -148,7 +161,7 @@ function stageLabel(value: string) {
 function formatBytes(value: number | null) {
   if (value === null || !Number.isFinite(value) || value < 0) return '—';
   if (value < 1024) return `${Math.round(value)} B`;
-  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+  const units = ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
   let amount = value / 1024;
   let unit = 0;
   while (amount >= 1024 && unit < units.length - 1) {
@@ -204,10 +217,11 @@ function etaDuration(eta: TimingEta | null) {
 
 export default function Home() {
   const [activeView, setActiveView] = useState('Matrix');
+  const [selectedLanguageId, setSelectedLanguageId] = useState('c');
   const [batchOrder, setBatchOrder] = useState<string[]>([]);
   const interfaceScale = useSyncExternalStore<InterfaceScale>(subscribeInterfaceScale, readInterfaceScale, () => 1);
   const factory = useFactoryApi();
-  const authorityBatchRows: BatchRow[] = (factory.authority?.plans ?? []).map(plan => {
+  const planBatchRows: BatchRow[] = (factory.authority?.plans ?? []).map(plan => {
     const desired = plan.summary.desired_cells ?? 0;
     const built = plan.inventory.summary.built ?? 0;
     const kinds = Array.from(new Set(plan.matrices.map(matrix => String(matrix.kind ?? 'unknown'))));
@@ -227,9 +241,40 @@ export default function Home() {
       note: plan.path,
     };
   });
-  const currentBatchRows = factory.snapshot ? resolvedBatchRows(factory.snapshot) : authorityBatchRows;
+  const widthStudyBatchRows: BatchRow[] = (factory.authority?.width_studies ?? []).map(study => {
+    const defaultPreset = study.presets.find(preset => preset.id === study.default_preset);
+    const reviewed = study.readiness.reviewed_recipe_families;
+    return {
+      id: study.id,
+      name: study.name,
+      status: 'Defined',
+      progress: `${reviewed} / ${study.family_count} families recipe-ready`,
+      percent: Math.round((reviewed / study.family_count) * 100),
+      worker: '—',
+      route: defaultPreset
+        ? `${defaultPreset.metrics.build_width_per_family}/family · width study`
+        : 'width study',
+      eta: '—',
+      tier: 'W',
+      note: `${study.authority_path} · ${defaultPreset?.metrics.build_cells.toLocaleString() ?? '—'} default build cells`,
+    };
+  });
+  const authorityBatchRows = [...planBatchRows, ...widthStudyBatchRows];
+  const currentBatchRows = factory.snapshot
+    ? [
+      ...resolvedBatchRows(factory.snapshot),
+      ...widthStudyBatchRows.filter(study => (
+        !factory.snapshot?.batches.some(batch => batch.id === study.id)
+      )),
+    ]
+    : authorityBatchRows;
   const effectiveBatchOrder = factory.snapshot
-    ? factory.snapshot.batches.map(batch => batch.id)
+    ? [
+      ...factory.snapshot.batches.map(batch => batch.id),
+      ...widthStudyBatchRows.map(study => study.id).filter(id => (
+        !factory.snapshot?.batches.some(batch => batch.id === id)
+      )),
+    ]
     : batchOrder.length
       ? batchOrder
       : authorityBatchRows.map(batch => batch.id);
@@ -524,7 +569,7 @@ export default function Home() {
               </div>
             </article>
           </section>
-          </> : <SecondaryView view={activeView} navigateTo={setActiveView} batchOrder={effectiveBatchOrder} setBatchOrder={setBatchOrder} rows={currentBatchRows} factory={factory} />}
+          </> : <SecondaryView view={activeView} navigateTo={setActiveView} batchOrder={effectiveBatchOrder} setBatchOrder={setBatchOrder} rows={currentBatchRows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />}
         </div>
       </section>
     </main>
@@ -533,14 +578,111 @@ export default function Home() {
 
 type FactoryApiState = ReturnType<typeof useFactoryApi>;
 
-function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState }) {
-  if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} />;
+function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
+  if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} />;
-  if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} />;
+  if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Evidence') return <EvidenceView snapshot={factory.snapshot} />;
   if (view === 'Automation') return <AutomationView factory={factory} />;
   return <ActivityView events={factory.events} connection={factory.connection} />;
+}
+
+function LanguageScopeSelector({ languages, selectedId, onSelect }: { languages: CoverageLanguage[]; selectedId: string; onSelect: (id: string) => void }) {
+  return <section className="language-scope-selector" aria-label="Coverage language scope"><div><span>LANGUAGE MATRIX</span><strong>One census · language-owned treatment policies</strong></div><div>{languages.map(language => <button key={language.id} className={selectedId === language.id ? 'active' : ''} onClick={() => onSelect(language.id)} aria-pressed={selectedId === language.id}><b>{language.label}</b><small>{language.state.replaceAll('-', ' ')}</small></button>)}</div></section>;
+}
+
+function WidthStudyPanel({ study, capabilities }: { study: WidthStudy; capabilities: FactoryCapabilities | null }) {
+  const defaultPreset = study.presets.find(preset => preset.id === study.default_preset) ?? study.presets[0];
+  const [axisValues, setAxisValues] = useState<Record<WidthAxisId, number>>(() => Object.fromEntries(
+    study.axes.map(axis => [axis.id, defaultPreset?.[axis.id] ?? axis.default]),
+  ) as Record<WidthAxisId, number>);
+  const [targetFamilies, setTargetFamilies] = useState(study.scaling.default_target_families);
+  const [workers, setWorkers] = useState(study.scaling.default_workers);
+  const [complexityMultiplier, setComplexityMultiplier] = useState(1);
+  const [retainedMultiplier, setRetainedMultiplier] = useState(1);
+  const buildWidth = axisValues.releases * axisValues.routes * axisValues.build_profiles * axisValues.artifact_shapes;
+  const activePreset = study.presets.find(preset => study.axes.every(axis => preset[axis.id] === axisValues[axis.id]));
+  const activeRequirements = study.toolchain_requirements.slice(0, axisValues.routes);
+  const capabilityById = new Map((capabilities?.toolchains ?? []).map(row => [row.id, row]));
+  const requirementState = (requirement: WidthStudy['toolchain_requirements'][number]) => {
+    if (requirement.route_state === 'pinned-source' && requirement.source_capable_toolchain_ids.some(id => capabilityById.get(id)?.state === 'verified-cached')) return 'pinned-cache-ready';
+    return requirement.route_state;
+  };
+  const stateLabel: Record<string, string> = {
+    installed: 'HOST INSTALLED',
+    'pinned-cache-ready': 'PINNED CACHE READY',
+    'pinned-source': 'PINNED SOURCE',
+    'archive-only': 'ARCHIVE EVIDENCE ONLY',
+    'remote-required': 'REMOTE WORKER REQUIRED',
+    'definition-required': 'DEFINITION + PIN REQUIRED',
+  };
+  const nextGate: Record<string, string> = {
+    installed: 'Verified',
+    'pinned-cache-ready': 'Qualify route',
+    'pinned-source': 'Fetch + qualify',
+    'archive-only': 'Add compiler pin',
+    'remote-required': 'Enroll worker',
+    'definition-required': 'Define + pin',
+  };
+  const stateCounts = activeRequirements.reduce<Record<string, number>>((counts, requirement) => {
+    const state = requirementState(requirement);
+    counts[state] = (counts[state] ?? 0) + 1;
+    return counts;
+  }, {});
+  const projectionFor = (families: number) => {
+    const buildCells = families * buildWidth;
+    const analyses = buildCells * axisValues.analysis_profiles;
+    const executions = analyses * axisValues.replay;
+    const retainedBytes = executions * study.calibration.retained_bundle_bytes_p50 * retainedMultiplier;
+    const compactBytes = analyses * study.calibration.compact_output_bytes_p50 * retainedMultiplier;
+    return {
+      families,
+      buildCells,
+      analyses,
+      executions,
+      policyEvaluations: analyses * axisValues.admission_profiles,
+      idealWallNs: executions * study.calibration.successful_wall_ns_p50 * complexityMultiplier / workers,
+      retainedBytes,
+      compactBytes,
+      diskBytes: retainedBytes + compactBytes,
+    };
+  };
+  const projections = study.scaling.comparison_family_counts.map(projectionFor);
+  const baseline = projectionFor(study.family_count);
+  const target = projectionFor(targetFamilies);
+  const selectPreset = (preset: WidthStudy['presets'][number]) => setAxisValues(Object.fromEntries(
+    study.axes.map(axis => [axis.id, preset[axis.id]]),
+  ) as Record<WidthAxisId, number>);
+  const updateAxis = (axis: WidthAxisId, value: number) => setAxisValues(current => ({ ...current, [axis]: value }));
+  return <section className="panel width-study-panel">
+    <div className="panel-header width-study-header"><div><p className="panel-kicker">DEFINED BATCH · {study.id}</p><h3>Top 10 C width laboratory</h3><small>{study.purpose}</small></div><div><span className="plan-state">DEFINED · DISARMED</span><code>{study.authority_path}</code></div></div>
+    <div className="width-study-warning"><span>!</span><p><strong>This is coverage intent, not queued work.</strong><small>{study.queue_policy}</small></p></div>
+    <div className="width-study-presets"><span>WIDTH PRESET</span><div>{study.presets.map(preset => <button key={preset.id} className={activePreset?.id === preset.id ? 'active' : ''} onClick={() => selectPreset(preset)} title={preset.description}><b>{preset.label}</b><small>{preset.metrics.build_width_per_family.toLocaleString()} builds/family · {preset.evidence_class}</small></button>)}</div><em>{activePreset ? activePreset.description : 'Custom width · bounded by the declared study authority'}</em></div>
+    <div className="width-axis-grid">{study.axes.map(axis => <label key={axis.id}><span><b>{axis.label}</b><strong>{axisValues[axis.id]}</strong></span><input type="range" min={axis.minimum} max={axis.maximum} value={axisValues[axis.id]} onChange={event => updateAxis(axis.id, Number(event.target.value))} /><small>{axis.minimum}–{axis.maximum} {axis.unit} · {axis.layer}</small><p>{axis.description}</p></label>)}</div>
+    <div className="width-study-metrics">
+      <article><span>BUILD WIDTH / FAMILY</span><strong>{buildWidth.toLocaleString()}</strong><small>releases × routes × build profiles × shapes</small></article>
+      <article><span>TOP-10 BUILD CELLS</span><strong>{baseline.buildCells.toLocaleString()}</strong><small>distinct compiled/artifact identities</small></article>
+      <article><span>ANALYSIS RUNS</span><strong>{baseline.analyses.toLocaleString()}</strong><small>reuse build artifacts · ×{axisValues.analysis_profiles}</small></article>
+      <article><span>FULL-PATH EXECUTIONS</span><strong>{baseline.executions.toLocaleString()}</strong><small>analysis runs × {axisValues.replay} replay</small></article>
+      <article><span>POLICY EVALUATIONS</span><strong>{baseline.policyEvaluations.toLocaleString()}</strong><small>reuse evidence · ×{axisValues.admission_profiles}</small></article>
+    </div>
+    <div className="width-study-body">
+      <section className="width-family-card"><header><div><p className="panel-kicker">FIXED SUBJECT SET</p><h4>Provisional C-screened top ten</h4></div><span>{study.readiness.reviewed_recipe_families}/{study.family_count} recipe-ready</span></header><div>{study.families.map(family => <article key={family.id}><b>{String(family.rank).padStart(2, '0')}</b><p><strong>{family.label}</strong><small>{family.selection_evidence}</small></p><em className={family.recipe_state}>{family.recipe_state.replaceAll('-', ' ')}</em></article>)}</div><footer>{study.caveat}</footer></section>
+      <section className="width-scale-card"><header><div><p className="panel-kicker">10 → 80 CAPACITY EXPLORER</p><h4>Same width, more families</h4></div><span>n={study.calibration.sample_count} smoke samples</span></header>
+        <div className="width-scale-controls"><label><span>FAMILIES</span><div>{study.scaling.comparison_family_counts.map(count => <button key={count} className={targetFamilies === count ? 'active' : ''} onClick={() => setTargetFamilies(count)}>{count}</button>)}</div></label><label><span>WORKER SLOTS <b>{workers}</b></span><input type="range" min="1" max={study.scaling.maximum_workers} value={workers} onChange={event => setWorkers(Number(event.target.value))} /></label><label><span>TIME COMPLEXITY × <b>{complexityMultiplier}</b></span><input type="range" min="1" max="50" value={complexityMultiplier} onChange={event => setComplexityMultiplier(Number(event.target.value))} /></label><label><span>RETAINED BYTES × <b>{retainedMultiplier}</b></span><input type="range" min="1" max="20" value={retainedMultiplier} onChange={event => setRetainedMultiplier(Number(event.target.value))} /></label></div>
+        <div className="width-delta"><span>10 → {targetFamilies} DELTA</span><div><p><strong>+{(target.executions - baseline.executions).toLocaleString()}</strong><small>full-path executions</small></p><p><strong>+{formatPlanningDurationNs(target.idealWallNs - baseline.idealWallNs)}</strong><small>ideal occupied-slot wall time</small></p><p><strong>+{formatBytes(target.diskBytes - baseline.diskBytes)}</strong><small>retained + compact disk proxy</small></p><p><strong>{formatBytes(workers * study.calibration.peak_worker_rss_bytes_p50)}</strong><small>concurrent RSS proxy</small></p></div></div>
+        <div className="width-scale-table"><div className="head"><span>Families</span><span>Build cells</span><span>Executions</span><span>Ideal wall</span><span>Retained</span><span>Compact</span></div>{projections.map(row => <div className={row.families === targetFamilies ? 'selected' : ''} key={row.families}><strong>{row.families}</strong><span>{row.buildCells.toLocaleString()}</span><span>{row.executions.toLocaleString()}</span><b>{formatPlanningDurationNs(row.idealWallNs)}</b><span>{formatBytes(row.retainedBytes)}</span><span>{formatBytes(row.compactBytes)}</span></div>)}</div>
+        <footer><strong>Smoke-linear projection; not an ETA.</strong> {study.calibration.caveat} Scratch peak: {study.calibration.scratch_peak_state}. Model: {study.scaling.model}.</footer>
+      </section>
+    </div>
+    <section className="width-toolchain-card"><header><div><p className="panel-kicker">ROUTE WIDTH → ACQUISITION LEDGER</p><h4>{axisValues.routes} active requirements from an ordered set of {study.toolchain_requirements.length}</h4></div><div className="width-route-counts"><span className="installed">{(stateCounts.installed ?? 0) + (stateCounts['pinned-cache-ready'] ?? 0)} ready</span><span className="remote-required">{stateCounts['remote-required'] ?? 0} remote</span><span className="definition-required">{(stateCounts['definition-required'] ?? 0) + (stateCounts['archive-only'] ?? 0)} definitions</span></div></header><div className="width-toolchain-note"><span>i</span><p><strong>The GUI tracks demand and the next qualification gate.</strong><small>Installation stays disabled until the exact compiler, linker, SDK/sysroot, digest and licence are reviewed in authority.</small></p></div><div className="width-toolchain-list">{study.toolchain_requirements.map(requirement => {
+      const active = requirement.order <= axisValues.routes;
+      const state = requirementState(requirement);
+      return <article className={active ? `active ${state}` : 'future'} key={requirement.id}><b>{String(requirement.order).padStart(2, '0')}</b><div><strong>{requirement.target_label}</strong><small>{requirement.target_id} · {requirement.wave}</small></div><p><strong>{requirement.compiler_label}</strong><small>{requirement.worker_class} · {requirement.acquisition}</small></p><span className={`route-requirement-state ${state}`}>{active ? stateLabel[state] : 'OUTSIDE CURRENT WIDTH'}</span><code>{requirement.version_policy}</code><button disabled title="Install actions require an exact reviewed pin and remain intentionally disabled in this coverage-intent batch">{active ? nextGate[state] : 'Later wave'}</button></article>;
+    })}</div></section>
+    {study.readiness.blockers.length > 0 && <details className="width-blockers"><summary>Materialization blockers <span>{study.readiness.blockers.length}</span></summary><div>{study.readiness.blockers.map(blocker => <p key={blocker}>! {blocker}</p>)}</div></details>}
+  </section>;
 }
 
 function ViewIntro({ kicker, title, copy, action }: { kicker: string; title: string; copy: string; action?: React.ReactNode }) {
@@ -580,13 +722,13 @@ type RecipeOption = {
   toolchainVariants?: string[];
 };
 
-function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows: BatchRow[]; factory: FactoryApiState }) {
+function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { batchOrder: string[]; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   const executor = 'local';
   const timing = factory.timings;
   const [selectedRecipesOverride, setSelectedRecipesOverride] = useState<string[] | null>(null);
   const [routeSelectionsOverride, setRouteSelectionsOverride] = useState<Record<string, string[]> | null>(null);
   const [factorSelectionsOverride, setFactorSelectionsOverride] = useState<Record<string, string[]> | null>(null);
-  const [collapsedVariableGroups, setCollapsedVariableGroups] = useState(['analysis-controls', 'environment-identity', 'fid-matching', 'truth-admission', 'hardening-instrumentation', 'link-output', 'analysis-recovery']);
+  const [collapsedVariableGroups, setCollapsedVariableGroups] = useState(['executable-routes', 'analysis-controls', 'environment-identity', 'fid-matching', 'truth-admission', 'hardening-instrumentation', 'link-output', 'analysis-recovery']);
   const [collapsedLibraryGroups, setCollapsedLibraryGroups] = useState<string[]>([]);
   const [matrixLayer, setMatrixLayer] = useState<'both' | 'plan' | 'inventory'>('both');
   const [queueStrategyOverride, setQueueStrategyOverride] = useState<string | null>(null);
@@ -600,6 +742,10 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
   const [savedDraftSha256, setSavedDraftSha256] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState('Resolve the generated request before saving it.');
   const authority = factory.authority;
+  const coverageUniverse = authority?.coverage_universe;
+  const widthStudy = authority?.width_studies.find(study => study.language_id === selectedLanguageId);
+  const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
+  const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (
     Object.entries(plan.inventory.cells)
   )) ?? [];
@@ -744,24 +890,76 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
   const factorStageIds = Array.from(new Set(
     (authority?.factors ?? []).map(factor => factor.stage),
   ));
-  const catalogFactorGroups = factorStageIds.map(stage => ({
-    id: 'known-' + stage,
-    label: humanize(stage),
-    note: 'known sensitivity and provenance dimensions',
-    options: (authority?.factors ?? [])
-      .filter(factor => factor.stage === stage)
-      .map(factor => ({
-        id: factor.id,
-        label: factor.label,
-        detail: factor.impact,
-        state: factor.confidence === 'observed-sensitive' ? 'recorded' : 'known',
-      })),
-  }));
-  const allFactorOptions = factorGroups.flatMap(group => group.options);
+  const catalogFactorGroups = selectedLanguageId === 'c'
+    ? factorStageIds.map(stage => ({
+      id: 'known-' + stage,
+      label: humanize(stage),
+      note: 'known C sensitivity and provenance dimensions',
+      options: (authority?.factors ?? [])
+        .filter(factor => factor.stage === stage)
+        .map(factor => ({
+          id: factor.id,
+          label: factor.label,
+          detail: factor.impact,
+          state: factor.confidence === 'observed-sensitive' ? 'recorded' : 'known',
+        })),
+    }))
+    : selectedLanguage
+      ? [{
+        id: `${selectedLanguage.id}-treatments`,
+        label: `${selectedLanguage.label} treatment policy`,
+        note: 'language-owned axes; finite profiles still require qualification',
+        options: selectedLanguage.treatment_axes.map((axis, index) => ({
+          id: `${selectedLanguage.id}:axis:${index + 1}`,
+          label: axis,
+          detail: selectedLanguage.denominator,
+          state: selectedLanguage.state === 'vocabulary-only' ? 'conceptual' : 'known',
+        })),
+      }]
+      : [];
+  const scopedFactorGroups = selectedLanguageId === 'c' ? factorGroups : [];
+  const allFactorOptions = scopedFactorGroups.flatMap(group => group.options);
   const knownFactorCount = authority?.factors.length ?? 0;
   const measuredFactorCount = authority?.factors.filter(factor => (
     factor.confidence.startsWith('observed')
   )).length ?? 0;
+  const variantCountsByFactor = (authority?.factor_variants ?? []).reduce<Record<string, number>>((counts, variant) => ({
+    ...counts,
+    [variant.factor]: (counts[variant.factor] ?? 0) + 1,
+  }), {});
+  const rawNamedTreatmentSpace = selectedLanguageId === 'c' ? Object.values(variantCountsByFactor).reduce(
+    (product, count) => product * count,
+    Object.keys(variantCountsByFactor).length ? 1 : 0,
+  ) : 0;
+  const executableTargetCount = (authority?.targets ?? []).filter(target => (
+    target.native_route_ids.length > 0 || target.source_capable_toolchain_ids.length > 0
+  )).length;
+  const targetContextOptions = (authority?.targets ?? []).map(target => {
+    const executable = target.native_route_ids.length > 0 || target.source_capable_toolchain_ids.length > 0;
+    const state = executable
+      ? 'executable'
+      : target.catalog_state === 'coverage-intent'
+        ? 'conceptual'
+        : target.catalog_state === 'study-observed'
+          ? 'observed'
+          : 'catalogued';
+    return {
+      id: `target:${target.id}`,
+      label: target.label,
+      detail: `${target.bits}-bit · ${target.endianness} · ${target.binary_format}`,
+      state,
+      compatible: ['native', 'source', 'malware'],
+      kind: 'target',
+    };
+  });
+  const compilerProfileOptions = languageProfiles.map(profile => ({
+    id: `profile:${profile.id}`,
+    label: profile.label,
+    detail: `${profile.route_scope} · ${profile.controls.join(' · ')}`,
+    state: profile.state,
+    compatible: ['native', 'source', 'malware'],
+    kind: 'profile',
+  }));
   const nativeRouteOptions = (authority?.native.routes ?? []).map(route => {
     const compiler = Array.isArray(route.compiler)
       ? route.compiler.join(' ')
@@ -794,9 +992,11 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
     })),
   ];
   const matrixVariableGroups = [
-    { id: 'platform-abi', label: 'Platform / ABI', note: 'route and target', options: routeColumns },
+    { id: 'target-contexts', label: 'Target / ISA / ABI', note: 'catalogued possibility space; readiness is an overlay', options: targetContextOptions },
+    { id: 'executable-routes', label: 'Executable route identities', note: 'registered native and pinned source/archive routes', options: routeColumns },
+    { id: 'compiler-profiles', label: 'Compiler calibration profiles', note: 'bounded family × version × setting pack', options: compilerProfileOptions },
     ...catalogFactorGroups.map(group => ({ ...group, options: group.options.map(option => ({ ...option, kind: 'catalog', compatible: ['native', 'source', 'malware'] })) })),
-    ...factorGroups.map(group => ({ ...group, options: group.options.map(option => ({ ...option, kind: 'factor', compatible: ['native'] })) })),
+    ...scopedFactorGroups.map(group => ({ ...group, options: group.options.map(option => ({ ...option, kind: 'factor', compatible: ['native'] })) })),
   ];
   const authorityDefaults = (() => {
     const recipes = new Set<string>();
@@ -846,9 +1046,10 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
     const rank = batchOrder.indexOf(batchId);
     return rank < 0 ? Number.MAX_SAFE_INTEGER : rank;
   };
-  const orderedRecipeOptions = [...recipeOptions].sort((left, right) => batchRank(left.batch) - batchRank(right.batch));
+  const scopedRecipeOptions = selectedLanguageId === 'c' ? recipeOptions : [];
+  const orderedRecipeOptions = [...scopedRecipeOptions].sort((left, right) => batchRank(left.batch) - batchRank(right.batch));
   const selectedRecipeRows = orderedRecipeOptions.filter(recipe => recipe.planEligible && selectedRecipes.includes(recipe.id));
-  const inspected = recipeOptions.find(recipe => recipe.id === inspectedRecipe);
+  const inspected = scopedRecipeOptions.find(recipe => recipe.id === inspectedRecipe);
   const inspectedCatalogFactor = catalogFactorGroups.flatMap(group => group.options).find(option => option.id === inspectedFactor);
   const inspectedFactorGroup = catalogFactorGroups.find(group => group.options.some(option => option.id === inspectedFactor));
   const libraryGroups = batchOrder.map(batchId => {
@@ -930,17 +1131,14 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
   const plannedCells = executionQueue.filter(row => row.state === 'queueable').length;
   const blockedCells = Math.max(0, desiredCellCount - plannedCells);
   const builtExecutions = executionQueue.filter(row => row.cell.coverage === 'built').length;
-  const tierZeroBatchIds = new Set(rows.filter(batch => batch.tier === 'T0').map(batch => batch.id));
-  const tierZeroSubjects = recipeOptions.filter(recipe => tierZeroBatchIds.has(recipe.batch));
-  const tierZeroGapCount = tierZeroSubjects.filter(recipe => !recipe.planEligible).length;
-  const malwareRecipe = recipeOptions.find(recipe => recipe.mode === 'malware');
+  const malwareRecipe = scopedRecipeOptions.find(recipe => recipe.mode === 'malware');
   const malwareInventory = malwareRecipe ? inventoryCells.filter(([cellId]) => (
     cellMatchesRecipe(cellId, malwareRecipe.name, malwareRecipe.version)
   )) : [];
   const measuredEtaNs = etaDuration(timing?.eta ?? null);
   const selectedFactorRows = allFactorOptions.filter(option => selectedRecipeRows.some(recipe => (factorSelections[recipe.id] || []).includes(option.id)));
   const toggleRecipe = (id: string) => {
-    if (!recipeOptions.find(recipe => recipe.id === id)?.planEligible) return;
+    if (!scopedRecipeOptions.find(recipe => recipe.id === id)?.planEligible) return;
     setSelectedRecipesOverride(current => {
       const selected = current ?? selectedRecipes;
       return selected.includes(id) ? selected.filter(item => item !== id) : [...selected, id];
@@ -1027,16 +1225,24 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
   };
   return (
     <div className="view-stack">
-      <ViewIntro kicker="ANALYST MATRIX" title="The whole factory in one view" copy="Libraries and match sets run down the batch-ordered left edge; every known platform, compiler, build and analysis variable runs across the top. Use the intersections to inspect coverage, plan precise work, and see queued, built, unbuilt and blocked state." action={<button className="secondary-action" onClick={() => setTomlOpen(!tomlOpen)}>{tomlOpen ? 'Hide' : 'Show'} TOML</button>} />
+      <ViewIntro kicker="ANALYST MATRIX" title={`${selectedLanguage?.label ?? 'C'} coverage matrix — with reality overlaid`} copy="The census, hard-route, analysis, admission and provenance layers are shared. Compiler and treatment policy belong to the selected language, so one language can never silently inherit another language's cell count." action={<button className="secondary-action" onClick={() => setTomlOpen(!tomlOpen)} disabled={selectedLanguageId !== 'c'}>{selectedLanguageId === 'c' ? `${tomlOpen ? 'Hide' : 'Show'} TOML` : 'No executable draft'}</button>} />
+
+      <LanguageScopeSelector languages={coverageUniverse?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
+
+      {selectedLanguage && <section className="panel language-matrix-contract"><div><span className={`language-state ${selectedLanguage.state}`}>{selectedLanguage.state.replaceAll('-', ' ')}</span><p className="panel-kicker">{selectedLanguage.label.toUpperCase()} DENOMINATOR</p><h3>{selectedLanguage.scope}</h3><p>{selectedLanguage.denominator}</p><small>{selectedLanguage.caveat}</small></div><div><span>TREATMENT AXES</span><div>{selectedLanguage.treatment_axes.map(axis => <em key={axis}>{axis}</em>)}</div></div></section>}
+
+      {widthStudy && <WidthStudyPanel key={widthStudy.id} study={widthStudy} capabilities={factory.capabilities} />}
+
+      {selectedLanguageId !== 'c' && <div className="inline-warning language-registration-warning">The {selectedLanguage?.label} matrix is defined conceptually, but no screened family denominator, finite profile pack or executable recipe rows are registered. The empty rows below are deliberate—not zero coverage.</div>}
 
       <section className="plan-source-bar">
-        <div><span className="source-glyph">T</span><p><strong>plans/priority-queue.toml</strong><small>fidb-queue/v1 · batch order points to immutable fidb-plan/v1 requests</small></p></div>
-        <span className="authority-badge">PRIORITY AUTHORITY</span>
+        <div><span className="source-glyph">T</span><p><strong>{selectedLanguageId === 'c' ? 'plans/priority-queue.toml' : `${selectedLanguage?.label ?? selectedLanguageId} execution authority not registered`}</strong><small>{selectedLanguageId === 'c' ? 'fidb-queue/v1 · batch order points to immutable fidb-plan/v1 requests' : 'conceptual language matrix · no queue cells or executable recipes'}</small></p></div>
+        <span className="authority-badge">{selectedLanguageId === 'c' ? 'PRIORITY AUTHORITY' : 'DESIGN SCOPE'}</span>
       </section>
 
       <div className="matrix-workspace">
         <section className="panel crosspoint-matrix-panel">
-          <div className="matrix-main-header"><div><p className="panel-kicker">MAIN BUILD MATRIX</p><h2>Libraries × platforms × FID variables</h2><small>Scroll down through later batches. Expand groups, then click intersections to define exact coverage for each library.</small></div><div className="matrix-live-summary"><span>KNOWN FACTORS <strong>{knownFactorCount}</strong><small>{measuredFactorCount} report-observed dimensions</small></span><span>T0 SUBJECTS <strong>{tierZeroSubjects.length}</strong><small>{tierZeroGapCount} recipe or route gaps</small></span><span>DRAFT EXECUTIONS <strong>{desiredCellCount}</strong></span><span>QUEUEABLE <strong>{plannedCells}</strong><small>TOML intent</small></span><span>BUILT <strong>{builtExecutions}</strong><small>sealed evidence only</small></span><span>ARTIFACT ONLY <strong>{cells.filter(cell => cell.coverage === 'artifact-only').length}</strong></span></div></div>
+          <div className="matrix-main-header"><div><p className="panel-kicker">{selectedLanguage?.label.toUpperCase() ?? 'C'} COVERAGE MATRIX</p><h2>Families × hard routes × language toolchains × treatments × admission</h2><small>Raw possibility, registered capability, planned work, built evidence and admitted coverage remain separate layers.</small></div><div className="matrix-live-summary"><span>RAW TREATMENT SPACE <strong>{rawNamedTreatmentSpace ? rawNamedTreatmentSpace.toLocaleString() : '—'}</strong><small>{selectedLanguageId === 'c' ? 'named C tuples / target / release; not a run plan' : 'finite profile pack not qualified'}</small></span><span>CANDIDATE PROFILES <strong>{languageProfiles.length || '—'}</strong><small>language-scoped · assumptions labelled</small></span><span>TARGET CONTEXTS <strong>{authority?.targets.length ?? '—'}</strong><small>{executableTargetCount} have a registered source route</small></span><span>DRAFT EXECUTIONS <strong>{desiredCellCount}</strong><small>TOML intent</small></span><span>QUEUEABLE <strong>{plannedCells}</strong><small>{selectedLanguageId === 'c' ? `${knownFactorCount} known factors · ${measuredFactorCount} observed` : 'no executable language pack'}</small></span><span>BUILT EVIDENCE <strong>{selectedLanguageId === 'c' ? builtCellIds.size : '—'}</strong><small>sealed cells · not yet coverage</small></span><span>ADMITTED COVERAGE <strong>—</strong><small>admission ledger not projected</small></span></div></div>
           <div className="matrix-toolbar">
             <div className="matrix-layer-control"><span>SHOW</span>{(['both', 'plan', 'inventory'] as const).map(layer => <button key={layer} className={matrixLayer === layer ? 'active' : ''} onClick={() => setMatrixLayer(layer)}>{layer === 'both' ? 'Plan + built' : layer}</button>)}</div>
             <div className="matrix-executor-control"><span>WORKER POOL</span><button className="active warning" disabled>Library local</button><small>native + explicit local cross-build · no QEMU</small></div>
@@ -1065,8 +1271,10 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
                           && (!recipe.toolchainVariants?.length || recipe.toolchainVariants.includes(toolchain.variant))
                         ))
                     );
+                    const possibilityOnly = column.kind === 'target' || column.kind === 'profile';
                     const compatible = column.kind === 'summary'
                       || column.kind === 'catalog'
+                      || possibilityOnly
                       || (column.kind === 'route' && routeIsCompatible(recipe, column.id))
                       || (column.kind === 'factor' && recipe.mode === 'native' && recipe.planEligible);
                     const requested = recipeSelected && (column.kind === 'route' ? (routeSelections[recipe.id] || []).includes(column.id) : column.kind === 'factor' ? (factorSelections[recipe.id] || []).includes(column.id) : false);
@@ -1080,7 +1288,7 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
                     )) : undefined;
                     const unsupported = column.state === 'gap' || (column.kind === 'factor' && column.state !== 'registered');
                     let state = compatible || routeRelevant ? 'unbuilt' : 'unavailable';
-                    if (column.kind === 'catalog') state = column.state;
+                    if (column.kind === 'catalog' || possibilityOnly) state = column.state;
                     else if (column.kind === 'summary') state = 'summary';
                     else if (column.kind === 'route' && routeRelevant && !compatible) state = 'blocked';
                     else if (catalogOnly && column.kind !== 'route') state = 'blocked';
@@ -1095,18 +1303,19 @@ function PlannerView({ batchOrder, rows, factory }: { batchOrder: string[]; rows
                     const action = () => {
                       if (column.kind === 'summary') return toggleVariableGroup(variableGroup.id);
                       if (column.kind === 'catalog') return setInspectedFactor(column.id);
+                      if (possibilityOnly) return;
                       if (!compatible || catalogOnly) return setInspectedRecipe(recipe.id);
                       if (!recipeSelected) setSelectedRecipesOverride(current => [...(current ?? selectedRecipes), recipe.id]);
                       if (column.kind === 'route') toggleRoute(recipe.id, column.id);
                       else toggleFactor(recipe.id, column.id);
                     };
-                    return <td className={`matrix-point-cell ${state}`} key={`${recipe.id}-${column.id}`}><button onClick={action} disabled={!compatible && !routeRelevant} aria-pressed={requested} title={`${recipe.name} × ${column.label}: ${catalogOnly && state === 'blocked' ? 'desired gap' : state}. ${catalogOnly ? recipe.gap : column.detail}`}><span>{state === 'unavailable' ? '—' : state === 'blocked' ? '!' : state === 'artifact-only' ? '◐' : state === 'built' ? '■' : state === 'running' ? '▶' : state === 'recorded' ? '●' : state === 'unmodeled' ? '?' : state === 'summary' ? (column.kind === 'summary' ? (variableGroup.options.filter(option => option.kind === 'catalog' || (option.kind === 'route' ? (routeSelections[recipe.id] || []).includes(option.id) : (factorSelections[recipe.id] || []).includes(option.id))).length || '·') : '·') : requested ? '■' : '·'}</span></button></td>;
+                    return <td className={`matrix-point-cell ${state}`} key={`${recipe.id}-${column.id}`}><button onClick={action} disabled={(!compatible && !routeRelevant) || possibilityOnly} aria-pressed={requested} title={`${recipe.name} × ${column.label}: ${catalogOnly && state === 'blocked' ? 'desired gap' : state}. ${catalogOnly ? recipe.gap : column.detail}`}><span>{state === 'unavailable' ? '—' : state === 'blocked' ? '!' : state === 'artifact-only' ? '◐' : state === 'built' ? '■' : state === 'running' ? '▶' : state === 'executable' ? 'E' : state === 'conceptual' ? 'C' : state === 'catalogued' ? 'K' : state === 'desired' ? 'D' : state === 'guarded' ? 'G' : state === 'observed' ? 'O' : state === 'recorded' ? '●' : state === 'unmodeled' ? '?' : state === 'summary' ? (column.kind === 'summary' ? (variableGroup.options.filter(option => option.kind === 'catalog' || (option.kind === 'route' ? (routeSelections[recipe.id] || []).includes(option.id) : (factorSelections[recipe.id] || []).includes(option.id))).length || '·') : '·') : requested ? '■' : '·'}</span></button></td>;
                   }))}</tr>;
                 })}</Fragment>)}</Fragment>;
               })}</tbody>
             </table>
           </div>
-          <div className="matrix-legend"><span><i className="selected" /> selected</span><span><i className="queued" /> queued</span><span><i className="running" /> running</span><span><i className="built" /> sealed built</span><span><i className="artifact-only" /> artifact only</span><span><i className="blocked" /> blocked / desired gap</span><span><i className="unbuilt" /> unbuilt</span><span><i className="unavailable" /> incompatible</span><p>Built is evidence-backed; a completed batch alone does not imply that its artifact is still present.</p></div>
+          <div className="matrix-legend"><span><i className="conceptual" /> conceptual context</span><span><i className="catalogued" /> catalogued</span><span><i className="executable" /> executable route exists</span><span><i className="selected" /> selected</span><span><i className="queued" /> queued</span><span><i className="running" /> running</span><span><i className="built" /> sealed built</span><span><i className="blocked" /> blocked / guarded</span><span><i className="unavailable" /> incompatible</span><p>Possibility-space markers are not queue cells. Built means evidence-backed output, never merely a declared target.</p></div>
           {inspectedCatalogFactor && <aside className="matrix-factor-inspector"><div><span>KNOWN SENSITIVITY FACTOR</span><button onClick={() => setInspectedFactor(null)} aria-label="Close factor detail">×</button></div><h3>{inspectedCatalogFactor.label}</h3><p>{inspectedCatalogFactor.detail}</p><dl><div><dt>Catalogue ID</dt><dd>{inspectedCatalogFactor.id}</dd></div><div><dt>Group</dt><dd>{inspectedFactorGroup?.label || 'Sensitivity'}</dd></div><div><dt>Matrix status</dt><dd>{inspectedCatalogFactor.state === 'recorded' ? 'Recorded in resolved-cell provenance' : 'Known factor; no named selectable variant yet'}</dd></div><div><dt>Authority</dt><dd>sensitivity/factors.toml</dd></div></dl><small>The catalogue is intentionally extensible: report-backed factors are the current baseline, not a claim that every possible FID influence is already known.</small></aside>}
           {inspected && <aside className="recipe-provenance matrix-provenance"><div><span>{inspected.planEligible ? 'REVIEWED RECIPE PROVENANCE' : 'TIER 0 COVERAGE GAP'}</span><button onClick={() => setInspectedRecipe(null)} aria-label="Close provenance">×</button></div><h3>{inspected.name} <em>{inspected.version}</em></h3><p>{inspected.planEligible ? 'Immutable build identity comes from the reviewed recipe. Change the recipe TOML and re-resolve the plan to alter these fields.' : inspected.gap}</p><dl><div><dt>Authority</dt><dd>{inspected.authority}</dd></div><div><dt>Readiness</dt><dd>{inspected.coverage}</dd></div><div><dt>Batch / family</dt><dd>{inspected.batch} / {inspected.familyGroup}</dd></div><div><dt>Match context</dt><dd>{inspected.matchSet}</dd></div>{inspected.recipePath && <div><dt>Recipe</dt><dd>{inspected.recipePath}</dd></div>}{inspected.adapter && <div><dt>Mode / adapter</dt><dd>{inspected.mode} / {inspected.adapter}</dd></div>}{inspected.url && <div className="wide"><dt>Source URL</dt><dd>{inspected.url}</dd></div>}{inspected.sha256 && <div className="wide"><dt>SHA-256</dt><dd>{inspected.sha256}</dd></div>}</dl></aside>}
         </section>
@@ -1324,11 +1533,19 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live }: { on
   </div>;
 }
 
-function ToolchainsView({ factory }: { factory: FactoryApiState }) {
+function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: { factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   const inventory = factory.capabilities?.toolchains.entries ?? [];
   const targets = factory.authority?.targets ?? [];
+  const universe = factory.authority?.coverage_universe;
+  const widthStudy = factory.authority?.width_studies.find(study => study.language_id === selectedLanguageId);
+  const widthDefault = widthStudy?.presets.find(preset => preset.id === widthStudy.default_preset);
+  const requirementByTarget = new Map((widthStudy?.toolchain_requirements ?? []).map(requirement => [requirement.target_id, requirement]));
+  const selectedLanguage = universe?.languages.find(language => language.id === selectedLanguageId);
+  const languageCompilerFamilies = (universe?.compiler_families ?? []).filter(family => family.language_ids.includes(selectedLanguageId));
+  const languageProfiles = (universe?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
+  const languageScenarios = (universe?.scenarios ?? []).filter(scenario => scenario.language_id === selectedLanguageId);
   const nativeRoutes = factory.capabilities?.native_routes ?? [];
-  const [targetFilter, setTargetFilter] = useState<'all' | 'ready' | 'not-installed' | 'unregistered'>('all');
+  const [targetFilter, setTargetFilter] = useState<'all' | 'study' | 'ready' | 'not-installed' | 'unregistered'>('all');
   const [targetQuery, setTargetQuery] = useState('');
   const [expandedTargets, setExpandedTargets] = useState<Set<string>>(new Set());
   const capabilityById = new Map(inventory.map(row => [row.id, row]));
@@ -1358,28 +1575,67 @@ function ToolchainsView({ factory }: { factory: FactoryApiState }) {
           : target.archive_capable_toolchain_ids.length
             ? 'archive-only'
             : 'unregistered';
-    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, cachedInputs, state };
+    return { target, targetToolchains, sourceToolchains, targetNativeRoutes, cachedInputs, state, requirement: requirementByTarget.get(target.id) };
   });
   const normalizedQuery = targetQuery.trim().toLowerCase();
   const visibleTargets = targetRows.filter(row => {
     const matchesFilter = targetFilter === 'all'
+      || (targetFilter === 'study' && Boolean(row.requirement))
       || (targetFilter === 'ready' && (row.state === 'installed' || row.state === 'cached'))
       || (targetFilter === 'not-installed' && (row.state === 'not-installed' || row.state === 'archive-only'))
       || (targetFilter === 'unregistered' && row.state === 'unregistered');
-    const searchText = [row.target.id, row.target.label, row.target.platform, row.target.architecture, row.target.binary_format, ...row.targetToolchains.map(toolchain => toolchain.id)].join(' ').toLowerCase();
+    const searchText = [row.target.id, row.target.label, row.target.platform, row.target.architecture, row.target.binary_format, row.requirement?.compiler_label, row.requirement?.wave, ...row.targetToolchains.map(toolchain => toolchain.id)].join(' ').toLowerCase();
     return matchesFilter && (!normalizedQuery || searchText.includes(normalizedQuery));
   });
   const readyTargets = targetRows.filter(row => row.state === 'installed' || row.state === 'cached').length;
   const sourceTargets = targetRows.filter(row => row.target.native_route_ids.length || row.target.source_capable_toolchain_ids.length).length;
   const gapTargets = targetRows.length - sourceTargets;
+  const campaignScenario = languageScenarios.find(row => row.id === 'c-campaign-b-four-source-n80');
   return <div className="view-stack">
-    <ViewIntro kicker="TARGET COVERAGE INVENTORY" title="Targets & toolchains" copy="Every reviewed or study-observed target remains visible, even when no compiler exists. Installed host tools, checksum-cached cross compilers, downloadable archive candidates and unregistered platform gaps are deliberately distinct." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
+    <ViewIntro kicker="COVERAGE POSSIBILITY SPACE" title="Targets, toolchains & language matrices" copy="One shared census and hard-route model feeds separate language-owned compiler and treatment policies. The readiness inventory remains an overlay: conceptual scope never implies that this host can execute it." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
+
+    <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
+
+    {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} requirements; widening the Matrix page reveals later compiler and platform waves.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + compiler-family pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>REMOTE WORKERS</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>macOS / Windows acquisition</small></article><article className="warn"><span>PIN / DEFINITION GATES</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'definition-required' || row.route_state === 'archive-only').length}</strong><small>not installable yet</small></article></div><footer>Installation remains a reviewed follow-on: exact compiler, SDK/sysroot, linker, version, digest and licence must be frozen before an action is enabled.</footer></section>}
+
+    <section className="panel coverage-universe-panel">
+      <div className="panel-header"><div><p className="panel-kicker">SHARED MASTER MODEL · {universe?.schema_version ?? 'LOADING'}</p><h3>Population evidence is not one denominator</h3></div><span className="authority-badge">{universe?.authority_path ?? 'coverage/universe.toml'}</span></div>
+      <div className="coverage-population evidence-population">
+        <div><span>FOUR-SOURCE N80</span><strong>{universe?.population.published_four_source_n80_families ?? '—'}</strong><small>published popularity-proxy head</small></div>
+        <div className="primary"><span>CAMPAIGN-B HEAD</span><strong>{universe?.population.published_priority_head_families ?? '—'}</strong><small>N80 + {universe?.population.tier_zero_families ?? '—'} Tier-0 subjects</small></div>
+        <div><span>NINE-SOURCE SPINE</span><strong>{universe?.population.nine_source_candidate_spine_keys.toLocaleString() ?? '—'}</strong><small>raw exact-key candidates</small></div>
+        <div><span>SHARED FRONTIER</span><strong>{universe?.population.nine_source_shared_frontier_keys.toLocaleString() ?? '—'}</strong><small>supported by ≥2 source families</small></div>
+        <div className="candidate"><span>NINE-SOURCE N80</span><strong>{universe?.population.nine_source_n80_candidate_rank.toLocaleString() ?? '—'}</strong><small>rank cutoff · pre-screen, not family count</small></div>
+        <div className="provisional"><span>GLOBAL ESTIMATE</span><strong>{universe ? `${(universe.population.global_family_lower_estimate / 1_000_000).toFixed(1)}–${(universe.population.global_family_upper_estimate / 1_000_000).toFixed(1)}M` : '—'}</strong><small>provisional · central {(universe?.population.global_family_central_estimate ?? 0) / 1_000_000}M</small></div>
+      </div>
+      <div className="coverage-dimension-grid">{(universe?.dimensions ?? []).map((dimension, index) => <article key={dimension.id}><span>{String(index + 1).padStart(2, '0')} · {dimension.layer}</span><h4>{dimension.label}</h4><p>{dimension.description}</p><div>{dimension.facets.map(facet => <em key={facet}>{facet}</em>)}</div><footer><b>{dimension.matrix_role}</b><small>{dimension.matrix_role === 'analysis-reuse' ? 'can reuse compile artifacts' : dimension.matrix_role === 'bounded-profile' ? 'sample as named treatments' : dimension.matrix_role === 'applicability' ? 'route-filtered, never blindly multiplied' : dimension.matrix_role === 'multiplier' ? 'creates distinct binary identities' : 'changes interpretation or admission'}</small></footer></article>)}</div>
+      {universe && <p className="coverage-caveat"><span>i</span>{universe.population.population_caveat}</p>}
+    </section>
+
+    {selectedLanguage && <section className="panel language-policy-panel"><div className="panel-header"><div><p className="panel-kicker">{selectedLanguage.label.toUpperCase()} MATRIX CONTRACT</p><h3>{selectedLanguage.scope}</h3></div><span className={`language-state ${selectedLanguage.state}`}>{selectedLanguage.state.replaceAll('-', ' ')}</span></div><div className="language-policy-body"><article><span>COVERAGE DENOMINATOR</span><p>{selectedLanguage.denominator}</p><small>{selectedLanguage.caveat}</small><code>{selectedLanguage.authority}</code></article><article><span>LANGUAGE-OWNED TREATMENT AXES</span><div>{selectedLanguage.treatment_axes.map(axis => <em key={axis}>{axis}</em>)}</div></article></div></section>}
+
+    <div className="coverage-planning-grid">
+      <section className="panel compiler-family-panel">
+        <div className="panel-header"><div><p className="panel-kicker">{selectedLanguage?.label.toUpperCase() ?? 'LANGUAGE'} TOOLCHAIN BREADTH</p><h3>Family × pinned version × route settings</h3></div><span className="plan-state">{languageProfiles.length || 'NO'} CANDIDATE PROFILES</span></div>
+        <div className="compiler-family-list">{languageCompilerFamilies.map(family => <article key={family.id}><header><div><strong>{family.label}</strong><small>{family.route_scope}</small></div><span className={`coverage-state ${family.state}`}>{family.state}</span></header><p>{family.version_strategy}</p><div>{family.settings.map(setting => <em key={setting}>{setting}</em>)}</div><footer>{languageProfiles.filter(profile => profile.compiler_family === family.id).length} candidate profiles · route-specific mapping required</footer></article>)}</div>
+        {!languageCompilerFamilies.length && <div className="empty-state"><span>◇</span><strong>No toolchain family registered</strong><p>This language remains vocabulary-only until a reviewed finite policy is added.</p></div>}
+        {languageProfiles.length ? <details className="calibration-pack"><summary>Inspect the illustrative language profile set <span>{languageProfiles.length}</span></summary><div>{languageProfiles.map((profile, index) => <article key={profile.id}><b>{String(index + 1).padStart(2, '0')}</b><div><strong>{profile.label}</strong><small>{profile.route_scope}</small></div><code>{profile.controls.join(' · ')}</code><span className={`scenario-evidence ${profile.evidence_class}`}>{profile.evidence_class}</span></article>)}</div></details> : <div className="profile-gap"><span>PROFILE QUALIFICATION REQUIRED</span><p>The treatment axes are visible above, but no numeric multiplier is asserted for {selectedLanguage?.label}.</p></div>}
+      </section>
+      <section className="panel scale-scenario-panel">
+        <div className="panel-header"><div><p className="panel-kicker">{selectedLanguage?.label.toUpperCase() ?? 'LANGUAGE'} MATRIX SCALE</p><h3>Evidence-classified scenarios</h3></div><span className="plan-state ready">{campaignScenario ? `PROPOSED ${campaignScenario.unique_executions.toLocaleString()}` : 'DENOMINATOR PENDING'}</span></div>
+        <div className="scenario-list">{languageScenarios.map(scenario => <article className={scenario.evidence_class} key={scenario.id}><header><div><span className={`scenario-evidence ${scenario.evidence_class}`}>{scenario.evidence_class}</span><strong>{scenario.label}</strong><small>{scenario.scope}</small></div><b>{scenario.unique_executions.toLocaleString()}</b></header><code>{scenario.library_families.toLocaleString()} families × {scenario.releases} releases × {scenario.routes} routes × {scenario.profiles} profiles</code><footer><span>{scenario.replayed_executions.toLocaleString()} executions with ×{scenario.replay_multiplier} replay</span><small>{scenario.caveat}</small><code>{scenario.authority}</code></footer></article>)}</div>
+        {!languageScenarios.length && <div className="empty-state"><span>◇</span><strong>No numeric scenario asserted</strong><p>Screen the family denominator and qualify a finite {selectedLanguage?.label} profile policy before estimating executions.</p></div>}
+      </section>
+    </div>
+
+    <section className="panel coverage-ledger-model"><div className="panel-header"><div><p className="panel-kicker">COVERAGE STATE MODEL</p><h3>Built is evidence; admitted is coverage</h3></div><span className="authority-badge">SHARED ACROSS LANGUAGES</span></div><div>{[['01','Possible','candidate or unresolved'],['02','Catalogued','canonical identity'],['03','Executable','capability verified'],['04','Planned','frozen denominator'],['05','Built','sealed evidence'],['06','Admitted','QC + replay + collision gates'],['07','Detected','held-out or operational utility']].map(([order,label,note], index) => <Fragment key={label}><article><b>{order}</b><strong>{label}</strong><small>{note}</small></article>{index < 6 && <span>→</span>}</Fragment>)}</div><p>C80 uses admitted eligible family × hard-route cells with their declared language treatment profile complete. Family breadth, architecture breadth, recall, precision and operational hit rate remain separate denominators.</p></section>
+    <div className="readiness-divider"><span>READINESS OVERLAY</span><p>The conceptual universe above does not assert executability. The inventory below is the narrower, live answer for this Linux host.</p></div>
     <section className="toolchain-summary">
-      <article><span>KNOWN TARGETS</span><strong>{factory.authority ? targetRows.length : '—'}</strong><small>reviewed plus study-observed</small></article><article><span>READY LOCALLY</span><strong>{factory.capabilities ? readyTargets : '—'}</strong><small>host-installed or checksum-cached</small></article><article><span>SOURCE BUILD TARGETS</span><strong>{factory.authority ? sourceTargets : '—'}</strong><small>native or reviewed cross compiler</small></article><article className="warn"><span>NO SOURCE ROUTE</span><strong>{factory.authority ? gapTargets : '—'}</strong><small>{inventory.length} pinned toolchain/archive identities</small></article>
+      <article><span>CATALOGUED TARGET CONTEXTS</span><strong>{factory.authority ? targetRows.length : '—'}</strong><small>possible target / ISA / ABI rows</small></article><article><span>READY ON THIS HOST</span><strong>{factory.capabilities ? readyTargets : '—'}</strong><small>host-installed or checksum-cached source routes</small></article><article><span>REGISTERED SOURCE COVERAGE</span><strong>{factory.authority ? sourceTargets : '—'}</strong><small>native or reviewed cross compiler, installed or not</small></article><article className="warn"><span>CATALOGUED ROUTE GAP</span><strong>{factory.authority ? gapTargets : '—'}</strong><small>{inventory.length} pinned compiler/archive identities tracked separately</small></article>
     </section>
     <section className="panel data-panel">
-      <div className="filterbar"><button className={targetFilter === 'all' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('all')}>All <span>{targetRows.length}</span></button><button className={targetFilter === 'ready' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('ready')}>Installed / cached <span>{readyTargets}</span></button><button className={targetFilter === 'not-installed' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('not-installed')}>Not installed <span>{targetRows.filter(row => row.state === 'not-installed' || row.state === 'archive-only').length}</span></button><button className={targetFilter === 'unregistered' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('unregistered')}>No route <span>{targetRows.filter(row => row.state === 'unregistered').length}</span></button><label className="filter-search">⌕<input value={targetQuery} onChange={event => setTargetQuery(event.target.value)} placeholder="Search target or toolchain" aria-label="Search target or toolchain" /></label></div>
+      <div className="filterbar"><button className={targetFilter === 'all' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('all')}>All <span>{targetRows.length}</span></button>{widthStudy && <button className={targetFilter === 'study' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('study')}>Width study <span>{widthStudy.toolchain_requirements.length}</span></button>}<button className={targetFilter === 'ready' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('ready')}>Installed / cached <span>{readyTargets}</span></button><button className={targetFilter === 'not-installed' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('not-installed')}>Not installed <span>{targetRows.filter(row => row.state === 'not-installed' || row.state === 'archive-only').length}</span></button><button className={targetFilter === 'unregistered' ? 'filter active' : 'filter'} onClick={() => setTargetFilter('unregistered')}>No route <span>{targetRows.filter(row => row.state === 'unregistered').length}</span></button><label className="filter-search">⌕<input value={targetQuery} onChange={event => setTargetQuery(event.target.value)} placeholder="Search target or toolchain" aria-label="Search target or toolchain" /></label></div>
       <div className="target-inventory">
         {visibleTargets.map(row => {
           const tone = row.state === 'installed' || row.state === 'cached' ? 'ready' : row.state === 'unregistered' ? 'warning' : 'cold';
@@ -1393,9 +1649,10 @@ function ToolchainsView({ factory }: { factory: FactoryApiState }) {
               return next;
             });
           }}>
-            <summary><span className={`cap-dot ${tone}`} /><div><strong>{row.target.label}</strong><small>{row.target.id} · {row.target.catalog_state}</small></div><code>{row.target.bits}-bit · {row.target.endianness} · {row.target.binary_format}</code><span className={`evidence-badge ${tone}`}>{stateLabel}</span><p><b>{row.sourceToolchains.length + row.targetNativeRoutes.length}</b><small>source routes</small></p><p><b>{row.target.archive_capable_toolchain_ids.length}</b><small>archive candidates</small></p><p><b>{row.cachedInputs}</b><small>cached identities</small></p><i>⌄</i></summary>
+            <summary><span className={`cap-dot ${tone}`} /><div><strong>{row.target.label}</strong><small>{row.target.id} · {row.target.catalog_state}{row.requirement ? ` · W${String(row.requirement.order).padStart(2, '0')} ${row.requirement.order <= (widthDefault?.routes ?? 0) ? 'ACTIVE' : 'LATER'}` : ''}</small></div><code>{row.target.bits}-bit · {row.target.endianness} · {row.target.binary_format}</code><span className={`evidence-badge ${tone}`}>{stateLabel}</span><p><b>{row.sourceToolchains.length + row.targetNativeRoutes.length}</b><small>source routes</small></p><p><b>{row.target.archive_capable_toolchain_ids.length}</b><small>archive candidates</small></p><p><b>{row.cachedInputs}</b><small>cached identities</small></p><i>⌄</i></summary>
             <div className="target-detail">
               <div className="target-evidence"><span>AUTHORITY</span><code>{row.target.evidence.join(' · ')}</code><small>{row.target.catalog_state === 'study-observed' ? 'Observed in the sensitivity study; no build route has been reviewed.' : 'Target identity is catalogued independently of installation state.'}</small></div>
+              {row.requirement && <div className="target-demand-row"><b>W{String(row.requirement.order).padStart(2, '0')}</b><p><strong>{row.requirement.compiler_label} · {row.requirement.wave}</strong><small>{row.requirement.rationale}</small></p><code>{row.requirement.version_policy}</code><span className={`route-requirement-state ${row.requirement.route_state}`}>{row.requirement.route_state.replaceAll('-', ' ')}</span></div>}
               {row.targetNativeRoutes.map(route => <div className="target-toolchain-row" key={route.id}><div><span className={`cap-dot ${route.ready ? 'ready' : 'warning'}`} /><strong>{route.id}</strong><small>native route</small></div><code>{Object.values(route.tools).map(tool => tool.path ?? tool.configured.join(' ')).join(' · ')}</code><span className={`evidence-badge ${route.ready ? 'ready' : 'warning'}`}>{route.ready ? 'installed' : 'missing tools'}</span><b>source build</b></div>)}
               {row.targetToolchains.map(toolchain => {
                 const toolchainTone = toolchain.state === 'verified-cached' ? 'ready' : toolchain.state === 'broken' ? 'warning' : 'cold';
