@@ -1,6 +1,7 @@
 schema_version = "fidb-toolchain-profile/v1"
 id = "c-canary"
 label = "C canary · Linux x86-64"
+language_id = "c"
 host_system = "linux"
 host_architecture = "x86_64"
 route_ids = ["linux-x86-64-gcc"]

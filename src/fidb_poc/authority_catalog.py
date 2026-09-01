@@ -19,9 +19,10 @@ from .plan_request import (
 from .recipe_generator import load_recipes as load_source_recipes
 from .target_registry import load_targets
 from .toolchain_registry import load_toolchains
+from .toolchain_packs import load_toolchain_pack_catalog
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v3"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v4"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -168,8 +169,7 @@ def _target_authority(
                 and row["endianness"] == target["endianness"]
                 and row["elf_class"] == target["bits"]
             ]
-            if target["platform"] == "linux"
-            and target["binary_format"] == "ELF"
+            if target["platform"] == "linux" and target["binary_format"] == "ELF"
             else []
         )
         result.append(
@@ -244,9 +244,7 @@ def _width_study_authority(
     coverage_universe: dict[str, object],
 ) -> list[dict[str, object]]:
     studies = []
-    language_ids = {
-        str(row["id"]) for row in coverage_universe["languages"]
-    }
+    language_ids = {str(row["id"]) for row in coverage_universe["languages"]}
     compiler_by_id = {
         str(row["id"]): row for row in coverage_universe["compiler_families"]
     }
@@ -308,8 +306,7 @@ def _width_study_authority(
             matches = [
                 str(recipe["id"])
                 for recipe in recipes
-                if recipe["kind"] != "malware"
-                and recipe["name"] == family["id"]
+                if recipe["kind"] != "malware" and recipe["name"] == family["id"]
             ]
             reviewed_recipe_releases += len(matches)
             reviewed_recipe_families += bool(matches)
@@ -322,9 +319,7 @@ def _width_study_authority(
                     "recipe_state": (
                         "reviewed-recipe"
                         if matches
-                        else "source-evidence"
-                        if source_evidence
-                        else "recipe-required"
+                        else "source-evidence" if source_evidence else "recipe-required"
                     ),
                 }
             )
@@ -353,9 +348,7 @@ def _width_study_authority(
             )
         }
         missing_recipe_families = int(study["family_count"]) - reviewed_recipe_families
-        required_release_pins = (
-            int(study["family_count"]) * int(default["releases"])
-        )
+        required_release_pins = int(study["family_count"]) * int(default["releases"])
         if missing_recipe_families:
             blockers.append(
                 f"{missing_recipe_families} of {study['family_count']} families need a reviewed recipe"
@@ -409,6 +402,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         root, recipes, native, targets, coverage_universe
     )
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
+    toolchain_pack_catalog = load_toolchain_pack_catalog(root)
     body = {
         "schema_version": AUTHORITY_SCHEMA,
         "coverage_universe": coverage_universe,
@@ -417,6 +411,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "native": native,
         "targets": targets,
         "toolchains": toolchains,
+        "toolchain_pack_catalog": toolchain_pack_catalog,
         "factors": factors,
         "factor_variants": variants,
         "plans": _plan_authority(root),
@@ -425,6 +420,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "routes": "worker.toml",
             "targets": "targets/registry.toml",
             "toolchains": "toolchains/registry.toml",
+            "toolchain_packs": "toolchains/packs.toml + routes.toml + profiles/",
             "factors": "sensitivity/factors.toml",
             "factor_variants": "sensitivity/variants.toml",
             "coverage_universe": "coverage/universe.toml",

@@ -31,6 +31,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         profile = next(
             row for row in catalog["profiles"] if row["id"] == "c-top10-linux"
         )
+        self.assertEqual(profile["language_id"], "c")
         self.assertEqual(
             profile["route_ids"],
             [

@@ -24,6 +24,7 @@ from .config import load_configuration
 from .coordinator import worker_pool_accepts_cell
 from .toolchain_registry import load_toolchains
 from .toolchain_cache import MANAGED_DOWNLOADS, inspect_cached
+from .toolchain_packs import resolve_toolchain_profiles
 
 CAPABILITIES_SCHEMA = "fidb-worker-capabilities/v1"
 TOOLCHAIN_CACHE = MANAGED_DOWNLOADS
@@ -453,6 +454,7 @@ def detect_capabilities(
     analysis_ready = bool(ghidra["ready"] and java["ready"] and pyghidra["available"])
     native_routes = _native_routes(root, effective_environment)
     registry = _registry_inventory(root)
+    toolchain_profiles = resolve_toolchain_profiles(root)
     active = _job_readiness(
         _active_cells(connection),
         native_routes=native_routes,
@@ -528,5 +530,9 @@ def detect_capabilities(
             "managed_cache": str(root / TOOLCHAIN_CACHE),
             "managed_preparation": "per-attempt-extraction",
             "entries": registry,
+        },
+        "toolchain_profiles": {
+            "managed_downloads": str(root / TOOLCHAIN_CACHE),
+            "plans": toolchain_profiles,
         },
     }

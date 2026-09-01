@@ -257,6 +257,115 @@ export type ToolchainCapability = {
   prepared_state?: string;
 };
 
+export type ToolchainPack = {
+  id: string;
+  label: string;
+  kind: 'compiler-sysroot';
+  target_ids: string[];
+  compiler_family: string;
+  compiler_version: string;
+  binutils_version: string;
+  runtime: string;
+  runtime_version: string;
+  url: string;
+  sha256: string;
+  download_bytes: number;
+  installed_bytes_estimate: number;
+  size_evidence: string;
+  license_ids: string[];
+  upstream_release: string;
+};
+
+export type ToolchainPackRoute = {
+  id: string;
+  label: string;
+  target_id: string;
+  compiler_family: string;
+  provisioning: 'downloadable-pack' | 'external-worker';
+  pack_ids: string[];
+  worker_class: string;
+  qualification_state: string;
+  external_requirements: string[];
+};
+
+export type ToolchainPackProfile = {
+  schema_version: 'fidb-toolchain-profile/v1';
+  id: string;
+  label: string;
+  language_id: string;
+  host_system: string;
+  host_architecture: string;
+  route_ids: string[];
+  external_policy: 'report';
+  purpose: string;
+  authority: string;
+  authority_path: string;
+};
+
+export type ToolchainProfilePlan = {
+  schema_version: 'fidb-toolchain-profile-plan/v1';
+  operation: 'plan' | 'status' | 'pull';
+  profile: ToolchainPackProfile;
+  catalog_digest: string;
+  profile_digest: string;
+  state: 'blocked' | 'acquisition-required' | 'downloadable-ready-external-required' | 'verified-cached';
+  host: {
+    required_system: string;
+    required_architecture: string;
+    detected_system: string;
+    detected_architecture: string;
+    compatible: boolean;
+  };
+  managed_downloads: string;
+  summary: {
+    routes: number;
+    downloadable_routes: number;
+    external_routes: number;
+    packs: number;
+    verified_cached_packs: number;
+    missing_packs: number;
+    broken_packs: number;
+    download_bytes: number;
+    cached_download_bytes: number;
+    remaining_download_bytes: number;
+    installed_bytes_estimate: number;
+    installed_size_evidence: string;
+  };
+  routes: Array<ToolchainPackRoute & { state: string }>;
+  packs: Array<ToolchainPack & {
+    state: 'missing' | 'verified-cached' | 'broken';
+    cache: { path: string; bytes: number | null; observed_sha256: string | null };
+  }>;
+  requirements: Array<{
+    code: string;
+    severity: 'action' | 'constraint' | 'blocker';
+    route_id?: string;
+    pack_id?: string;
+    message: string;
+    details?: string[];
+  }>;
+  recommended_next_action: string;
+  cli_examples: Array<{ action: 'plan' | 'status' | 'pull'; argv: string[]; shell: string }>;
+  trace: {
+    sources: Record<string, string>;
+    source_digests: Record<string, string>;
+    profile_authority: string;
+  };
+};
+
+export type ToolchainPackCatalog = {
+  schema_version: 'fidb-toolchain-pack-catalog/v1';
+  host: { system: string; architecture: string };
+  source_authority: string;
+  cache_policy: string;
+  packs: ToolchainPack[];
+  routes: ToolchainPackRoute[];
+  profiles: ToolchainPackProfile[];
+  sources: Record<string, string>;
+  source_digests: Record<string, string>;
+  catalog_digest: string;
+};
+
 export type FactoryCapabilities = {
   schema_version: string;
   detection_mode: 'read-only';
@@ -298,6 +407,10 @@ export type FactoryCapabilities = {
     managed_cache: string;
     managed_preparation: boolean | 'per-attempt-extraction';
     entries: ToolchainCapability[];
+  };
+  toolchain_profiles: {
+    managed_downloads: string;
+    plans: ToolchainProfilePlan[];
   };
 };
 
@@ -599,7 +712,7 @@ export type WidthStudy = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v3';
+  schema_version: 'fidb-authority-catalog/v4';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -612,6 +725,7 @@ export type FactoryAuthority = {
   };
   targets: AuthorityTarget[];
   toolchains: AuthorityToolchain[];
+  toolchain_pack_catalog: ToolchainPackCatalog;
   factors: AuthorityFactor[];
   factor_variants: AuthorityFactorVariant[];
   plans: AuthorityPlan[];

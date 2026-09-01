@@ -20,6 +20,8 @@ class CapabilityDetectionTests(unittest.TestCase):
             shutil.copytree(
                 self.source_root / "toolchains", project_root / "toolchains"
             )
+            shutil.copytree(self.source_root / "targets", project_root / "targets")
+            shutil.copytree(self.source_root / "coverage", project_root / "coverage")
             cache = project_root / capabilities.TOOLCHAIN_CACHE
 
             result = capabilities.detect_capabilities(
@@ -30,6 +32,15 @@ class CapabilityDetectionTests(unittest.TestCase):
             self.assertFalse(cache.exists())
             self.assertEqual(result["detection_mode"], "read-only")
             self.assertTrue(result["toolchains"]["entries"])
+            self.assertEqual(len(result["toolchain_profiles"]["plans"]), 2)
+            self.assertEqual(
+                next(
+                    row
+                    for row in result["toolchain_profiles"]["plans"]
+                    if row["profile"]["id"] == "c-top10-linux"
+                )["summary"]["missing_packs"],
+                8,
+            )
             self.assertTrue(
                 all(
                     row["state"] == "missing" for row in result["toolchains"]["entries"]

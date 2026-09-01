@@ -60,7 +60,14 @@ class LocalApiTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         for name in ("pyproject.toml", "worker.toml"):
             shutil.copy2(self.source_root / name, self.root / name)
-        for name in ("coverage", "plans", "recipes", "sensitivity", "targets", "toolchains"):
+        for name in (
+            "coverage",
+            "plans",
+            "recipes",
+            "sensitivity",
+            "targets",
+            "toolchains",
+        ):
             shutil.copytree(self.source_root / name, self.root / name)
         self.state = self.root / "var/fidb-coordinator/ledger.sqlite3"
         self.queue = self.root / "plans/priority-queue.toml"
@@ -392,11 +399,12 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v3")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v4")
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["toolchains"]), 41)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 8)
         self.assertEqual(len(document["factors"]), 41)
         self.assertEqual(document["width_studies"][0]["id"], "batch-010")
         self.assertEqual(
@@ -412,6 +420,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(managed_cache.exists())
         self.assertEqual(result["detection_mode"], "read-only")
         self.assertTrue(result["toolchains"]["entries"])
+        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 2)
         self.assertTrue(
             all(row["state"] == "missing" for row in result["toolchains"]["entries"])
         )

@@ -13,6 +13,7 @@ import {
   type PlanDraftResult,
   type CoverageLanguage,
   type FactoryCapabilities,
+  type ToolchainProfilePlan,
   type WidthAxisId,
   type WidthStudy,
 } from './use-factory-api';
@@ -1533,6 +1534,57 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live }: { on
   </div>;
 }
 
+function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfilePlan[]; languageLabel: string }) {
+  const [selectedProfileId, setSelectedProfileId] = useState('c-top10-linux');
+  const [copiedAction, setCopiedAction] = useState<string | null>(null);
+  const selected = plans.find(plan => plan.profile.id === selectedProfileId) ?? plans[0];
+
+  const copyCommand = async (action: string, command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopiedAction(action);
+      window.setTimeout(() => setCopiedAction(current => current === action ? null : current), 1500);
+    } catch {
+      setCopiedAction(null);
+    }
+  };
+
+  if (!selected) return <section className="panel toolchain-pack-panel empty-pack-profile">
+    <div className="panel-header"><div><p className="panel-kicker">PORTABLE TOOLCHAIN PACKS</p><h3>No {languageLabel} pack profile is reviewed yet</h3></div><span className="plan-state">TOML REQUIRED</span></div>
+    <div className="empty-state"><span>◇</span><strong>The pack model is language-scoped</strong><p>Add a reviewed profile under toolchains/profiles before this language inherits any downloads, routes, or size estimate.</p></div>
+  </section>;
+
+  const externalRoutes = selected.routes.filter(route => route.provisioning === 'external-worker');
+  const profileTone = selected.state === 'blocked' || selected.summary.broken_packs ? 'warning' : selected.summary.missing_packs ? 'cold' : 'ready';
+  return <section className="panel toolchain-pack-panel">
+    <div className="pack-panel-header">
+      <div><p className="panel-kicker">PORTABLE TOOLCHAIN PACK · {selected.profile.language_id.toUpperCase()}</p><h3>{selected.profile.label}</h3><p>{selected.profile.purpose}</p></div>
+      <div className="pack-profile-tabs">{plans.map(plan => <button className={plan.profile.id === selected.profile.id ? 'active' : ''} key={plan.profile.id} onClick={() => setSelectedProfileId(plan.profile.id)}><strong>{plan.profile.label}</strong><small>{plan.summary.routes} routes · {plan.summary.packs} packs</small></button>)}</div>
+    </div>
+    <div className="pack-state-strip">
+      <article><span>PROFILE STATE</span><strong className={profileTone}>{selected.state.replaceAll('-', ' ')}</strong><small>next: {selected.recommended_next_action.replaceAll('-', ' ')}</small></article>
+      <article><span>COMPLETE ROUTES</span><strong>{selected.summary.routes}</strong><small>{selected.summary.downloadable_routes} Linux downloadable · {selected.summary.external_routes} external</small></article>
+      <article><span>VERIFIED CACHE</span><strong>{selected.summary.verified_cached_packs} / {selected.summary.packs}</strong><small>{formatBytes(selected.summary.cached_download_bytes)} already present</small></article>
+      <article><span>DOWNLOAD REMAINING</span><strong>{formatBytes(selected.summary.remaining_download_bytes)}</strong><small>{formatBytes(selected.summary.download_bytes)} full compressed pack</small></article>
+      <article><span>INSTALLED ESTIMATE</span><strong>{formatBytes(selected.summary.installed_bytes_estimate)}</strong><small>planning estimate · measure after preparation</small></article>
+      <article><span>HOST CONTRACT</span><strong className={selected.host.compatible ? 'ready' : 'warning'}>{selected.host.required_system} / {selected.host.required_architecture}</strong><small>detected {selected.host.detected_system} / {selected.host.detected_architecture}</small></article>
+    </div>
+    <div className="pack-command-grid">
+      <div><span>CLI MUTATION BOUNDARY</span><p>The GUI remains read-only. Plan and status inspect; pull downloads only reviewed SHA-256 payloads into the managed cache.</p></div>
+      {selected.cli_examples.map(example => <article key={example.action}><span>{example.action.toUpperCase()}</span><code>{example.shell}</code><button onClick={() => void copyCommand(example.action, example.shell)}>{copiedAction === example.action ? 'Copied' : 'Copy command'}</button></article>)}
+    </div>
+    <div className="pack-ledger">
+      <div className="pack-ledger-head"><span>Pack / target</span><span>Compiler composition</span><span>Download / installed estimate</span><span>Integrity + licence</span><span>State</span></div>
+      {selected.packs.map(pack => {
+        const tone = pack.state === 'verified-cached' ? 'ready' : pack.state === 'broken' ? 'warning' : 'cold';
+        return <article key={pack.id}><div><strong>{pack.label}</strong><small>{pack.target_ids.join(' · ')}</small><code>{pack.id}</code></div><div><strong>GCC {pack.compiler_version}</strong><small>binutils {pack.binutils_version} · {pack.runtime} {pack.runtime_version.split('-')[0]}</small><code>{pack.upstream_release}</code></div><div><strong>{formatBytes(pack.download_bytes)}</strong><small>→ ≈ {formatBytes(pack.installed_bytes_estimate)}</small><code>{pack.size_evidence}</code></div><div><strong>{pack.sha256.slice(0, 16)}…</strong><small>{pack.license_ids.join(' · ')}</small><code>SHA-256 pinned</code></div><span className={`evidence-badge ${tone}`}>{pack.state === 'verified-cached' ? 'verified cached' : pack.state}</span></article>;
+      })}
+    </div>
+    {externalRoutes.length > 0 && <div className="external-route-ledger"><header><span>EXTERNAL ROUTES RETAINED IN DENOMINATOR</span><p>These cannot be downloaded as Linux packs; they need separately pinned native workers.</p></header>{externalRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_id} · {route.worker_class}</small></div><code>{route.external_requirements.join(' + ')}</code><span className="evidence-badge warning">external definition required</span></article>)}</div>}
+    <footer className="pack-trace"><div><span>PROFILE DIGEST</span><code>{selected.profile_digest}</code></div><div><span>AUTHORITY CHAIN</span><code>{selected.profile.authority_path} → toolchains/routes.toml → toolchains/packs.toml</code></div><div><span>MANAGED CACHE</span><code>{selected.managed_downloads}</code></div></footer>
+  </section>;
+}
+
 function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: { factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   const inventory = factory.capabilities?.toolchains.entries ?? [];
   const targets = factory.authority?.targets ?? [];
@@ -1544,6 +1596,7 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
   const languageCompilerFamilies = (universe?.compiler_families ?? []).filter(family => family.language_ids.includes(selectedLanguageId));
   const languageProfiles = (universe?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const languageScenarios = (universe?.scenarios ?? []).filter(scenario => scenario.language_id === selectedLanguageId);
+  const languagePackPlans = (factory.capabilities?.toolchain_profiles?.plans ?? []).filter(plan => plan.profile.language_id === selectedLanguageId);
   const nativeRoutes = factory.capabilities?.native_routes ?? [];
   const [targetFilter, setTargetFilter] = useState<'all' | 'study' | 'ready' | 'not-installed' | 'unregistered'>('all');
   const [targetQuery, setTargetQuery] = useState('');
@@ -1598,6 +1651,8 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
     <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
     {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} requirements; widening the Matrix page reveals later compiler and platform waves.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + compiler-family pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>REMOTE WORKERS</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>macOS / Windows acquisition</small></article><article className="warn"><span>PIN / DEFINITION GATES</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'definition-required' || row.route_state === 'archive-only').length}</strong><small>not installable yet</small></article></div><footer>Installation remains a reviewed follow-on: exact compiler, SDK/sysroot, linker, version, digest and licence must be frozen before an action is enabled.</footer></section>}
+
+    <ToolchainPackPanel plans={languagePackPlans} languageLabel={selectedLanguage?.label ?? selectedLanguageId} />
 
     <section className="panel coverage-universe-panel">
       <div className="panel-header"><div><p className="panel-kicker">SHARED MASTER MODEL · {universe?.schema_version ?? 'LOADING'}</p><h3>Population evidence is not one denominator</h3></div><span className="authority-badge">{universe?.authority_path ?? 'coverage/universe.toml'}</span></div>

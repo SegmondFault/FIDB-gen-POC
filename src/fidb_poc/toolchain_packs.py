@@ -58,6 +58,7 @@ _PROFILE_FIELDS = {
     "schema_version",
     "id",
     "label",
+    "language_id",
     "host_system",
     "host_architecture",
     "route_ids",
@@ -247,6 +248,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
     target_ids = {str(row["id"]) for row in targets}
     universe = load_coverage_universe(root / "coverage/universe.toml")
     compiler_ids = {str(row["id"]) for row in universe["compiler_families"]}
+    language_ids = {str(row["id"]) for row in universe["languages"]}
     pack_by_id = {str(row["id"]): row for row in packs}
     route_by_id = {str(row["id"]): row for row in routes}
 
@@ -284,6 +286,10 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
                 )
 
     for profile in profiles:
+        if profile["language_id"] not in language_ids:
+            raise ValueError(
+                f"profile {profile['id']} has unknown language {profile['language_id']}"
+            )
         unknown_routes = set(profile["route_ids"]) - route_by_id.keys()
         if unknown_routes:
             raise ValueError(

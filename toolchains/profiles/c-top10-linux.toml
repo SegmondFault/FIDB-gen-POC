@@ -1,6 +1,7 @@
 schema_version = "fidb-toolchain-profile/v1"
 id = "c-top10-linux"
 label = "C top 10 · complete route profile"
+language_id = "c"
 host_system = "linux"
 host_architecture = "x86_64"
 route_ids = [
