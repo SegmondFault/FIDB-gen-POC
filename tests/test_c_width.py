@@ -69,15 +69,32 @@ class CWidthCompilerTests(unittest.TestCase):
         )
 
     def test_substantive_authority_is_disarmed_and_uses_rank_one_subject(self):
-        authority = load_c_width_authority(
-            self.root / "coverage/c-width-v1.toml"
-        )
+        authority = load_c_width_authority(self.root / "coverage/c-width-v1.toml")
 
         self.assertEqual(authority["state"], "candidate-disarmed")
         self.assertEqual(authority["fixed_recipe"], "openssl@3.5.8")
         self.assertEqual(authority["toolchain_profile"], "c-compiler-width-v1")
         self.assertEqual(authority["selected_replay"], 1)
         self.assertIsNone(authority["freeze"])
+
+    def test_android_width_extends_v1_without_changing_its_frozen_membership(self):
+        original = compile_c_width(self.root, "c-width-v1")
+        extended = compile_c_width(self.root, "c-width-v2")
+        gap = compile_c_width(self.root, "c-android-gap-v1")
+
+        original_routes = {row["id"] for row in original["routes"]}
+        extended_routes = {row["id"] for row in extended["routes"]}
+        gap_routes = {row["id"] for row in gap["routes"]}
+        self.assertEqual(len(original_routes), 29)
+        self.assertEqual(len(gap_routes), 8)
+        self.assertEqual(extended_routes, original_routes | gap_routes)
+        self.assertTrue(original_routes.isdisjoint(gap_routes))
+        self.assertEqual(extended["summary"]["feasible_full_path_executions"], 222)
+        self.assertEqual(gap["summary"]["feasible_full_path_executions"], 48)
+        self.assertEqual(len({row["compiler_id"] for row in extended["routes"]}), 10)
+        self.assertEqual(len({row["compiler_id"] for row in gap["routes"]}), 2)
+        self.assertEqual(extended["state"], "candidate-disarmed")
+        self.assertEqual(gap["state"], "candidate-disarmed")
 
 
 if __name__ == "__main__":
