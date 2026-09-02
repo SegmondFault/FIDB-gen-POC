@@ -275,10 +275,12 @@ def _run_id(plan: WidthRunPlan) -> str:
     return f"{plan.mode}-{stamp}-{digest}"
 
 
-def _validated_run_root(project_root: Path, run_id: str) -> Path:
+def _validated_run_root(project_root: Path, width_id: str, run_id: str) -> Path:
     if SAFE_RUN_ID.fullmatch(run_id) is None:
         raise ValueError("width run id is not a safe path component")
-    parent = project_root / "artifacts/width-runs" / "c-width-v1"
+    if SAFE_RUN_ID.fullmatch(width_id) is None:
+        raise ValueError("width id is not a safe path component")
+    parent = project_root / "artifacts/width-runs" / width_id
     destination = parent / run_id
     if destination.exists() or destination.is_symlink():
         raise ValueError(f"width run destination already exists: {destination}")
@@ -408,7 +410,9 @@ def execute_width_run(
     root = Path(project_root).expanduser().resolve()
     plan = compile_width_run_plan(root, canary=canary)
     announce = progress or (lambda _message: None)
-    run_root = _validated_run_root(root, _run_id(plan))
+    run_root = _validated_run_root(
+        root, str(plan.compilation["id"]), _run_id(plan)
+    )
     preview = width_run_preview(plan)
     _atomic_json(run_root / "width-run-plan.json", preview)
     started_at = utc_now()

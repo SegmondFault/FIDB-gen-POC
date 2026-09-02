@@ -1,5 +1,5 @@
 schema_version = "fidb-width-freeze/v1"
-width_id = "c-width-v1"
+width_id = "c-route-toolchain-canary-v1"
 state = "frozen-measured"
 language_id = "c"
 fixed_recipe = "zlib@1.3.1"
@@ -104,6 +104,12 @@ fid_semantic_mismatch_cells = 1
 fidb_container_byte_identical_cells = 0
 fidb_container_byte_mismatch_cells = 54
 interpretation = "Build artifacts repeat exactly on all eight ELF routes. All six PE/COFF cells differ at the compiled-object level. Recovered FID additions are stable in all 54 cells, while SH4 Os attempted and excluded counts differ by eight. Raw FIDB container digests differ in every cell and are not treated as a semantic mismatch."
+
+[classification]
+kind = "route-toolchain-canary"
+substantive_width = false
+reason = "The run exercised one compiler build per target. It qualified route, sysroot, object-format, treatment, replay and Ghidra execution, but did not measure compiler-family or compiler-generation hash coverage."
+successor = "c-width-v1"
 
 [[reproducibility.artifact_mismatch]]
 route_id = "windows-x86-64-llvm-mingw"

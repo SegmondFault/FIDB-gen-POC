@@ -81,18 +81,24 @@ frozen baseline: one fixed zlib release, one O2 treatment and all nine managed
 routes. Resolve it before execution; its cells are blocked automatically if a
 qualification identity cannot be recovered.
 
-## Applicability-compiled width
+## Route/toolchain canary (superseded as width evidence)
 
-`coverage/c-width-v1.toml` fixes zlib 1.3.1 and the non-Apple route profile,
+`coverage/c-route-toolchain-canary-v1.toml` fixes zlib 1.3.1 and the non-Apple route profile,
 then names all four artifact shapes, six analysis profiles, three admission
 profiles and two selected replays. `coverage/universe.toml` maps the bounded
 O0/O2/O3/Os, frame-pointer and stack-protection profiles to reviewed worker
 treatments for each compatible compiler family.
 
+This authority is explicitly a route/toolchain canary. It proves that nine
+target/toolchain routes, six treatments, two replays, object extraction and
+Ghidra FID production work end to end. Because each target used only one
+compiler build, it does not measure compiler-family or compiler-generation
+hash coverage and is not substantive `c-width-v1` evidence.
+
 Compile the authority without executing anything:
 
 ```sh
-fidb-poc compile-width --project-root . --output /tmp/c-width-v1.json
+fidb-poc compile-width --project-root . --output /tmp/c-route-toolchain-canary-v1.json
 ```
 
 The output retains four distinct states for each route/profile pair:
@@ -124,7 +130,7 @@ fidb-poc run-width --project-root . --execute
 ```
 
 Each live invocation creates a new immutable run directory under
-`artifacts/width-runs/c-width-v1/`; it never replaces an earlier run. The full
+`artifacts/width-runs/c-route-toolchain-canary-v1/`; it never replaces an earlier run. The full
 run executes the 54 applicability-approved route/profile cells twice and
 writes `width-run.json` with wall time, peak and final scratch size, retained
 size, peak process RSS, per-cell failures, coverage contribution, and replay
@@ -132,7 +138,7 @@ comparison. Replay comparison deliberately separates compiled-object bytes,
 FID semantic counts, and raw FIDB container bytes; a container digest change
 must not be reported as a recovered-function change.
 
-### Frozen `c-width-v1` measurement
+### Frozen route/toolchain-canary measurement
 
 The 2026-09-02 `reference-host` run completed all 108 scheduled executions: nine
 routes by six build profiles by two isolated replays. It took 492.46 seconds
@@ -147,7 +153,7 @@ FID semantic counts repeated in 53 of 54 cells. SH4 `-Os` added the same 137
 functions in both runs but attempted/excluded counts differed by eight. Raw
 FIDB container bytes differed in all 54 cells and are therefore tracked
 separately from semantic results. The checksum-bound compact record is
-`coverage/evidence/c-width-v1-reference-host-2026-09-02.toml`.
+`coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml`.
 
 A deliberately naive linear projection puts the same width over ten libraries
 at about 1h22m and 26.85 GB final scratch, and over 80 libraries at about 10h57m
@@ -163,7 +169,7 @@ C++17 objects with the expected target identity and a static `ar` archive.
 The result was 9 qualified routes, 0 missing qualifications, 0 broken routes,
 and one deliberately deferred external Apple route. No library or FIDB batch
 had been executed at the point that qualification record was written; the
-later `c-width-v1` measurement above is separate evidence.
+later route/toolchain-canary measurement above is separate evidence.
 
 The compact audit record is
 `toolchains/evidence/c-top10-linux-reference-host-2026-09-02.toml`. Full records and

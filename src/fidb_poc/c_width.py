@@ -236,7 +236,9 @@ def _factor_space(root: Path) -> list[dict[str, object]]:
 
 def compile_c_width(project_root: str | Path) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
-    authority = load_c_width_authority(root / "coverage/c-width-v1.toml")
+    authority = load_c_width_authority(
+        root / "coverage/c-route-toolchain-canary-v1.toml"
+    )
     study = load_width_study(root / "coverage/c-top10-width-study.toml")
     universe = load_coverage_universe(root / "coverage/universe.toml")
     configuration = load_configuration(
@@ -337,7 +339,7 @@ def compile_c_width(project_root: str | Path) -> dict[str, object]:
         "route_profile_digest": route_plan["profile_digest"],
         "freeze": authority["freeze"],
         "authorities": {
-            "width": "coverage/c-width-v1.toml",
+            "width": "coverage/c-route-toolchain-canary-v1.toml",
             "study": "coverage/c-top10-width-study.toml",
             "universe": "coverage/universe.toml",
             "worker": "worker.toml",

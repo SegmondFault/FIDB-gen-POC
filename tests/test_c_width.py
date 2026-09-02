@@ -13,6 +13,7 @@ class CWidthCompilerTests(unittest.TestCase):
         compiled = compile_c_width(self.root)
 
         self.assertEqual(compiled["schema_version"], "fidb-width-compilation/v1")
+        self.assertEqual(compiled["id"], "c-route-toolchain-canary-v1")
         self.assertEqual(compiled["fixed_recipe"], "zlib@1.3.1")
         self.assertEqual(len(compiled["routes"]), 9)
         self.assertEqual(len(compiled["build_profiles"]), 16)
@@ -42,7 +43,9 @@ class CWidthCompilerTests(unittest.TestCase):
         )
 
     def test_layer_authority_is_bounded_and_bound_to_measured_freeze(self):
-        authority = load_c_width_authority(self.root / "coverage/c-width-v1.toml")
+        authority = load_c_width_authority(
+            self.root / "coverage/c-route-toolchain-canary-v1.toml"
+        )
 
         self.assertEqual(authority["state"], "frozen-measured")
         self.assertEqual(authority["selected_replay"], 2)

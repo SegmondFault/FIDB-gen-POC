@@ -58,7 +58,9 @@ class ConfigurationTests(unittest.TestCase):
             "O2, compiled without -g or LTO, frame pointer retained",
         )
         self.assertEqual(configuration.profiles["smoke"], ("baseline_o2",))
-        self.assertEqual(len(configuration.profiles["c-width-v1"]), 6)
+        self.assertEqual(
+            len(configuration.profiles["c-route-toolchain-canary-v1"]), 6
+        )
 
         managed = next(
             row for row in configuration.routes if row.id == "linux-aarch64-gcc"

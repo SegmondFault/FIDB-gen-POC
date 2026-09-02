@@ -1,12 +1,12 @@
 schema_version = "fidb-c-width/v1"
-id = "c-width-v1"
-label = "C width v1"
+id = "c-route-toolchain-canary-v1"
+label = "C route/toolchain canary v1"
 language_id = "c"
 state = "frozen-measured"
 fixed_recipe = "zlib@1.3.1"
 toolchain_profile = "c-nonapple-baseline-v1"
 selected_replay = 2
-purpose = "Measure every currently feasible lateral C matrix choice against one fixed source release before adding library depth."
+purpose = "Preserve the measured zlib route, treatment, replay and analysis canary without claiming compiler-generation width."
 
 [[artifact_profile]]
 id = "static-archive-members"
@@ -101,8 +101,8 @@ state = "guarded"
 description = "Measure recall-oriented alternatives without admitting them into the active database set."
 
 [freeze]
-evidence_path = "coverage/evidence/c-width-v1-reference-host-2026-09-02.toml"
-evidence_sha256 = "01f62bc8fd8371bd4804d6867c8a20c9af16602ff0f6c8d0923049087be18d50"
+evidence_path = "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml"
+evidence_sha256 = "48a896416379ba1fb4c3057f7a94275f25fe934857bf9b92da9fa84f30a778de"
 executed_compilation_digest = "6c2bb1a798db1860310abd8492a5d3fd75b380365bd6276bea5dd17407440051"
 completed_executions = 108
 wall_time_ns = 492456917639

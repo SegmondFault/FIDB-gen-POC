@@ -234,4 +234,4 @@ factor_variants = ["optimization:o2", "frame-pointer:retained", "stack-protectio
 
 [profiles]
 smoke = ["baseline_o2"]
-c-width-v1 = ["baseline_o2", "optimization_o0", "optimization_o3", "optimization_os", "frame_pointer_omitted", "stack_protector_strong"]
+c-route-toolchain-canary-v1 = ["baseline_o2", "optimization_o0", "optimization_o3", "optimization_os", "frame_pointer_omitted", "stack_protector_strong"]
