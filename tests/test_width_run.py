@@ -12,6 +12,7 @@ from fidb_poc.width_run import (
     _read_csv_rows,
     _release_cell_scratch,
     _replay_comparison,
+    _terminate_executor,
     compile_width_run_plan,
     width_run_preview,
 )
@@ -144,6 +145,20 @@ class WidthRunTests(unittest.TestCase):
 
             self.assertEqual(rows[0]["status"], "complete")
             self.assertGreater(len(rows[0]["analysis_artifact_path"]), 131_072)
+
+    def test_pool_termination_uses_supported_executor_api(self):
+        class Executor:
+            def __init__(self):
+                self.terminated = False
+
+            def terminate_workers(self):
+                self.terminated = True
+
+        executor = Executor()
+
+        _terminate_executor(executor)
+
+        self.assertTrue(executor.terminated)
 
 
 if __name__ == "__main__":

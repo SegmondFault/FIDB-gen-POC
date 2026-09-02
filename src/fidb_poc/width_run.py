@@ -605,6 +605,18 @@ def _cell_status(manifest: Path | None) -> str:
     return next(iter(statuses)) if len(statuses) == 1 else "mixed"
 
 
+def _terminate_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
+    terminate_workers = getattr(executor, "terminate_workers", None)
+    if terminate_workers is not None:
+        terminate_workers()
+        return
+    processes = tuple(getattr(executor, "_processes", {}).values())
+    for process in processes:
+        if process.is_alive():
+            process.terminate()
+    executor.shutdown(wait=True, cancel_futures=True)
+
+
 def execute_width_run(
     project_root: str | Path,
     *,
@@ -646,10 +658,11 @@ def execute_width_run(
                 group_root.mkdir()
                 _seed_group_sources(configuration, group_root, source_cache)
                 scheduled.append((group_index, configuration, group_root))
-            with concurrent.futures.ProcessPoolExecutor(
+            executor = concurrent.futures.ProcessPoolExecutor(
                 max_workers=parallel_workers,
                 mp_context=multiprocessing.get_context("spawn"),
-            ) as executor:
+            )
+            try:
                 future_rows = {
                     executor.submit(
                         _execute_cell, configuration, str(group_root), verbose
@@ -716,6 +729,11 @@ def execute_width_run(
                             ),
                         },
                     )
+            except BaseException:
+                _terminate_executor(executor)
+                raise
+            else:
+                executor.shutdown(wait=True)
         cells, failures = _manifest_rows(manifests, plan.compilation)
         measurement_by_cell = {
             (str(row["route_id"]), str(row["treatment_id"])): row
