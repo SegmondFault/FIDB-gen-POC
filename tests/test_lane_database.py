@@ -57,7 +57,7 @@ class LaneDatabaseTests(unittest.TestCase):
             created_at="2026-09-02T20:00:00+00:00",
         )
 
-    def test_equal_signatures_are_deduplicated_but_occurrences_are_preserved(self):
+    def test_equal_signatures_remain_separate_raw_observations(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "linux-x86.sqlite3"
             result = self.build(
@@ -76,16 +76,15 @@ class LaneDatabaseTests(unittest.TestCase):
                 ],
             )
 
-            self.assertEqual(result["counts"]["signature"], 1)
-            self.assertEqual(result["counts"]["function_occurrence"], 3)
+            self.assertEqual(result["counts"]["raw_signature_observation"], 3)
             self.assertEqual(result["counts"]["build_variant"], 2)
-            self.assertEqual(result["counts"]["admission_decision"], 1)
+            self.assertEqual(result["generation"]["signature_records"], 3)
             self.assertEqual(
                 result["generation"]["native_projection_state"],
                 "blocked-missing-relationships",
             )
 
-    def test_sublane_namespace_prevents_cross_bitness_collapse(self):
+    def test_cross_bitness_observations_retain_their_sublanes(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "linux-x86.sqlite3"
             result = self.build(
@@ -102,8 +101,15 @@ class LaneDatabaseTests(unittest.TestCase):
                 ],
             )
 
-            self.assertEqual(result["counts"]["signature"], 2)
-            self.assertEqual(result["counts"]["function_occurrence"], 2)
+            self.assertEqual(result["counts"]["raw_signature_observation"], 2)
+            with sqlite3.connect(path) as connection:
+                sublanes = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT sublane_id FROM raw_signature_observation"
+                    )
+                }
+            self.assertEqual(sublanes, {"linux-x86-elf32", "linux-x86-elf64"})
 
     def test_published_database_is_immutable_and_cannot_be_replaced(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -117,7 +123,19 @@ class LaneDatabaseTests(unittest.TestCase):
                     )
             with self.assertRaises(FileExistsError):
                 self.build(path, [self.occurrence()])
-            self.assertEqual(inspect_lane_database(path)["counts"]["signature"], 1)
+            self.assertEqual(
+                inspect_lane_database(path)["counts"]["raw_signature_observation"],
+                1,
+            )
+
+    def test_identical_input_rows_are_not_silently_deduplicated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "linux-x86.sqlite3"
+            row = self.occurrence()
+
+            result = self.build(path, [row, dict(row)])
+
+            self.assertEqual(result["counts"]["raw_signature_observation"], 2)
 
     def test_incompatible_language_and_unknown_fields_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -24,10 +24,8 @@ _MUTABLE_TABLES = (
     "library_family",
     "library_release",
     "build_variant",
-    "signature",
-    "function_occurrence",
+    "raw_signature_observation",
     "function_relationship",
-    "admission_decision",
     "native_projection",
 )
 
@@ -48,8 +46,7 @@ CREATE TABLE lane_generation (
         native_projection_state IN ('blocked-missing-relationships', 'not-requested', 'ready')
     ),
     signature_records INTEGER NOT NULL DEFAULT 0 CHECK (signature_records >= 0),
-    unique_signatures INTEGER NOT NULL DEFAULT 0 CHECK (unique_signatures >= 0),
-    function_occurrences INTEGER NOT NULL DEFAULT 0 CHECK (function_occurrences >= 0),
+    raw_signature_observations INTEGER NOT NULL DEFAULT 0 CHECK (raw_signature_observations >= 0),
     function_relationships INTEGER NOT NULL DEFAULT 0 CHECK (function_relationships >= 0)
 );
 
@@ -107,53 +104,27 @@ CREATE TABLE build_variant (
     UNIQUE (release_id, sublane_id, route_id, treatment_id, build_manifest_sha256)
 );
 
-CREATE TABLE signature (
+CREATE TABLE raw_signature_observation (
     id INTEGER PRIMARY KEY,
     sublane_id TEXT NOT NULL REFERENCES sublane(id),
     policy_id TEXT NOT NULL REFERENCES policy(id),
+    build_variant_id TEXT NOT NULL REFERENCES build_variant(id),
     ghidra_language_id TEXT NOT NULL,
     ghidra_compiler_spec_id TEXT NOT NULL,
     full_hash TEXT NOT NULL CHECK (length(full_hash) = 16),
     specific_hash TEXT NOT NULL CHECK (length(specific_hash) = 16),
     specific_hash_additional_size INTEGER NOT NULL CHECK (specific_hash_additional_size >= 0),
     code_unit_size INTEGER NOT NULL CHECK (code_unit_size >= 0),
-    UNIQUE (
-        sublane_id,
-        policy_id,
-        ghidra_language_id,
-        ghidra_compiler_spec_id,
-        full_hash,
-        specific_hash,
-        specific_hash_additional_size,
-        code_unit_size
-    )
-);
-
-CREATE TABLE function_occurrence (
-    id INTEGER PRIMARY KEY,
-    signature_id INTEGER NOT NULL REFERENCES signature(id),
-    build_variant_id TEXT NOT NULL REFERENCES build_variant(id),
     domain_path TEXT NOT NULL,
-    function_name TEXT NOT NULL,
-    UNIQUE (signature_id, build_variant_id, domain_path, function_name)
+    function_name TEXT NOT NULL
 );
 
 CREATE TABLE function_relationship (
     id INTEGER PRIMARY KEY,
-    source_occurrence_id INTEGER NOT NULL REFERENCES function_occurrence(id),
-    target_occurrence_id INTEGER NOT NULL REFERENCES function_occurrence(id),
+    source_observation_id INTEGER NOT NULL REFERENCES raw_signature_observation(id),
+    target_observation_id INTEGER NOT NULL REFERENCES raw_signature_observation(id),
     relationship_kind TEXT NOT NULL,
-    UNIQUE (source_occurrence_id, target_occurrence_id, relationship_kind)
-);
-
-CREATE TABLE admission_decision (
-    signature_id INTEGER PRIMARY KEY REFERENCES signature(id),
-    state TEXT NOT NULL CHECK (
-        state IN ('unreviewed', 'unique-owner', 'shared-owner', 'collision-suspect', 'excluded')
-    ),
-    rationale TEXT NOT NULL,
-    reviewed_at TEXT,
-    reviewed_by TEXT
+    UNIQUE (source_observation_id, target_observation_id, relationship_kind)
 );
 
 CREATE TABLE native_projection (
@@ -166,15 +137,14 @@ CREATE TABLE native_projection (
     UNIQUE (sublane_id, kind, relative_path)
 );
 
-CREATE INDEX signature_hash_lookup ON signature (
+CREATE INDEX raw_signature_hash_lookup ON raw_signature_observation (
     sublane_id,
     ghidra_language_id,
     ghidra_compiler_spec_id,
     full_hash,
     specific_hash
 );
-CREATE INDEX occurrence_signature_lookup ON function_occurrence(signature_id);
-CREATE INDEX occurrence_build_lookup ON function_occurrence(build_variant_id);
+CREATE INDEX raw_observation_build_lookup ON raw_signature_observation(build_variant_id);
 CREATE INDEX build_release_lookup ON build_variant(release_id);
 """
 
@@ -440,7 +410,6 @@ def build_lane_database(
             family_ids: dict[tuple[str, str], int] = {}
             release_ids: dict[tuple[int, str, str], int] = {}
             build_fingerprints: dict[str, tuple[object, ...]] = {}
-            signature_ids: dict[tuple[object, ...], int] = {}
             signature_records = 0
             for raw in occurrences:
                 row = _validate_occurrence(raw, sublanes)
@@ -510,48 +479,34 @@ def build_lane_database(
                         ),
                     )
                     build_fingerprints[build_id] = build_fingerprint
-                signature_key = (
-                    row["sublane_id"],
-                    sublanes[str(row["sublane_id"])]["policy_id"],
-                    row["ghidra_language_id"],
-                    row["ghidra_compiler_spec_id"],
-                    row["full_hash"],
-                    row["specific_hash"],
-                    row["specific_hash_additional_size"],
-                    row["code_unit_size"],
-                )
-                signature_id = signature_ids.get(signature_key)
-                if signature_id is None:
-                    cursor = connection.execute(
-                        """
-                        INSERT INTO signature (
-                            sublane_id, policy_id, ghidra_language_id,
-                            ghidra_compiler_spec_id, full_hash, specific_hash,
-                            specific_hash_additional_size, code_unit_size
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        signature_key,
-                    )
-                    signature_id = int(cursor.lastrowid)
-                    signature_ids[signature_key] = signature_id
                 connection.execute(
                     """
-                    INSERT INTO function_occurrence (
-                        signature_id, build_variant_id, domain_path, function_name
-                    ) VALUES (?, ?, ?, ?)
+                    INSERT INTO raw_signature_observation (
+                        sublane_id, policy_id, build_variant_id,
+                        ghidra_language_id, ghidra_compiler_spec_id,
+                        full_hash, specific_hash, specific_hash_additional_size,
+                        code_unit_size, domain_path, function_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        signature_id,
+                        row["sublane_id"],
+                        sublanes[str(row["sublane_id"])]["policy_id"],
                         build_id,
+                        row["ghidra_language_id"],
+                        row["ghidra_compiler_spec_id"],
+                        row["full_hash"],
+                        row["specific_hash"],
+                        row["specific_hash_additional_size"],
+                        row["code_unit_size"],
                         row["domain_path"],
                         row["function_name"],
                     ),
                 )
             if signature_records == 0:
                 raise ValueError("lane database requires at least one occurrence")
-            occurrence_count = int(
+            observation_count = int(
                 connection.execute(
-                    "SELECT count(*) FROM function_occurrence"
+                    "SELECT count(*) FROM raw_signature_observation"
                 ).fetchone()[0]
             )
             relationship_count = int(
@@ -562,27 +517,17 @@ def build_lane_database(
             connection.execute(
                 """
                 UPDATE lane_generation
-                SET signature_records = ?, unique_signatures = ?,
-                    function_occurrences = ?, function_relationships = ?
+                SET signature_records = ?, raw_signature_observations = ?,
+                    function_relationships = ?
                 WHERE id = ?
                 """,
                 (
                     signature_records,
-                    len(signature_ids),
-                    occurrence_count,
+                    observation_count,
                     relationship_count,
                     generation_id,
                 ),
             )
-            for signature_id in signature_ids.values():
-                connection.execute(
-                    """
-                    INSERT INTO admission_decision (
-                        signature_id, state, rationale, reviewed_at, reviewed_by
-                    ) VALUES (?, 'unreviewed', 'awaiting ecological validation', NULL, NULL)
-                    """,
-                    (signature_id,),
-                )
             _freeze(connection)
         if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise ValueError("lane database failed SQLite integrity_check")
@@ -649,10 +594,8 @@ def inspect_lane_database(path: str | Path) -> dict[str, object]:
                 "library_family",
                 "library_release",
                 "build_variant",
-                "signature",
-                "function_occurrence",
+                "raw_signature_observation",
                 "function_relationship",
-                "admission_decision",
                 "native_projection",
             )
         }
