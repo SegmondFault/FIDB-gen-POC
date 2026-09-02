@@ -855,6 +855,17 @@ button { font: inherit; }
 .compiler-family-list small, .compiler-family-list p { color: var(--muted); font-size: 7px; line-height: 1.45; }
 .compiler-family-list p { margin: 0; }
 .compiler-family-list footer { margin-top: auto; padding-top: 7px; color: var(--muted-2); border-top: 1px solid #222e3a; font-size: 6px; }
+.compiler-generation-panel { overflow: hidden; }
+.compiler-generation-ledger { padding: 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.compiler-generation-ledger article { min-width: 0; padding: 11px; display: flex; flex-direction: column; gap: 6px; border: 1px solid #263442; border-radius: 6px; background: linear-gradient(145deg, #111a24, #0e161e); }
+.compiler-generation-ledger header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.compiler-generation-ledger strong { color: #c6d0db; font: 650 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.compiler-generation-ledger p { margin: 0; color: var(--cyan); font: 650 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.compiler-generation-ledger small { color: var(--muted); font-size: 7px; }
+.compiler-generation-ledger code { overflow: hidden; color: #708196; font-size: 6px; line-height: 1.45; text-overflow: ellipsis; }
+.compiler-generation-panel > footer { padding: 10px 13px; display: flex; align-items: baseline; gap: 12px; border-top: 1px solid var(--line-soft); background: rgba(240,182,87,.035); }
+.compiler-generation-panel > footer span { color: var(--amber); font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; white-space: nowrap; }
+.compiler-generation-panel > footer p { margin: 0; color: #92846f; font-size: 7px; line-height: 1.45; }
 .coverage-state { align-self: start; padding: 4px 5px; border-radius: 3px; color: #7c899c; background: #18212b; font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; white-space: nowrap; }
 .coverage-state.catalogued { color: var(--green); background: rgba(101,214,139,.07); }
 .coverage-state.desired { color: var(--cyan); background: rgba(71,215,208,.07); }
@@ -1166,6 +1177,7 @@ button { font: inherit; }
 .terminal-events p { margin: 0; color: #778397; }
 
 @media (max-width: 1050px) {
+  .compiler-generation-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .campaign-banner { grid-template-columns: 1fr auto; }
   .campaign-actions { grid-column: 1 / -1; flex-direction: row; }
   .campaign-actions button { flex: 1; }
@@ -1210,6 +1222,7 @@ button { font: inherit; }
 }
 
 @media (max-width: 760px) {
+  .compiler-generation-ledger { grid-template-columns: 1fr; }
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: relative; height: auto; padding: 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand-block { padding-bottom: 14px; }

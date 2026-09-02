@@ -323,6 +323,7 @@ export type ToolchainPackRoute = {
   id: string;
   label: string;
   target_id: string;
+  compiler_id: string;
   coverage_requirement_id: string;
   compiler_family: string;
   target_triple: string;
@@ -445,11 +446,29 @@ export type ToolchainProfilePlan = {
 };
 
 export type ToolchainPackCatalog = {
-  schema_version: 'fidb-toolchain-pack-catalog/v3';
+  schema_version: 'fidb-toolchain-pack-catalog/v4';
   host: { system: string; architecture: string };
   source_authority: string;
   cache_policy: string;
   packs: ToolchainPack[];
+  compilers: Array<{
+    id: string;
+    family: string;
+    version: string;
+    generation: string;
+    language_ids: string[];
+    release_authority: string;
+  }>;
+  compiler_width: {
+    schema_version: string;
+    purpose: string;
+    selection: {
+      gcc_compiler_ids: string[];
+      llvm_mingw_compiler_ids: string[];
+      deferred_families: string[];
+      selection_reason: string;
+    };
+  };
   inputs: ToolchainPackInput[];
   routes: ToolchainPackRoute[];
   qualifications: ToolchainQualification[];
@@ -832,7 +851,7 @@ export type WidthCompilation = {
     retained_bytes: number;
     artifact_byte_identical_cells: number;
     fid_semantic_identical_cells: number;
-  };
+  } | null;
   routes: Array<{
     id: string;
     label: string;
@@ -841,6 +860,7 @@ export type WidthCompilation = {
     architecture: string;
     binary_format: string;
     compiler_family: string;
+    compiler_id: string;
     toolchain_state: string;
     toolchain_identity: string;
   }>;
