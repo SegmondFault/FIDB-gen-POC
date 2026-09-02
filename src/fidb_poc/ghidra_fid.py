@@ -183,6 +183,97 @@ def build_library_fidb(
                 manager.removeUserFile(fid_file)
 
 
+def export_fid_signatures(
+    fidb: Path, output: Path, language: str
+) -> dict[str, int]:
+    """Export deterministic function-level matching identities from a FIDB.
+
+    A packed FIDB's byte hash identifies its container, not its matching
+    coverage. The composite tuple exported here is the reusable comparison
+    unit for compiler/treatment marginal-coverage analysis.
+    """
+
+    from ghidra.feature.fid.db import FidFileManager
+    from java.io import File
+
+    manager = FidFileManager.getInstance()
+    manager.load()
+    fid_file = manager.addUserFidFile(File(str(fidb.resolve())))
+    database = fid_file.getFidDB(False)
+    rows: list[dict[str, object]] = []
+    try:
+        next_hash = -(1 << 63)
+        while True:
+            boxed_hash = database.findFullHashValueAtOrAfter(next_hash)
+            if boxed_hash is None:
+                break
+            full_hash_signed = int(boxed_hash.longValue())
+            full_hash = format(full_hash_signed & ((1 << 64) - 1), "016x")
+            for record in database.findFunctionsByFullHash(full_hash_signed):
+                rows.append(
+                    {
+                        "language": language,
+                        "full_hash": full_hash,
+                        "specific_hash": format(
+                            int(record.getSpecificHash()) & ((1 << 64) - 1),
+                            "016x",
+                        ),
+                        "specific_hash_additional_size": int(
+                            record.getSpecificHashAdditionalSize()
+                        ),
+                        "code_unit_size": int(record.getCodeUnitSize()),
+                        "name": str(record.getName()),
+                        "domain_path": str(record.getDomainPath()),
+                    }
+                )
+            if full_hash_signed == (1 << 63) - 1:
+                break
+            next_hash = full_hash_signed + 1
+    finally:
+        database.close()
+        manager.removeUserFile(fid_file)
+
+    rows.sort(
+        key=lambda row: (
+            row["language"],
+            row["full_hash"],
+            row["specific_hash"],
+            row["specific_hash_additional_size"],
+            row["code_unit_size"],
+            row["name"],
+            row["domain_path"],
+        )
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(f".{output.name}.part")
+    temporary.unlink(missing_ok=True)
+    try:
+        with temporary.open("x", encoding="utf-8") as stream:
+            for row in rows:
+                stream.write(json.dumps(row, sort_keys=True, separators=(",", ":")))
+                stream.write("\n")
+        temporary.replace(output)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+    full_hashes = {str(row["full_hash"]) for row in rows}
+    signatures = {
+        (
+            str(row["language"]),
+            str(row["full_hash"]),
+            str(row["specific_hash"]),
+            int(row["specific_hash_additional_size"]),
+            int(row["code_unit_size"]),
+        )
+        for row in rows
+    }
+    return {
+        "records": len(rows),
+        "unique_full_hashes": len(full_hashes),
+        "unique_signatures": len(signatures),
+    }
+
+
 def compiler_spec_for_language(language: str) -> str:
     """x86/x86-64 only define a "default" spec for 16-bit real mode; ELF
     binaries need the "gcc" spec. Every other processor defines "default" as

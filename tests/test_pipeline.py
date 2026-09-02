@@ -230,11 +230,19 @@ class PipelineTests(unittest.TestCase):
             output = Path(temporary)
             fidb = output / f"{library.identifier}-{group_id}.fidb"
             fidb.write_bytes(b"fidb")
+            signatures = output / (
+                f"{library.identifier}-{group_id}.fid-signatures.jsonl"
+            )
+            signatures.write_text("{}\n", encoding="utf-8")
             population = {
                 "library": "zlib",
                 "version": "1.3.1",
                 "variant": group_id,
                 "fidb_path": str(fidb),
+                "fid_signatures_path": str(signatures),
+                "records": 113,
+                "unique_full_hashes": 100,
+                "unique_signatures": 105,
                 "program_count": 15,
                 "attempted": 124,
                 "added": 113,
@@ -413,6 +421,14 @@ class PipelineTests(unittest.TestCase):
                 output.write_bytes(b"fake fidb")
                 return {"programs": 1, "attempted": 1, "added": 1, "excluded": 0}
 
+            def fake_export(_fidb, output, _language):
+                output.write_text("{}\n", encoding="utf-8")
+                return {
+                    "records": 1,
+                    "unique_full_hashes": 1,
+                    "unique_signatures": 1,
+                }
+
             with (
                 patch(
                     "fidb_poc.pipeline.find_ghidra",
@@ -428,6 +444,10 @@ class PipelineTests(unittest.TestCase):
                     "fidb_poc.pipeline.ghidra_fid.build_library_fidb",
                     side_effect=fake_build,
                 ) as build,
+                patch(
+                    "fidb_poc.pipeline.ghidra_fid.export_fid_signatures",
+                    side_effect=fake_export,
+                ),
             ):
                 _populate_group(configuration, root, route, treatment, records, objects)
 
@@ -438,8 +458,10 @@ class PipelineTests(unittest.TestCase):
             record = records[key]
             self.assertEqual(record.status, "complete")
             self.assertEqual(record.fid_added, 1)
+            self.assertEqual(record.fid_unique_signatures, 1)
             self.assertEqual(record.pyghidra_version, "3.1.0")
             self.assertTrue((root / record.fidb_path).is_file())
+            self.assertTrue((root / record.fid_signatures_path).is_file())
 
     def test_execute_rejects_symlinked_generated_root(self):
         source_root = Path(__file__).resolve().parents[1]

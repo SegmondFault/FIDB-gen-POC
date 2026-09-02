@@ -136,6 +136,11 @@ class BuildRecord:
     fidb_path: str = ""
     fidb_sha256: str = ""
     fidb_bytes: int = 0
+    fid_signatures_path: str = ""
+    fid_signatures_sha256: str = ""
+    fid_signature_records: int = 0
+    fid_unique_full_hashes: int = 0
+    fid_unique_signatures: int = 0
     fid_programs: int = 0
     fid_attempted: int = 0
     fid_added: int = 0
@@ -1082,7 +1087,12 @@ def _validate_population_report(
         expected_fidb = (
             output_directory / f"{library.identifier}-{group_id}.fidb"
         ).resolve()
+        expected_signatures = (
+            output_directory
+            / f"{library.identifier}-{group_id}.fid-signatures.jsonl"
+        ).resolve()
         observed_fidb = Path(row.get("fidb_path", "")).resolve()
+        observed_signatures = Path(row.get("fid_signatures_path", "")).resolve()
         expected_identity = {
             "library": library.name,
             "version": library.version,
@@ -1099,6 +1109,11 @@ def _validate_population_report(
             raise PipelineError(
                 f"Ghidra population report points at an unexpected FIDB for "
                 f"{library.identifier}: {observed_fidb}"
+            )
+        if observed_signatures != expected_signatures:
+            raise PipelineError(
+                f"Ghidra population report points at unexpected signatures for "
+                f"{library.identifier}: {observed_signatures}"
             )
 
         counts = {
@@ -1134,6 +1149,34 @@ def _validate_population_report(
             raise PipelineError(f"Ghidra added no signatures for {library.identifier}")
         if not expected_fidb.is_file() or expected_fidb.stat().st_size == 0:
             raise PipelineError(f"Ghidra did not produce a non-empty {expected_fidb}")
+        signature_counts = {
+            field: row.get(field)
+            for field in ("records", "unique_full_hashes", "unique_signatures")
+        }
+        if any(
+            type(value) is not int or value <= 0
+            for value in signature_counts.values()
+        ):
+            raise PipelineError(
+                f"Ghidra signature export has invalid counts for "
+                f"{library.identifier}: {signature_counts}"
+            )
+        if (
+            signature_counts["records"] > counts["added"]
+            or signature_counts["unique_full_hashes"] > signature_counts["records"]
+            or signature_counts["unique_signatures"] > signature_counts["records"]
+        ):
+            raise PipelineError(
+                f"Ghidra signature counts do not reconcile for "
+                f"{library.identifier}: {signature_counts}, added={counts['added']}"
+            )
+        if (
+            not expected_signatures.is_file()
+            or expected_signatures.stat().st_size == 0
+        ):
+            raise PipelineError(
+                f"Ghidra did not produce non-empty signatures: {expected_signatures}"
+            )
     return by_library
 
 
@@ -1153,7 +1196,9 @@ def _populate_group(
     references = project_root / "work/ghidra/references" / route.id / treatment.id
     candidates = project_root / "work/ghidra/candidates" / group_id
     output_fidb = project_root / "artifacts/libs/fidb"
+    output_signatures = project_root / "artifacts/libs/fid-signatures"
     output_fidb.mkdir(parents=True, exist_ok=True)
+    output_signatures.mkdir(parents=True, exist_ok=True)
     _recreate_directory(projects)
     _recreate_directory(references)
     _recreate_directory(candidates)
@@ -1236,12 +1281,20 @@ def _populate_group(
             compiler_spec=route.ghidra_compiler_spec,
             timing=timing,
         )
+        candidate_signatures = candidates / (
+            f"{library.identifier}-{group_id}.fid-signatures.jsonl"
+        )
+        signature_counts = ghidra_fid.export_fid_signatures(
+            candidate_fidb, candidate_signatures, route.ghidra_language
+        )
         populations.append(
             {
                 "library": library.name,
                 "version": library.version,
                 "variant": group_id,
                 "fidb_path": str(candidate_fidb.resolve()),
+                "fid_signatures_path": str(candidate_signatures.resolve()),
+                **signature_counts,
                 "program_count": result["programs"],
                 "attempted": result["attempted"],
                 "added": result["added"],
@@ -1282,8 +1335,13 @@ def _populate_group(
             candidate_fidb = Path(population["fidb_path"])
             final_fidb = output_fidb / candidate_fidb.name
             candidate_fidb.replace(final_fidb)
+            candidate_signatures = Path(population["fid_signatures_path"])
+            final_signatures = output_signatures / candidate_signatures.name
+            candidate_signatures.replace(final_signatures)
             exported_bytes += final_fidb.stat().st_size
+            exported_bytes += final_signatures.stat().st_size
             population["fidb_path"] = str(final_fidb.resolve())
+            population["fid_signatures_path"] = str(final_signatures.resolve())
         export_metrics["bytes"] = exported_bytes
     for library in available:
         key = (library.identifier, route.id, treatment.id)
@@ -1293,6 +1351,14 @@ def _populate_group(
         record.fidb_path = str(fidb.resolve().relative_to(project_root.resolve()))
         record.fidb_sha256 = sha256(fidb)
         record.fidb_bytes = fidb.stat().st_size
+        signatures = Path(population["fid_signatures_path"])
+        record.fid_signatures_path = str(
+            signatures.resolve().relative_to(project_root.resolve())
+        )
+        record.fid_signatures_sha256 = sha256(signatures)
+        record.fid_signature_records = population["records"]
+        record.fid_unique_full_hashes = population["unique_full_hashes"]
+        record.fid_unique_signatures = population["unique_signatures"]
         record.fid_programs = population["program_count"]
         record.fid_attempted = population["attempted"]
         record.fid_added = population["added"]
@@ -1347,12 +1413,23 @@ def populate_fidbs(
                         / f"{library.identifier}-{group_id}.fidb"
                     )
                     partial_fidb.unlink(missing_ok=True)
+                    partial_signatures = (
+                        project_root
+                        / "artifacts/libs/fid-signatures"
+                        / f"{library.identifier}-{group_id}.fid-signatures.jsonl"
+                    )
+                    partial_signatures.unlink(missing_ok=True)
                     if records[key].status in {"built", "complete"}:
                         records[key].status = "fid_failed"
                         records[key].error = str(error)
                         records[key].fidb_path = ""
                         records[key].fidb_sha256 = ""
                         records[key].fidb_bytes = 0
+                        records[key].fid_signatures_path = ""
+                        records[key].fid_signatures_sha256 = ""
+                        records[key].fid_signature_records = 0
+                        records[key].fid_unique_full_hashes = 0
+                        records[key].fid_unique_signatures = 0
                         records[key].fid_programs = 0
                         records[key].fid_attempted = 0
                         records[key].fid_added = 0
@@ -1452,6 +1529,7 @@ def execute(
         (work, logs, "logs"),
         (work, work / "ghidra", "ghidra"),
         (output, output / "fidb", "fidb"),
+        (output, output / "fid-signatures", "fid-signatures"),
         (output, manifest, "fidb_manifest.csv"),
     )
     for generated_root, path, relative_name in generated_children:
@@ -1466,6 +1544,7 @@ def execute(
     _recreate_directory(logs)
     _recreate_directory(work / "ghidra")
     _recreate_directory(output / "fidb")
+    _recreate_directory(output / "fid-signatures")
     manifest.unlink(missing_ok=True)
     records: dict[tuple[str, str, str], BuildRecord] = {}
     object_sets: dict[tuple[str, str, str], list[Path]] = {}

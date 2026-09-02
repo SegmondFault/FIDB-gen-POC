@@ -16,6 +16,7 @@ from typing import Callable, Iterable
 
 from .c_width import compile_c_width, materialize_width_configuration
 from .config import Configuration
+from .hash_coverage import analyze_signature_coverage
 from .toolchain_packs import resolve_toolchain_profile
 from .pipeline import PipelineError, execute
 from .timing import utc_now
@@ -230,17 +231,27 @@ def _read_manifest(
         rows = list(csv.DictReader(stream))
     cells = []
     failures = []
+    routes = {str(item["id"]): item for item in compilation["routes"]}
     for row in rows:
+        route = routes[row["route"]]
         cell = {
             "library": row["library"],
             "version": row["version"],
             "route_id": row["route"],
+            "target_id": str(route["target_id"]),
+            "compiler_id": str(route["compiler_id"]),
+            "compiler_family": str(route["compiler_family"]),
             "treatment_id": row["treatment"],
             "profile_id": _profile_for(compilation, row["route"], row["treatment"]),
             "status": row["status"],
             "analysis_artifact_sha256": row["analysis_artifact_sha256"],
             "fidb_sha256": row["fidb_sha256"],
             "fidb_bytes": row["fidb_bytes"],
+            "fid_signatures_path": row["fid_signatures_path"],
+            "fid_signatures_sha256": row["fid_signatures_sha256"],
+            "fid_signature_records": row["fid_signature_records"],
+            "fid_unique_full_hashes": row["fid_unique_full_hashes"],
+            "fid_unique_signatures": row["fid_unique_signatures"],
             "fid_programs": row["fid_programs"],
             "fid_attempted": row["fid_attempted"],
             "fid_added": row["fid_added"],
@@ -458,6 +469,7 @@ def execute_width_run(
                 else:
                     manifests.append(manifest)
         cells, failures = _manifest_rows(manifests, plan.compilation)
+        hash_coverage = analyze_signature_coverage(manifests, plan.compilation)
         outcomes = Counter(row["status"] for row in cells)
         replay_result: dict[str, object] = {
             "replay": replay_index,
@@ -477,6 +489,7 @@ def execute_width_run(
             "cells": cells,
             "failures": failures,
             "pipeline_errors": pipeline_errors,
+            "hash_coverage": hash_coverage,
         }
         replay_results.append(replay_result)
         _atomic_json(replay_root / "replay-result.json", replay_result)
@@ -527,6 +540,9 @@ def execute_width_run(
             ),
             "planned_route_profile_pairs": plan.cell_count,
         },
+        "hash_coverage": (
+            replay_results[0]["hash_coverage"] if replay_results else None
+        ),
         "replay_comparison": comparison,
         "replay_results": replay_results,
     }

@@ -147,6 +147,16 @@ size, peak process RSS, per-cell failures, and coverage contribution. Per-cell
 FID signatures are retained for unique and marginal-coverage comparison; raw
 FIDB container hashes are not used as a proxy for function coverage.
 
+Every completed cell publishes a deterministic `fid-signatures/*.jsonl`
+ledger. Its comparison identity is Ghidra language, full hash, specific hash,
+specific-hash additional size and code-unit size; function name and object
+domain path remain attached as diagnostic evidence. The run summary reports
+union and exclusive signature counts by compiler and treatment, compiler
+marginals within each target/treatment, treatment marginals within each route,
+all same-target pairwise overlaps, and near-duplicate pairs at Jaccard 0.98 or
+higher. This preserves the raw function evidence so later regrouping does not
+require recompilation.
+
 ### Frozen route/toolchain-canary measurement
 
 The 2026-09-02 `reference-host` run completed all 108 scheduled executions: nine
