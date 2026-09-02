@@ -8,6 +8,7 @@ import {
   type CoordinatorEvent,
   type CoordinatorJob,
   type CoordinatorSnapshot,
+  type CoordinatorWorker,
   type StageSpan,
   type TimingEta,
   type PlanDraftResult,
@@ -99,6 +100,32 @@ function eventDetail(event: CoordinatorEvent) {
     .map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)
     .join(' · ');
   return [event.batch_id, event.job_id?.slice(0, 12), payload].filter(Boolean).join(' · ') || event.actor;
+}
+
+function externalWorkerDisplay(worker: CoordinatorWorker) {
+  const raw = worker.metadata.external_toolchain;
+  const external = raw && typeof raw === 'object' ? raw as Record<string, unknown> : null;
+  const rawMetadata = external?.metadata;
+  const metadata = rawMetadata && typeof rawMetadata === 'object'
+    ? rawMetadata as Record<string, unknown>
+    : null;
+  const rawDefinition = external?.definition;
+  const definition = rawDefinition && typeof rawDefinition === 'object'
+    ? rawDefinition as Record<string, unknown>
+    : null;
+  const languages = Array.isArray(definition?.languages)
+    ? definition.languages.filter(value => typeof value === 'string').join(' + ')
+    : null;
+  const details = metadata
+    ? [metadata.hardware, metadata.macos_version, metadata.xcode_version, metadata.sdk_version]
+      .filter(value => typeof value === 'string')
+      .join(' · ')
+    : `${worker.transport} · ${worker.pools.join(', ')}`;
+  return {
+    details: `${details}${details ? ' · ' : ''}last seen ${new Date(worker.last_seen_at).toLocaleString()}`,
+    state: external?.ready === true && languages ? `${languages} ready` : worker.state,
+    tone: worker.state === 'online' && (external === null || external.ready === true) ? 'ready' : 'offline',
+  };
 }
 
 function eventTime(event: CoordinatorEvent, milliseconds = false) {
@@ -544,7 +571,10 @@ export default function Home() {
                     <span className={`worker-state ${worker.tone}`}>{worker.state}</span>
                   </div>
                 )) : <div className="empty-state"><span>◇</span><strong>No capability scan</strong><p>Connect the local API to inspect this host.</p></div>}
-                {(factory.snapshot?.workers ?? []).map(worker => <div className="worker-row" key={worker.worker_id}><span className="worker-glyph ready">⌬</span><div><strong>{worker.worker_id}</strong><small>{worker.transport} · {worker.pools.join(', ')} · last seen {new Date(worker.last_seen_at).toLocaleString()}</small></div><span className="worker-state ready">{worker.state}</span></div>)}
+                {(factory.snapshot?.workers ?? []).map(worker => {
+                  const display = externalWorkerDisplay(worker);
+                  return <div className="worker-row" key={worker.worker_id}><span className={`worker-glyph ${display.tone}`}>⌬</span><div><strong>{worker.worker_id}</strong><small>{display.details}</small></div><span className={`worker-state ${display.tone}`}>{display.state}</span></div>;
+                })}
               </div>
               <button className="full-width-button" onClick={() => setActiveView('Targets & toolchains')}>Inspect targets</button>
             </article>
@@ -1539,7 +1569,7 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live }: { on
   </div>;
 }
 
-function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfilePlan[]; languageLabel: string }) {
+function ToolchainPackPanel({ plans, languageLabel, workers }: { plans: ToolchainProfilePlan[]; languageLabel: string; workers: CoordinatorWorker[] }) {
   const [selectedProfileId, setSelectedProfileId] = useState('c-top10-linux');
   const [copiedAction, setCopiedAction] = useState<string | null>(null);
   const selected = plans.find(plan => plan.profile.id === selectedProfileId) ?? plans[0];
@@ -1578,7 +1608,7 @@ function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfileP
       <article><span>HOST CONTRACT</span><strong className={selected.host.compatible ? 'ready' : 'warning'}>{selected.host.required_system} / {selected.host.required_architecture}</strong><small>detected {selected.host.detected_system} / {selected.host.detected_architecture}</small></article>
     </div>
     <div className="pack-command-grid">
-      <div><span>CLI LIFECYCLE BOUNDARY</span><p>The GUI remains read-only. Pull verifies reviewed SHA-256 payloads; prepare extracts safely; compose builds the fixed osxcross route; qualify runs fixed C and C++17 target probes.</p></div>
+      <div><span>CLI LIFECYCLE BOUNDARY</span><p>The GUI remains read-only. Pull verifies reviewed SHA-256 payloads; prepare extracts safely; compose builds reviewed multi-pack routes; qualify runs each route&apos;s fixed language and target probes.</p></div>
       {selected.cli_examples.map(example => <article key={example.action}><span>{example.action.toUpperCase()}</span><code>{example.shell}</code><button onClick={() => void copyCommand(example.action, example.shell)}>{copiedAction === example.action ? 'Copied' : 'Copy command'}</button></article>)}
     </div>
     <div className="pack-ledger">
@@ -1595,7 +1625,13 @@ function ToolchainPackPanel({ plans, languageLabel }: { plans: ToolchainProfileP
       const composition = route.qualification?.composition?.state;
       return <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.evidence_role}</small></div><code>{definition ? `${definition.tool_pack_id} · ${definition.version_contains} · ${definition.smoke_languages.join('+')}` : 'qualification authority unavailable'}</code><small>{composition ? `composition: ${composition}` : definition?.composition === 'none' ? 'direct prepared pack' : 'blocked by prerequisites'}</small><span className={`evidence-badge ${lifecycleTone(route.state)}`}>{route.state.replaceAll('-', ' ')}</span></article>;
     })}</div>
-    {externalRoutes.length > 0 && <div className="external-route-ledger"><header><span>NATIVE REFERENCE ROUTES</span><p>Cross-built C/C++ evidence does not substitute for these separately pinned native compilers and workers.</p></header>{externalRoutes.map(route => <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.worker_class}</small></div><code>{route.external_requirements.join(' + ')}</code><span className="evidence-badge warning">native definition required</span></article>)}</div>}
+    {externalRoutes.length > 0 && <div className="external-route-ledger"><header><span>MANAGED EXTERNAL NATIVE ROUTES</span><p>Platform-restricted tools stay on their native workers; the coordinator tracks definitions, capabilities, leases, and returned sealed evidence.</p></header>{externalRoutes.map(route => {
+      const liveWorker = workers.find(worker => worker.state === 'online' && worker.pools.includes(route.worker_class === 'macos-native-remote' ? 'macos-native' : route.worker_class));
+      const defined = route.qualification_state === 'external-definition-reviewed';
+      const state = liveWorker ? 'worker online' : defined ? 'definition ready · worker offline' : 'native definition required';
+      const tone = liveWorker ? 'ready' : 'warning';
+      return <article key={route.id}><div><strong>{route.label}</strong><small>{route.target_triple} · {route.worker_class}</small></div><code>{route.external_requirements.join(' + ')}</code><span className={`evidence-badge ${tone}`}>{state}</span></article>;
+    })}</div>}
     <footer className="pack-trace"><div><span>PROFILE DIGEST</span><code>{selected.profile_digest}</code></div><div><span>AUTHORITY CHAIN</span><code>{selected.profile.authority_path} → routes.toml → inputs.toml + packs.toml → qualifications.toml</code></div><div><span>LIFECYCLE STORES</span><code>{selected.managed_downloads} → {selected.managed_prepared} → {selected.managed_composed} → {selected.managed_qualified}</code></div></footer>
   </section>;
 }
@@ -1668,14 +1704,14 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
   const gapTargets = targetRows.length - sourceTargets;
   const campaignScenario = languageScenarios.find(row => row.id === 'c-campaign-b-four-source-n80');
   return <div className="view-stack">
-    <ViewIntro kicker="C-FAMILY COVERAGE POSSIBILITY SPACE" title="C libraries, targets & toolchains" copy="The active campaign covers C libraries, including C++ only when their implementation requires it. Cross-build routes expose target breadth from this host while native compiler references remain separate evidence." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
+    <ViewIntro kicker={`${selectedLanguage?.label.toUpperCase() ?? selectedLanguageId.toUpperCase()} COVERAGE POSSIBILITY SPACE`} title={`${selectedLanguage?.label ?? selectedLanguageId} libraries, targets & toolchains`} copy="Each language owns its treatment profile while sharing the target, worker, provenance, and artifact lifecycle. Cross-build routes expose target breadth from this host; platform-native workers remain distinct evidence." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
 
     <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
-    {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered C-family install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} target requirements; implementation routes can be cross-build, native reference, or both.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + reference compiler pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>CROSS-BUILD ROUTES</span><strong>{languagePackPlans.find(plan => plan.profile.id === 'c-top10-linux')?.summary.cross_build_routes ?? 0}</strong><small>Mach-O + PE/COFF from Linux</small></article><article className="warn"><span>NATIVE REFERENCES</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>Apple Clang + MSVC remain distinct</small></article></div><footer>Every route keeps compiler, SDK/sysroot, linker, runtime, target triple, version, digest and licence explicit. Cross-built evidence does not claim native-compiler equivalence.</footer></section>}
+    {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered {selectedLanguage?.label ?? selectedLanguageId} install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} target requirements; implementation routes can be cross-build, external native, or both.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + reference compiler pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>LINUX CROSS ROUTES</span><strong>{languagePackPlans.find(plan => plan.profile.id === 'c-top10-linux')?.summary.cross_build_routes ?? 0}</strong><small>currently PE/COFF from Linux</small></article><article className="warn"><span>EXTERNAL NATIVE</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>Apple worker + MSVC remain distinct</small></article></div><footer>Every route keeps compiler, SDK/sysroot, linker, runtime, target triple, version, digest and licence explicit. Cross-built evidence does not claim native-compiler equivalence.</footer></section>}
 
-    <ToolchainPackPanel plans={languagePackPlans} languageLabel={selectedLanguage?.label ?? selectedLanguageId} />
+    <ToolchainPackPanel plans={languagePackPlans} languageLabel={selectedLanguage?.label ?? selectedLanguageId} workers={factory.snapshot?.workers ?? []} />
 
     <section className="panel coverage-universe-panel">
       <div className="panel-header"><div><p className="panel-kicker">SHARED MASTER MODEL · {universe?.schema_version ?? 'LOADING'}</p><h3>Population evidence is not one denominator</h3></div><span className="authority-badge">{universe?.authority_path ?? 'coverage/universe.toml'}</span></div>

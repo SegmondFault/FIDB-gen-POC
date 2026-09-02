@@ -475,17 +475,9 @@ export type FactoryCapabilities = {
     pyghidra: { available: boolean; version: string | null };
   };
   worker_pools: {
-    'library-local': {
-      cell_kinds: string[];
-      source_executor: 'local';
-      qemu_required: false;
-      eligible_jobs: number;
-      ready_now: number;
-      runnable_with_pinned_acquisition: number;
-      blocked: number;
-      max_workers?: number;
-      active_workers?: number;
-      available_worker_slots?: number;
+    'library-local': WorkerPoolCapabilities;
+    'macos-native'?: WorkerPoolCapabilities & {
+      external_registration_required?: boolean;
     };
   };
   active_job_readiness: CapabilityReadiness[];
@@ -505,6 +497,20 @@ export type FactoryCapabilities = {
     managed_downloads: string;
     plans: ToolchainProfilePlan[];
   };
+};
+
+type WorkerPoolCapabilities = {
+      cell_kinds: string[];
+      source_executor: 'local' | 'native-local';
+      qemu_required: false;
+      eligible_jobs: number;
+      ready_now: number;
+      runnable_with_pinned_acquisition: number;
+      blocked: number;
+      max_workers?: number;
+      active_workers?: number;
+      available_worker_slots?: number;
+      excluded_cell_kinds?: string[];
 };
 
 export type CoordinatorEvent = {
