@@ -1667,6 +1667,10 @@ function ToolchainPackPanel({ plans, languageLabel, workers }: { plans: Toolchai
 function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: { factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   const inventory = factory.capabilities?.toolchains.entries ?? [];
   const targets = factory.authority?.targets ?? [];
+  const laneRegistry = factory.authority?.lane_registry;
+  const lanes = laneRegistry?.lanes ?? [];
+  const sublaneCount = lanes.reduce((total, lane) => total + lane.sublanes.length, 0);
+  const mappedSublaneCount = lanes.reduce((total, lane) => total + lane.sublanes.filter(sublane => sublane.definition_state === 'mapped').length, 0);
   const universe = factory.authority?.coverage_universe;
   const widthStudy = factory.authority?.width_studies.find(study => study.language_id === selectedLanguageId);
   const widthDefault = widthStudy?.presets.find(preset => preset.id === widthStudy.default_preset);
@@ -1739,6 +1743,27 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
 
     <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
+
+    <section className="panel lane-model-panel">
+      <div className="panel-header lane-model-header"><div><p className="panel-kicker">ANALYST DATABASE BOUNDARIES · {laneRegistry?.schema_version ?? 'LOADING'}</p><h3>One broad pack per device family; exact compatibility stays internal</h3><p>The binary loader and Ghidra metadata resolve the sublane. Compiler generation, treatment and library release remain occurrence provenance—not databases the analyst must choose.</p></div><span className="plan-state">EXPERIMENTAL · NO ACTIVE PACK</span></div>
+      <div className="lane-summary-strip">
+        <article><span>USER-VISIBLE LANES</span><strong>{laneRegistry ? lanes.length : '—'}</strong><small>install and selection boundary</small></article>
+        <article><span>EXACT SUBLANES</span><strong>{laneRegistry ? sublaneCount : '—'}</strong><small>query-compatibility boundary</small></article>
+        <article className="ready"><span>GHIDRA MAPPED</span><strong>{laneRegistry ? mappedSublaneCount : '—'}</strong><small>language + compiler spec defined</small></article>
+        <article className="warn"><span>UNRESOLVED</span><strong>{laneRegistry ? sublaneCount - mappedSublaneCount : '—'}</strong><small>coverage intent, not admission</small></article>
+        <article><span>MATERIALIZED PACKS</span><strong>0</strong><small>raw compiler only; no activation</small></article>
+      </div>
+      <div className="lane-grid">{lanes.map(lane => {
+        const mapped = lane.sublanes.filter(sublane => sublane.definition_state === 'mapped').length;
+        return <article className="lane-card" key={lane.id}>
+          <header><div><strong>{lane.label}</strong><small>{lane.id} · {lane.platform} / {lane.architecture_family}</small></div><span className="lane-count">{mapped}/{lane.sublanes.length} mapped</span></header>
+          <p>{lane.description}</p>
+          <div className="lane-sublane-list">{lane.sublanes.map(sublane => <div key={sublane.id}><span className={`cap-dot ${sublane.definition_state === 'mapped' ? 'ready' : 'warning'}`} /><div><strong>{sublane.target.label}</strong><small>{sublane.id}</small></div><code>{sublane.target.bits}-bit · {sublane.target.endianness} · {sublane.target.binary_format}</code><b>{sublane.definition_state}</b></div>)}</div>
+          <footer>One analyst pack · {lane.sublanes.length} internal selector{lane.sublanes.length === 1 ? '' : 's'}</footer>
+        </article>;
+      })}</div>
+      <div className="lane-experiment-note"><span>REVERSIBLE EXPERIMENT</span><p>The current per-cell FIDB workflow is unchanged. Lane definitions and raw SQLite generations are parallel evidence; semantic deduplication and native Ghidra projection remain separate, gated steps.</p><code>{laneRegistry?.authority_path ?? 'lanes/registry.toml'}</code></div>
+    </section>
 
     {widthStudy && widthDefault && <section className="panel toolchain-demand-summary"><div><p className="panel-kicker">{widthStudy.id} ACQUISITION DEMAND</p><h3>Route width is an ordered {selectedLanguage?.label ?? selectedLanguageId} install ledger</h3><p>The default {widthDefault.label} activates the first {widthDefault.routes} target requirements; implementation routes can be cross-build, external native, or both.</p></div><div><article><span>ORDERED REQUIREMENTS</span><strong>{widthStudy.toolchain_requirements.length}</strong><small>target + reference compiler pairs</small></article><article><span>DEFAULT ACTIVE</span><strong>{widthDefault.routes}</strong><small>first N requirements</small></article><article className="ready"><span>HOST INSTALLED</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'installed').length}</strong><small>verified native routes</small></article><article className="remote"><span>LINUX CROSS ROUTES</span><strong>{languagePackPlans.find(plan => plan.profile.id === 'c-top10-linux')?.summary.cross_build_routes ?? 0}</strong><small>currently PE/COFF from Linux</small></article><article className="warn"><span>EXTERNAL NATIVE</span><strong>{widthStudy.toolchain_requirements.filter(row => row.route_state === 'remote-required').length}</strong><small>Apple worker + MSVC remain distinct</small></article></div><footer>Every route keeps compiler, SDK/sysroot, linker, runtime, target triple, version, digest and licence explicit. Cross-built evidence does not claim native-compiler equivalence.</footer></section>}
 

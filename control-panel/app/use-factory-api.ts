@@ -590,6 +590,40 @@ export type AuthorityTarget = {
   archive_capable_toolchain_ids: string[];
 };
 
+export type AuthorityLaneSublane = {
+  id: string;
+  target_id: string;
+  policy_id: string;
+  definition_state: 'mapped' | 'unresolved';
+  ghidra_language_ids: string[];
+  compiler_spec_ids: string[];
+  target: Omit<AuthorityTarget, 'native_route_ids' | 'toolchain_ids' | 'source_capable_toolchain_ids' | 'archive_capable_toolchain_ids'>;
+};
+
+export type AuthorityLane = {
+  id: string;
+  label: string;
+  platform: string;
+  architecture_family: string;
+  state: 'experimental' | 'active' | 'retired';
+  description: string;
+  sublanes: AuthorityLaneSublane[];
+};
+
+export type AuthorityLaneRegistry = {
+  schema_version: 'fidb-lanes/v1';
+  authority_path: string;
+  policies: Array<{
+    id: string;
+    ghidra_version: string;
+    ghidra_release: string;
+    ghidra_build: string;
+    analysis_profile: string;
+    fid_algorithm: string;
+  }>;
+  lanes: AuthorityLane[];
+};
+
 export type AuthorityFactor = {
   id: string;
   stage: string;
@@ -970,7 +1004,7 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v8';
+  schema_version: 'fidb-authority-catalog/v9';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -984,6 +1018,7 @@ export type FactoryAuthority = {
     authority_path: string;
   };
   targets: AuthorityTarget[];
+  lane_registry: AuthorityLaneRegistry;
   toolchains: AuthorityToolchain[];
   toolchain_pack_catalog: ToolchainPackCatalog;
   factors: AuthorityFactor[];
