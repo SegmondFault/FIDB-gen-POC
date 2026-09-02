@@ -33,6 +33,7 @@ digest excludes cache state so acquisition does not change experiment identity.
 | `c-top10-linux` | 10 / 10 | 9 | 753,465,840 | 3,852,132,920 | native Apple Clang |
 | `c-top10-reference` | 10 / 11 | 9 | 753,465,840 | 3,852,132,920 | Apple Clang + native MSVC definition gap |
 | `c-compiler-width-v1` | 9 / 29 | 29 | 2,850,394,000 | 12,890,591,603 | none |
+| `c-android-width-v1` | 4 / 8 | 2 | 1,447,505,517 | 4,548,615,143 | none |
 
 The nine packs are eight Bootlin GCC/binutils/glibc target SDKs and one
 llvm-mingw/Clang/LLD/MinGW UCRT pack. macOS ARM64 is not a pack: its reviewed
@@ -52,6 +53,13 @@ new archives require 2,096,928,160 additional download bytes on a host that
 already has the nine baseline packs and extracted to 9,038,458,683 bytes in
 the first safe preparation cycle.
 
+`c-android-width-v1` keeps ABI and compiler generation independent: ARM32,
+ARM64, x86 and x86-64 are each bound to NDK r27d/Clang 18 and NDK r29/Clang
+21 at API 21. One NDK archive supplies all four ABIs, so eight routes require
+two packs rather than eight copies. All eight routes are qualified on
+`reference-host`; the compact record is
+`evidence/c-android-width-v1-reference-host-2026-09-02.toml`.
+
 ## Operator lifecycle
 
 ```sh
@@ -63,6 +71,10 @@ the first safe preparation cycle.
 ./scripts/toolchains/qualify.sh c-top10-linux
 ./scripts/toolchains/status.sh c-top10-linux
 ```
+
+Substitute `c-android-width-v1` to reproduce the Android lifecycle. The
+archives remain in the ignored content-addressed store and are not
+redistributed by this repository.
 
 Compose remains a typed lifecycle stage for profiles that define a reviewed
 multi-pack composition; the current top-ten profile has none. Each mutating

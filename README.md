@@ -395,9 +395,11 @@ routes expose the ledger, timings, detected capabilities and one validated
 projection of recipes, targets, native routes, treatments, toolchains,
 sensitivity factors, variants and plans. `targets/registry.toml` keeps every
 reviewed, study-observed or planned platform/ABI visible independently of
-whether this host has a compiler. Android ABI rows are coverage inventory only;
-they do not add an NDK route or queue work. The **Targets & toolchains** view then overlays installed
-native tools and checksum-cached registry inputs without confusing an
+whether this host has a compiler. Android now has eight qualified Linux-hosted
+NDK routes: four ABIs across r27d/Clang 18 and r29/Clang 21 at API 21. These
+routes are visible and runnable but do not queue work by themselves. The
+**Targets & toolchains** view overlays that managed lifecycle, installed native
+tools and checksum-cached registry inputs without confusing an
 archive-only libc candidate with a source-build compiler. The matrix therefore
 does not maintain a second hard-coded build catalog. Its `built` markers use
 the sealed inventory from that projection.

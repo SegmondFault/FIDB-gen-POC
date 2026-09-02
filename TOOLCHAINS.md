@@ -266,6 +266,48 @@ native MSVC and Apple Clang remain named denominator gaps. The first OpenSSL
 measurement determines which existing generations and treatments contribute
 enough new FID signatures to retain before those families are added.
 
+## Android NDK width on Linux
+
+`c-android-width-v1` adds the complete current Android ABI set without moving
+execution off `reference-host`:
+
+| Broad analyst lane | ABI sublane | NDK/compiler routes |
+| --- | --- | --- |
+| `android-arm` | armeabi-v7a, arm64-v8a | r27d/Clang 18.0.4 and r29/Clang 21.0.0 |
+| `android-x86` | x86, x86-64 | r27d/Clang 18.0.4 and r29/Clang 21.0.0 |
+
+API 21 is explicit in every route ID, target wrapper and OpenSSL Configure
+invocation. Target and compiler identity therefore remain separate axes:
+four ABI requirements become eight executable routes. Each NDK archive
+contains every ABI sysroot, so the profile downloads only two official Google
+archives: 1,447,505,517 bytes compressed and 4,548,615,143 measured extracted
+file bytes.
+
+Reproduce the project-local lifecycle on Linux x86-64 with:
+
+```sh
+./scripts/toolchains/plan.sh c-android-width-v1
+./scripts/toolchains/pull.sh c-android-width-v1
+./scripts/toolchains/prepare.sh c-android-width-v1
+./scripts/toolchains/qualify.sh c-android-width-v1
+./scripts/toolchains/status.sh c-android-width-v1
+```
+
+All eight routes qualified on `reference-host` on 2026-09-02. Qualification compiled
+fixed C and C++17 objects, checked ELF bitness, endianness and machine IDs, and
+created static archives. The worker resolves only those qualification records;
+its OpenSSL adapter selects `android-arm`, `android-arm64`, `android-x86` or
+`android-x86_64`, sets the matching reviewed `ANDROID_NDK_ROOT` and tool `PATH`,
+and pins `-D__ANDROID_API__=21`. A disarmed plan reports all eight OpenSSL cells
+as runnable, but no Android library or Ghidra batch was executed here.
+
+The repository records official URLs, exact sizes, SHA-256 values, upstream
+release identities and licence classifications. It does not commit or
+redistribute NDK archives or extracted SDK files; those remain ignored beneath
+`var/fidb-toolchains/`. Operators must review and accept the terms applicable
+to their own download and use. The qualification audit record is
+`toolchains/evidence/c-android-width-v1-reference-host-2026-09-02.toml`.
+
 ## Native Apple worker
 
 The public project does not download, package, bind, copy, or redistribute an

@@ -1,0 +1,47 @@
+schema_version = "fidb-toolchain-qualification-snapshot/v1"
+id = "c-android-width-v1-reference-host-2026-09-02"
+profile_id = "c-android-width-v1"
+observed_at = "2026-09-02T20:10:47Z"
+source_revision = "374f232851260760d97ff9d5c843b06bc00a2e40"
+host_id = "reference-host"
+host_system = "linux"
+host_architecture = "x86_64"
+kernel_release = "7.1.8-1-cachyos"
+catalog_digest = "246a9e98f872c35c89306e23eddb017e40e0a4b1a2ddc68aad9dcca7de4470bd"
+profile_digest = "525d55bcf748ef77e925639ab2c08b45eb722c469d11069fe9f21ae2f7191be0"
+profile_state = "qualified"
+qualification_scope = "fixed C and C++17 compilation, ELF class/endianness/machine validation, and static ar archive"
+qualified_routes = 8
+coverage_requirements = 4
+missing_qualifications = 0
+broken_routes = 0
+route_material_digest_set_sha256 = "2134d7b4b3afbf813e7af380efeecf013c71b3e52b71c51bec4e5101eaf12833"
+qualification_record_digest_set_sha256 = "f22e8a607c7da4461d4c332a805a5823f4bf06e61a1f9b784de64d37291969b7"
+
+[storage]
+selected_archive_bytes = 1447505517
+selected_extracted_file_bytes = 4548615143
+selected_pack_count = 2
+selected_prepared_pack_count = 2
+store_downloads_allocated_bytes = 6310526976
+store_prepared_allocated_bytes = 30020345856
+store_qualified_allocated_bytes = 638976
+store_totals_include_unselected_retained_material = true
+
+[[compiler]]
+id = "android-clang-r522817d"
+version = "18.0.4"
+ndk_release = "r27d"
+route_count = 4
+route_ids = ["android-arm64-ndk-r27d-clang-api21", "android-arm32-ndk-r27d-clang-api21", "android-x86-64-ndk-r27d-clang-api21", "android-x86-32-ndk-r27d-clang-api21"]
+route_material_digests = ["b6f6cc3da8c62e1a4b72c058cbee8c2f1310c01f5eb2ef27ef86a002c7e3d7b0", "e5690a61b774482278747165cd60354846128cab6837844611f4784a1b02ea55", "79952ba9c4ae9684d0dfb417d65190e270f55cef7b941a4d29b678d0e74d100f", "2d90244c4a14ab54ee9d4d6c8a76fb5d8f0c4a05fc4a1e40a1fb4d8ab535ea48"]
+qualification_record_digests = ["dc8429082d57299011e74c19688c65404f399d3231b88de1cc816d2bff1de954", "fb862196c8553bf8e0bdc7a9fd97cf3bbb0e8d6af4353c447a8e2d8b5586feac", "f2a7025dca23e4213505cb8292581b0a7d49126e9cbc245ec5f2b4c10ac65720", "643bc70856d4d7ee77e22f3ce8d04ced5af33608198599628c54b896f3d11798"]
+
+[[compiler]]
+id = "android-clang-r563880c"
+version = "21.0.0"
+ndk_release = "r29"
+route_count = 4
+route_ids = ["android-arm64-ndk-r29-clang-api21", "android-arm32-ndk-r29-clang-api21", "android-x86-64-ndk-r29-clang-api21", "android-x86-32-ndk-r29-clang-api21"]
+route_material_digests = ["3c88cc619a5134519c01029485e00c8a3b26adeb614efd43a816d69f9531ff8d", "df6cd08921e506059a9346c230810ff5854b001fc0a1d36eef266b5187a4ec5a", "2c9b96805ce2259d924457972fa84beb133d7cce94604c5f281c75d01fe99094", "2387e42ce3ca6d84d7b5114a667697cfcef4636ee0ec9470870e8218322d80c6"]
+qualification_record_digests = ["dc3af2e2ca9afd90a395f6d67597dac361110bf4178e8284f4d9772af3139cc5", "789532e31c70837e709e99cc614c88fdcc7ef538516014c9f42f05763fd842a8", "bfa02c77525a45dee42dbf04b7f4bed008c278d07ce3b08e69a6192c5df28ca4", "f16c79145bdafbf15eedb7590f8ff1df86119838557f9999f86ad9427752d978"]

@@ -30,3 +30,9 @@ in the qualified route list.
 the target multiplicity, while digest-set hashes bind the complete ordered
 route-material and qualification-record sets. Full smoke objects and records
 remain in the host-local qualification store.
+
+`c-android-width-v1-reference-host-2026-09-02.toml` records eight qualified Android
+routes: four ABIs at NDK r27d/Clang 18 and NDK r29/Clang 21, all at API 21.
+The two shared NDK packs passed fixed C/C++ compilation and ELF
+class/endianness/machine validation. This is toolchain evidence only; it is not
+evidence that OpenSSL or another library batch ran on those routes.
