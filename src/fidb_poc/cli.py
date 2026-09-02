@@ -72,6 +72,30 @@ def _compile_width_main(argv: list[str]) -> int:
         return 1
 
 
+def _compile_width_batch_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc compile-width-batch",
+        description="Validate and preview one disarmed exact-width batch.",
+    )
+    result.add_argument("batch")
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    arguments = result.parse_args(argv)
+    try:
+        from .authority_catalog import authority_catalog
+
+        document = authority_catalog(arguments.project_root)
+        matches = [
+            row for row in document["width_batches"] if row["id"] == arguments.batch
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"unknown reviewed width batch: {arguments.batch}")
+        print(json.dumps(matches[0], indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _run_width_main(argv: list[str]) -> int:
     result = argparse.ArgumentParser(
         prog="fidb-poc run-width",
@@ -276,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
         return _resolve_plan_main(tokens[1:])
     if tokens and tokens[0] == "compile-width":
         return _compile_width_main(tokens[1:])
+    if tokens and tokens[0] == "compile-width-batch":
+        return _compile_width_batch_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "queue":

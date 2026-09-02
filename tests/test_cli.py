@@ -1,6 +1,7 @@
 import contextlib
 import csv
 import io
+import json
 import shutil
 import tempfile
 import unittest
@@ -12,6 +13,26 @@ from fidb_poc.pipeline import PipelineError
 
 
 class CommandLineTests(unittest.TestCase):
+    def test_width_batch_preview_is_disarmed_and_exact(self):
+        root = Path(__file__).resolve().parents[1]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(
+                [
+                    "compile-width-batch",
+                    "batch-020",
+                    "--project-root",
+                    str(root),
+                ]
+            )
+
+        self.assertEqual(status, 0)
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["state"], "defined-disarmed")
+        self.assertEqual(document["summary"]["libraries"], 9)
+        self.assertEqual(document["summary"]["total_executions"], 1_566)
+        self.assertEqual(document["readiness"]["recipe_ready_libraries"], 0)
+
     def test_build_requires_an_explicit_route(self):
         errors = io.StringIO()
         with contextlib.redirect_stderr(errors):
