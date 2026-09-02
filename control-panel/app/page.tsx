@@ -16,6 +16,7 @@ import {
   type FactoryCapabilities,
   type ToolchainProfilePlan,
   type WidthAxisId,
+  type WidthCompilation,
   type WidthStudy,
 } from './use-factory-api';
 
@@ -628,7 +629,7 @@ function LanguageScopeSelector({ languages, selectedId, onSelect }: { languages:
   return <section className="language-scope-selector" aria-label="Active library language scope"><div><span>ACTIVE LIBRARY MATRIX</span><strong>C-family scope · C++ only where a C library requires it</strong></div><div>{activeLanguages.map(language => <button key={language.id} className={selectedId === language.id ? 'active' : ''} onClick={() => onSelect(language.id)} aria-pressed={selectedId === language.id}><b>{language.label}</b><small>{language.state.replaceAll('-', ' ')}</small></button>)}</div></section>;
 }
 
-function WidthStudyPanel({ study, capabilities }: { study: WidthStudy; capabilities: FactoryCapabilities | null }) {
+function WidthStudyPanel({ study, compilation, capabilities }: { study: WidthStudy; compilation?: WidthCompilation; capabilities: FactoryCapabilities | null }) {
   const defaultPreset = study.presets.find(preset => preset.id === study.default_preset) ?? study.presets[0];
   const [axisValues, setAxisValues] = useState<Record<WidthAxisId, number>>(() => Object.fromEntries(
     study.axes.map(axis => [axis.id, defaultPreset?.[axis.id] ?? axis.default]),
@@ -691,9 +692,17 @@ function WidthStudyPanel({ study, capabilities }: { study: WidthStudy; capabilit
     study.axes.map(axis => [axis.id, preset[axis.id]]),
   ) as Record<WidthAxisId, number>);
   const updateAxis = (axis: WidthAxisId, value: number) => setAxisValues(current => ({ ...current, [axis]: value }));
+  const applicability = new Map(compilation?.applicability.map(row => [`${row.route_id}:${row.profile_id}`, row]));
   return <section className="panel width-study-panel">
     <div className="panel-header width-study-header"><div><p className="panel-kicker">DEFINED BATCH · {study.id}</p><h3>Top 10 C width laboratory</h3><small>{study.purpose}</small></div><div><span className="plan-state">DEFINED · DISARMED</span><code>{study.authority_path}</code></div></div>
     <div className="width-study-warning"><span>!</span><p><strong>This is coverage intent, not queued work.</strong><small>{study.queue_policy}</small></p></div>
+    {compilation && <section className="compiled-width">
+      <header><div><p className="panel-kicker">APPLICABILITY COMPILER · {compilation.id}</p><h4>Declared width overlaid with executable reality</h4><small>{compilation.fixed_recipe} · {compilation.toolchain_profile} · {compilation.state}</small></div><code>{compilation.compilation_digest.slice(0, 16)}…</code></header>
+      <div className="compiled-width-metrics"><article><span>DECLARED ROUTES</span><strong>{compilation.summary.declared_route_slots}</strong><small>{compilation.summary.qualified_routes} qualified now</small></article><article><span>PROFILE SLOTS</span><strong>{compilation.summary.declared_build_profile_slots}</strong><small>{compilation.summary.catalogued_build_profiles} named</small></article><article><span>FEASIBLE BUILD CELLS</span><strong>{compilation.summary.feasible_build_cells}</strong><small>{compilation.summary.executable_route_profile_pairs} applicable pairs</small></article><article><span>REPLAYED FULL PATHS</span><strong>{compilation.summary.feasible_full_path_executions}</strong><small>×{compilation.summary.selected_replay} independent attempts</small></article><article><span>VARIABLES VISIBLE</span><strong>{compilation.summary.sensitivity_factors}</strong><small>{compilation.summary.factors_with_variants} have named choices</small></article></div>
+      <details className="applicability-map" open><summary>Route × compiler/version/treatment applicability <span>{compilation.summary.executable_route_profile_pairs} executable · {compilation.summary.unimplemented_applicable_pairs} gaps · {compilation.summary.inapplicable_pairs} inapplicable</span></summary><div className="applicability-scroll"><div className="applicability-grid" style={{ '--width-cols': compilation.build_profiles.length } as CSSProperties}><div className="corner">ROUTE</div>{compilation.build_profiles.map(profile => <div className="profile-head" key={profile.id} title={profile.controls.join(' · ')}><b>{profile.label}</b><small>{profile.execution_treatment ?? 'not wired'}</small></div>)}{compilation.routes.map(route => <Fragment key={route.id}><div className="route-head"><b>{route.label}</b><small>{route.binary_format} · {route.compiler_family}</small></div>{compilation.build_profiles.map(profile => { const cell = applicability.get(`${route.id}:${profile.id}`); return <div key={`${route.id}:${profile.id}`} className={`applicability-cell ${cell?.state ?? 'unavailable'}`} title={cell?.reasons.join(' · ') || cell?.treatment_id || 'Executable'}>{cell?.state === 'executable' ? '●' : cell?.state === 'inapplicable' ? '—' : '!'}</div>; })}</Fragment>)}</div></div></details>
+      <div className="compiled-layer-grid"><section><span>ARTIFACT SHAPES · {compilation.artifact_profiles.length}</span>{compilation.artifact_profiles.map(row => <article key={row.id}><b>{row.label}</b><em className={row.state}>{row.state}</em><small>{row.description}</small></article>)}</section><section><span>ANALYSIS PROFILES · {compilation.analysis_profiles.length}</span>{compilation.analysis_profiles.map(row => <article key={row.id}><b>{row.label}</b><em className={row.state}>{row.state}</em><small>{row.description}</small></article>)}</section><section><span>ADMISSION PROFILES · {compilation.admission_profiles.length}</span>{compilation.admission_profiles.map(row => <article key={row.id}><b>{row.label}</b><em className={row.state}>{row.state}</em><small>{row.description}</small></article>)}</section></div>
+      <details className="compiled-factor-ledger"><summary>All {compilation.factors.length} studied variables <span>registered, desired, guarded and unresolved choices remain visible</span></summary><div>{compilation.factors.map((factor, index) => <article key={factor.id}><b>{String(index + 1).padStart(2, '0')}</b><p><strong>{factor.label}</strong><small>{factor.id} · {factor.stage}</small></p><span>{factor.variants.length ? factor.variants.map(row => `${row.label} [${row.state}]`).join(' · ') : 'No named variants yet · explicit unresolved width'}</span></article>)}</div></details>
+    </section>}
     <div className="width-study-presets"><span>WIDTH PRESET</span><div>{study.presets.map(preset => <button key={preset.id} className={activePreset?.id === preset.id ? 'active' : ''} onClick={() => selectPreset(preset)} title={preset.description}><b>{preset.label}</b><small>{preset.metrics.build_width_per_family.toLocaleString()} builds/family · {preset.evidence_class}</small></button>)}</div><em>{activePreset ? activePreset.description : 'Custom width · bounded by the declared study authority'}</em></div>
     <div className="width-axis-grid">{study.axes.map(axis => <label key={axis.id}><span><b>{axis.label}</b><strong>{axisValues[axis.id]}</strong></span><input type="range" min={axis.minimum} max={axis.maximum} value={axisValues[axis.id]} onChange={event => updateAxis(axis.id, Number(event.target.value))} /><small>{axis.minimum}–{axis.maximum} {axis.unit} · {axis.layer}</small><p>{axis.description}</p></label>)}</div>
     <div className="width-study-metrics">
@@ -780,6 +789,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
   const authority = factory.authority;
   const coverageUniverse = authority?.coverage_universe;
   const widthStudy = authority?.width_studies.find(study => study.language_id === selectedLanguageId);
+  const widthCompilation = authority?.width_compilations.find(compilation => compilation.language_id === selectedLanguageId);
   const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
   const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (
@@ -1267,7 +1277,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
 
       {selectedLanguage && <section className="panel language-matrix-contract"><div><span className={`language-state ${selectedLanguage.state}`}>{selectedLanguage.state.replaceAll('-', ' ')}</span><p className="panel-kicker">{selectedLanguage.label.toUpperCase()} DENOMINATOR</p><h3>{selectedLanguage.scope}</h3><p>{selectedLanguage.denominator}</p><small>{selectedLanguage.caveat}</small></div><div><span>TREATMENT AXES</span><div>{selectedLanguage.treatment_axes.map(axis => <em key={axis}>{axis}</em>)}</div></div></section>}
 
-      {widthStudy && <WidthStudyPanel key={widthStudy.id} study={widthStudy} capabilities={factory.capabilities} />}
+      {widthStudy && <WidthStudyPanel key={widthStudy.id} study={widthStudy} compilation={widthCompilation} capabilities={factory.capabilities} />}
 
       {selectedLanguageId !== 'c' && <div className="inline-warning language-registration-warning">The {selectedLanguage?.label} matrix is defined conceptually, but no screened family denominator, finite profile pack or executable recipe rows are registered. The empty rows below are deliberate—not zero coverage.</div>}
 

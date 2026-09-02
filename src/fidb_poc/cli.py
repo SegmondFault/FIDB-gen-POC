@@ -47,6 +47,31 @@ def _resolve_plan_main(argv: list[str]) -> int:
         return 1
 
 
+def _compile_width_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc compile-width",
+        description="Compile declared C width into applicable and feasible cells.",
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--output", type=Path)
+    arguments = result.parse_args(argv)
+    try:
+        from .c_width import compile_c_width
+
+        document = compile_c_width(arguments.project_root)
+        payload = json.dumps(document, indent=2, sort_keys=True) + "\n"
+        if arguments.output:
+            arguments.output.parent.mkdir(parents=True, exist_ok=True)
+            arguments.output.write_text(payload, encoding="utf-8")
+            print(f"Compiled width: {arguments.output}")
+        else:
+            print(payload, end="")
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description=(
@@ -188,6 +213,8 @@ def main(argv: list[str] | None = None) -> int:
     tokens = sys.argv[1:] if argv is None else argv
     if tokens and tokens[0] == "resolve-plan":
         return _resolve_plan_main(tokens[1:])
+    if tokens and tokens[0] == "compile-width":
+        return _compile_width_main(tokens[1:])
     if tokens and tokens[0] == "queue":
         from .queue_cli import main as queue_main
 

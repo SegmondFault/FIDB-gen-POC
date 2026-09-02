@@ -53,6 +53,9 @@ TREATMENT_FIELDS = {
     "append_flags",
     "supported_routes",
     "phase",
+    "artifact_shape",
+    "factor_values",
+    "factor_variants",
 }
 
 
@@ -125,6 +128,9 @@ class Treatment:
     append_flags: tuple[str, ...]
     supported_routes: tuple[str, ...]
     phase: str = "compile"
+    artifact_shape: str = "static-archive-members"
+    factor_values: tuple[tuple[str, str], ...] = ()
+    factor_variants: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _path_component(self.id, "treatment id")
@@ -366,6 +372,12 @@ def load_configuration(
             append_flags=tuple(row.get("append_flags", [])),
             supported_routes=tuple(row.get("supported_routes", [])),
             phase=row.get("phase", "compile"),
+            artifact_shape=row.get("artifact_shape", "static-archive-members"),
+            factor_values=tuple(
+                (str(key), str(value))
+                for key, value in row.get("factor_values", {}).items()
+            ),
+            factor_variants=tuple(row.get("factor_variants", [])),
         )
         for row in treatment_rows
     )
@@ -395,6 +407,19 @@ def load_configuration(
     invalid_phases = {row.phase for row in treatments} - {"compile", "link"}
     if invalid_phases:
         raise ValueError(f"unsupported treatment phases: {sorted(invalid_phases)}")
+    for treatment in treatments:
+        factors = [factor for factor, _value in treatment.factor_values]
+        if len(factors) != len(set(factors)):
+            raise ValueError(f"treatment {treatment.id} has duplicate factor values")
+        if not treatment.artifact_shape:
+            raise ValueError(f"treatment {treatment.id} has no artifact shape")
+        if len(treatment.factor_variants) != len(set(treatment.factor_variants)):
+            raise ValueError(f"treatment {treatment.id} has duplicate factor variants")
+        if len(treatment.factor_variants) != len(treatment.factor_values):
+            raise ValueError(
+                f"treatment {treatment.id} factor variants must map one-to-one "
+                "to factor values"
+            )
 
     return Configuration(
         libraries=libraries,

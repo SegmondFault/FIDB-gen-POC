@@ -20,7 +20,7 @@ class CoverageUniverseTests(unittest.TestCase):
             {"c", "cpp", "rust", "go", "swift", "other"},
         )
         self.assertEqual(len(document["compiler_families"]), 8)
-        self.assertEqual(len(document["profiles"]), 12)
+        self.assertEqual(len(document["profiles"]), 16)
         self.assertTrue(all(row["language_id"] == "c" for row in document["profiles"]))
         self.assertEqual(
             {row["matrix_role"] for row in document["dimensions"]},

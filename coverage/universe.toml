@@ -232,6 +232,7 @@ route_scope = "GCC-compatible routes"
 state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "baseline_o2"
 
 [[profile]]
 id = "gcc-adjacent-o2"
@@ -251,9 +252,10 @@ compiler_family = "llvm-clang"
 optimization = "O2"
 controls = ["route default hardening", "exact toolchain pin"]
 route_scope = "Clang-compatible ELF and Android routes"
-state = "desired"
+state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "baseline_o2"
 
 [[profile]]
 id = "clang-adjacent-o2"
@@ -276,6 +278,7 @@ route_scope = "GCC-compatible routes"
 state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "optimization_o0"
 
 [[profile]]
 id = "clang-o0"
@@ -284,9 +287,10 @@ compiler_family = "llvm-clang"
 optimization = "O0"
 controls = ["compiler-by-optimization interaction", "no LTO"]
 route_scope = "Clang-compatible routes"
-state = "desired"
+state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "optimization_o0"
 
 [[profile]]
 id = "gcc-o3"
@@ -298,6 +302,7 @@ route_scope = "GCC-compatible routes"
 state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "optimization_o3"
 
 [[profile]]
 id = "gcc-os"
@@ -309,6 +314,7 @@ route_scope = "GCC-compatible routes"
 state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "optimization_os"
 
 [[profile]]
 id = "gcc-o2-frame-omit"
@@ -317,9 +323,10 @@ compiler_family = "gcc"
 optimization = "O2"
 controls = ["omit frame pointer", "route default hardening"]
 route_scope = "routes where the flag is meaningful"
-state = "desired"
+state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "frame_pointer_omitted"
 
 [[profile]]
 id = "gcc-o2-stack-strong"
@@ -328,9 +335,58 @@ compiler_family = "gcc"
 optimization = "O2"
 controls = ["stack protector strong", "route default frame policy"]
 route_scope = "routes with compatible runtime support"
-state = "desired"
+state = "catalogued"
 language_id = "c"
 evidence_class = "assumption"
+execution_treatment = "stack_protector_strong"
+
+[[profile]]
+id = "clang-current-o3"
+label = "Clang current · O3"
+compiler_family = "llvm-clang"
+optimization = "O3"
+controls = ["aggressive optimization", "no LTO"]
+route_scope = "Clang-compatible ELF, Android and PE/COFF routes"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+execution_treatment = "optimization_o3"
+
+[[profile]]
+id = "clang-current-os"
+label = "Clang current · Os"
+compiler_family = "llvm-clang"
+optimization = "Os"
+controls = ["size optimization", "no LTO"]
+route_scope = "Clang-compatible ELF, Android and PE/COFF routes"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+execution_treatment = "optimization_os"
+
+[[profile]]
+id = "clang-o2-frame-omit"
+label = "Clang O2 · omit frame pointer"
+compiler_family = "llvm-clang"
+optimization = "O2"
+controls = ["omit frame pointer", "route default hardening"]
+route_scope = "Clang routes where the flag is meaningful"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+execution_treatment = "frame_pointer_omitted"
+
+[[profile]]
+id = "clang-o2-stack-strong"
+label = "Clang O2 · stack protector strong"
+compiler_family = "llvm-clang"
+optimization = "O2"
+controls = ["stack protector strong", "route default frame policy"]
+route_scope = "Clang routes with compatible runtime support"
+state = "catalogued"
+language_id = "c"
+evidence_class = "assumption"
+execution_treatment = "stack_protector_strong"
 
 [[profile]]
 id = "gcc-o2-cpu-tuned"

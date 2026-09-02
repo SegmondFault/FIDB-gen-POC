@@ -8,6 +8,7 @@ from pathlib import Path
 import tomllib
 
 from .config import load_configuration
+from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
 from .plan_request import (
     REQUEST_SCHEMA,
@@ -22,7 +23,7 @@ from .toolchain_registry import load_toolchains
 from .toolchain_packs import load_toolchain_pack_catalog
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v6"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v7"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -81,6 +82,9 @@ def _native_authority(root: Path) -> tuple[list[dict[str, object]], dict[str, ob
             "remove_flags": list(row.remove_flags),
             "append_flags": list(row.append_flags),
             "supported_routes": list(row.supported_routes),
+            "artifact_shape": row.artifact_shape,
+            "factor_values": dict(row.factor_values),
+            "factor_variants": list(row.factor_variants),
         }
         for row in configuration.treatments
     ]
@@ -406,12 +410,14 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     width_studies = _width_study_authority(
         root, recipes, native, targets, coverage_universe
     )
+    width_compilations = [compile_c_width(root)]
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     toolchain_pack_catalog = load_toolchain_pack_catalog(root)
     body = {
         "schema_version": AUTHORITY_SCHEMA,
         "coverage_universe": coverage_universe,
         "width_studies": width_studies,
+        "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
         "targets": targets,
@@ -430,6 +436,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "factor_variants": "sensitivity/variants.toml",
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
+            "width_compilations": "coverage/c-width-v1.toml",
             "plans": "plans/",
         },
         "source_digests": {
@@ -440,6 +447,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "width_studies_sha256": hashlib.sha256(
                 b"".join(path.read_bytes() for path in width_paths)
+            ).hexdigest(),
+            "c_width_sha256": hashlib.sha256(
+                (root / "coverage/c-width-v1.toml").read_bytes()
             ).hexdigest(),
         },
     }

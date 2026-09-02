@@ -18,8 +18,8 @@ id = "optimization:o0"
 factor = "optimization-level"
 group = "compiler-codegen"
 label = "O0"
-state = "desired"
-authority = "unmet-treatment"
+state = "registered"
+authority = "treatment:optimization_o0"
 
 [[variant]]
 id = "optimization:o1"
@@ -34,16 +34,16 @@ id = "optimization:o3"
 factor = "optimization-level"
 group = "compiler-codegen"
 label = "O3"
-state = "desired"
-authority = "unmet-treatment"
+state = "registered"
+authority = "treatment:optimization_o3"
 
 [[variant]]
 id = "optimization:os"
 factor = "optimization-level"
 group = "compiler-codegen"
 label = "Os"
-state = "desired"
-authority = "unmet-treatment"
+state = "registered"
+authority = "treatment:optimization_os"
 
 [[variant]]
 id = "optimization:oz"
@@ -98,8 +98,8 @@ id = "frame-pointer:omitted"
 factor = "frame-pointer"
 group = "compiler-codegen"
 label = "Frame pointer omitted"
-state = "desired"
-authority = "unmet-treatment"
+state = "registered"
+authority = "treatment:frame_pointer_omitted"
 
 [[variant]]
 id = "stack-protection:off"
@@ -114,8 +114,8 @@ id = "stack-protection:strong"
 factor = "stack-protection"
 group = "hardening-instrumentation"
 label = "Stack protector strong"
-state = "desired"
-authority = "unmet-treatment"
+state = "registered"
+authority = "treatment:stack_protector_strong"
 
 [[variant]]
 id = "sanitizer:off"

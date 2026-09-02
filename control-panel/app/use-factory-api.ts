@@ -810,11 +810,80 @@ export type WidthStudy = {
   };
 };
 
+export type WidthCompilation = {
+  schema_version: 'fidb-width-compilation/v1';
+  compilation_digest: string;
+  id: string;
+  label: string;
+  state: string;
+  language_id: string;
+  purpose: string;
+  fixed_recipe: string;
+  toolchain_profile: string;
+  route_profile_digest: string;
+  routes: Array<{
+    id: string;
+    label: string;
+    target_id: string;
+    target_os: string;
+    architecture: string;
+    binary_format: string;
+    compiler_family: string;
+    toolchain_state: string;
+    toolchain_identity: string;
+  }>;
+  build_profiles: Array<{
+    id: string;
+    label: string;
+    compiler_family: string;
+    optimization: string;
+    controls: string[];
+    state: string;
+    execution_treatment?: string;
+  }>;
+  artifact_profiles: Array<{ id: string; label: string; state: string; description: string }>;
+  analysis_profiles: Array<{ id: string; label: string; state: string; variant_id: string; description: string }>;
+  admission_profiles: Array<{ id: string; label: string; state: string; description: string }>;
+  factors: Array<AuthorityFactor & {
+    variants: AuthorityFactorVariant[];
+    variant_state_counts: Record<string, number>;
+  }>;
+  applicability: Array<{
+    route_id: string;
+    profile_id: string;
+    treatment_id?: string;
+    state: 'executable' | 'inapplicable' | 'unimplemented' | 'unavailable';
+    reasons: string[];
+  }>;
+  summary: {
+    declared_route_slots: number;
+    implemented_routes: number;
+    qualified_routes: number;
+    declared_build_profile_slots: number;
+    catalogued_build_profiles: number;
+    applicable_route_profile_pairs: number;
+    executable_route_profile_pairs: number;
+    unimplemented_applicable_pairs: number;
+    inapplicable_pairs: number;
+    feasible_build_cells: number;
+    feasible_analysis_runs: number;
+    feasible_policy_evaluations: number;
+    selected_replay: number;
+    feasible_full_path_executions: number;
+    declared_maximum_build_cells_one_family: number;
+    declared_maximum_analysis_runs_one_family: number;
+    declared_maximum_policy_evaluations_one_family: number;
+    sensitivity_factors: number;
+    factors_with_variants: number;
+  };
+};
+
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v6';
+  schema_version: 'fidb-authority-catalog/v7';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
+  width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
     routes: Array<Record<string, unknown> & { id: string }>;

@@ -32,7 +32,7 @@ class CapabilityDetectionTests(unittest.TestCase):
             self.assertFalse(cache.exists())
             self.assertEqual(result["detection_mode"], "read-only")
             self.assertTrue(result["toolchains"]["entries"])
-            self.assertEqual(len(result["toolchain_profiles"]["plans"]), 3)
+            self.assertEqual(len(result["toolchain_profiles"]["plans"]), 4)
             self.assertEqual(
                 next(
                     row

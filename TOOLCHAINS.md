@@ -81,6 +81,29 @@ frozen baseline: one fixed zlib release, one O2 treatment and all nine managed
 routes. Resolve it before execution; its cells are blocked automatically if a
 qualification identity cannot be recovered.
 
+## Applicability-compiled width
+
+`coverage/c-width-v1.toml` fixes zlib 1.3.1 and the non-Apple route profile,
+then names all four artifact shapes, six analysis profiles, three admission
+profiles and two selected replays. `coverage/universe.toml` maps the bounded
+O0/O2/O3/Os, frame-pointer and stack-protection profiles to reviewed worker
+treatments for each compatible compiler family.
+
+Compile the authority without executing anything:
+
+```sh
+fidb-poc compile-width --project-root . --output /tmp/c-width-v1.json
+```
+
+The output retains four distinct states for each route/profile pair:
+`executable`, `unimplemented`, `unavailable`, and `inapplicable`. It also
+projects every one of the 41 sensitivity factors, including factors with no
+named variant yet. The GUI renders the same route-by-profile map and the full
+factor ledger. On the qualified 2026-09-02 host, the compiler resolves 54
+feasible build/analysis cells and 108 full-path executions after two replays;
+the 4,800-build theoretical one-family maximum remains visible as capacity
+intent, not executable work.
+
 ## Current non-Apple qualification
 
 On 2026-09-02, `reference-host` qualified all nine Linux-managed routes at revision

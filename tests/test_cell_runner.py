@@ -314,7 +314,7 @@ class CellRunnerTests(unittest.TestCase):
             ):
                 run_cell(
                     self.native_cell,
-                    ["optimization:o0"],
+                    ["optimization:o1"],
                     self.project_root,
                     Path(temporary) / "attempt",
                 )

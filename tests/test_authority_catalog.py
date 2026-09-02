@@ -12,7 +12,7 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v6")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v7")
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["toolchains"]), 41)
@@ -50,7 +50,14 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["authority_digest"]), 64)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["coverage_universe"]["languages"]), 6)
-        self.assertEqual(len(document["coverage_universe"]["profiles"]), 12)
+        self.assertEqual(len(document["coverage_universe"]["profiles"]), 16)
+        self.assertEqual(len(document["width_compilations"]), 1)
+        self.assertEqual(
+            document["width_compilations"][0]["summary"][
+                "feasible_full_path_executions"
+            ],
+            108,
+        )
         self.assertEqual(
             document["coverage_universe"]["population"][
                 "published_priority_head_families"

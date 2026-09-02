@@ -312,6 +312,24 @@ def _validate_cell_state(cell: dict[str, object]) -> tuple[str, str]:
     return cell_id, kind
 
 
+def _validate_native_treatment_variants(
+    configuration: Configuration, variants: Sequence[dict[str, object]]
+) -> None:
+    treatment = configuration.treatments[0]
+    selected_by_factor = {str(row["factor"]): str(row["id"]) for row in variants}
+    required_by_factor = {
+        factor: variant_id
+        for (factor, _value), variant_id in zip(
+            treatment.factor_values, treatment.factor_variants
+        )
+    }
+    for factor, required_id in required_by_factor.items():
+        if factor in selected_by_factor and selected_by_factor[factor] != required_id:
+            raise CellResolutionError(
+                f"treatment {treatment.id} requires {required_id} for {factor}"
+            )
+
+
 def _resolve_native(
     cell: dict[str, object], project_root: Path
 ) -> tuple[Configuration, dict[str, object]]:
@@ -370,6 +388,14 @@ def _resolve_native(
         "treatment": treatment.id,
         "factor": treatment.factor,
         "compiler_flags": list(treatment.flags_for(route)),
+        "artifact_shape": treatment.artifact_shape,
+        "factor_variants": list(treatment.factor_variants),
+        "factor_variant_requirements": dict(
+            zip(
+                (factor for factor, _value in treatment.factor_values),
+                treatment.factor_variants,
+            )
+        ),
     }
     reviewed_analysis = {
         "ghidra_language": route.ghidra_language,
@@ -1069,6 +1095,7 @@ def run_cell(
     ) as resolution_metrics:
         if kind == "native":
             configuration, pins = _resolve_native(plain, project)
+            _validate_native_treatment_variants(configuration, variants)
             generated = None
             executor = "native-local"
         elif kind == "archive-library":

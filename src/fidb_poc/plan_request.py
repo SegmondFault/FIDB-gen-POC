@@ -630,140 +630,152 @@ def _native_cells(
                 if route.toolchain_state == "unavailable":
                     blockers.append(route.toolchain_blocker)
                 status = "planned" if not blockers else "blocked"
-                cells.append(
-                    {
-                        "id": f'{matrix["id"]}:{library.identifier}:{route.id}:{treatment.id}',
-                        "matrix": matrix["id"],
-                        "kind": "native",
-                        "status": status,
-                        "blockers": blockers,
-                        "readiness": "unprobed" if status == "planned" else "unmet",
-                        "recipe": {
-                            "name": library.name,
-                            "version": library.version,
-                            "url": library.url,
-                            "sha256": library.sha256,
+                cell = {
+                    "id": f'{matrix["id"]}:{library.identifier}:{route.id}:{treatment.id}',
+                    "matrix": matrix["id"],
+                    "kind": "native",
+                    "status": status,
+                    "blockers": blockers,
+                    "readiness": "unprobed" if status == "planned" else "unmet",
+                    "recipe": {
+                        "name": library.name,
+                        "version": library.version,
+                        "url": library.url,
+                        "sha256": library.sha256,
+                    },
+                    "target": {
+                        "os": route.target_os,
+                        "architecture": route.architecture,
+                        "binary_format": route.binary_format,
+                    },
+                    "toolchain": {
+                        "route": route.id,
+                        "compiler": list(route.compiler),
+                        "archiver": list(route.archiver),
+                        "ranlib": list(route.ranlib),
+                        "identity": route.toolchain_identity,
+                    },
+                    "build": {
+                        "adapter": library.preferred_build_system,
+                        "treatment": treatment.id,
+                        "factor": treatment.factor,
+                        "compiler_flags": flags,
+                        "artifact_shape": treatment.artifact_shape,
+                        "factor_variants": list(treatment.factor_variants),
+                        "factor_variant_requirements": dict(
+                            zip(
+                                (factor for factor, _value in treatment.factor_values),
+                                treatment.factor_variants,
+                            )
+                        ),
+                    },
+                    "analysis": {
+                        "ghidra_language": route.ghidra_language,
+                        "ghidra_compiler_spec": route.ghidra_compiler_spec,
+                        "ghidra_version": "execution-probed",
+                        "analysis_profile": "fid-safe-default",
+                    },
+                    "routing": {
+                        "executor": "native-local",
+                        "worker_pool": (
+                            "macos-native"
+                            if route.target_os == "macos"
+                            else "library-local"
+                        ),
+                    },
+                    "sensitivity": {
+                        "source-identity": {
+                            "state": "controlled",
+                            "value": f"{library.identifier}:{library.sha256[:12]}",
                         },
-                        "target": {
-                            "os": route.target_os,
-                            "architecture": route.architecture,
-                            "binary_format": route.binary_format,
+                        "target-platform-format": {
+                            "state": "controlled",
+                            "value": f"{route.target_os}:{route.binary_format}",
                         },
-                        "toolchain": {
-                            "route": route.id,
-                            "compiler": list(route.compiler),
-                            "archiver": list(route.archiver),
-                            "ranlib": list(route.ranlib),
-                            "identity": route.toolchain_identity,
+                        "target-abi": {
+                            "state": "controlled",
+                            "value": route.architecture,
                         },
-                        "build": {
-                            "adapter": library.preferred_build_system,
-                            "treatment": treatment.id,
-                            "factor": treatment.factor,
-                            "compiler_flags": flags,
+                        "compiler-family": {
+                            "state": "execution-probed",
+                            "value": route.compiler_family,
                         },
-                        "analysis": {
-                            "ghidra_language": route.ghidra_language,
-                            "ghidra_compiler_spec": route.ghidra_compiler_spec,
-                            "ghidra_version": "execution-probed",
-                            "analysis_profile": "fid-safe-default",
+                        "compiler-version": {
+                            "state": "execution-probed",
+                            "value": None,
                         },
-                        "routing": {
-                            "executor": "native-local",
-                            "worker_pool": (
-                                "macos-native"
-                                if route.target_os == "macos"
-                                else "library-local"
-                            ),
+                        "optimization-level": {
+                            "state": "controlled",
+                            "value": "O2",
                         },
-                        "sensitivity": {
-                            "source-identity": {
-                                "state": "controlled",
-                                "value": f"{library.identifier}:{library.sha256[:12]}",
-                            },
-                            "target-platform-format": {
-                                "state": "controlled",
-                                "value": f"{route.target_os}:{route.binary_format}",
-                            },
-                            "target-abi": {
-                                "state": "controlled",
-                                "value": route.architecture,
-                            },
-                            "compiler-family": {
-                                "state": "execution-probed",
-                                "value": route.compiler_family,
-                            },
-                            "compiler-version": {
-                                "state": "execution-probed",
-                                "value": None,
-                            },
-                            "optimization-level": {
-                                "state": "controlled",
-                                "value": "O2",
-                            },
-                            "link-time-optimization": {
-                                "state": "controlled",
-                                "value": "off",
-                            },
-                            "frame-pointer": {
-                                "state": "controlled",
-                                "value": "retained",
-                            },
-                            "position-independent-code": {
-                                "state": "controlled",
-                                "value": "on",
-                            },
-                            "debug-information-emission": {
-                                "state": "controlled",
-                                "value": "off",
-                            },
-                            "sanitizer-mode": {
-                                "state": "controlled",
-                                "value": "off",
-                            },
-                            "cpu-target-tuning": {
-                                "state": "controlled",
-                                "value": route.architecture,
-                            },
-                            "build-environment": {
-                                "state": "execution-probed",
-                                "value": None,
-                            },
-                            "build-shape": {
-                                "state": "controlled",
-                                "value": library.preferred_build_system,
-                            },
-                            "link-shape": {
-                                "state": "controlled",
-                                "value": treatment.phase,
-                            },
-                            "ghidra-language": {
-                                "state": "controlled",
-                                "value": route.ghidra_language,
-                            },
-                            "ghidra-compiler-spec": {
-                                "state": "controlled",
-                                "value": route.ghidra_compiler_spec,
-                            },
-                            "ghidra-application": {
-                                "state": "execution-probed",
-                                "value": None,
-                            },
-                            "pyghidra-version": {
-                                "state": "execution-probed",
-                                "value": None,
-                            },
-                            "java-runtime": {
-                                "state": "execution-probed",
-                                "value": None,
-                            },
-                            "analysis-configuration": {
-                                "state": "controlled",
-                                "value": "fid-safe-default",
-                            },
+                        "link-time-optimization": {
+                            "state": "controlled",
+                            "value": "off",
                         },
+                        "frame-pointer": {
+                            "state": "controlled",
+                            "value": "retained",
+                        },
+                        "position-independent-code": {
+                            "state": "controlled",
+                            "value": "on",
+                        },
+                        "debug-information-emission": {
+                            "state": "controlled",
+                            "value": "off",
+                        },
+                        "sanitizer-mode": {
+                            "state": "controlled",
+                            "value": "off",
+                        },
+                        "cpu-target-tuning": {
+                            "state": "controlled",
+                            "value": route.architecture,
+                        },
+                        "build-environment": {
+                            "state": "execution-probed",
+                            "value": None,
+                        },
+                        "build-shape": {
+                            "state": "controlled",
+                            "value": library.preferred_build_system,
+                        },
+                        "link-shape": {
+                            "state": "controlled",
+                            "value": treatment.phase,
+                        },
+                        "ghidra-language": {
+                            "state": "controlled",
+                            "value": route.ghidra_language,
+                        },
+                        "ghidra-compiler-spec": {
+                            "state": "controlled",
+                            "value": route.ghidra_compiler_spec,
+                        },
+                        "ghidra-application": {
+                            "state": "execution-probed",
+                            "value": None,
+                        },
+                        "pyghidra-version": {
+                            "state": "execution-probed",
+                            "value": None,
+                        },
+                        "java-runtime": {
+                            "state": "execution-probed",
+                            "value": None,
+                        },
+                        "analysis-configuration": {
+                            "state": "controlled",
+                            "value": "fid-safe-default",
+                        },
+                    },
+                }
+                for factor, value in treatment.factor_values:
+                    cell["sensitivity"][factor] = {
+                        "state": "controlled",
+                        "value": value,
                     }
-                )
+                cells.append(cell)
     return cells
 
 
@@ -837,6 +849,17 @@ def _queue_preview(
             for variant in combination
             if variant["state"] != "registered"
         ]
+        requirements = cell.get("build", {}).get("factor_variant_requirements", {})
+        factor_blockers.extend(
+            f'factor variant {variant["id"]} is incompatible with '
+            f'{cell["build"]["treatment"]}'
+            for variant in combination
+            if requirements.get(str(variant["factor"]))
+            not in {
+                None,
+                variant["id"],
+            }
+        )
         blockers = [*cell["blockers"], *factor_blockers]
         result.append(
             {

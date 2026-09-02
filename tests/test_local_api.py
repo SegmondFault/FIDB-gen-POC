@@ -402,7 +402,7 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v6")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v7")
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
@@ -424,7 +424,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(managed_cache.exists())
         self.assertEqual(result["detection_mode"], "read-only")
         self.assertTrue(result["toolchains"]["entries"])
-        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 3)
+        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 4)
         self.assertTrue(
             all(row["state"] == "missing" for row in result["toolchains"]["entries"])
         )
