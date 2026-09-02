@@ -178,6 +178,23 @@ Verified bytes are stored content-addressed under the ignored
 `var/fidb-sources/downloads/` cache. See [`sources/README.md`](sources/README.md)
 for the extension and trust model.
 
+The disarmed next-run definition is
+[`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml).
+It deliberately selects only ranks 2–10 because OpenSSL supplies the first
+174-cell calibration. The exact next batch is 9 libraries × 29 qualified
+compiler routes × 6 executable treatments = 1,566 full-path executions; the
+combined top-ten study is 1,740. Inspect its pinned authority and current recipe
+blockers without starting work:
+
+```sh
+uv run fidb-poc compile-width-batch batch-020 --project-root .
+```
+
+The batch is not in `plans/priority-queue.toml`. It cannot be materialized until
+the nine source pins have matching reviewed native recipes. See
+[`batches/README.md`](batches/README.md) for the drift guards and activation
+boundary.
+
 `worker.toml` is trusted operator configuration for the single Linux route, one
 treatment and one profile. It is not untrusted request data.
 
@@ -627,6 +644,7 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |
 | `src/fidb_poc/toolchain_cache.py` | locked, checksum-verified content-addressed acquisition |
 | `src/fidb_poc/source_packs.py`, `sources/*.toml` | source-only release packs, cache status and sequential verified acquisition |
+| `src/fidb_poc/width_batch.py`, `batches/*.toml` | immutable source-to-width batch bindings, exact cardinality and recipe readiness |
 | `src/fidb_poc/toolchain_prepare.py`, `toolchain_inputs.py` | safe prepared roots and private non-redistributed input binding |
 | `src/fidb_poc/toolchain_qualification.py` | reviewed route composition boundary and fixed target/language smoke qualification |
 | `src/fidb_poc/external_workers.py` | command-free external definitions, native preflight, and registration validation |
