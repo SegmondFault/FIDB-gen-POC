@@ -243,8 +243,7 @@ def analyze_signature_coverage(
             )
     all_signatures = _union(cell["signatures"] for cell in cells)
     full_hashes = {
-        (signature[0], signature[1], signature[2])
-        for signature in all_signatures
+        (signature[0], signature[1], signature[2]) for signature in all_signatures
     }
     pairwise = _pairwise_same_target(cells)
     compiler_marginals = _member_marginals(

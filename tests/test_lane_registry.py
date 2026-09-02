@@ -94,9 +94,7 @@ class LaneRegistryTests(unittest.TestCase):
 
         self.assertEqual(result["state"], "exact")
         self.assertEqual(result["candidates"][0]["lane_id"], "linux-x86")
-        self.assertEqual(
-            result["candidates"][0]["sublane_id"], "linux-x86-elf64"
-        )
+        self.assertEqual(result["candidates"][0]["sublane_id"], "linux-x86-elf64")
 
     def test_partial_program_facts_report_ambiguity_instead_of_guessing(self):
         registry = load_lane_registry(

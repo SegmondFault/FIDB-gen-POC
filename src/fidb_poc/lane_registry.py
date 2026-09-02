@@ -8,7 +8,6 @@ import tomllib
 
 from .target_registry import load_targets
 
-
 LANE_SCHEMA = "fidb-lanes/v1"
 LANE_STATES = {"experimental", "active", "retired"}
 SUBLANE_STATES = {"mapped", "unresolved"}
@@ -40,9 +39,7 @@ _SUBLANE_FIELDS = {
 }
 
 
-def _table_fields(
-    row: dict[str, object], expected: set[str], label: str
-) -> None:
+def _table_fields(row: dict[str, object], expected: set[str], label: str) -> None:
     unknown = set(row) - expected
     missing = expected - set(row)
     if unknown or missing:
@@ -63,17 +60,21 @@ def _token(value: object, label: str) -> str:
 
 def _strings(value: object, label: str, *, allow_empty: bool = False) -> list[str]:
     if not isinstance(value, list) or (not value and not allow_empty):
-        raise ValueError(f"{label} must be a{' possibly empty' if allow_empty else ' non-empty'} list")
-    if not all(isinstance(item, str) and item == item.strip() and item for item in value):
-        raise ValueError(f"{label} must contain non-empty strings without outer whitespace")
+        raise ValueError(
+            f"{label} must be a{' possibly empty' if allow_empty else ' non-empty'} list"
+        )
+    if not all(
+        isinstance(item, str) and item == item.strip() and item for item in value
+    ):
+        raise ValueError(
+            f"{label} must contain non-empty strings without outer whitespace"
+        )
     if len(set(value)) != len(value):
         raise ValueError(f"{label} contains duplicates")
     return list(value)
 
 
-def load_lane_registry(
-    path: str | Path, target_path: str | Path
-) -> dict[str, object]:
+def load_lane_registry(path: str | Path, target_path: str | Path) -> dict[str, object]:
     """Load a closed-schema lane registry and join its referenced targets."""
 
     registry_path = Path(path)
@@ -83,7 +84,9 @@ def load_lane_registry(
             "lane registry must contain only schema_version, policy and lane"
         )
     if document["schema_version"] != LANE_SCHEMA:
-        raise ValueError(f"unsupported lane registry schema: {document['schema_version']}")
+        raise ValueError(
+            f"unsupported lane registry schema: {document['schema_version']}"
+        )
 
     raw_policies = document["policy"]
     if not isinstance(raw_policies, list) or not raw_policies:
@@ -102,7 +105,9 @@ def load_lane_registry(
         for field in _POLICY_FIELDS - {"id"}:
             value = row[field]
             if not isinstance(value, str) or not value or value != value.strip():
-                raise ValueError(f"policy {policy_id} {field} must be a non-empty string")
+                raise ValueError(
+                    f"policy {policy_id} {field} must be a non-empty string"
+                )
         row["id"] = policy_id
         policies.append(row)
 
@@ -196,7 +201,8 @@ def load_lane_registry(
     missing_targets = set(targets_by_id) - mapped_targets
     if missing_targets:
         raise ValueError(
-            "lane registry omits target definitions: " + ", ".join(sorted(missing_targets))
+            "lane registry omits target definitions: "
+            + ", ".join(sorted(missing_targets))
         )
     return {
         "schema_version": LANE_SCHEMA,

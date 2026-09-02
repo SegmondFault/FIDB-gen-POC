@@ -36,7 +36,9 @@ class TargetRegistryTests(unittest.TestCase):
 
         android = [row for row in rows if row["platform"] == "android"]
         self.assertEqual(len(android), 4)
-        self.assertTrue(all(row["catalog_state"] == "coverage-intent" for row in android))
+        self.assertTrue(
+            all(row["catalog_state"] == "coverage-intent" for row in android)
+        )
         self.assertTrue(
             {"linux-sparc32-be-elf", "linux-riscv64-elf", "linux-loongarch64-elf"}
             <= {row["id"] for row in rows}
