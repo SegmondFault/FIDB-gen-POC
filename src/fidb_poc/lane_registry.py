@@ -222,3 +222,95 @@ def resolve_target_sublane(
             f"target {target_id} resolves to {len(matches)} lane sublanes, expected one"
         )
     return matches[0]
+
+
+def resolve_program_sublanes(
+    registry: dict[str, object],
+    *,
+    platform: str | None = None,
+    binary_format: str | None = None,
+    architecture: str | None = None,
+    machine: str | None = None,
+    bits: int | None = None,
+    endianness: str | None = None,
+    ghidra_language_id: str | None = None,
+    compiler_spec_id: str | None = None,
+    include_unresolved: bool = True,
+) -> dict[str, object]:
+    """Resolve inspected program facts without requiring a user to pick a sublane.
+
+    The caller supplies whichever facts its binary loader and Ghidra program have
+    established.  Partial facts intentionally return every compatible candidate;
+    ambiguity is data for the integration to resolve, never permission to guess.
+    """
+
+    selectors = {
+        "platform": platform,
+        "binary_format": binary_format,
+        "architecture": architecture,
+        "machine": machine,
+        "bits": bits,
+        "endianness": endianness,
+        "ghidra_language_id": ghidra_language_id,
+        "compiler_spec_id": compiler_spec_id,
+    }
+    if not any(value is not None for value in selectors.values()):
+        raise ValueError("at least one inspected program fact is required")
+    if bits is not None and bits not in {32, 64}:
+        raise ValueError("bits must be 32 or 64")
+
+    candidates: list[dict[str, object]] = []
+    for lane in registry["lanes"]:
+        if platform is not None and lane["platform"] != platform:
+            continue
+        for sublane in lane["sublanes"]:
+            if not include_unresolved and sublane["definition_state"] != "mapped":
+                continue
+            target = sublane["target"]
+            target_selectors = {
+                "binary_format": binary_format,
+                "architecture": architecture,
+                "machine": machine,
+                "bits": bits,
+                "endianness": endianness,
+            }
+            if any(
+                value is not None and target[field] != value
+                for field, value in target_selectors.items()
+            ):
+                continue
+            if (
+                ghidra_language_id is not None
+                and ghidra_language_id not in sublane["ghidra_language_ids"]
+            ):
+                continue
+            if (
+                compiler_spec_id is not None
+                and compiler_spec_id not in sublane["compiler_spec_ids"]
+            ):
+                continue
+            candidates.append(
+                {
+                    "lane_id": lane["id"],
+                    "lane_label": lane["label"],
+                    "lane_state": lane["state"],
+                    "sublane_id": sublane["id"],
+                    "definition_state": sublane["definition_state"],
+                    "policy_id": sublane["policy_id"],
+                    "target_id": sublane["target_id"],
+                    "target": dict(target),
+                    "ghidra_language_ids": list(sublane["ghidra_language_ids"]),
+                    "compiler_spec_ids": list(sublane["compiler_spec_ids"]),
+                }
+            )
+
+    return {
+        "schema_version": "fidb-lane-resolution/v1",
+        "state": (
+            "unsupported"
+            if not candidates
+            else "exact" if len(candidates) == 1 else "ambiguous"
+        ),
+        "selectors": selectors,
+        "candidates": candidates,
+    }

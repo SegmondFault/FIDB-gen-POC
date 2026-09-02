@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fidb_poc.lane_registry import load_lane_registry, resolve_target_sublane
+from fidb_poc.lane_registry import (
+    load_lane_registry,
+    resolve_program_sublanes,
+    resolve_target_sublane,
+)
 
 
 class LaneRegistryTests(unittest.TestCase):
@@ -70,6 +74,74 @@ class LaneRegistryTests(unittest.TestCase):
             path.write_text(source + "\nunexpected = true\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unknown"):
                 load_lane_registry(path, root / "targets.toml")
+
+    def test_inspected_program_facts_resolve_without_user_architecture_choice(self):
+        registry = load_lane_registry(
+            self.root / "lanes/registry.toml",
+            self.root / "targets/registry.toml",
+        )
+
+        result = resolve_program_sublanes(
+            registry,
+            platform="linux",
+            binary_format="ELF",
+            machine="x86-64",
+            bits=64,
+            endianness="little",
+            ghidra_language_id="x86:LE:64:default",
+            compiler_spec_id="gcc",
+        )
+
+        self.assertEqual(result["state"], "exact")
+        self.assertEqual(result["candidates"][0]["lane_id"], "linux-x86")
+        self.assertEqual(
+            result["candidates"][0]["sublane_id"], "linux-x86-elf64"
+        )
+
+    def test_partial_program_facts_report_ambiguity_instead_of_guessing(self):
+        registry = load_lane_registry(
+            self.root / "lanes/registry.toml",
+            self.root / "targets/registry.toml",
+        )
+
+        result = resolve_program_sublanes(
+            registry,
+            platform="linux",
+            binary_format="ELF",
+            endianness="little",
+        )
+
+        self.assertEqual(result["state"], "ambiguous")
+        self.assertGreater(len(result["candidates"]), 1)
+        self.assertIn(
+            "linux-x86",
+            {row["lane_id"] for row in result["candidates"]},
+        )
+
+    def test_resolution_can_exclude_unresolved_coverage_intent(self):
+        registry = load_lane_registry(
+            self.root / "lanes/registry.toml",
+            self.root / "targets/registry.toml",
+        )
+
+        result = resolve_program_sublanes(
+            registry,
+            platform="linux",
+            architecture="riscv64",
+            include_unresolved=False,
+        )
+
+        self.assertEqual(result["state"], "unsupported")
+        self.assertEqual(result["candidates"], [])
+
+    def test_resolution_requires_real_program_evidence(self):
+        registry = load_lane_registry(
+            self.root / "lanes/registry.toml",
+            self.root / "targets/registry.toml",
+        )
+
+        with self.assertRaisesRegex(ValueError, "at least one inspected"):
+            resolve_program_sublanes(registry)
 
 
 if __name__ == "__main__":
