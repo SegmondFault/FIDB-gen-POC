@@ -1,0 +1,51 @@
+schema_version = "fidb-performance-evidence/v1"
+id = "build-parallelism-reference-host-2026-09-03"
+host = "reference-host"
+subject = "openssl-3.5.8"
+ghidra_version = "12.1.2"
+java_major = 21
+logical_cpus = 32
+visible_memory_gib = 93.93
+ghidra_heap_mib = 4096
+route_count = 10
+workers = 10
+treatment_ids = ["baseline_o2"]
+decision = "Retain the established four native build jobs per cell. Three jobs did not reduce aggregate compile time and the sub-percent wall-time difference is experimental noise. Do not add adaptive build-job policy without a stronger fixed-workload result."
+
+[[case]]
+id = "four-build-jobs-control"
+build_jobs_per_cell = 4
+wall_time_ns = 843186843488
+aggregate_compile_ns = 702412401889
+aggregate_ghidra_import_analysis_ns = 6867058217676
+peak_process_rss_bytes = 24613445632
+peak_scratch_bytes = 1385697280
+signature_records = 133052
+unique_signature_sum = 97254
+semantic_digest = "41f5cd9cb5e5da2aae3ec7ed3b4e33c3b5dd3edf758600677dcf1f1e04fa4629"
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-ten-workers-20260902T211711Z-4b5832c5041a/benchmark-result.json"
+raw_result_sha256 = "bc39a28b24eb535c291f90d9adcd86b68b107a4403462361a819c4dcaff68205"
+
+[[case]]
+id = "three-build-jobs-candidate"
+build_jobs_per_cell = 3
+wall_time_ns = 836288688936
+aggregate_compile_ns = 706663952633
+aggregate_ghidra_import_analysis_ns = 6815384005657
+peak_process_rss_bytes = 25204940800
+peak_scratch_bytes = 1378762752
+signature_records = 133052
+unique_signature_sum = 97254
+semantic_digest = "41f5cd9cb5e5da2aae3ec7ed3b4e33c3b5dd3edf758600677dcf1f1e04fa4629"
+raw_result = "artifacts/benchmarks/width-pipeline/buildjobs3-ten-workers-20260902T225014Z-446b24688f9a/benchmark-result.json"
+raw_result_sha256 = "4f16817924ee45c2a0d8a97024f7e45723b206cc177d7a0eb42213dc9a7d2b13"
+
+[comparison.three_to_four]
+wall_time_change_percent = -0.8181050979714666
+aggregate_compile_change_percent = 0.6052784279671375
+aggregate_ghidra_import_analysis_change_percent = -0.7524941595221879
+peak_rss_change_percent = 2.4031384180969617
+semantic_digest_equal = true
+signature_records_equal = true
+unique_signature_sum_equal = true
+

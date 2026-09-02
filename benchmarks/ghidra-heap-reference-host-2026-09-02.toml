@@ -74,6 +74,22 @@ semantic_digest = "41f5cd9cb5e5da2aae3ec7ed3b4e33c3b5dd3edf758600677dcf1f1e04fa4
 raw_result = "artifacts/benchmarks/width-pipeline/heap4096-ten-workers-20260902T211711Z-4b5832c5041a/benchmark-result.json"
 raw_result_sha256 = "bc39a28b24eb535c291f90d9adcd86b68b107a4403462361a819c4dcaff68205"
 
+[[case]]
+id = "heap4096-one-redirected-console"
+route_ids = ["linux-x86-64-gcc-13"]
+treatment_ids = ["baseline_o2"]
+workers = 1
+ghidra_heap_mib = 4096
+wall_time_ns = 718357294558
+peak_process_rss_bytes = 2449735680
+peak_scratch_bytes = 162414592
+signature_records = 12157
+unique_signature_sum = 9504
+signature_records_per_wall_hour = 60924.00025940909
+semantic_digest = "041cde25869b7bc0732c06a455bcfbddc0af8ce90ad51c9d7046d4ca27f53799"
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-one-redirected-20260902T223742Z-a4982d9bffe3/benchmark-result.json"
+raw_result_sha256 = "cb3fdf29ab6231c50a991ab00b705641f35bbb6030d96cc31644ed45d882cb9e"
+
 [comparison.one_cell]
 rss_reduction_percent = 56.60378221339252
 wall_time_increase_percent = 1.7735716244193702
@@ -87,3 +103,8 @@ analysis_artifact_sha256_equal = 10
 fid_signatures_sha256_equal = 10
 signature_record_counts_equal = 10
 unique_signature_counts_equal = 10
+
+[comparison.redirected_console]
+wall_time_change_percent = -0.04200853158954354
+semantic_digest_equal = true
+decision = "No throughput change. Keep the normal executor unchanged; redirecting diagnostics is optional operator ergonomics."
