@@ -164,6 +164,20 @@ library, libc, or malware fork alike -- uses this same `fidb-recipe/v3` TOML
 schema; only the directory and `mode` differ. See **Hunting an unknown
 target** below for the other two.
 
+The earlier, source-only staging boundary is [`sources/c-top10-v1.toml`](sources/c-top10-v1.toml).
+It pins and checksum-identifies all ten study archives without claiming that
+the remaining nine already have executable recipes. Inspect or acquire the
+pack without extraction, compilation, or Ghidra work:
+
+```sh
+uv run fidb-poc source status c-top10-v1 --project-root .
+uv run fidb-poc source pull c-top10-v1 --project-root .
+```
+
+Verified bytes are stored content-addressed under the ignored
+`var/fidb-sources/downloads/` cache. See [`sources/README.md`](sources/README.md)
+for the extension and trust model.
+
 `worker.toml` is trusted operator configuration for the single Linux route, one
 treatment and one profile. It is not untrusted request data.
 
@@ -612,6 +626,7 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/hunt.py` | investigate -> select -> prepare -> match -> export workflow |
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |
 | `src/fidb_poc/toolchain_cache.py` | locked, checksum-verified content-addressed acquisition |
+| `src/fidb_poc/source_packs.py`, `sources/*.toml` | source-only release packs, cache status and sequential verified acquisition |
 | `src/fidb_poc/toolchain_prepare.py`, `toolchain_inputs.py` | safe prepared roots and private non-redistributed input binding |
 | `src/fidb_poc/toolchain_qualification.py` | reviewed route composition boundary and fixed target/language smoke qualification |
 | `src/fidb_poc/external_workers.py` | command-free external definitions, native preflight, and registration validation |
