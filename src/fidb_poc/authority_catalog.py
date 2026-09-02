@@ -21,9 +21,10 @@ from .recipe_generator import load_recipes as load_source_recipes
 from .target_registry import load_targets
 from .toolchain_registry import load_toolchains
 from .toolchain_packs import load_toolchain_pack_catalog
+from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v7"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v8"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -245,6 +246,15 @@ def _plan_authority(root: Path) -> list[dict[str, object]]:
     return plans
 
 
+def _width_batch_authority(
+    root: Path, recipes: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    return [
+        project_width_batch_readiness(load_width_batch(root, path), recipes)
+        for path in sorted((root / "batches").glob("*.toml"))
+    ]
+
+
 def _width_study_authority(
     root: Path,
     recipes: list[dict[str, object]],
@@ -410,13 +420,16 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     width_studies = _width_study_authority(
         root, recipes, native, targets, coverage_universe
     )
+    width_batches = _width_batch_authority(root, recipes)
     width_compilations = [compile_c_width(root)]
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
+    width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]
     toolchain_pack_catalog = load_toolchain_pack_catalog(root)
     body = {
         "schema_version": AUTHORITY_SCHEMA,
         "coverage_universe": coverage_universe,
         "width_studies": width_studies,
+        "width_batches": width_batches,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -436,6 +449,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "factor_variants": "sensitivity/variants.toml",
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
+            "width_batches": "batches/*.toml",
             "width_compilations": "coverage/c-width-v1.toml",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -448,6 +462,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "width_studies_sha256": hashlib.sha256(
                 b"".join(path.read_bytes() for path in width_paths)
+            ).hexdigest(),
+            "width_batches_sha256": hashlib.sha256(
+                b"".join(path.read_bytes() for path in width_batch_paths)
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()

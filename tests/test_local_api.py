@@ -61,10 +61,12 @@ class LocalApiTests(unittest.TestCase):
         for name in ("pyproject.toml", "worker.toml"):
             shutil.copy2(self.source_root / name, self.root / name)
         for name in (
+            "batches",
             "coverage",
             "plans",
             "recipes",
             "sensitivity",
+            "sources",
             "targets",
             "toolchains",
         ):
@@ -402,7 +404,7 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v7")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v8")
         self.assertEqual(len(document["recipes"]), 5)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
@@ -414,6 +416,15 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(
             document["width_studies"][0]["presets"][1]["metrics"]["build_cells"],
             180,
+        )
+        self.assertEqual(document["width_batches"][0]["id"], "batch-020")
+        self.assertEqual(
+            document["width_batches"][0]["summary"]["total_executions"],
+            1_566,
+        )
+        self.assertEqual(
+            document["width_batches"][0]["readiness"]["queue_state"],
+            "not-materialized-disarmed",
         )
         self.assertTrue(document["plans"])
 

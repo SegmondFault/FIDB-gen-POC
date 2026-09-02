@@ -12,7 +12,7 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v7")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v8")
         self.assertEqual(len(document["recipes"]), 5)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["toolchains"]), 41)
@@ -97,6 +97,13 @@ class AuthorityCatalogTests(unittest.TestCase):
                 "definition-required": 0,
             },
         )
+        self.assertEqual(len(document["width_batches"]), 1)
+        width_batch = document["width_batches"][0]
+        self.assertEqual(width_batch["id"], "batch-020")
+        self.assertEqual(width_batch["summary"]["total_executions"], 1_566)
+        self.assertEqual(width_batch["readiness"]["source_pins"], 9)
+        self.assertEqual(width_batch["readiness"]["recipe_ready_libraries"], 0)
+        self.assertEqual(width_batch["readiness"]["blocked_executions"], 1_566)
 
         targets = {row["id"]: row for row in document["targets"]}
         self.assertEqual(

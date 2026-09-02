@@ -1,0 +1,35 @@
+schema_version = "fidb-width-batch/v1"
+id = "batch-020"
+name = "c-next-nine-mega-width"
+label = "C next nine · exact mega width"
+state = "defined-disarmed"
+language_id = "c"
+purpose = "Apply the exact OpenSSL compiler-generation and treatment width to the remaining nine pinned C study libraries, so the completed OpenSSL result plus this batch covers the full top ten."
+source_pack = "sources/c-top10-v1.toml"
+source_pack_sha256 = "97544e2c51d791be6ecfadbe5c493915914651a8db967070736333652be05c57"
+source_ids = [
+  "sqlite",
+  "xz",
+  "zstd",
+  "pcre2",
+  "lz4",
+  "gettext",
+  "nghttp2",
+  "readline",
+  "gmp",
+]
+width_authority = "coverage/c-width-v1.toml"
+width_authority_sha256 = "fd1849f1821559b735dbd9eb1e0af9a5eacd3f94d197d8355812c80bc0a7cd30"
+width_compilation_digest = "0da1396951e5a0550eaad8ce2c6ff95909a783dec396205d6df6038ba1691a59"
+width_study = "coverage/c-top10-width-study.toml"
+width_study_sha256 = "194a4b4c955461e843eabe111af2ceca268ffb76a06613068c325c1e7834f7b8"
+recipe_policy = "Resolve each selected source as <source-id>@<pinned-version>; require its reviewed native recipe to match the source URL and SHA-256 before materialization."
+queue_policy = "Definition only. Keep out of plans/priority-queue.toml until every selected library has a reviewed build recipe and the batch is deliberately armed."
+
+[expected]
+libraries = 9
+route_profiles = 29
+compiler_identities = 8
+executable_treatments = 6
+executions_per_library = 174
+total_executions = 1566
