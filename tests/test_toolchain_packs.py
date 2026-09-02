@@ -77,13 +77,17 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         self.assertEqual(plan["summary"]["packs"], 9)
         self.assertEqual(plan["summary"]["download_bytes"], 753_465_840)
         self.assertEqual(
-            plan["summary"]["pack_installed_bytes_estimate"], 3_013_863_360
+            plan["summary"]["pack_installed_bytes_estimate"], 3_852_132_920
         )
         self.assertEqual(
             plan["summary"]["route_additional_installed_bytes_estimate"],
             0,
         )
-        self.assertEqual(plan["summary"]["installed_bytes_estimate"], 3_013_863_360)
+        self.assertEqual(plan["summary"]["installed_bytes_estimate"], 3_852_132_920)
+        self.assertEqual(
+            plan["summary"]["installed_size_evidence"],
+            "measured-preparation-2026-09-02",
+        )
         self.assertEqual(plan["recommended_next_action"], "pull")
         self.assertEqual(
             sum(

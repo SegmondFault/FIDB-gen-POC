@@ -937,6 +937,7 @@ def resolve_toolchain_profile(
 
     total_download = sum(int(row["download_bytes"]) for row in pack_rows)
     pack_installed = sum(int(row["installed_bytes_estimate"]) for row in pack_rows)
+    pack_size_evidence = sorted({str(row["size_evidence"]) for row in pack_rows})
     additional_installed = sum(
         int(row["additional_installed_bytes_estimate"]) for row in route_rows
     )
@@ -1060,7 +1061,7 @@ def resolve_toolchain_profile(
             "pack_installed_bytes_estimate": pack_installed,
             "route_additional_installed_bytes_estimate": additional_installed,
             "installed_bytes_estimate": total_installed,
-            "installed_size_evidence": "planning-estimate; replace after measured preparation",
+            "installed_size_evidence": "; ".join(pack_size_evidence),
         },
         "routes": route_rows,
         "packs": pack_rows,
