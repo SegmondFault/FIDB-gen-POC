@@ -411,7 +411,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["toolchains"]), 41)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 29)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 31)
         self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
         self.assertEqual(len(document["factors"]), 41)
         self.assertEqual(document["width_studies"][0]["id"], "batch-010")
@@ -422,7 +422,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["width_batches"][0]["id"], "batch-020")
         self.assertEqual(
             document["width_batches"][0]["summary"]["total_executions"],
-            1_566,
+            1_998,
         )
         self.assertEqual(
             document["width_batches"][0]["readiness"]["queue_state"],
@@ -450,7 +450,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(managed_cache.exists())
         self.assertEqual(result["detection_mode"], "read-only")
         self.assertTrue(result["toolchains"]["entries"])
-        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 5)
+        self.assertEqual(len(result["toolchain_profiles"]["plans"]), 7)
         self.assertTrue(
             all(row["state"] == "missing" for row in result["toolchains"]["entries"])
         )

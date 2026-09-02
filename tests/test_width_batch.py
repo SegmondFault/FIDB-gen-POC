@@ -12,7 +12,7 @@ class WidthBatchTests(unittest.TestCase):
         cls.root = Path(__file__).resolve().parents[1]
         cls.path = cls.root / "batches/c-next-nine-mega-width.toml"
 
-    def test_next_nine_are_bound_to_exact_measured_width(self):
+    def test_next_nine_are_bound_to_expanded_nonapple_width(self):
         batch = load_width_batch(self.root, self.path)
 
         self.assertEqual(batch["state"], "defined-disarmed")
@@ -30,14 +30,26 @@ class WidthBatchTests(unittest.TestCase):
                 "gmp",
             ],
         )
-        self.assertEqual(batch["summary"]["route_profiles"], 29)
-        self.assertEqual(batch["summary"]["compiler_identities"], 8)
+        self.assertEqual(batch["summary"]["route_profiles"], 37)
+        self.assertEqual(batch["summary"]["compiler_identities"], 10)
         self.assertEqual(batch["summary"]["executable_treatments"], 6)
-        self.assertEqual(batch["summary"]["executions_per_library"], 174)
-        self.assertEqual(batch["summary"]["total_executions"], 1_566)
-        self.assertEqual(batch["summary"]["locally_qualified_routes"], 29)
-        self.assertEqual(batch["summary"]["locally_executable_per_library"], 174)
+        self.assertEqual(batch["summary"]["executions_per_library"], 222)
+        self.assertEqual(batch["summary"]["total_executions"], 1_998)
+        self.assertEqual(batch["summary"]["locally_qualified_routes"], 37)
+        self.assertEqual(batch["summary"]["locally_executable_per_library"], 222)
         self.assertEqual(len(batch["batch_digest"]), 64)
+
+    def test_openssl_gap_contains_only_new_android_width(self):
+        batch = load_width_batch(
+            self.root, self.root / "batches/c-openssl-android-gap.toml"
+        )
+
+        self.assertEqual([row["id"] for row in batch["libraries"]], ["openssl"])
+        self.assertEqual(batch["summary"]["route_profiles"], 8)
+        self.assertEqual(batch["summary"]["compiler_identities"], 2)
+        self.assertEqual(batch["summary"]["executions_per_library"], 48)
+        self.assertEqual(batch["summary"]["total_executions"], 48)
+        self.assertEqual(batch["summary"]["locally_executable_per_library"], 48)
 
     def test_recipe_gates_keep_unimplemented_libraries_out_of_queue(self):
         catalog = authority_catalog(self.root)
@@ -47,7 +59,7 @@ class WidthBatchTests(unittest.TestCase):
 
         self.assertEqual(batch["readiness"]["source_pins"], 9)
         self.assertEqual(batch["readiness"]["recipe_ready_libraries"], 0)
-        self.assertEqual(batch["readiness"]["blocked_executions"], 1_566)
+        self.assertEqual(batch["readiness"]["blocked_executions"], 1_998)
         self.assertEqual(batch["readiness"]["queue_state"], "not-materialized-disarmed")
         self.assertEqual(len(batch["readiness"]["blockers"]), 9)
 

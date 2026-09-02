@@ -1,0 +1,25 @@
+schema_version = "fidb-width-batch/v1"
+id = "batch-020-android-gap"
+name = "c-openssl-android-gap"
+label = "OpenSSL · Android width gap"
+state = "defined-disarmed"
+language_id = "c"
+purpose = "Add the eight qualified Android NDK route generations and six treatments omitted from the completed OpenSSL c-width-v1 run, without repeating its 174 existing cells. Together with batch-020, this completes c-width-v2 across the top ten."
+source_pack = "sources/c-top10-v1.toml"
+source_pack_sha256 = "97544e2c51d791be6ecfadbe5c493915914651a8db967070736333652be05c57"
+source_ids = ["openssl"]
+width_authority = "coverage/c-android-gap-v1.toml"
+width_authority_sha256 = "6af36b331e4c8f7325c557ce55c62339b3b47817da221ae120501f34918ff436"
+width_route_profile_digest = "525d55bcf748ef77e925639ab2c08b45eb722c469d11069fe9f21ae2f7191be0"
+width_study = "coverage/c-top10-width-study.toml"
+width_study_sha256 = "111c67c238e0779eabfbcc47470e5cdabee77eee32b435e8efee9d82090a475f"
+recipe_policy = "Resolve OpenSSL as openssl@3.5.8; require its reviewed native recipe to match the source URL and SHA-256 before materialization."
+queue_policy = "Definition only. Keep out of plans/priority-queue.toml until batch-020 and this gap batch are deliberately armed as one top-ten campaign."
+
+[expected]
+libraries = 1
+route_profiles = 8
+compiler_identities = 2
+executable_treatments = 6
+executions_per_library = 48
+total_executions = 48

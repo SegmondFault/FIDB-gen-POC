@@ -33,7 +33,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
         self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 39)
         self.assertEqual(len(document["toolchain_pack_catalog"]["qualifications"]), 37)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 6)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 7)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
         self.assertEqual(len(document["native"]["routes"]), 19)
@@ -72,14 +72,17 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["coverage_universe"]["languages"]), 6)
         self.assertEqual(len(document["coverage_universe"]["profiles"]), 16)
-        self.assertEqual(len(document["width_compilations"]), 1)
-        self.assertEqual(document["width_compilations"][0]["id"], "c-width-v1")
-        self.assertIsNone(document["width_compilations"][0]["freeze"])
         self.assertEqual(
-            document["width_compilations"][0]["summary"][
-                "feasible_full_path_executions"
-            ],
-            document["width_compilations"][0]["summary"]["qualified_routes"] * 6,
+            {row["id"] for row in document["width_compilations"]},
+            {"c-android-gap-v1", "c-width-v1", "c-width-v2"},
+        )
+        width_v1 = next(
+            row for row in document["width_compilations"] if row["id"] == "c-width-v1"
+        )
+        self.assertIsNone(width_v1["freeze"])
+        self.assertEqual(
+            width_v1["summary"]["feasible_full_path_executions"],
+            width_v1["summary"]["qualified_routes"] * 6,
         )
         self.assertEqual(
             document["coverage_universe"]["population"][
@@ -118,13 +121,19 @@ class AuthorityCatalogTests(unittest.TestCase):
                 "definition-required": 0,
             },
         )
-        self.assertEqual(len(document["width_batches"]), 1)
+        self.assertEqual(len(document["width_batches"]), 2)
         width_batch = document["width_batches"][0]
         self.assertEqual(width_batch["id"], "batch-020")
-        self.assertEqual(width_batch["summary"]["total_executions"], 1_566)
+        self.assertEqual(width_batch["summary"]["total_executions"], 1_998)
         self.assertEqual(width_batch["readiness"]["source_pins"], 9)
         self.assertEqual(width_batch["readiness"]["recipe_ready_libraries"], 0)
-        self.assertEqual(width_batch["readiness"]["blocked_executions"], 1_566)
+        self.assertEqual(width_batch["readiness"]["blocked_executions"], 1_998)
+        android_gap = document["width_batches"][1]
+        self.assertEqual(android_gap["id"], "batch-020-android-gap")
+        self.assertEqual(android_gap["summary"]["total_executions"], 48)
+        self.assertEqual(
+            android_gap["readiness"]["queue_state"], "not-materialized-disarmed"
+        )
 
         targets = {row["id"]: row for row in document["targets"]}
         self.assertEqual(

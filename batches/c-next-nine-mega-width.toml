@@ -1,10 +1,10 @@
 schema_version = "fidb-width-batch/v1"
 id = "batch-020"
 name = "c-next-nine-mega-width"
-label = "C next nine · exact mega width"
+label = "C next nine · exact non-Apple width v2"
 state = "defined-disarmed"
 language_id = "c"
-purpose = "Apply the exact OpenSSL compiler-generation and treatment width to the remaining nine pinned C study libraries, so the completed OpenSSL result plus this batch covers the full top ten."
+purpose = "Apply the expanded non-Apple compiler-generation and treatment width, including Android, to the remaining nine pinned C study libraries. The separate OpenSSL Android-gap batch completes the same width for rank one without repeating its finished v1 cells."
 source_pack = "sources/c-top10-v1.toml"
 source_pack_sha256 = "97544e2c51d791be6ecfadbe5c493915914651a8db967070736333652be05c57"
 source_ids = [
@@ -18,9 +18,9 @@ source_ids = [
   "readline",
   "gmp",
 ]
-width_authority = "coverage/c-width-v1.toml"
-width_authority_sha256 = "fd1849f1821559b735dbd9eb1e0af9a5eacd3f94d197d8355812c80bc0a7cd30"
-width_route_profile_digest = "433c95107adfc64095308e10f886d1a06d4c4ef0f7f08595146ac23d0bdcce95"
+width_authority = "coverage/c-width-v2.toml"
+width_authority_sha256 = "228669026327dd6aee49af151167fa82e89dc3307bfdc795612682a73762d6f0"
+width_route_profile_digest = "2d2c7f74dff3fac244bc19f92c83885db8f9605ac2f3eca195a8b81ef1a3861d"
 width_study = "coverage/c-top10-width-study.toml"
 width_study_sha256 = "111c67c238e0779eabfbcc47470e5cdabee77eee32b435e8efee9d82090a475f"
 recipe_policy = "Resolve each selected source as <source-id>@<pinned-version>; require its reviewed native recipe to match the source URL and SHA-256 before materialization."
@@ -28,8 +28,8 @@ queue_policy = "Definition only. Keep out of plans/priority-queue.toml until eve
 
 [expected]
 libraries = 9
-route_profiles = 29
-compiler_identities = 8
+route_profiles = 37
+compiler_identities = 10
 executable_treatments = 6
-executions_per_library = 174
-total_executions = 1566
+executions_per_library = 222
+total_executions = 1998

@@ -41,7 +41,7 @@ class CommandLineTests(unittest.TestCase):
         document = json.loads(output.getvalue())
         self.assertEqual(document["state"], "defined-disarmed")
         self.assertEqual(document["summary"]["libraries"], 9)
-        self.assertEqual(document["summary"]["total_executions"], 1_566)
+        self.assertEqual(document["summary"]["total_executions"], 1_998)
         self.assertEqual(document["readiness"]["recipe_ready_libraries"], 0)
 
     def test_build_requires_an_explicit_route(self):

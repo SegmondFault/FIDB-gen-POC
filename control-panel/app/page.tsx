@@ -807,7 +807,12 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
   const authority = factory.authority;
   const coverageUniverse = authority?.coverage_universe;
   const widthStudy = authority?.width_studies.find(study => study.language_id === selectedLanguageId);
-  const widthCompilation = authority?.width_compilations.find(compilation => compilation.language_id === selectedLanguageId);
+  const widthCompilation = authority?.width_compilations
+    .filter(compilation => compilation.language_id === selectedLanguageId)
+    .sort((left, right) => (
+      right.summary.feasible_full_path_executions
+      - left.summary.feasible_full_path_executions
+    ))[0];
   const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
   const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (

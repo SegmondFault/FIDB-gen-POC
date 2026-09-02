@@ -178,20 +178,24 @@ Verified bytes are stored content-addressed under the ignored
 `var/fidb-sources/downloads/` cache. See [`sources/README.md`](sources/README.md)
 for the extension and trust model.
 
-The disarmed next-run definition is
-[`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml).
-It deliberately selects only ranks 2–10 because OpenSSL supplies the first
-174-cell calibration. The exact next batch is 9 libraries × 29 qualified
-compiler routes × 6 executable treatments = 1,566 full-path executions; the
-combined top-ten study is 1,740. Inspect its pinned authority and current recipe
-blockers without starting work:
+The disarmed next-run campaign is split between
+[`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml) and
+[`batches/c-openssl-android-gap.toml`](batches/c-openssl-android-gap.toml).
+Ranks 2–10 receive `c-width-v2`: 9 libraries × 37 qualified compiler routes ×
+6 executable treatments = 1,998 executions. OpenSSL receives only its 8 newly
+qualified Android routes × 6 treatments = 48 executions, without repeating its
+174 completed cells. The next campaign is therefore 2,046 new executions and
+the complete top-ten projection is 2,220. Inspect both pinned authorities and
+their current recipe blockers without starting work:
 
 ```sh
 uv run fidb-poc compile-width-batch batch-020 --project-root .
+uv run fidb-poc compile-width-batch batch-020-android-gap --project-root .
 ```
 
-The batch is not in `plans/priority-queue.toml`. It cannot be materialized until
-the nine source pins have matching reviewed native recipes. See
+Neither segment is in `plans/priority-queue.toml`. The next-nine segment cannot
+be materialized until its source pins have matching reviewed native recipes;
+the Android gap remains explicitly disarmed even though OpenSSL is ready. See
 [`batches/README.md`](batches/README.md) for the drift guards and activation
 boundary.
 

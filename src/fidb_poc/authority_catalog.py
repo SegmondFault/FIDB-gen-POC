@@ -441,9 +441,18 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         root, recipes, native, targets, coverage_universe
     )
     width_batches = _width_batch_authority(root, recipes)
-    width_compilations = [compile_c_width(root)]
+    width_ids = {"c-width-v1"}
+    width_ids.update(
+        Path(str(row["authorities"]["width"])).stem for row in width_batches
+    )
+    width_compilations = [
+        compile_c_width(root, width_id) for width_id in sorted(width_ids)
+    ]
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]
+    width_compilation_paths = [
+        root / str(row["authorities"]["width"]) for row in width_compilations
+    ]
     body = {
         "schema_version": AUTHORITY_SCHEMA,
         "coverage_universe": coverage_universe,
@@ -471,7 +480,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
             "width_batches": "batches/*.toml",
-            "width_compilations": "coverage/c-width-v1.toml",
+            "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
         },
@@ -490,6 +499,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()
+            ).hexdigest(),
+            "width_compilations_sha256": hashlib.sha256(
+                b"".join(path.read_bytes() for path in width_compilation_paths)
             ).hexdigest(),
             "c_width_evidence_sha256": hashlib.sha256(
                 (
