@@ -157,6 +157,76 @@ def _run_width_main(argv: list[str]) -> int:
         return 1
 
 
+def _lane_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc lane",
+        description="Inspect or compile experimental, reversible lane databases.",
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    commands = result.add_subparsers(dest="command", required=True)
+    commands.add_parser("registry", help="print the reviewed lane registry")
+    compile_parser = commands.add_parser(
+        "compile", help="preview raw width evidence or explicitly build a raw database"
+    )
+    compile_parser.add_argument("--run", type=Path, required=True)
+    compile_parser.add_argument("--lane", required=True)
+    compile_parser.add_argument("--replay", type=int, default=1)
+    compile_parser.add_argument("--generation")
+    compile_parser.add_argument("--output", type=Path)
+    compile_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="write a new raw database; preview is the default",
+    )
+    inspect_parser = commands.add_parser(
+        "inspect", help="validate and summarize an existing raw lane database"
+    )
+    inspect_parser.add_argument("database", type=Path)
+    arguments = result.parse_args(argv)
+    root = arguments.project_root.expanduser().resolve()
+    try:
+        if arguments.command == "registry":
+            from .lane_registry import load_lane_registry
+
+            document = load_lane_registry(
+                root / "lanes/registry.toml", root / "targets/registry.toml"
+            )
+        elif arguments.command == "inspect":
+            from .lane_database import inspect_lane_database
+
+            document = inspect_lane_database(arguments.database)
+        else:
+            from .lane_compiler import build_lane_from_plan, compile_lane_plan
+
+            document = compile_lane_plan(
+                root, arguments.run, arguments.lane, replay=arguments.replay
+            )
+            if arguments.execute:
+                if not arguments.generation:
+                    raise ValueError("--generation is required with --execute")
+                output = arguments.output or (
+                    root
+                    / "var/fidb-lanes"
+                    / arguments.lane
+                    / f"{arguments.generation}.raw.sqlite3"
+                )
+                resolved_output = output.expanduser().resolve()
+                try:
+                    resolved_output.relative_to(root)
+                except ValueError as error:
+                    raise ValueError(
+                        "lane output must remain inside the project root"
+                    ) from error
+                document = build_lane_from_plan(
+                    root, document, resolved_output, arguments.generation
+                )
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description=(
@@ -304,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_batch_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
+    if tokens and tokens[0] == "lane":
+        return _lane_main(tokens[1:])
     if tokens and tokens[0] == "queue":
         from .queue_cli import main as queue_main
 

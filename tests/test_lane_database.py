@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -102,7 +103,7 @@ class LaneDatabaseTests(unittest.TestCase):
             )
 
             self.assertEqual(result["counts"]["raw_signature_observation"], 2)
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection:
                 sublanes = {
                     row[0]
                     for row in connection.execute(
@@ -116,7 +117,7 @@ class LaneDatabaseTests(unittest.TestCase):
             path = Path(directory) / "linux-x86.sqlite3"
             self.build(path, [self.occurrence()])
 
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection:
                 with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
                     connection.execute(
                         "UPDATE lane_generation SET lane_label = 'changed'"

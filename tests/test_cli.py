@@ -13,6 +13,17 @@ from fidb_poc.pipeline import PipelineError
 
 
 class CommandLineTests(unittest.TestCase):
+    def test_lane_registry_is_available_without_building(self):
+        root = Path(__file__).resolve().parents[1]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(["lane", "--project-root", str(root), "registry"])
+
+        self.assertEqual(status, 0)
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["schema_version"], "fidb-lanes/v1")
+        self.assertIn("linux-x86", {row["id"] for row in document["lanes"]})
+
     def test_width_batch_preview_is_disarmed_and_exact(self):
         root = Path(__file__).resolve().parents[1]
         output = io.StringIO()
