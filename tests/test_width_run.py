@@ -62,6 +62,17 @@ class WidthRunTests(unittest.TestCase):
             {row["treatment_id"] for row in preview["cells"]}, {"baseline_o2"}
         )
 
+    def test_android_gap_authority_is_independently_previewable(self):
+        preview = width_run_preview(
+            compile_width_run_plan(
+                self.root, canary=False, authority_id="c-android-gap-v1"
+            )
+        )
+
+        self.assertEqual(preview["width_id"], "c-android-gap-v1")
+        self.assertEqual(preview["scheduled_executions"], 48)
+        self.assertEqual(len({row["route_id"] for row in preview["cells"]}), 8)
+
     def test_command_is_disarmed_without_execute_flag(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

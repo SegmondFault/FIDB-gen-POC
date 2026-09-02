@@ -48,6 +48,20 @@ class WidthBenchmarkTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(json.loads(output.getvalue())["state"], "disarmed-preview")
 
+    def test_android_authority_can_be_benchmarked_without_execution(self):
+        preview = width_benchmark_preview(
+            self.root,
+            authority_id="c-android-gap-v1",
+            route_ids=("android-arm64-ndk-r29-clang-api21",),
+            treatment_ids=("baseline_o2",),
+            workers=1,
+            heap_mib=4096,
+            core_limit=None,
+        )
+
+        self.assertEqual(preview["width_id"], "c-android-gap-v1")
+        self.assertEqual(preview["scheduled_cells"], 1)
+
     def test_heap_and_core_bounds_are_validated(self):
         with self.assertRaisesRegex(ValueError, "heap"):
             _java_options(512, 2)

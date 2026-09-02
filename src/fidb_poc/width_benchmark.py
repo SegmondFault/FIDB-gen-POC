@@ -43,6 +43,7 @@ def _selected_groups(
     project_root: Path,
     route_ids: tuple[str, ...],
     treatment_ids: tuple[str, ...],
+    authority_id: str = "c-width-v1",
 ) -> tuple[dict[str, object], tuple[Configuration, ...]]:
     if not route_ids or not treatment_ids:
         raise ValueError("benchmark requires at least one route and treatment")
@@ -50,7 +51,7 @@ def _selected_groups(
         raise ValueError("benchmark route ids contain duplicates")
     if len(set(treatment_ids)) != len(treatment_ids):
         raise ValueError("benchmark treatment ids contain duplicates")
-    plan = compile_width_run_plan(project_root, canary=False)
+    plan = compile_width_run_plan(project_root, canary=False, authority_id=authority_id)
     available_routes = {route for route, _treatments in plan.route_treatments}
     available_treatments = {
         treatment
@@ -90,6 +91,7 @@ def _java_options(heap_mib: int | None, core_limit: int | None) -> str:
 def width_benchmark_preview(
     project_root: str | Path,
     *,
+    authority_id: str = "c-width-v1",
     route_ids: Iterable[str],
     treatment_ids: Iterable[str],
     workers: int,
@@ -101,7 +103,7 @@ def width_benchmark_preview(
         raise ValueError("benchmark workers must be between 1 and 32")
     routes = tuple(route_ids)
     treatments = tuple(treatment_ids)
-    compilation, groups = _selected_groups(root, routes, treatments)
+    compilation, groups = _selected_groups(root, routes, treatments, authority_id)
     java_options = _java_options(heap_mib, core_limit)
     return {
         "schema_version": BENCHMARK_SCHEMA,
@@ -217,6 +219,7 @@ def execute_width_benchmark(
     project_root: str | Path,
     *,
     label: str,
+    authority_id: str = "c-width-v1",
     route_ids: Iterable[str],
     treatment_ids: Iterable[str],
     workers: int,
@@ -230,13 +233,14 @@ def execute_width_benchmark(
     treatments = tuple(treatment_ids)
     preview = width_benchmark_preview(
         root,
+        authority_id=authority_id,
         route_ids=routes,
         treatment_ids=treatments,
         workers=workers,
         heap_mib=heap_mib,
         core_limit=core_limit,
     )
-    compilation, groups = _selected_groups(root, routes, treatments)
+    compilation, groups = _selected_groups(root, routes, treatments, authority_id)
     run_root = _benchmark_root(root, label, preview)
     _atomic_json(run_root / "benchmark-plan.json", preview)
     source_cache = _seed_source_cache(root, run_root, groups[0])

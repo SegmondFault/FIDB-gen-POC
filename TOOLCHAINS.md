@@ -355,6 +355,23 @@ redistribute NDK archives or extracted SDK files; those remain ignored beneath
 to their own download and use. The qualification audit record is
 `toolchains/evidence/c-android-width-v1-reference-host-2026-09-02.toml`.
 
+`c-nonapple-width-v2` composes these eight Android routes with the existing 29
+GCC and llvm-mingw routes. Its disarmed `coverage/c-width-v2.toml` projection is
+37 routes × 6 registered treatments = 222 cells per library. The already
+completed OpenSSL run used only the earlier 29-route authority, so
+`coverage/c-android-gap-v1.toml` exposes the missing 48 Android cells as a
+separate executable authority. This preserves completed evidence and avoids a
+174-cell rerun. Preview either authority explicitly:
+
+```sh
+fidb-poc compile-width --project-root . --width c-width-v2
+fidb-poc run-width --project-root . --width c-android-gap-v1
+```
+
+Both commands are read-only previews without `--execute`. The control panel
+selects the broadest compiled authority for the C matrix and displays the two
+separately disarmed top-ten batch segments.
+
 ## Native Apple worker
 
 The public project does not download, package, bind, copy, or redistribute an

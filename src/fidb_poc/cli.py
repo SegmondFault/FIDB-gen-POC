@@ -53,12 +53,13 @@ def _compile_width_main(argv: list[str]) -> int:
         description="Compile declared C width into applicable and feasible cells.",
     )
     result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--width", default="c-width-v1")
     result.add_argument("--output", type=Path)
     arguments = result.parse_args(argv)
     try:
         from .c_width import compile_c_width
 
-        document = compile_c_width(arguments.project_root)
+        document = compile_c_width(arguments.project_root, arguments.width)
         payload = json.dumps(document, indent=2, sort_keys=True) + "\n"
         if arguments.output:
             arguments.output.parent.mkdir(parents=True, exist_ok=True)
@@ -104,10 +105,11 @@ def _run_width_main(argv: list[str]) -> int:
         ),
     )
     result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--width", default="c-width-v1")
     result.add_argument(
         "--canary",
         action="store_true",
-        help="select only the nine-route baseline O2 canary and one replay",
+        help="select only the authority's baseline O2 cells and one replay",
     )
     result.add_argument(
         "--execute",
@@ -153,7 +155,9 @@ def _run_width_main(argv: list[str]) -> int:
 
         if not arguments.execute:
             plan = compile_width_run_plan(
-                arguments.project_root, canary=arguments.canary
+                arguments.project_root,
+                canary=arguments.canary,
+                authority_id=arguments.width,
             )
             print(
                 json.dumps(
@@ -171,6 +175,7 @@ def _run_width_main(argv: list[str]) -> int:
         outcome, path = execute_width_run(
             arguments.project_root,
             canary=arguments.canary,
+            authority_id=arguments.width,
             progress=print,
             verbose=arguments.verbose,
             workers=arguments.workers,
@@ -190,6 +195,7 @@ def _benchmark_width_main(argv: list[str]) -> int:
         description="Preview or execute a bounded subset of reviewed width cells.",
     )
     result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--width", default="c-width-v1")
     result.add_argument("--label", default="width-pipeline")
     result.add_argument("--route", action="append", required=True, dest="routes")
     result.add_argument(
@@ -213,6 +219,7 @@ def _benchmark_width_main(argv: list[str]) -> int:
 
         options = {
             "project_root": arguments.project_root,
+            "authority_id": arguments.width,
             "route_ids": arguments.routes,
             "treatment_ids": arguments.treatments,
             "workers": arguments.workers,

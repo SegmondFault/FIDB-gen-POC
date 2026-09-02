@@ -165,9 +165,14 @@ class _ResourceSampler:
         self._measure()
 
 
-def compile_width_run_plan(project_root: str | Path, *, canary: bool) -> WidthRunPlan:
+def compile_width_run_plan(
+    project_root: str | Path,
+    *,
+    canary: bool,
+    authority_id: str = "c-width-v1",
+) -> WidthRunPlan:
     root = Path(project_root).expanduser().resolve()
-    compilation = compile_c_width(root)
+    compilation = compile_c_width(root, authority_id)
     fixed_recipe = str(compilation["fixed_recipe"])
     route_plan = resolve_toolchain_profile(root, str(compilation["toolchain_profile"]))
     configuration = materialize_width_configuration(root, fixed_recipe, route_plan)
@@ -706,6 +711,7 @@ def execute_width_run(
     project_root: str | Path,
     *,
     canary: bool,
+    authority_id: str = "c-width-v1",
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
     workers: int | None = None,
@@ -713,7 +719,7 @@ def execute_width_run(
     core_limit: int | None = None,
 ) -> tuple[dict[str, object], Path]:
     root = Path(project_root).expanduser().resolve()
-    plan = compile_width_run_plan(root, canary=canary)
+    plan = compile_width_run_plan(root, canary=canary, authority_id=authority_id)
     announce = progress or (lambda _message: None)
     parallel_workers = default_width_workers() if workers is None else workers
     if parallel_workers < 1 or parallel_workers > 32:
