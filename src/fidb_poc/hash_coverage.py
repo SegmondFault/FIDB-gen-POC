@@ -73,13 +73,24 @@ def _dimension_summary(
     rows = []
     for name in sorted(grouped):
         others = _union(value for other, value in unions.items() if other != name)
+        wall_time_ns = sum(int(item.get("wall_time_ns", 0)) for item in grouped[name])
+        exclusive = len(unions[name] - others)
         rows.append(
             {
                 "id": name,
                 "cells": len(grouped[name]),
                 "unique_signatures": len(unions[name]),
-                "exclusive_signatures": len(unions[name] - others),
+                "exclusive_signatures": exclusive,
                 "overlap_signatures": len(unions[name] & others),
+                "cell_wall_time_ns": wall_time_ns,
+                "retained_bytes": sum(
+                    int(item.get("retained_bytes", 0)) for item in grouped[name]
+                ),
+                "exclusive_signatures_per_wall_hour": (
+                    exclusive / (wall_time_ns / 3_600_000_000_000)
+                    if wall_time_ns
+                    else None
+                ),
             }
         )
     return rows
@@ -100,16 +111,55 @@ def _member_marginals(
                 item["signatures"] for item in members if item is not member
             )
             signatures = member["signatures"]
+            marginal = len(signatures - others)
+            wall_time_ns = int(member.get("wall_time_ns", 0))
             result.append(
                 {
                     "group": list(group),
                     "member": member_key(member),
                     "unique_signatures": len(signatures),
-                    "marginal_signatures_if_added_last": len(signatures - others),
+                    "marginal_signatures_if_added_last": marginal,
                     "overlap_signatures": len(signatures & others),
+                    "marginal_fraction": (
+                        marginal / len(signatures) if signatures else 0.0
+                    ),
+                    "wall_time_ns": wall_time_ns,
+                    "retained_bytes": int(member.get("retained_bytes", 0)),
+                    "marginal_signatures_per_wall_hour": (
+                        marginal / (wall_time_ns / 3_600_000_000_000)
+                        if wall_time_ns
+                        else None
+                    ),
                 }
             )
     return result
+
+
+def _pairwise_within_groups(
+    cells: list[dict[str, object]],
+    group_key: Callable[[dict[str, object]], tuple[str, ...]],
+) -> list[dict[str, object]]:
+    grouped: dict[tuple[str, ...], list[dict[str, object]]] = defaultdict(list)
+    for cell in cells:
+        grouped[group_key(cell)].append(cell)
+    rows = []
+    for group, members in sorted(grouped.items()):
+        ordered = sorted(members, key=lambda item: str(item["cell_id"]))
+        for left_index, left in enumerate(ordered):
+            for right in ordered[left_index + 1 :]:
+                intersection = len(left["signatures"] & right["signatures"])
+                union = len(left["signatures"] | right["signatures"])
+                rows.append(
+                    {
+                        "group": list(group),
+                        "left": left["cell_id"],
+                        "right": right["cell_id"],
+                        "intersection_signatures": intersection,
+                        "union_signatures": union,
+                        "jaccard": intersection / union if union else 1.0,
+                    }
+                )
+    return rows
 
 
 def _pairwise_same_target(cells: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -137,9 +187,14 @@ def _pairwise_same_target(cells: list[dict[str, object]]) -> list[dict[str, obje
 
 
 def analyze_signature_coverage(
-    manifests: Iterable[Path], compilation: dict[str, object]
+    manifests: Iterable[Path],
+    compilation: dict[str, object],
+    measurements: Iterable[dict[str, object]] = (),
 ) -> dict[str, object]:
     routes = {str(row["id"]): row for row in compilation["routes"]}
+    costs = {
+        (str(row["route_id"]), str(row["treatment_id"])): row for row in measurements
+    }
     cells: list[dict[str, object]] = []
     for manifest in manifests:
         group_root = manifest.resolve().parents[2]
@@ -158,6 +213,7 @@ def analyze_signature_coverage(
                         f"FID unique signature count differs: {signature_path}"
                     )
                 route = routes[row["route"]]
+                cost = costs.get((row["route"], row["treatment"]), {})
                 cells.append(
                     {
                         "cell_id": f"{row['route']}/{row['treatment']}",
@@ -168,12 +224,33 @@ def analyze_signature_coverage(
                         "treatment_id": row["treatment"],
                         "signature_records": int(row["fid_signature_records"]),
                         "unique_full_hashes": int(row["fid_unique_full_hashes"]),
+                        "wall_time_ns": int(cost.get("wall_time_ns", 0)),
+                        "peak_scratch_bytes": int(cost.get("peak_scratch_bytes", 0)),
+                        "retained_bytes": int(cost.get("retained_bytes", 0)),
                         "signatures": signatures,
                     }
                 )
     all_signatures = _union(cell["signatures"] for cell in cells)
     full_hashes = {(signature[0], signature[1]) for signature in all_signatures}
     pairwise = _pairwise_same_target(cells)
+    compiler_marginals = _member_marginals(
+        cells,
+        lambda cell: (str(cell["target_id"]), str(cell["treatment_id"])),
+        lambda cell: str(cell["compiler_id"]),
+    )
+    treatment_marginals = _member_marginals(
+        cells,
+        lambda cell: (str(cell["route_id"]),),
+        lambda cell: str(cell["treatment_id"]),
+    )
+    compiler_pairs = _pairwise_within_groups(
+        cells,
+        lambda cell: (str(cell["target_id"]), str(cell["treatment_id"])),
+    )
+    treatment_pairs = _pairwise_within_groups(
+        cells,
+        lambda cell: (str(cell["route_id"]),),
+    )
     result = {
         "schema_version": SCHEMA,
         "comparison_identity": list(SIGNATURE_FIELDS),
@@ -188,25 +265,35 @@ def analyze_signature_coverage(
             "unique_full_hashes": len(full_hashes),
             "unique_signatures": len(all_signatures),
         },
-        "by_compiler": _dimension_summary(
-            cells, lambda cell: str(cell["compiler_id"])
-        ),
+        "by_compiler": _dimension_summary(cells, lambda cell: str(cell["compiler_id"])),
         "by_treatment": _dimension_summary(
             cells, lambda cell: str(cell["treatment_id"])
         ),
-        "compiler_marginal_within_target_treatment": _member_marginals(
-            cells,
-            lambda cell: (str(cell["target_id"]), str(cell["treatment_id"])),
-            lambda cell: str(cell["compiler_id"]),
-        ),
-        "treatment_marginal_within_route": _member_marginals(
-            cells,
-            lambda cell: (str(cell["route_id"]),),
-            lambda cell: str(cell["treatment_id"]),
-        ),
+        "compiler_marginal_within_target_treatment": compiler_marginals,
+        "treatment_marginal_within_route": treatment_marginals,
+        "compiler_pairwise_within_target_treatment": compiler_pairs,
+        "treatment_pairwise_within_route": treatment_pairs,
         "pairwise_same_target": pairwise,
         "near_duplicate_pairs": [
             row for row in pairwise if float(row["jaccard"]) >= 0.98
         ],
+        "overstressed_candidates": {
+            "compiler_members_at_or_below_one_percent_marginal": [
+                row
+                for row in compiler_marginals
+                if float(row["marginal_fraction"]) <= 0.01
+            ],
+            "treatment_members_at_or_below_one_percent_marginal": [
+                row
+                for row in treatment_marginals
+                if float(row["marginal_fraction"]) <= 0.01
+            ],
+            "compiler_pairs_at_or_above_0_98_jaccard": [
+                row for row in compiler_pairs if float(row["jaccard"]) >= 0.98
+            ],
+            "treatment_pairs_at_or_above_0_98_jaccard": [
+                row for row in treatment_pairs if float(row["jaccard"]) >= 0.98
+            ],
+        },
     }
     return result

@@ -76,14 +76,18 @@ class HashCoverageTests(unittest.TestCase):
             first = self._manifest(
                 root,
                 "gcc-12",
-                [("0000000000000001", "1000000000000001"),
-                 ("0000000000000002", "1000000000000002")],
+                [
+                    ("0000000000000001", "1000000000000001"),
+                    ("0000000000000002", "1000000000000002"),
+                ],
             )
             second = self._manifest(
                 root,
                 "gcc-13",
-                [("0000000000000001", "1000000000000001"),
-                 ("0000000000000003", "1000000000000003")],
+                [
+                    ("0000000000000001", "1000000000000001"),
+                    ("0000000000000003", "1000000000000003"),
+                ],
             )
             compilation = {
                 "routes": [
@@ -102,7 +106,24 @@ class HashCoverageTests(unittest.TestCase):
                 ]
             }
 
-            result = analyze_signature_coverage([first, second], compilation)
+            result = analyze_signature_coverage(
+                [first, second],
+                compilation,
+                measurements=[
+                    {
+                        "route_id": "gcc-12",
+                        "treatment_id": "baseline_o2",
+                        "wall_time_ns": 1_800_000_000_000,
+                        "retained_bytes": 100,
+                    },
+                    {
+                        "route_id": "gcc-13",
+                        "treatment_id": "baseline_o2",
+                        "wall_time_ns": 3_600_000_000_000,
+                        "retained_bytes": 200,
+                    },
+                ],
+            )
 
         self.assertEqual(result["totals"]["unique_signatures"], 3)
         self.assertEqual(result["totals"]["cells"], 2)
@@ -114,6 +135,19 @@ class HashCoverageTests(unittest.TestCase):
         self.assertEqual(pair["intersection_signatures"], 1)
         self.assertEqual(pair["union_signatures"], 3)
         self.assertAlmostEqual(pair["jaccard"], 1 / 3)
+        gcc_12 = result["by_compiler"][0]
+        self.assertEqual(gcc_12["cell_wall_time_ns"], 1_800_000_000_000)
+        self.assertEqual(gcc_12["retained_bytes"], 100)
+        self.assertEqual(gcc_12["exclusive_signatures_per_wall_hour"], 2.0)
+        marginal = result["compiler_marginal_within_target_treatment"][0]
+        self.assertEqual(marginal["marginal_fraction"], 0.5)
+        self.assertEqual(len(result["compiler_pairwise_within_target_treatment"]), 1)
+        self.assertEqual(
+            result["overstressed_candidates"][
+                "compiler_members_at_or_below_one_percent_marginal"
+            ],
+            [],
+        )
 
     def test_empty_signature_ledger_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
