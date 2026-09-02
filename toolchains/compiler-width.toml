@@ -108,112 +108,112 @@ target = "x86-64"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "e3c0ef1618df3a3100a8a167066e7b19fdd25ee2c4285cf2cfe3ef34f0456867"
 download_bytes = 158042420
-installed_bytes_estimate = 790212100
+installed_bytes_estimate = 557571586
 
 [[gcc_asset]]
 target = "x86-64"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "932823ca9a3e067e7e2a29810a666d20c9cc5bb550de947f6879e38ace1aa955"
 download_bytes = 86382404
-installed_bytes_estimate = 431912020
+installed_bytes_estimate = 420754249
 
 [[gcc_asset]]
 target = "armv7-eabihf"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "d0a575b156e5c481dbe079cd3e292fb8eefed39392a90cdde871e7b9e77fd420"
 download_bytes = 143834231
-installed_bytes_estimate = 719171155
+installed_bytes_estimate = 494930135
 
 [[gcc_asset]]
 target = "armv7-eabihf"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "608263bc9dc3eadf0962ddb1165f1c2291001190f9927dee47d464e26374462c"
 download_bytes = 78809824
-installed_bytes_estimate = 394049120
+installed_bytes_estimate = 368777891
 
 [[gcc_asset]]
 target = "aarch64"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "5b1fde169c9ed678ee75a729286531a291c6ce5ee9d8a8b598b3abbef35c05f2"
 download_bytes = 152852957
-installed_bytes_estimate = 764264785
+installed_bytes_estimate = 530385667
 
 [[gcc_asset]]
 target = "aarch64"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "b0fad860eb94b503a56d66ca8b9ba06d2d4826943e37ebd1d7217423f6ea5bb2"
 download_bytes = 83754052
-installed_bytes_estimate = 418770260
+installed_bytes_estimate = 402622022
 
 [[gcc_asset]]
 target = "mips32"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "062d5df972b7b628337fdecba84cbe2b33f9c863e59c9702556ef252e7b44750"
 download_bytes = 140813476
-installed_bytes_estimate = 704067380
+installed_bytes_estimate = 491798057
 
 [[gcc_asset]]
 target = "mips32"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "677402719c545e49eb71c3d27a5f495af38f60463b40ed705e24e43a9834c137"
 download_bytes = 75921876
-installed_bytes_estimate = 379609380
+installed_bytes_estimate = 370423019
 
 [[gcc_asset]]
 target = "mips32el"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "60fc28d1521dfeefbfedb20776eeadec5b9bade7a55d0ea0c901766f722da3bd"
 download_bytes = 140549360
-installed_bytes_estimate = 702746800
+installed_bytes_estimate = 491810644
 
 [[gcc_asset]]
 target = "mips32el"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "d0139b6ade7f3b72a5f9c33814696af817661e826c9c501f6cefcab4ac684c8f"
 download_bytes = 76777748
-installed_bytes_estimate = 383888740
+installed_bytes_estimate = 370447308
 
 [[gcc_asset]]
 target = "powerpc-e500mc"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "e0b50deb4ffba15fcead9ecea75a6f4af6feca6012a60ddd76591874a47e5338"
 download_bytes = 145215432
-installed_bytes_estimate = 726077160
+installed_bytes_estimate = 508694349
 
 [[gcc_asset]]
 target = "powerpc-e500mc"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "365e30fda99630e5bcf04c4913f905640025b90cc9d1a4b17cccfc729827d335"
 download_bytes = 79506396
-installed_bytes_estimate = 397531980
+installed_bytes_estimate = 385110744
 
 [[gcc_asset]]
 target = "sh-sh4"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "e957c0854780cb48b0fcb54eddf9ef40ed496b8fb3d0c905f9c36dd8263f3cf0"
 download_bytes = 133493812
-installed_bytes_estimate = 667469060
+installed_bytes_estimate = 449834056
 
 [[gcc_asset]]
 target = "sh-sh4"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "6290f90417b194c467cf432d9c012d4321827160407c5b4664a443910a54c7d8"
 download_bytes = 75115132
-installed_bytes_estimate = 375575660
+installed_bytes_estimate = 333959655
 
 [[gcc_asset]]
 target = "m68k-68xxx"
 generation = "bootlin-stable-2023.11-1"
 sha256 = "79b120e67b7f17a1f265f5a5685b602ee3755f32047c657d837e9fc5c9ac7afa"
 download_bytes = 130125968
-installed_bytes_estimate = 650629840
+installed_bytes_estimate = 425728329
 
 [[gcc_asset]]
 target = "m68k-68xxx"
 generation = "bootlin-stable-2024.05-1"
 sha256 = "77f22dcafc78cde84e6441bd450aa3edb628b8f36ef6c1a160c942f38b38e5ea"
 download_bytes = 69793268
-installed_bytes_estimate = 348966340
+installed_bytes_estimate = 306655268
 
 # llvm-mingw publishes self-contained Linux-hosted Clang/LLD/UCRT packs. Five
 # spaced generations (15, 17, 19, 20 and 23) are selected; Clang 23 is already
@@ -225,7 +225,7 @@ compiler_id = "llvm-clang-15.0.0"
 ubuntu = "18.04"
 sha256 = "ee00708bdd65eeaa88d5fa89ad7e3fa1d6bae8093ee4559748e431e55f7568ec"
 download_bytes = 75295528
-installed_bytes_estimate = 455210129
+installed_bytes_estimate = 455207454
 
 [[llvm_mingw_asset]]
 release = "20231128"
@@ -233,7 +233,7 @@ compiler_id = "llvm-clang-17.0.6"
 ubuntu = "20.04"
 sha256 = "0f21ff3be90311092fe32e0e30878ef3ae9d9437b8d9ac25ef279e0d84e9bb8e"
 download_bytes = 72800008
-installed_bytes_estimate = 461376829
+installed_bytes_estimate = 461373938
 
 [[llvm_mingw_asset]]
 release = "20241217"
@@ -241,7 +241,7 @@ compiler_id = "llvm-clang-19.1.6"
 ubuntu = "20.04"
 sha256 = "cfe4aac3d245a77d8cd0c41bdcd7971b1002c771d3bba2ac39702733b0fb0c12"
 download_bytes = 88422244
-installed_bytes_estimate = 601402920
+installed_bytes_estimate = 601399899
 
 [[llvm_mingw_asset]]
 release = "20250613"
@@ -249,7 +249,7 @@ compiler_id = "llvm-clang-20.1.7"
 ubuntu = "22.04"
 sha256 = "936f82221fa4ad4ff1829f28f1cdf4c1e304cfd589323212e2b7ef8be428784a"
 download_bytes = 89422024
-installed_bytes_estimate = 610977441
+installed_bytes_estimate = 610974413
 
 [selection]
 gcc_compiler_ids = ["gcc-12.3.0", "gcc-13.3.0", "gcc-14.3.0"]

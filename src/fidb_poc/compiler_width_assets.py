@@ -98,7 +98,7 @@ def load_compiler_width_assets(path: str | Path) -> dict[str, object]:
                 "sha256": str(asset["sha256"]),
                 "download_bytes": int(asset["download_bytes"]),
                 "installed_bytes_estimate": int(asset["installed_bytes_estimate"]),
-                "size_evidence": "projected-5x-until-safe-preparation",
+                "size_evidence": "measured-local-extraction-2026-09-02",
                 "license_ids": [
                     "GPL-3.0-or-later",
                     "LGPL-2.1-or-later",

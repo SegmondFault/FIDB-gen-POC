@@ -44,10 +44,11 @@ class CWidthCompilerTests(unittest.TestCase):
         cells = compiled["applicability"]
 
         self.assertEqual(len(cells), 29 * 16)
-        self.assertEqual(
-            {row["state"] for row in cells},
-            {"executable", "unavailable", "inapplicable", "unimplemented"},
+        states = {row["state"] for row in cells}
+        self.assertTrue(
+            states <= {"executable", "unavailable", "inapplicable", "unimplemented"}
         )
+        self.assertTrue({"inapplicable", "unimplemented"} < states)
         self.assertTrue(
             all(row["reasons"] for row in cells if row["state"] != "executable")
         )

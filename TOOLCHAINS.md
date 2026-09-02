@@ -226,7 +226,9 @@ generations on Windows x86-64:
 
 The profile is `c-compiler-width-v1`: 29 routes backed by 29 immutable packs.
 On the already-qualified host, the twenty additions require 2,096,928,160
-download bytes. Acquire them through the same project-local lifecycle:
+download bytes and extracted to 9,038,458,683 bytes. Across all 29 packs, the
+measured prepared payload is 12,890,591,603 bytes. Acquire them through the
+same project-local lifecycle:
 
 ```sh
 ./scripts/toolchains/plan.sh c-compiler-width-v1
