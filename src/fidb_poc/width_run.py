@@ -26,6 +26,7 @@ from .timing import utc_now
 
 WIDTH_RUN_SCHEMA = "fidb-width-run/v1"
 SAFE_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
+MANIFEST_FIELD_LIMIT = 16 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -300,8 +301,7 @@ def _profile_for(
 def _read_manifest(
     manifest: Path, compilation: dict[str, object]
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    with manifest.open(newline="", encoding="utf-8") as stream:
-        rows = list(csv.DictReader(stream))
+    rows = _read_csv_rows(manifest)
     cells = []
     failures = []
     routes = {str(item["id"]): item for item in compilation["routes"]}
@@ -390,6 +390,16 @@ def _manifest_rows(paths: Iterable[Path], compilation: dict[str, object]):
         cells.extend(group_cells)
         failures.extend(group_failures)
     return cells, failures
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    previous_limit = csv.field_size_limit()
+    csv.field_size_limit(max(previous_limit, MANIFEST_FIELD_LIMIT))
+    try:
+        with path.open(newline="", encoding="utf-8") as stream:
+            return list(csv.DictReader(stream))
+    finally:
+        csv.field_size_limit(previous_limit)
 
 
 def _replay_comparison(replays: list[dict[str, object]]) -> dict[str, object]:
@@ -590,8 +600,7 @@ def _execute_cell(
 def _cell_status(manifest: Path | None) -> str:
     if manifest is None or not manifest.is_file():
         return "pipeline_error"
-    with manifest.open(newline="", encoding="utf-8") as stream:
-        rows = list(csv.DictReader(stream))
+    rows = _read_csv_rows(manifest)
     statuses = {row["status"] for row in rows}
     return next(iter(statuses)) if len(statuses) == 1 else "mixed"
 

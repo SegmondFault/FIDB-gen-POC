@@ -51,6 +51,7 @@ class HashCoverageTests(unittest.TestCase):
                     "fid_signature_records",
                     "fid_unique_full_hashes",
                     "fid_unique_signatures",
+                    "analysis_artifact_path",
                 ),
             )
             writer.writeheader()
@@ -66,6 +67,7 @@ class HashCoverageTests(unittest.TestCase):
                     "fid_signature_records": len(compiler_signatures),
                     "fid_unique_full_hashes": len(compiler_signatures),
                     "fid_unique_signatures": len(compiler_signatures),
+                    "analysis_artifact_path": "object.o;" * 20_000,
                 }
             )
         return manifest

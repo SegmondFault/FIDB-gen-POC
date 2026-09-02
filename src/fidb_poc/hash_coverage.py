@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 SCHEMA = "fidb-hash-coverage/v1"
+MANIFEST_FIELD_LIMIT = 16 * 1024 * 1024
 SIGNATURE_FIELDS = (
     "language",
     "full_hash",
@@ -198,38 +199,44 @@ def analyze_signature_coverage(
     cells: list[dict[str, object]] = []
     for manifest in manifests:
         group_root = manifest.resolve().parents[2]
-        with manifest.open(newline="", encoding="utf-8") as stream:
-            for row in csv.DictReader(stream):
-                if row["status"] != "complete":
-                    continue
-                signature_path = (group_root / row["fid_signatures_path"]).resolve()
-                if group_root not in signature_path.parents:
-                    raise ValueError("FID signature ledger escapes its run group")
-                if _sha256(signature_path) != row["fid_signatures_sha256"]:
-                    raise ValueError(f"FID signature digest differs: {signature_path}")
-                signatures = load_signatures(signature_path)
-                if len(signatures) != int(row["fid_unique_signatures"]):
-                    raise ValueError(
-                        f"FID unique signature count differs: {signature_path}"
-                    )
-                route = routes[row["route"]]
-                cost = costs.get((row["route"], row["treatment"]), {})
-                cells.append(
-                    {
-                        "cell_id": f"{row['route']}/{row['treatment']}",
-                        "route_id": row["route"],
-                        "target_id": str(route["target_id"]),
-                        "compiler_id": str(route["compiler_id"]),
-                        "compiler_family": str(route["compiler_family"]),
-                        "treatment_id": row["treatment"],
-                        "signature_records": int(row["fid_signature_records"]),
-                        "unique_full_hashes": int(row["fid_unique_full_hashes"]),
-                        "wall_time_ns": int(cost.get("wall_time_ns", 0)),
-                        "peak_scratch_bytes": int(cost.get("peak_scratch_bytes", 0)),
-                        "retained_bytes": int(cost.get("retained_bytes", 0)),
-                        "signatures": signatures,
-                    }
+        previous_limit = csv.field_size_limit()
+        csv.field_size_limit(max(previous_limit, MANIFEST_FIELD_LIMIT))
+        try:
+            with manifest.open(newline="", encoding="utf-8") as stream:
+                rows = list(csv.DictReader(stream))
+        finally:
+            csv.field_size_limit(previous_limit)
+        for row in rows:
+            if row["status"] != "complete":
+                continue
+            signature_path = (group_root / row["fid_signatures_path"]).resolve()
+            if group_root not in signature_path.parents:
+                raise ValueError("FID signature ledger escapes its run group")
+            if _sha256(signature_path) != row["fid_signatures_sha256"]:
+                raise ValueError(f"FID signature digest differs: {signature_path}")
+            signatures = load_signatures(signature_path)
+            if len(signatures) != int(row["fid_unique_signatures"]):
+                raise ValueError(
+                    f"FID unique signature count differs: {signature_path}"
                 )
+            route = routes[row["route"]]
+            cost = costs.get((row["route"], row["treatment"]), {})
+            cells.append(
+                {
+                    "cell_id": f"{row['route']}/{row['treatment']}",
+                    "route_id": row["route"],
+                    "target_id": str(route["target_id"]),
+                    "compiler_id": str(route["compiler_id"]),
+                    "compiler_family": str(route["compiler_family"]),
+                    "treatment_id": row["treatment"],
+                    "signature_records": int(row["fid_signature_records"]),
+                    "unique_full_hashes": int(row["fid_unique_full_hashes"]),
+                    "wall_time_ns": int(cost.get("wall_time_ns", 0)),
+                    "peak_scratch_bytes": int(cost.get("peak_scratch_bytes", 0)),
+                    "retained_bytes": int(cost.get("retained_bytes", 0)),
+                    "signatures": signatures,
+                }
+            )
     all_signatures = _union(cell["signatures"] for cell in cells)
     full_hashes = {(signature[0], signature[1]) for signature in all_signatures}
     pairwise = _pairwise_same_target(cells)

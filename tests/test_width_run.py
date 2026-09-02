@@ -9,6 +9,7 @@ from fidb_poc.cli import main
 from fidb_poc.c_width import compile_c_width
 from fidb_poc.width_run import (
     _groups,
+    _read_csv_rows,
     _release_cell_scratch,
     _replay_comparison,
     compile_width_run_plan,
@@ -128,6 +129,21 @@ class WidthRunTests(unittest.TestCase):
 
             self.assertTrue(all(not (group / path).exists() for path in removable))
             self.assertTrue(all((group / path).is_dir() for path in retained))
+
+    def test_large_openssl_manifest_fields_are_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "manifest.csv"
+            manifest.write_text(
+                "status,analysis_artifact_path\ncomplete,"
+                + ("object.o;" * 20_000)
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = _read_csv_rows(manifest)
+
+            self.assertEqual(rows[0]["status"], "complete")
+            self.assertGreater(len(rows[0]["analysis_artifact_path"]), 131_072)
 
 
 if __name__ == "__main__":
