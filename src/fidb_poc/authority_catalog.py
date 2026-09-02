@@ -431,7 +431,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "routes": "worker.toml",
             "targets": "targets/registry.toml",
             "toolchains": "toolchains/registry.toml",
-            "toolchain_packs": "toolchains/packs.toml + routes.toml + inputs.toml + qualifications.toml + profiles/",
+            "toolchain_packs": "toolchains/packs.toml + compilers.toml + routes.toml + inputs.toml + qualifications.toml + profiles/",
             "factors": "sensitivity/factors.toml",
             "factor_variants": "sensitivity/variants.toml",
             "coverage_universe": "coverage/universe.toml",

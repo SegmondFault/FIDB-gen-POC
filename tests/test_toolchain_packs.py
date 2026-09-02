@@ -22,7 +22,8 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
     def test_catalog_cross_validates_complete_top_ten_profile(self):
         catalog = load_toolchain_pack_catalog(self.root)
 
-        self.assertEqual(catalog["schema_version"], "fidb-toolchain-pack-catalog/v3")
+        self.assertEqual(catalog["schema_version"], "fidb-toolchain-pack-catalog/v4")
+        self.assertGreaterEqual(len(catalog["compilers"]), 10)
         self.assertEqual(catalog["host"], {"system": "linux", "architecture": "x86_64"})
         self.assertEqual(len(catalog["packs"]), 9)
         self.assertEqual(len(catalog["inputs"]), 0)

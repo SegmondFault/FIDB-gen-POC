@@ -16,6 +16,7 @@ import re
 import tomllib
 
 from .coverage_universe import load_coverage_universe
+from .compiler_identities import load_compiler_identities
 from .target_registry import load_targets
 from .toolchain_cache import CacheInspection, MANAGED_DOWNLOADS, inspect_cached
 from .toolchain_inputs import (
@@ -38,7 +39,7 @@ ROUTES_SCHEMA = "fidb-toolchain-routes/v2"
 INPUTS_SCHEMA = "fidb-toolchain-inputs/v1"
 QUALIFICATIONS_SCHEMA = "fidb-toolchain-qualifications/v1"
 PROFILE_SCHEMA = "fidb-toolchain-profile/v1"
-CATALOG_SCHEMA = "fidb-toolchain-pack-catalog/v3"
+CATALOG_SCHEMA = "fidb-toolchain-pack-catalog/v4"
 PROFILE_PLAN_SCHEMA = "fidb-toolchain-profile-plan/v3"
 
 _PACK_FIELDS = {
@@ -67,6 +68,7 @@ _ROUTE_FIELDS = {
     "id",
     "label",
     "target_id",
+    "compiler_id",
     "coverage_requirement_id",
     "compiler_family",
     "target_triple",
@@ -383,17 +385,20 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
     routes_path = root / "toolchains/routes.toml"
     inputs_path = root / "toolchains/inputs.toml"
     qualifications_path = root / "toolchains/qualifications.toml"
+    compilers_path = root / "toolchains/compilers.toml"
     profiles_directory = root / "toolchains/profiles"
     header, packs = _load_packs(packs_path)
     routes = _load_routes(routes_path)
     inputs = _load_inputs(inputs_path)
     qualifications = _load_qualifications(qualifications_path)
     profiles, profile_paths = _load_profiles(profiles_directory)
+    compilers = load_compiler_identities(compilers_path)
 
     targets = load_targets(root / "targets/registry.toml")
     target_ids = {str(row["id"]) for row in targets}
     universe = load_coverage_universe(root / "coverage/universe.toml")
     compiler_ids = {str(row["id"]) for row in universe["compiler_families"]}
+    compiler_identity_by_id = {str(row["id"]): row for row in compilers}
     language_ids = {str(row["id"]) for row in universe["languages"]}
     pack_by_id = {str(row["id"]): row for row in packs}
     input_by_id = {str(row["id"]): row for row in inputs}
@@ -424,6 +429,13 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
             )
         if route["compiler_family"] not in compiler_ids:
             raise ValueError(f"route {route_id} has unknown compiler family")
+        compiler_identity = compiler_identity_by_id.get(str(route["compiler_id"]))
+        if compiler_identity is None:
+            raise ValueError(f"route {route_id} has unknown compiler identity")
+        if compiler_identity["family"] != route["compiler_family"]:
+            raise ValueError(
+                f"route {route_id} compiler identity differs from its family"
+            )
         unknown_packs = set(route["pack_ids"]) - pack_by_id.keys()
         if unknown_packs:
             raise ValueError(
@@ -483,6 +495,15 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
                 raise ValueError(
                     f"qualification {route_id} pack source does not match its route"
                 )
+            tool_pack = pack_by_id[str(qualification["tool_pack_id"])]
+            compiler_identity = compiler_identity_by_id[str(route["compiler_id"])]
+            if (
+                tool_pack["compiler_family"] != compiler_identity["family"]
+                or tool_pack["compiler_version"] != compiler_identity["version"]
+            ):
+                raise ValueError(
+                    f"qualification {route_id} tool pack does not match compiler identity"
+                )
         elif qualification["tool_source"] == "composed-route":
             if (
                 qualification["tool_pack_id"] != "osxcross-composed"
@@ -527,6 +548,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "inputs": "toolchains/inputs.toml",
         "qualifications": "toolchains/qualifications.toml",
         "profiles": "toolchains/profiles/*.toml",
+        "compilers": "toolchains/compilers.toml",
     }
     source_digests = {
         "packs_sha256": _sha256(packs_path),
@@ -536,6 +558,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "profiles_sha256": hashlib.sha256(
             b"".join(path.read_bytes() for path in profile_paths)
         ).hexdigest(),
+        "compilers_sha256": _sha256(compilers_path),
     }
     body: dict[str, object] = {
         "schema_version": CATALOG_SCHEMA,
@@ -546,6 +569,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "source_authority": header["source_authority"],
         "cache_policy": header["cache_policy"],
         "packs": packs,
+        "compilers": compilers,
         "inputs": inputs,
         "routes": routes,
         "qualifications": qualifications,

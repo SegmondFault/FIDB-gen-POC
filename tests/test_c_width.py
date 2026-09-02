@@ -16,6 +16,7 @@ class CWidthCompilerTests(unittest.TestCase):
         self.assertEqual(compiled["id"], "c-route-toolchain-canary-v1")
         self.assertEqual(compiled["fixed_recipe"], "zlib@1.3.1")
         self.assertEqual(len(compiled["routes"]), 9)
+        self.assertTrue(all(row["compiler_id"] for row in compiled["routes"]))
         self.assertEqual(len(compiled["build_profiles"]), 16)
         self.assertEqual(len(compiled["artifact_profiles"]), 4)
         self.assertEqual(len(compiled["analysis_profiles"]), 6)

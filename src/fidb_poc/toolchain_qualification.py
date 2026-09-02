@@ -158,7 +158,7 @@ def route_material_digest(
             "route": {
                 key: value
                 for key, value in route.items()
-                if key not in {"state", "qualification"}
+                if key not in {"state", "qualification", "compiler_id"}
             },
             "qualification": qualification,
             "packs": selected_packs,

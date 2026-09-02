@@ -3,6 +3,11 @@
 This directory is the reviewed, cloneable authority for compiler and native
 worker breadth. It separates six concepts:
 
+Compiler generations are registered independently in `compilers.toml`.
+Concrete routes bind `compiler_id` and `target_id` separately so multiple
+compiler generations can target the same ABI without being collapsed into one
+route label.
+
 1. A **pack** is an immutable upstream archive with URL, SHA-256, exact bytes,
    component versions, target, licences, and a classified size estimate.
 2. An **input** is a non-redistributed component accepted by a reviewed route.

@@ -257,6 +257,7 @@ def compile_c_width(project_root: str | Path) -> dict[str, object]:
                 "id": worker.id,
                 "label": planned["label"],
                 "target_id": planned["target_id"],
+                "compiler_id": planned["compiler_id"],
                 "target_os": worker.target_os,
                 "architecture": worker.architecture,
                 "binary_format": worker.binary_format,

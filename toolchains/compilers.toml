@@ -1,0 +1,85 @@
+schema_version = "fidb-compiler-identities/v1"
+
+# Compiler identity is independent of the target and sysroot. A route binds one
+# compiler identity to one target plus its linker/runtime pack. This prevents a
+# target label from hiding compiler-generation width.
+
+[[compiler]]
+id = "gcc-12.3.0"
+family = "gcc"
+version = "12.3.0"
+generation = "12"
+language_ids = ["c", "cpp"]
+release_authority = "https://gcc.gnu.org/gcc-12/"
+
+[[compiler]]
+id = "gcc-13.3.0"
+family = "gcc"
+version = "13.3.0"
+generation = "13"
+language_ids = ["c", "cpp"]
+release_authority = "https://gcc.gnu.org/gcc-13/"
+
+[[compiler]]
+id = "gcc-14.3.0"
+family = "gcc"
+version = "14.3.0"
+generation = "14"
+language_ids = ["c", "cpp"]
+release_authority = "https://gcc.gnu.org/gcc-14/"
+
+[[compiler]]
+id = "llvm-clang-15.0.0"
+family = "llvm-clang"
+version = "15.0.0"
+generation = "15"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-15.0.0"
+
+[[compiler]]
+id = "llvm-clang-17.0.6"
+family = "llvm-clang"
+version = "17.0.6"
+generation = "17"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-17.0.6"
+
+[[compiler]]
+id = "llvm-clang-19.1.6"
+family = "llvm-clang"
+version = "19.1.6"
+generation = "19"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-19.1.6"
+
+[[compiler]]
+id = "llvm-clang-20.1.7"
+family = "llvm-clang"
+version = "20.1.7"
+generation = "20"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.7"
+
+[[compiler]]
+id = "llvm-clang-23.1.0"
+family = "llvm-clang"
+version = "23.1.0"
+generation = "23"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.0"
+
+[[compiler]]
+id = "apple-clang-external"
+family = "apple-clang"
+version = "external-pinned-at-worker"
+generation = "external"
+language_ids = ["c", "cpp"]
+release_authority = "toolchains/external/macos-arm64-apple-clang.toml"
+
+[[compiler]]
+id = "msvc-external"
+family = "msvc"
+version = "external-pinned-at-worker"
+generation = "external"
+language_ids = ["c", "cpp"]
+release_authority = "toolchains/routes.toml"

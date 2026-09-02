@@ -179,6 +179,20 @@ Re-run `status`, `qualify`, and `status` on another Linux x86-64 host; matching
 profile, route-material, and qualification-record digests provide the
 reproducibility comparison.
 
+## Compiler identity is a separate axis
+
+`toolchains/compilers.toml` is the target-independent compiler registry. A
+route in `toolchains/routes.toml` binds one `compiler_id` to one `target_id`,
+then names the exact downloadable pack, linker, runtime/sysroot and target
+triple. The GUI and compiled matrix must therefore report target and compiler
+identity as separate fields; neither a target label nor a generic `gcc` route
+may stand in for compiler-generation width.
+
+The compiler ID is validated against the qualification pack's family and exact
+version. Qualification records remain content-addressed by the full pack
+material, so the added explicit ID does not invalidate an otherwise identical
+existing qualification.
+
 ## Native Apple worker
 
 The public project does not download, package, bind, copy, or redistribute an
