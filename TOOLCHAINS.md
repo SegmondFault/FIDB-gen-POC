@@ -174,6 +174,32 @@ The broader same-target overlaps remain available too. Preserving the raw
 function evidence means later thresholds and regrouping do not require
 recompilation.
 
+### Bounded width-pipeline benchmarks
+
+`benchmark-width` executes an explicitly selected subset of the reviewed
+OpenSSL width without presenting it as coverage evidence. Preview is the
+default; `--execute` is required to build or start Ghidra. Results live under
+`artifacts/benchmarks/width-pipeline/`, outside the lane compiler's
+`artifacts/width-runs/` input boundary.
+
+```sh
+fidb-poc benchmark-width --project-root . \
+  --label x86-arm-baseline \
+  --route linux-x86-64-gcc-13 \
+  --route linux-arm32-gcc-13 \
+  --treatment baseline_o2 \
+  --treatment optimization_o3 \
+  --workers 4 \
+  --ghidra-heap-mib 4096 \
+  --ghidra-core-limit 2
+```
+
+The result records per-stage wall/CPU/RSS evidence, aggregate hashes per wall
+hour, peak process-tree RSS and scratch, the JVM's observed maximum and
+committed heap, and a semantic digest over every selected cell's deterministic
+FID-signature ledger. Configurations may be compared only when their selected
+routes, treatments and semantic digest agree.
+
 ### Frozen route/toolchain-canary measurement
 
 The 2026-09-02 `reference-host` run completed all 108 scheduled executions: nine

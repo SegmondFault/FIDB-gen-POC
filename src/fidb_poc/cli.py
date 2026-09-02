@@ -157,6 +157,59 @@ def _run_width_main(argv: list[str]) -> int:
         return 1
 
 
+def _benchmark_width_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc benchmark-width",
+        description="Preview or execute a bounded subset of reviewed width cells.",
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--label", default="width-pipeline")
+    result.add_argument("--route", action="append", required=True, dest="routes")
+    result.add_argument(
+        "--treatment", action="append", required=True, dest="treatments"
+    )
+    result.add_argument("--workers", type=int, required=True)
+    result.add_argument("--ghidra-heap-mib", type=int)
+    result.add_argument("--ghidra-core-limit", type=int)
+    result.add_argument(
+        "--execute",
+        action="store_true",
+        help="run the selected cells; preview is otherwise the default",
+    )
+    result.add_argument("--verbose", "-v", action="store_true")
+    arguments = result.parse_args(argv)
+    try:
+        from .width_benchmark import (
+            execute_width_benchmark,
+            width_benchmark_preview,
+        )
+
+        options = {
+            "project_root": arguments.project_root,
+            "route_ids": arguments.routes,
+            "treatment_ids": arguments.treatments,
+            "workers": arguments.workers,
+            "heap_mib": arguments.ghidra_heap_mib,
+            "core_limit": arguments.ghidra_core_limit,
+        }
+        if not arguments.execute:
+            print(
+                json.dumps(width_benchmark_preview(**options), indent=2, sort_keys=True)
+            )
+            return 0
+        outcome, path = execute_width_benchmark(
+            **options,
+            label=arguments.label,
+            progress=print,
+            verbose=arguments.verbose,
+        )
+        print(f"Benchmark result: {path}")
+        return 0 if outcome["state"] == "measured-complete" else 1
+    except (OSError, ValueError, PipelineError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _lane_main(argv: list[str]) -> int:
     result = argparse.ArgumentParser(
         prog="fidb-poc lane",
@@ -374,6 +427,8 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_batch_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
+    if tokens and tokens[0] == "benchmark-width":
+        return _benchmark_width_main(tokens[1:])
     if tokens and tokens[0] == "lane":
         return _lane_main(tokens[1:])
     if tokens and tokens[0] == "queue":
