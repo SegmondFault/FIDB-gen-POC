@@ -248,9 +248,10 @@ def materialize_width_configuration(
 ) -> Configuration:
     """Project target-independent compiler routes into executable workers.
 
-    `worker.toml` retains one build/analysis template per target. Compiler
-    generations come from the toolchain authority and inherit only the target
-    mechanics; tool paths and qualification identities are resolved afresh.
+    `worker.toml` may retain several concrete compiler routes per target.
+    Compiler generations come from the toolchain authority and inherit only
+    identical target mechanics; tool paths and qualification identities are
+    resolved afresh.
     """
 
     root = Path(project_root).expanduser().resolve()
@@ -271,8 +272,37 @@ def materialize_width_configuration(
         if catalog_route is None:
             continue
         key = (str(catalog_route["target_id"]), worker.compiler_family)
-        if key in template_by_target_family:
-            raise ValueError(f"multiple worker templates for target/compiler {key}")
+        existing_template = template_by_target_family.get(key)
+        mechanics = (
+            worker.target_os,
+            worker.architecture,
+            worker.binary_format,
+            worker.compiler_family,
+            worker.compiler_flags,
+            worker.object_file_markers,
+            worker.linked_suffix,
+            worker.linked_file_markers,
+            worker.ghidra_language,
+            worker.ghidra_compiler_spec,
+        )
+        if existing_template is not None:
+            existing_mechanics = (
+                existing_template.target_os,
+                existing_template.architecture,
+                existing_template.binary_format,
+                existing_template.compiler_family,
+                existing_template.compiler_flags,
+                existing_template.object_file_markers,
+                existing_template.linked_suffix,
+                existing_template.linked_file_markers,
+                existing_template.ghidra_language,
+                existing_template.ghidra_compiler_spec,
+            )
+            if mechanics != existing_mechanics:
+                raise ValueError(
+                    f"conflicting worker templates for target/compiler {key}"
+                )
+            continue
         template_by_target_family[key] = worker
 
     materialized: list[Route] = []

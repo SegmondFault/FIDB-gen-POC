@@ -98,6 +98,20 @@ def tool_text(command: tuple[str, ...]) -> str:
     return " ".join(command)
 
 
+def _android_ndk_root(route: Route) -> Path:
+    """Recover the reviewed NDK root from a qualified target wrapper path."""
+
+    compiler = Path(route.compiler[0])
+    marker = ("toolchains", "llvm", "prebuilt", "linux-x86_64", "bin")
+    parts = compiler.parts
+    for index in range(len(parts) - len(marker)):
+        if parts[index : index + len(marker)] == marker:
+            return Path(*parts[:index])
+    raise AdapterError(
+        f"Android route {route.id} compiler is not inside a Linux NDK toolchain"
+    )
+
+
 def build_commands(
     build_system: str,
     *,
@@ -123,22 +137,32 @@ def build_commands(
                 "sh4": "linux-generic32",
                 "m68k": "linux-generic32",
             }.get(route.architecture, "")
+        elif route.target_os == "android":
+            target = {
+                "aarch64": "android-arm64",
+                "arm": "android-arm",
+                "i686": "android-x86",
+                "x86_64": "android-x86_64",
+            }.get(route.architecture, "")
         else:
             target = ""
         if not target:
             raise AdapterError(
                 f"no OpenSSL Configure target for {route.target_os}/{route.architecture}"
             )
+        configure = [
+            "perl",
+            "Configure",
+            target,
+            "no-shared",
+            "no-tests",
+            "no-docs",
+            "no-module",
+        ]
+        if route.target_os == "android":
+            configure.append("-D__ANDROID_API__=21")
         return (
-            (
-                "perl",
-                "Configure",
-                target,
-                "no-shared",
-                "no-tests",
-                "no-docs",
-                "no-module",
-            ),
+            tuple(configure),
             ("make", f"-j{jobs}", "build_libs"),
         )
     if build_system == "autoconf":
@@ -178,12 +202,18 @@ def build_environment(
 ) -> dict[str, str]:
     if build_system not in {"autoconf", "openssl-configure"}:
         return {}
-    return {
+    environment = {
         "CC": tool_text(route.compiler),
         "AR": tool_text(route.archiver),
         "RANLIB": tool_text(route.ranlib),
         "CFLAGS": " ".join(compiler_flags),
     }
+    if route.target_os == "android":
+        ndk_root = _android_ndk_root(route)
+        ndk_bin = ndk_root / "toolchains/llvm/prebuilt/linux-x86_64/bin"
+        environment["ANDROID_NDK_ROOT"] = str(ndk_root)
+        environment["PATH"] = f"{ndk_bin}:/usr/bin:/bin"
+    return environment
 
 
 def linked_output_command(
@@ -194,9 +224,9 @@ def linked_output_command(
     output: Path,
 ) -> tuple[str, ...]:
     """Return the fixed route adapter for materialising a linked library image."""
-    if route.target_os != "linux":
+    if route.target_os not in {"linux", "android"}:
         raise AdapterError(
-            f"no linked-output adapter in the Linux PoC for {route.target_os!r}"
+            f"no linked-output adapter in the ELF PoC for {route.target_os!r}"
         )
     command = [*route.compiler, *treatment.flags_for(route)]
     command.extend(("-shared", "-nostdlib", "-Wl,--whole-archive"))

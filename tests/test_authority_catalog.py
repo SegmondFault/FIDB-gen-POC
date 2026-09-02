@@ -36,7 +36,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 6)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
-        self.assertEqual(len(document["native"]["routes"]), 11)
+        self.assertEqual(len(document["native"]["routes"]), 19)
         self.assertEqual(
             {
                 row["id"]
@@ -44,6 +44,14 @@ class AuthorityCatalogTests(unittest.TestCase):
                 if row["toolchain_state"] == "qualified"
             },
             {
+                "android-arm64-ndk-r27d-clang-api21",
+                "android-arm32-ndk-r27d-clang-api21",
+                "android-x86-64-ndk-r27d-clang-api21",
+                "android-x86-32-ndk-r27d-clang-api21",
+                "android-arm64-ndk-r29-clang-api21",
+                "android-arm32-ndk-r29-clang-api21",
+                "android-x86-64-ndk-r29-clang-api21",
+                "android-x86-32-ndk-r29-clang-api21",
                 "linux-x86-64-gcc",
                 "windows-x86-64-llvm-mingw",
                 "linux-arm32-gcc",
@@ -136,9 +144,7 @@ class AuthorityCatalogTests(unittest.TestCase):
                 "android-ndk-r29-linux-x86-64",
             ],
         )
-        self.assertEqual(
-            len(targets["android-arm64-v8a-elf"]["managed_route_ids"]), 2
-        )
+        self.assertEqual(len(targets["android-arm64-v8a-elf"]["managed_route_ids"]), 2)
         self.assertEqual(targets["linux-riscv64-elf"]["toolchain_ids"], [])
 
     def test_catalog_contains_no_caller_supplied_command_field(self):

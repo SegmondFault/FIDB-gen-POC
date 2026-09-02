@@ -157,6 +157,129 @@ ghidra_language = "68000:BE:32:default"
 ghidra_compiler_spec = "default"
 compiler_version_markers = ["14.3.0", "Free Software Foundation"]
 
+# Android routes retain ABI, NDK build and API level in their stable IDs while
+# resolving executable paths only from qualification records.
+
+[[routes]]
+id = "android-arm64-ndk-r27d-clang-api21"
+managed_toolchain_route = "android-arm64-ndk-r27d-clang-api21"
+target_os = "android"
+architecture = "aarch64"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 64-bit LSB", "relocatable", "ARM aarch64"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 64-bit LSB", "ARM aarch64", "shared object"]
+ghidra_language = "AARCH64:LE:64:v8A"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 18.0.4", "r522817d"]
+
+[[routes]]
+id = "android-arm32-ndk-r27d-clang-api21"
+managed_toolchain_route = "android-arm32-ndk-r27d-clang-api21"
+target_os = "android"
+architecture = "arm"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "ARM", "EABI5"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "ARM", "shared object"]
+ghidra_language = "ARM:LE:32:v7"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 18.0.4", "r522817d"]
+
+[[routes]]
+id = "android-x86-64-ndk-r27d-clang-api21"
+managed_toolchain_route = "android-x86-64-ndk-r27d-clang-api21"
+target_os = "android"
+architecture = "x86_64"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 64-bit LSB", "relocatable", "x86-64"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 64-bit LSB", "x86-64", "shared object"]
+ghidra_language = "x86:LE:64:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 18.0.4", "r522817d"]
+
+[[routes]]
+id = "android-x86-32-ndk-r27d-clang-api21"
+managed_toolchain_route = "android-x86-32-ndk-r27d-clang-api21"
+target_os = "android"
+architecture = "i686"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "Intel 80386"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "Intel 80386", "shared object"]
+ghidra_language = "x86:LE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 18.0.4", "r522817d"]
+
+[[routes]]
+id = "android-arm64-ndk-r29-clang-api21"
+managed_toolchain_route = "android-arm64-ndk-r29-clang-api21"
+target_os = "android"
+architecture = "aarch64"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 64-bit LSB", "relocatable", "ARM aarch64"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 64-bit LSB", "ARM aarch64", "shared object"]
+ghidra_language = "AARCH64:LE:64:v8A"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 21.0.0", "r563880c"]
+
+[[routes]]
+id = "android-arm32-ndk-r29-clang-api21"
+managed_toolchain_route = "android-arm32-ndk-r29-clang-api21"
+target_os = "android"
+architecture = "arm"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "ARM", "EABI5"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "ARM", "shared object"]
+ghidra_language = "ARM:LE:32:v7"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 21.0.0", "r563880c"]
+
+[[routes]]
+id = "android-x86-64-ndk-r29-clang-api21"
+managed_toolchain_route = "android-x86-64-ndk-r29-clang-api21"
+target_os = "android"
+architecture = "x86_64"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 64-bit LSB", "relocatable", "x86-64"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 64-bit LSB", "x86-64", "shared object"]
+ghidra_language = "x86:LE:64:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 21.0.0", "r563880c"]
+
+[[routes]]
+id = "android-x86-32-ndk-r29-clang-api21"
+managed_toolchain_route = "android-x86-32-ndk-r29-clang-api21"
+target_os = "android"
+architecture = "i686"
+binary_format = "ELF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-fno-stack-protector"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "Intel 80386"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "Intel 80386", "shared object"]
+ghidra_language = "x86:LE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["clang version 21.0.0", "r563880c"]
+
 [[routes]]
 id = "macos-arm64-apple-clang"
 target_os = "macos"

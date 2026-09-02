@@ -475,6 +475,7 @@ def _run_checked(
 _ELF_MACHINES = {
     "aarch64": 183,
     "arm": 40,
+    "i686": 3,
     "m68k": 4,
     "mips": 8,
     "mipsel": 8,

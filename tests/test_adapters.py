@@ -6,6 +6,7 @@ from pathlib import Path
 from fidb_poc.adapters import (
     AdapterError,
     build_commands,
+    build_environment,
     detect_project,
     linked_output_command,
 )
@@ -125,6 +126,37 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(commands[1], ("make", "-j8", "build_libs"))
 
+    def test_openssl_android_adapter_pins_abi_api_and_ndk_environment(self):
+        ndk_root = Path("/reviewed/android-ndk-r29")
+        compiler = (
+            str(
+                ndk_root
+                / "toolchains/llvm/prebuilt/linux-x86_64/bin"
+                / "aarch64-linux-android21-clang"
+            ),
+        )
+        android = replace(
+            route(),
+            id="android-arm64-ndk-r29-clang-api21",
+            target_os="android",
+            architecture="aarch64",
+            compiler=compiler,
+        )
+
+        commands = build_commands(
+            "openssl-configure", route=android, compiler_flags=("-O2",), jobs=8
+        )
+        environment = build_environment(
+            "openssl-configure", route=android, compiler_flags=("-O2",)
+        )
+
+        self.assertEqual(commands[0][2], "android-arm64")
+        self.assertIn("-D__ANDROID_API__=21", commands[0])
+        self.assertEqual(environment["ANDROID_NDK_ROOT"], str(ndk_root))
+        self.assertTrue(
+            environment["PATH"].startswith(f"{compiler[0].rsplit('/', 1)[0]}:")
+        )
+
     def test_link_adapter_materialises_archive_without_raw_recipe_commands(self):
         treatment = Treatment(
             id="linked_demo",
@@ -158,7 +190,7 @@ class AdapterTests(unittest.TestCase):
             phase="link",
         )
         unsupported = replace(route(), target_os="macos")
-        with self.assertRaisesRegex(AdapterError, "Linux PoC"):
+        with self.assertRaisesRegex(AdapterError, "ELF PoC"):
             linked_output_command(
                 route=unsupported,
                 treatment=treatment,

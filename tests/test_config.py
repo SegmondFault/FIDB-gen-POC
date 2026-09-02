@@ -19,7 +19,7 @@ class ConfigurationTests(unittest.TestCase):
             [row.identifier for row in configuration.libraries],
             ["zlib-1.3.1", "bzip2-1.0.7"],
         )
-        self.assertEqual(len(configuration.routes), 11)
+        self.assertEqual(len(configuration.routes), 19)
         self.assertEqual(
             {
                 route.id
@@ -27,6 +27,14 @@ class ConfigurationTests(unittest.TestCase):
                 if route.toolchain_state == "qualified"
             },
             {
+                "android-arm64-ndk-r27d-clang-api21",
+                "android-arm32-ndk-r27d-clang-api21",
+                "android-x86-64-ndk-r27d-clang-api21",
+                "android-x86-32-ndk-r27d-clang-api21",
+                "android-arm64-ndk-r29-clang-api21",
+                "android-arm32-ndk-r29-clang-api21",
+                "android-x86-64-ndk-r29-clang-api21",
+                "android-x86-32-ndk-r29-clang-api21",
                 "linux-x86-64-gcc",
                 "windows-x86-64-llvm-mingw",
                 "linux-arm32-gcc",
@@ -58,9 +66,7 @@ class ConfigurationTests(unittest.TestCase):
             "O2, compiled without -g or LTO, frame pointer retained",
         )
         self.assertEqual(configuration.profiles["smoke"], ("baseline_o2",))
-        self.assertEqual(
-            len(configuration.profiles["c-route-toolchain-canary-v1"]), 6
-        )
+        self.assertEqual(len(configuration.profiles["c-route-toolchain-canary-v1"]), 6)
 
         managed = next(
             row for row in configuration.routes if row.id == "linux-aarch64-gcc"
@@ -76,7 +82,7 @@ class ConfigurationTests(unittest.TestCase):
             row for row in document["routes"] if "managed_toolchain_route" in row
         ]
 
-        self.assertEqual(len(managed), 9)
+        self.assertEqual(len(managed), 17)
         for row in managed:
             self.assertNotIn("compiler", row)
             self.assertNotIn("archiver", row)
