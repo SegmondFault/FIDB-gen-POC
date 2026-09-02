@@ -253,6 +253,33 @@ bits = 64
 catalog_state = "coverage-intent"
 evidence = ["coverage/universe.toml"]
 
+# iOS device targets are coverage intent only. They name the future phone lane
+# without claiming that an Apple SDK route or worker is currently qualified.
+
+[[target]]
+id = "ios-armv7-macho"
+label = "iOS ARMv7"
+platform = "ios"
+architecture = "arm"
+machine = "ARM"
+binary_format = "Mach-O"
+endianness = "little"
+bits = 32
+catalog_state = "coverage-intent"
+evidence = ["lanes/registry.toml"]
+
+[[target]]
+id = "ios-arm64-macho"
+label = "iOS ARM64"
+platform = "ios"
+architecture = "arm64"
+machine = "AArch64"
+binary_format = "Mach-O"
+endianness = "little"
+bits = 64
+catalog_state = "coverage-intent"
+evidence = ["lanes/registry.toml"]
+
 [[target]]
 id = "windows-x86-64-pecoff"
 label = "Windows x86-64"

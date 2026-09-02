@@ -1,0 +1,325 @@
+schema_version = "fidb-lanes/v1"
+
+# This is an experimental, reversible authority. A lane is the database a user
+# selects for a device/platform family. A sublane is the exact query and
+# semantic-deduplication namespace selected from the binary and Ghidra program.
+
+[[policy]]
+id = "ghidra-fid-12-1-2-dev-default-v1"
+ghidra_version = "12.1.2"
+ghidra_release = "DEV"
+ghidra_build = "2026-Jun-29 1514 GMT"
+analysis_profile = "FIDB PoC default auto-analysis and Function ID population policy"
+fid_algorithm = "Ghidra Function ID full and specific hashes"
+
+[[lane]]
+id = "linux-x86"
+label = "Linux x86"
+platform = "linux"
+architecture_family = "x86"
+state = "experimental"
+description = "One analyst database for 32-bit and 64-bit Linux x86 executables."
+
+[[lane.sublane]]
+id = "linux-x86-elf32"
+target_id = "linux-x86-32-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["x86:LE:32:default"]
+compiler_spec_ids = ["gcc"]
+
+[[lane.sublane]]
+id = "linux-x86-elf64"
+target_id = "linux-x86-64-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["x86:LE:64:default"]
+compiler_spec_ids = ["gcc"]
+
+[[lane]]
+id = "windows-x86"
+label = "Windows x86"
+platform = "windows"
+architecture_family = "x86"
+state = "experimental"
+description = "One analyst database for PE/COFF x86 and x86-64 executables."
+
+[[lane.sublane]]
+id = "windows-x86-pe32"
+target_id = "windows-x86-32-pecoff"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "unresolved"
+ghidra_language_ids = []
+compiler_spec_ids = []
+
+[[lane.sublane]]
+id = "windows-x86-pe64"
+target_id = "windows-x86-64-pecoff"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["x86:LE:64:default"]
+compiler_spec_ids = ["clangwindows"]
+
+[[lane]]
+id = "macos-apple-silicon"
+label = "macOS on Apple Silicon"
+platform = "macos"
+architecture_family = "apple-silicon"
+state = "experimental"
+description = "One analyst database for native ARM and supported x86-64/Rosetta Mach-O slices."
+
+[[lane.sublane]]
+id = "macos-apple-silicon-arm64"
+target_id = "macos-arm64-macho"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["AARCH64:LE:64:v8A"]
+compiler_spec_ids = ["default"]
+
+[[lane.sublane]]
+id = "macos-apple-silicon-x86-64"
+target_id = "macos-x86-64-macho"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["x86:LE:64:default"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "android-arm"
+label = "Android ARM"
+platform = "android"
+architecture_family = "arm"
+state = "experimental"
+description = "One analyst database for Android ARMv7 and AArch64 native libraries."
+
+[[lane.sublane]]
+id = "android-arm-armeabi-v7a"
+target_id = "android-armeabi-v7a-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["ARM:LE:32:v7"]
+compiler_spec_ids = ["default"]
+
+[[lane.sublane]]
+id = "android-arm-arm64-v8a"
+target_id = "android-arm64-v8a-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["AARCH64:LE:64:v8A"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "android-x86"
+label = "Android x86"
+platform = "android"
+architecture_family = "x86"
+state = "experimental"
+description = "One analyst database for Android x86 and x86-64 native libraries."
+
+[[lane.sublane]]
+id = "android-x86-elf32"
+target_id = "android-x86-32-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["x86:LE:32:default"]
+compiler_spec_ids = ["default"]
+
+[[lane.sublane]]
+id = "android-x86-elf64"
+target_id = "android-x86-64-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["x86:LE:64:default"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "ios-arm"
+label = "iOS ARM"
+platform = "ios"
+architecture_family = "arm"
+state = "experimental"
+description = "One analyst database for legacy ARMv7 and current ARM64 iOS device binaries."
+
+[[lane.sublane]]
+id = "ios-arm-armv7"
+target_id = "ios-armv7-macho"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["ARM:LE:32:v7"]
+compiler_spec_ids = ["default"]
+
+[[lane.sublane]]
+id = "ios-arm-arm64"
+target_id = "ios-arm64-macho"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["AARCH64:LE:64:v8A"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "linux-arm"
+label = "Linux ARM"
+platform = "linux"
+architecture_family = "arm"
+state = "experimental"
+description = "One analyst database for Linux ARM32 and AArch64 executables."
+
+[[lane.sublane]]
+id = "linux-arm-elf32"
+target_id = "linux-arm32-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["ARM:LE:32:v7"]
+compiler_spec_ids = ["default"]
+
+[[lane.sublane]]
+id = "linux-arm-elf64"
+target_id = "linux-aarch64-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["AARCH64:LE:64:v8A"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "linux-mips-be"
+label = "Linux MIPS big-endian"
+platform = "linux"
+architecture_family = "mips-be"
+state = "experimental"
+description = "One analyst database for cross-runnable big-endian Linux MIPS variants."
+
+[[lane.sublane]]
+id = "linux-mips-be-elf32"
+target_id = "linux-mips32-be-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["MIPS:BE:32:default"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "linux-mips-le"
+label = "Linux MIPS little-endian"
+platform = "linux"
+architecture_family = "mips-le"
+state = "experimental"
+description = "One analyst database for cross-runnable little-endian Linux MIPS variants."
+
+[[lane.sublane]]
+id = "linux-mips-le-elf32"
+target_id = "linux-mips32-le-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["MIPS:LE:32:default"]
+compiler_spec_ids = ["default"]
+
+[[lane.sublane]]
+id = "linux-mips-le-elf64"
+target_id = "linux-mips64-le-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "unresolved"
+ghidra_language_ids = []
+compiler_spec_ids = []
+
+[[lane]]
+id = "linux-powerpc"
+label = "Linux PowerPC"
+platform = "linux"
+architecture_family = "powerpc"
+state = "experimental"
+description = "One analyst database for compatible Linux PowerPC variants."
+
+[[lane.sublane]]
+id = "linux-powerpc-be-elf32"
+target_id = "linux-powerpc32-be-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["PowerPC:BE:32:default"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "linux-superh"
+label = "Linux SuperH"
+platform = "linux"
+architecture_family = "superh"
+state = "experimental"
+description = "One analyst database for compatible Linux SuperH variants."
+
+[[lane.sublane]]
+id = "linux-superh-sh4-elf32"
+target_id = "linux-sh32-le-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["SuperH4:LE:32:default"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "linux-m68k"
+label = "Linux M68K"
+platform = "linux"
+architecture_family = "m68k"
+state = "experimental"
+description = "One analyst database for compatible Linux Motorola 68000 variants."
+
+[[lane.sublane]]
+id = "linux-m68k-elf32"
+target_id = "linux-m68k-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "mapped"
+ghidra_language_ids = ["68000:BE:32:default"]
+compiler_spec_ids = ["default"]
+
+[[lane]]
+id = "linux-riscv"
+label = "Linux RISC-V"
+platform = "linux"
+architecture_family = "riscv"
+state = "experimental"
+description = "One analyst database for compatible Linux RISC-V 32-bit and 64-bit variants."
+
+[[lane.sublane]]
+id = "linux-riscv-elf32"
+target_id = "linux-riscv32-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "unresolved"
+ghidra_language_ids = []
+compiler_spec_ids = []
+
+[[lane.sublane]]
+id = "linux-riscv-elf64"
+target_id = "linux-riscv64-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "unresolved"
+ghidra_language_ids = []
+compiler_spec_ids = []
+
+[[lane]]
+id = "linux-sparc"
+label = "Linux SPARC"
+platform = "linux"
+architecture_family = "sparc"
+state = "experimental"
+description = "One analyst database for compatible Linux SPARC variants."
+
+[[lane.sublane]]
+id = "linux-sparc-be-elf32"
+target_id = "linux-sparc32-be-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "unresolved"
+ghidra_language_ids = []
+compiler_spec_ids = []
+
+[[lane]]
+id = "linux-loongarch"
+label = "Linux LoongArch"
+platform = "linux"
+architecture_family = "loongarch"
+state = "experimental"
+description = "One analyst database for compatible Linux LoongArch variants."
+
+[[lane.sublane]]
+id = "linux-loongarch-elf64"
+target_id = "linux-loongarch64-elf"
+policy_id = "ghidra-fid-12-1-2-dev-default-v1"
+definition_state = "unresolved"
+ghidra_language_ids = []
+compiler_spec_ids = []

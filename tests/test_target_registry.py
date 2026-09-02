@@ -13,7 +13,7 @@ class TargetRegistryTests(unittest.TestCase):
     def test_repository_registry_records_reviewed_and_observed_targets(self):
         rows = load_targets(self.root / "targets/registry.toml")
 
-        self.assertEqual(len(rows), 22)
+        self.assertEqual(len(rows), 24)
         self.assertEqual(
             {row["catalog_state"] for row in rows},
             {
@@ -27,6 +27,7 @@ class TargetRegistryTests(unittest.TestCase):
             {(row["platform"], row["binary_format"]) for row in rows},
             {
                 ("android", "ELF"),
+                ("ios", "Mach-O"),
                 ("linux", "ELF"),
                 ("macos", "Mach-O"),
                 ("windows", "PE/COFF"),
