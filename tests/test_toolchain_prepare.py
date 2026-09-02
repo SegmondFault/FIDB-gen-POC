@@ -7,6 +7,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+import zipfile
 
 from fidb_poc.toolchain_prepare import (
     PREPARATION_SCHEMA,
@@ -33,6 +34,105 @@ def _file(
 
 
 class ToolchainPreparationTests(unittest.TestCase):
+    def test_prepares_zip_with_executable_and_relative_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "pack.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                directory = zipfile.ZipInfo("toolchain/bin/")
+                directory.external_attr = (0o40755 << 16) | 0x10
+                output.writestr(directory, b"")
+                executable = zipfile.ZipInfo("toolchain/bin/cc")
+                executable.external_attr = 0o100755 << 16
+                output.writestr(executable, b"compiler")
+                symlink = zipfile.ZipInfo("toolchain/bin/current-cc")
+                symlink.external_attr = 0o120777 << 16
+                output.writestr(symlink, b"cc")
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+
+            result = prepare_pinned_archive(
+                archive,
+                digest,
+                archive.stat().st_size,
+                "toolchain",
+                root / "prepared",
+                max_extracted_bytes=1024,
+            )
+
+            self.assertTrue((result.root / "bin/cc").stat().st_mode & 0o111)
+            self.assertTrue((result.root / "bin/current-cc").is_symlink())
+            self.assertEqual((result.root / "bin/current-cc").readlink(), Path("cc"))
+            self.assertEqual(result.symlinks, 1)
+
+    def test_zip_traversal_special_members_and_expansion_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            traversal = root / "traversal.zip"
+            with zipfile.ZipFile(traversal, "w") as output:
+                output.writestr("../../escape", b"bad")
+            traversal_digest = hashlib.sha256(traversal.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(PreparationError, "escapes extraction root"):
+                prepare_pinned_archive(
+                    traversal,
+                    traversal_digest,
+                    traversal.stat().st_size,
+                    "toolchain",
+                    root / "prepared-traversal",
+                    max_extracted_bytes=1024,
+                )
+            self.assertFalse((root / "escape").exists())
+
+            special = root / "special.zip"
+            with zipfile.ZipFile(special, "w") as output:
+                fifo = zipfile.ZipInfo("toolchain/fifo")
+                fifo.external_attr = 0o010644 << 16
+                output.writestr(fifo, b"")
+            special_digest = hashlib.sha256(special.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(PreparationError, "special member"):
+                prepare_pinned_archive(
+                    special,
+                    special_digest,
+                    special.stat().st_size,
+                    "toolchain",
+                    root / "prepared-special-zip",
+                    max_extracted_bytes=1024,
+                )
+
+            oversized = root / "oversized.zip"
+            with zipfile.ZipFile(oversized, "w") as output:
+                output.writestr("toolchain/large", b"x" * 128)
+            oversized_digest = hashlib.sha256(oversized.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(PreparationError, "expands to"):
+                prepare_pinned_archive(
+                    oversized,
+                    oversized_digest,
+                    oversized.stat().st_size,
+                    "toolchain",
+                    root / "prepared-oversized-zip",
+                    max_extracted_bytes=64,
+                )
+
+    def test_zip_rejects_material_nested_beneath_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "nested.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                symlink = zipfile.ZipInfo("toolchain/link")
+                symlink.external_attr = 0o120777 << 16
+                output.writestr(symlink, b"real")
+                output.writestr("toolchain/link/escape", b"bad")
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+
+            with self.assertRaisesRegex(PreparationError, "non-directory"):
+                prepare_pinned_archive(
+                    archive,
+                    digest,
+                    archive.stat().st_size,
+                    "toolchain",
+                    root / "prepared",
+                    max_extracted_bytes=1024,
+                )
+
     def test_prepares_atomically_and_reuses_sealed_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

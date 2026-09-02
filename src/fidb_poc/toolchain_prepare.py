@@ -11,9 +11,11 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import tarfile
 import tempfile
 import time
+import zipfile
 
 from .toolchain_cache import MANAGED_CACHE_ROOT
 
@@ -123,6 +125,154 @@ def _sanitized(member: tarfile.TarInfo) -> tarfile.TarInfo:
     clean.uname = ""
     clean.gname = ""
     return clean
+
+
+def _zip_kind(member: zipfile.ZipInfo) -> str:
+    mode = member.external_attr >> 16
+    file_type = stat.S_IFMT(mode)
+    if member.is_dir() or file_type == stat.S_IFDIR:
+        return "directory"
+    if file_type == stat.S_IFLNK:
+        return "symlink"
+    if file_type in {0, stat.S_IFREG}:
+        return "file"
+    raise PreparationError(
+        f"archive contains unsupported special member: {member.filename}"
+    )
+
+
+def _zip_members(
+    source: zipfile.ZipFile,
+    *,
+    max_extracted_bytes: int,
+    max_members: int,
+) -> tuple[list[tuple[zipfile.ZipInfo, tuple[str, ...], str]], int]:
+    members = source.infolist()
+    if len(members) > max_members:
+        raise PreparationError(
+            f"archive has {len(members)} members; limit is {max_members}"
+        )
+    extracted_bytes = sum(int(member.file_size) for member in members)
+    if extracted_bytes > max_extracted_bytes:
+        raise PreparationError(
+            f"archive expands to {extracted_bytes} bytes; limit is "
+            f"{max_extracted_bytes}"
+        )
+
+    result: list[tuple[zipfile.ZipInfo, tuple[str, ...], str]] = []
+    kinds: dict[tuple[str, ...], str] = {}
+    for member in members:
+        if member.flag_bits & 0x1:
+            raise PreparationError(
+                f"archive contains encrypted member: {member.filename}"
+            )
+        parts = _safe_parts(member.filename, field="member path")
+        if parts in kinds:
+            raise PreparationError(
+                f"archive contains duplicate material path: {member.filename}"
+            )
+        kind = _zip_kind(member)
+        kinds[parts] = kind
+        result.append((member, parts, kind))
+
+    for _member, parts, _kind in result:
+        for length in range(1, len(parts)):
+            ancestor = parts[:length]
+            ancestor_kind = kinds.get(ancestor)
+            if ancestor_kind is not None and ancestor_kind != "directory":
+                raise PreparationError(
+                    "archive member is nested beneath a non-directory: "
+                    + "/".join(parts)
+                )
+    return result, extracted_bytes
+
+
+def _extract_zip(
+    archive: Path,
+    staging: Path,
+    *,
+    max_extracted_bytes: int,
+    max_members: int,
+) -> dict[str, int]:
+    with zipfile.ZipFile(archive, mode="r") as source:
+        members, extracted_bytes = _zip_members(
+            source,
+            max_extracted_bytes=max_extracted_bytes,
+            max_members=max_members,
+        )
+        directories = [row for row in members if row[2] == "directory"]
+        files = [row for row in members if row[2] == "file"]
+        symlinks = [row for row in members if row[2] == "symlink"]
+        for _member, parts, _kind in sorted(directories, key=lambda row: len(row[1])):
+            destination = staging.joinpath(*parts)
+            destination.mkdir(parents=True, exist_ok=True)
+            destination.chmod(0o755)
+        for member, parts, _kind in files:
+            destination = staging.joinpath(*parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with (
+                source.open(member, mode="r") as input_stream,
+                destination.open("xb") as output_stream,
+            ):
+                shutil.copyfileobj(input_stream, output_stream)
+            if destination.stat().st_size != member.file_size:
+                raise PreparationError(
+                    f"archive member size changed during extraction: {member.filename}"
+                )
+            mode = member.external_attr >> 16
+            destination.chmod(0o755 if mode & 0o111 else 0o644)
+        for member, parts, _kind in symlinks:
+            if member.file_size > 4096:
+                raise PreparationError(
+                    f"archive symlink target is too large: {member.filename}"
+                )
+            try:
+                linkname = source.read(member).decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise PreparationError(
+                    f"archive symlink target is not UTF-8: {member.filename}"
+                ) from error
+            _safe_parts(linkname, field="link target", base=parts[:-1])
+            destination = staging.joinpath(*parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.symlink_to(linkname)
+    return {
+        "members": len(members),
+        "extracted_bytes": extracted_bytes,
+        "files": len(files),
+        "directories": len(directories),
+        "symlinks": len(symlinks),
+    }
+
+
+def _extract_tar(
+    archive: Path,
+    staging: Path,
+    *,
+    max_extracted_bytes: int,
+    max_members: int,
+) -> dict[str, int]:
+    with tarfile.open(archive, mode="r:*") as source:
+        members = source.getmembers()
+        if len(members) > max_members:
+            raise PreparationError(
+                f"archive has {len(members)} members; limit is {max_members}"
+            )
+        extracted_bytes = sum(int(member.size) for member in members if member.isfile())
+        if extracted_bytes > max_extracted_bytes:
+            raise PreparationError(
+                f"archive expands to {extracted_bytes} bytes; limit is "
+                f"{max_extracted_bytes}"
+            )
+        sanitized = [_sanitized(member) for member in members]
+        source.extractall(staging, members=sanitized, numeric_owner=False)
+    return {
+        "members": len(members),
+        "extracted_bytes": extracted_bytes,
+        "files": sum(member.isfile() for member in members),
+        "directories": sum(member.isdir() for member in members),
+        "symlinks": sum(member.issym() or member.islnk() for member in members),
+    }
 
 
 def inspect_prepared(
@@ -242,22 +392,20 @@ def prepare_pinned_archive(
 
         staging = Path(tempfile.mkdtemp(prefix=f".{archive_sha256}.", dir=prepared))
         try:
-            with tarfile.open(archive, mode="r:*") as source:
-                members = source.getmembers()
-                if len(members) > max_members:
-                    raise PreparationError(
-                        f"archive has {len(members)} members; limit is {max_members}"
-                    )
-                extracted_bytes = sum(
-                    int(member.size) for member in members if member.isfile()
+            if zipfile.is_zipfile(archive):
+                extraction = _extract_zip(
+                    archive,
+                    staging,
+                    max_extracted_bytes=max_extracted_bytes,
+                    max_members=max_members,
                 )
-                if extracted_bytes > max_extracted_bytes:
-                    raise PreparationError(
-                        f"archive expands to {extracted_bytes} bytes; limit is "
-                        f"{max_extracted_bytes}"
-                    )
-                sanitized = [_sanitized(member) for member in members]
-                source.extractall(staging, members=sanitized, numeric_owner=False)
+            else:
+                extraction = _extract_tar(
+                    archive,
+                    staging,
+                    max_extracted_bytes=max_extracted_bytes,
+                    max_members=max_members,
+                )
             root = staging / archive_root
             if root.is_symlink() or not root.is_dir():
                 raise PreparationError(
@@ -268,11 +416,11 @@ def prepare_pinned_archive(
                 "archive_sha256": archive_sha256,
                 "archive_bytes": expected_archive_bytes,
                 "archive_root": archive_root,
-                "extracted_bytes": extracted_bytes,
-                "members": len(members),
-                "files": sum(member.isfile() for member in members),
-                "directories": sum(member.isdir() for member in members),
-                "symlinks": sum(member.issym() or member.islnk() for member in members),
+                "extracted_bytes": extraction["extracted_bytes"],
+                "members": extraction["members"],
+                "files": extraction["files"],
+                "directories": extraction["directories"],
+                "symlinks": extraction["symlinks"],
             }
             manifest_path = staging / _MANIFEST
             with manifest_path.open("x", encoding="utf-8") as output:
@@ -287,15 +435,15 @@ def prepare_pinned_archive(
                 root=destination / archive_root,
                 archive_sha256=archive_sha256,
                 archive_bytes=expected_archive_bytes,
-                extracted_bytes=extracted_bytes,
-                members=len(members),
+                extracted_bytes=extraction["extracted_bytes"],
+                members=extraction["members"],
                 files=int(document["files"]),
                 directories=int(document["directories"]),
                 symlinks=int(document["symlinks"]),
                 cache_hit=False,
                 quarantined=quarantined,
             )
-        except (OSError, tarfile.TarError, ValueError) as error:
+        except (OSError, tarfile.TarError, zipfile.BadZipFile, ValueError) as error:
             raise PreparationError(
                 f"failed to prepare reviewed archive: {archive}"
             ) from error
