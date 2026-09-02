@@ -16,6 +16,7 @@ import {
   type FactoryCapabilities,
   type ToolchainProfilePlan,
   type WidthAxisId,
+  type WidthBatch,
   type WidthCompilation,
   type WidthStudy,
 } from './use-factory-api';
@@ -292,19 +293,35 @@ export default function Home() {
       note: `${study.authority_path} · ${defaultPreset?.metrics.build_cells.toLocaleString() ?? '—'} default build cells`,
     };
   });
-  const authorityBatchRows = [...planBatchRows, ...widthStudyBatchRows];
+  const widthBatchRows: BatchRow[] = (factory.authority?.width_batches ?? []).map((batch: WidthBatch) => {
+    const ready = batch.readiness.recipe_ready_libraries;
+    return {
+      id: batch.id,
+      name: batch.name,
+      status: batch.readiness.blockers.length ? 'Blocked' : 'Defined',
+      progress: `${ready} / ${batch.summary.libraries} libraries recipe-ready`,
+      percent: Math.round((ready / batch.summary.libraries) * 100),
+      worker: '—',
+      route: `${batch.summary.route_profiles} routes × ${batch.summary.executable_treatments} treatments`,
+      eta: '—',
+      tier: 'W+',
+      note: `${batch.authority_path} · ${batch.summary.total_executions.toLocaleString()} exact executions · disarmed`,
+    };
+  });
+  const staticWidthRows = [...widthStudyBatchRows, ...widthBatchRows];
+  const authorityBatchRows = [...planBatchRows, ...staticWidthRows];
   const currentBatchRows = factory.snapshot
     ? [
       ...resolvedBatchRows(factory.snapshot),
-      ...widthStudyBatchRows.filter(study => (
-        !factory.snapshot?.batches.some(batch => batch.id === study.id)
+      ...staticWidthRows.filter(row => (
+        !factory.snapshot?.batches.some(batch => batch.id === row.id)
       )),
     ]
     : authorityBatchRows;
   const effectiveBatchOrder = factory.snapshot
     ? [
       ...factory.snapshot.batches.map(batch => batch.id),
-      ...widthStudyBatchRows.map(study => study.id).filter(id => (
+      ...staticWidthRows.map(row => row.id).filter(id => (
         !factory.snapshot?.batches.some(batch => batch.id === id)
       )),
     ]

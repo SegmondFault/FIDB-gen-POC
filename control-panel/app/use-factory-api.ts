@@ -910,11 +910,67 @@ export type WidthCompilation = {
   };
 };
 
+export type WidthBatch = {
+  schema_version: 'fidb-width-batch-compilation/v1';
+  batch_digest: string;
+  id: string;
+  name: string;
+  label: string;
+  state: 'defined-disarmed';
+  language_id: string;
+  purpose: string;
+  recipe_policy: string;
+  queue_policy: string;
+  authority_path: string;
+  authority_sha256: string;
+  authorities: {
+    source_pack: string;
+    source_pack_sha256: string;
+    width: string;
+    width_sha256: string;
+    width_compilation_digest: string;
+    study: string;
+    study_sha256: string;
+  };
+  libraries: Array<{
+    rank: number;
+    id: string;
+    label: string;
+    version: string;
+    url: string;
+    sha256: string;
+    recipe_id: string;
+    recipe_state: 'recipe-ready' | 'recipe-required' | 'recipe-source-mismatch';
+    blocker: string;
+  }>;
+  summary: {
+    libraries: number;
+    route_profiles: number;
+    compiler_identities: number;
+    executable_treatments: number;
+    executions_per_library: number;
+    total_executions: number;
+    applicable_pairs_per_library: number;
+    unimplemented_pairs_per_library: number;
+    declared_maximum_build_cells: number;
+  };
+  readiness: {
+    source_pins: number;
+    recipe_ready_libraries: number;
+    recipe_blocked_libraries: number;
+    materializable_executions: number;
+    blocked_executions: number;
+    queue_state: 'not-materialized-disarmed';
+    blockers: string[];
+  };
+};
+
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v7';
+  schema_version: 'fidb-authority-catalog/v8';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
+  width_batches: WidthBatch[];
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
