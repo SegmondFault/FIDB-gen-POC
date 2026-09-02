@@ -557,14 +557,14 @@ class ToolchainCommandTests(unittest.TestCase):
         )
         self.assertEqual(json.loads(output.getvalue())["operation"], "bind")
 
-    def test_apple_sdk_wrapper_is_typed_and_executable(self):
+    def test_macos_worker_wrappers_are_typed_and_executable(self):
         project_root = Path(__file__).resolve().parents[1]
-        path = project_root / "scripts/toolchains/bind-apple-sdk.sh"
-        self.assertTrue(path.stat().st_mode & 0o111)
-        source = path.read_text(encoding="utf-8")
-        self.assertIn("toolchain input bind apple-macos-sdk", source)
-        self.assertIn('if [ "$#" -ne 6 ]', source)
-        self.assertNotIn("eval", source)
+        for name in ("macos-preflight.sh", "macos-run.sh"):
+            path = project_root / "scripts/workers" / name
+            self.assertTrue(path.stat().st_mode & 0o111)
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("macos-arm64-apple-clang", source)
+            self.assertNotIn("eval", source)
 
 
 if __name__ == "__main__":

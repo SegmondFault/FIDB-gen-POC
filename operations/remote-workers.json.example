@@ -5,6 +5,11 @@
       "worker_id": "replace-with-reviewed-worker-id",
       "token_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "pools": ["library-local"]
+    },
+    {
+      "worker_id": "replace-with-macos-worker-id",
+      "token_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pools": ["macos-native"]
     }
   ]
 }
