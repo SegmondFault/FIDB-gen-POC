@@ -22,7 +22,7 @@ from .config import Configuration
 from .hash_coverage import analyze_signature_coverage
 from .toolchain_packs import resolve_toolchain_profile
 from .pipeline import PipelineError, download_library, execute
-from .timing import utc_now
+from .timing import TimingRecorder, utc_now
 
 WIDTH_RUN_SCHEMA = "fidb-width-run/v1"
 SAFE_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
@@ -569,9 +569,16 @@ def _execute_cell(
     started_ns = time.monotonic_ns()
     manifest: Path | None = None
     pipeline_error = ""
+    timing = TimingRecorder()
     with _ResourceSampler(group_root) as sampler:
         try:
-            manifest = execute(configuration, group_root, verbose=verbose)
+            manifest = execute(
+                configuration,
+                group_root,
+                verbose=verbose,
+                timing=timing.span,
+                skipped=timing.skip,
+            )
         except (OSError, ValueError, PipelineError) as error:
             pipeline_error = str(error)
             candidate = group_root / "artifacts/libs/fidb_manifest.csv"
@@ -592,6 +599,7 @@ def _execute_cell(
         "retained_bytes": _directory_size(group_root / "artifacts/libs"),
         "peak_process_rss_bytes": sampler.peak_rss_bytes,
         "resource_samples": sampler.samples,
+        "stage_timing": timing.document(),
         "manifest": str(manifest) if manifest is not None else "",
         "pipeline_error": pipeline_error,
     }
@@ -694,6 +702,7 @@ def execute_width_run(
                             ),
                             "peak_process_rss_bytes": 0,
                             "resource_samples": 0,
+                            "stage_timing": None,
                             "manifest": "",
                             "pipeline_error": (
                                 f"worker {type(error).__name__}: {error}"

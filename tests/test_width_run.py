@@ -4,10 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fidb_poc.cli import main
 from fidb_poc.c_width import compile_c_width
 from fidb_poc.width_run import (
+    _execute_cell,
     _groups,
     _read_csv_rows,
     _release_cell_scratch,
@@ -145,6 +147,31 @@ class WidthRunTests(unittest.TestCase):
 
             self.assertEqual(rows[0]["status"], "complete")
             self.assertGreater(len(rows[0]["analysis_artifact_path"]), 131_072)
+
+    def test_width_cell_retains_pipeline_stage_timing(self):
+        configuration = _groups(compile_width_run_plan(self.root, canary=True))[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            group = Path(temporary) / "group-001"
+            group.mkdir()
+
+            def fake_execute(_configuration, project_root, **kwargs):
+                with kwargs["timing"]("compile", "benchmark compile stage"):
+                    pass
+                kwargs["skipped"]("patch", "no patch required")
+                manifest = project_root / "artifacts/libs/fidb_manifest.csv"
+                manifest.parent.mkdir(parents=True)
+                manifest.write_text("status\ncomplete\n", encoding="utf-8")
+                return manifest
+
+            with patch("fidb_poc.width_run.execute", side_effect=fake_execute):
+                measurement = _execute_cell(configuration, str(group), False)
+
+            timing = measurement["stage_timing"]
+            self.assertEqual(timing["schema_version"], "fidb-execution-timing/v1")
+            self.assertIn("compile", timing["summary"]["stage_duration_ns"])
+            self.assertEqual(
+                timing["summary"]["terminal_event_counts"]["skipped"], 1
+            )
 
     def test_pool_termination_uses_supported_executor_api(self):
         class Executor:
