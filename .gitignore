@@ -5,6 +5,7 @@ artifacts/libs/
 artifacts/malware/
 artifacts/runs/
 artifacts/width-runs/
+artifacts/benchmarks/
 var/
 dist/
 build/
