@@ -1,12 +1,12 @@
 schema_version = "fidb-toolchain-profile/v1"
 id = "c-top10-reference"
-label = "C top 10 · cross-build + native references"
+label = "C top 10 · managed routes + native MSVC reference"
 language_id = "c"
 host_system = "linux"
 host_architecture = "x86_64"
 route_ids = [
   "linux-x86-64-gcc",
-  "macos-arm64-osxcross-clang",
+  "macos-arm64-apple-clang",
   "windows-x86-64-llvm-mingw",
   "linux-arm32-gcc",
   "linux-aarch64-gcc",
@@ -15,9 +15,8 @@ route_ids = [
   "linux-powerpc32-be-gcc",
   "linux-sh32-gcc",
   "linux-m68k-gcc",
-  "macos-arm64-apple-clang",
   "windows-x86-64-msvc",
 ]
 external_policy = "report"
-purpose = "Retain the complete Linux-hosted C/C++ cross-build width while adding native Apple Clang and MSVC reference routes as separate evidence, not cross-compiler substitutes."
+purpose = "Retain the Linux-managed top-ten routes, including native Apple Clang, while adding native MSVC as separate reference evidence for the Windows requirement."
 authority = "coverage/c-top10-width-study.toml"

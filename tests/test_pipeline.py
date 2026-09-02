@@ -23,6 +23,7 @@ from fidb_poc.pipeline import (
     pipeline_environment,
     plan,
     populate_fidbs,
+    resolve_executable,
     run_command,
     sha256,
     write_manifest,
@@ -32,6 +33,30 @@ from fidb_poc.config import Library, load_configuration, select_configuration
 
 
 class PipelineTests(unittest.TestCase):
+    def test_xcrun_route_hashes_the_resolved_sdk_tool(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            xcrun = root / "xcrun"
+            clang = root / "clang"
+            xcrun.touch()
+            clang.touch()
+            completed = SimpleNamespace(stdout=f"{clang}\n", stderr="", returncode=0)
+            with (
+                patch("fidb_poc.pipeline.shutil.which", return_value=str(xcrun)),
+                patch(
+                    "fidb_poc.pipeline.subprocess.run", return_value=completed
+                ) as run,
+            ):
+                resolved = resolve_executable(
+                    (str(xcrun), "--sdk", "macosx", "clang"), {}
+                )
+
+        self.assertEqual(resolved, clang)
+        self.assertEqual(
+            run.call_args.args[0],
+            [str(xcrun), "--sdk", "macosx", "--find", "clang"],
+        )
+
     def test_run_command_verbose_streams_and_still_matches_buffered_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_path = Path(tmp) / "logs" / "cmd.log"

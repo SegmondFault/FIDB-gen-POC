@@ -185,8 +185,8 @@ upstream_release = "toolchains.bootlin.com-2025.08.1"
 upstream_authority = "https://toolchains.bootlin.com/downloads/releases/toolchains/m68k-68xxx/readmes/m68k-68xxx--glibc--stable-2025.08-1.txt"
 archive_root = "m68k-68xxx--glibc--stable-2025.08-1"
 
-# The three C/C++ cross-build packs below close target-format gaps from a Linux
-# build host while remaining distinct from native Apple Clang and MSVC evidence.
+# The Windows C/C++ cross-build pack below closes the PE/COFF target-format gap
+# from a Linux build host while remaining distinct from native MSVC evidence.
 
 [[pack]]
 id = "llvm-mingw-ucrt-x86-64-linux-20260826"
@@ -209,47 +209,3 @@ license_ids = ["Apache-2.0-WITH-LLVM-exception", "ZPL-2.1", "various-open-source
 upstream_release = "llvm-mingw-20260826-llvm-23.1.0"
 upstream_authority = "https://github.com/mstorsjo/llvm-mingw/releases/tag/20260826"
 archive_root = "llvm-mingw-20260826-ucrt-ubuntu-22.04-x86_64"
-
-[[pack]]
-id = "llvm-linux-x86-64-22.1.8"
-label = "LLVM/Clang 22.1.8 · Linux x86-64 host"
-kind = "compiler-tooling"
-target_ids = ["macos-arm64-macho"]
-compiler_family = "llvm-clang"
-compiler_version = "22.1.8"
-compiler_driver = "bin/clang"
-linker_family = "LLD"
-linker_version = "22.1.8"
-runtime = "none"
-runtime_version = "not-bundled"
-url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-Linux-X64.tar.xz"
-sha256 = "df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384"
-download_bytes = 1938859476
-installed_bytes_estimate = 7755437904
-size_evidence = "planning-estimate-4x-compressed"
-license_ids = ["Apache-2.0-WITH-LLVM-exception", "various-open-source"]
-upstream_release = "llvmorg-22.1.8"
-upstream_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-22.1.8"
-archive_root = "LLVM-22.1.8-Linux-X64"
-
-[[pack]]
-id = "osxcross-source-27d21e4977c9"
-label = "osxcross source · 27d21e4977c9"
-kind = "toolchain-builder-source"
-target_ids = ["macos-arm64-macho"]
-compiler_family = "llvm-clang"
-compiler_version = "22.1.8-composed"
-compiler_driver = "build.sh"
-linker_family = "osxcross LLVM flavor / ld64.lld"
-linker_version = "27d21e4977c9 source composition"
-runtime = "Apple SDK"
-runtime_version = "operator-supplied-and-pinned"
-url = "https://github.com/tpoechtrager/osxcross/archive/27d21e4977c9751d01199c7a226a6faf494c3dd9.tar.gz"
-sha256 = "c94952432565db84f1b3a9e4ba3d44344b1464fcbeb8c7580ab9db1e7c22834a"
-download_bytes = 99306
-installed_bytes_estimate = 397224
-size_evidence = "planning-estimate-4x-compressed-source-only"
-license_ids = ["GPL-2.0-only", "APSL-2.0", "BSD-3-Clause", "various-open-source"]
-upstream_release = "osxcross-27d21e4977c9751d01199c7a226a6faf494c3dd9"
-upstream_authority = "https://github.com/tpoechtrager/osxcross/commit/27d21e4977c9751d01199c7a226a6faf494c3dd9"
-archive_root = "osxcross-27d21e4977c9751d01199c7a226a6faf494c3dd9"

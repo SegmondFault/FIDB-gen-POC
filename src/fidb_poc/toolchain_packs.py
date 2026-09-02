@@ -151,8 +151,14 @@ def _strings(value: object, field: str, *, allow_empty: bool = False) -> list[st
     return result
 
 
-def _rows(value: object, kind: str, fields: set[str]) -> list[dict[str, object]]:
-    if not isinstance(value, list) or not value:
+def _rows(
+    value: object,
+    kind: str,
+    fields: set[str],
+    *,
+    allow_empty: bool = False,
+) -> list[dict[str, object]]:
+    if not isinstance(value, list) or (not value and not allow_empty):
         raise ValueError(f"toolchain authority requires at least one {kind}")
     result: list[dict[str, object]] = []
     seen: set[str] = set()
@@ -292,7 +298,7 @@ def _load_inputs(path: Path) -> list[dict[str, object]]:
         raise ValueError(
             f"unsupported toolchain inputs schema: {document.get('schema_version')}"
         )
-    rows = _rows(document.get("input"), "input", _INPUT_FIELDS)
+    rows = _rows(document.get("input"), "input", _INPUT_FIELDS, allow_empty=True)
     for row in rows:
         input_id = str(row["id"])
         for field in _INPUT_FIELDS - {"target_ids", "required_metadata"}:
@@ -597,12 +603,19 @@ def resolve_toolchain_profile(
         route = routes[str(route_id)]
         if route["provisioning"] == "external-worker":
             state = "external-required"
+            definition_reviewed = (
+                route["qualification_state"] == "external-definition-reviewed"
+            )
             requirements.append(
                 {
                     "code": "external-worker-required",
                     "severity": "constraint",
                     "route_id": route_id,
-                    "message": f"{route['label']} requires a separately pinned {route['worker_class']} worker",
+                    "message": (
+                        f"{route['label']} has a reviewed definition and requires a registered {route['worker_class']} worker"
+                        if definition_reviewed
+                        else f"{route['label']} requires a separately pinned {route['worker_class']} worker"
+                    ),
                     "details": route["external_requirements"],
                 }
             )
@@ -1087,7 +1100,7 @@ def resolve_toolchain_profile(
                                                     "qualify"
                                                     if state == "qualification-required"
                                                     else (
-                                                        "define-external-workers"
+                                                        "start-external-workers"
                                                         if state
                                                         == "qualified-external-required"
                                                         else "done"

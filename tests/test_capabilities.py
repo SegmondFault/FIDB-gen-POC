@@ -39,7 +39,7 @@ class CapabilityDetectionTests(unittest.TestCase):
                     for row in result["toolchain_profiles"]["plans"]
                     if row["profile"]["id"] == "c-top10-linux"
                 )["summary"]["missing_packs"],
-                11,
+                9,
             )
             self.assertTrue(
                 all(

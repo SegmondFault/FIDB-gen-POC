@@ -276,10 +276,10 @@ def _width_study_authority(
             native_route_ids = list(target["native_route_ids"])
             source_ids = list(target["source_capable_toolchain_ids"])
             archive_ids = list(target["archive_capable_toolchain_ids"])
-            if native_route_ids:
-                route_state = "installed"
-            elif requirement["acquisition"] == "remote-worker":
+            if requirement["acquisition"] == "remote-worker":
                 route_state = "remote-required"
+            elif native_route_ids:
+                route_state = "installed"
             elif source_ids:
                 route_state = "pinned-source"
             elif archive_ids:

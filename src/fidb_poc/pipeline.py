@@ -172,7 +172,31 @@ def resolve_executable(
     candidate = shutil.which(command[0], path=search_path)
     if candidate is None:
         raise PipelineError(f"required executable is unavailable: {command[0]}")
-    return Path(candidate).resolve()
+    resolved = Path(candidate).resolve()
+    if (
+        resolved.name == "xcrun"
+        and len(command) == 4
+        and command[1:3] == ("--sdk", "macosx")
+        and command[3] in {"clang", "ar", "ranlib"}
+    ):
+        try:
+            located = subprocess.run(
+                [str(resolved), "--sdk", "macosx", "--find", command[3]],
+                env=environment,
+                text=True,
+                capture_output=True,
+                timeout=30,
+                check=True,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError) as error:
+            raise PipelineError(
+                f"could not resolve Apple SDK tool: {command[3]}"
+            ) from error
+        tool = Path(located)
+        if not tool.is_absolute() or not tool.is_file():
+            raise PipelineError(f"xcrun returned an invalid path for {command[3]}")
+        return tool.resolve()
+    return resolved
 
 
 def command_text(command: Iterable[str]) -> str:
@@ -496,9 +520,17 @@ def executable_identity(
     label: str,
 ) -> tuple[Path, str]:
     executable = resolve_executable(command, environment)
+    identity_command = [*command, "--version"]
+    if (
+        len(command) == 4
+        and Path(command[0]).name == "xcrun"
+        and command[1:3] == ("--sdk", "macosx")
+        and command[3] in {"ar", "ranlib"}
+    ):
+        identity_command = [*command[:3], "--show-sdk-version"]
     with tempfile.TemporaryDirectory(prefix=f"fidb-{label}-identity-") as temporary:
         result = subprocess.run(
-            [*command, "--version"],
+            identity_command,
             cwd=temporary,
             env=environment,
             text=True,
@@ -511,6 +543,8 @@ def executable_identity(
     )
     if result.returncode != 0 or not version:
         raise PipelineError(f"could not identify {label}: {command_text(command)}")
+    if identity_command[-1] == "--show-sdk-version":
+        version = f"Apple macOS SDK {version}; tool={executable}"
     return executable, version
 
 

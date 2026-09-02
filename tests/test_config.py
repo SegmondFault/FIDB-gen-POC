@@ -19,10 +19,10 @@ class ConfigurationTests(unittest.TestCase):
             [row.identifier for row in configuration.libraries],
             ["zlib-1.3.1", "bzip2-1.0.7"],
         )
-        self.assertEqual(len(configuration.routes), 1)
+        self.assertEqual(len(configuration.routes), 2)
         self.assertEqual(
             [route.id for route in configuration.routes],
-            ["linux-x86_64-gnu-gcc"],
+            ["linux-x86_64-gnu-gcc", "macos-arm64-apple-clang"],
         )
         gcc_route = configuration.routes[0]
         self.assertEqual(gcc_route.target_os, "linux")

@@ -16,16 +16,16 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["recipes"]), 4)
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["toolchains"]), 41)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 11)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 1)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 12)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["qualifications"]), 10)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 9)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 11)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["qualifications"]), 9)
         self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 3)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
         self.assertEqual(
             {row["id"] for row in document["native"]["routes"]},
-            {"linux-x86_64-gnu-gcc"},
+            {"linux-x86_64-gnu-gcc", "macos-arm64-apple-clang"},
         )
         self.assertIn(
             "plans/coverage-baseline.toml",

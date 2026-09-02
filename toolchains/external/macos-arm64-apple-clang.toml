@@ -1,0 +1,24 @@
+schema_version = "fidb-external-toolchain/v1"
+id = "macos-arm64-apple-clang"
+label = "macOS ARM64 · native Apple Clang"
+route_id = "macos-arm64-apple-clang"
+worker_pool = "macos-native"
+worker_class = "macos-native-remote"
+host_system = "darwin"
+host_architecture = "arm64"
+target_id = "macos-arm64-macho"
+compiler_family = "apple-clang"
+probe_kind = "apple-xcode"
+languages = ["c", "cpp"]
+deployment_target = "11.0"
+worker_configuration = "worker.toml"
+license_authority = "https://www.apple.com/legal/sla/docs/xcode.pdf"
+source_policy = "Xcode and the macOS SDK remain installed and used only on the operator's Apple-branded macOS worker; no Apple payload is copied to the coordinator or repository."
+required_tools = ["xcodebuild", "xcrun", "file", "make", "tar", "java"]
+required_metadata = ["hardware", "macos_version", "xcode_version", "xcode_build", "sdk_version", "sdk_path", "deployment_target", "apple_clang_version", "apple_clang_path", "apple_clang_sha256", "ghidra_version", "java_version"]
+
+[resources]
+min_available_memory_gib = 12
+min_free_disk_gib = 100
+max_load_per_cpu = 1.0
+max_temperature_c = 0

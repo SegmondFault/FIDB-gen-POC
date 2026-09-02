@@ -16,17 +16,6 @@ smoke_languages = ["c", "cpp"]
 composition = "none"
 
 [[qualification]]
-route_id = "macos-arm64-osxcross-clang"
-tool_source = "composed-route"
-tool_pack_id = "osxcross-composed"
-driver_pattern = "bin/arm64-apple-darwin*-clang"
-cxx_driver_pattern = "bin/arm64-apple-darwin*-clang++"
-archiver_pattern = "bin/arm64-apple-darwin*-ar"
-version_contains = "22.1.8"
-smoke_languages = ["c", "cpp"]
-composition = "osxcross-llvm"
-
-[[qualification]]
 route_id = "windows-x86-64-llvm-mingw"
 tool_source = "pack"
 tool_pack_id = "llvm-mingw-ucrt-x86-64-linux-20260826"

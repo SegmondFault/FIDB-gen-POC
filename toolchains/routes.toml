@@ -1,8 +1,8 @@
 schema_version = "fidb-toolchain-routes/v2"
 
-# A route is a concrete C/C++ target/compiler composition.  Cross-build routes
-# cover target and binary-format breadth; native-reference routes remain
-# separate evidence and are never silently treated as compiler-equivalent.
+# A route is a concrete C/C++ target/compiler composition. Cross-build routes
+# cover target and binary-format breadth where the toolchain terms permit it;
+# native routes remain explicit worker requirements.
 
 [[route]]
 id = "linux-x86-64-gcc"
@@ -19,23 +19,6 @@ worker_class = "linux-x86_64"
 qualification_state = "acquisition-reviewed"
 additional_installed_bytes_estimate = 0
 additional_size_evidence = "none"
-external_requirements = []
-
-[[route]]
-id = "macos-arm64-osxcross-clang"
-label = "macOS ARM64 · LLVM/Clang + osxcross"
-target_id = "macos-arm64-macho"
-coverage_requirement_id = "macos-arm64-apple-clang"
-compiler_family = "llvm-clang"
-target_triple = "arm64-apple-darwin"
-evidence_role = "cross-build"
-provisioning = "pack-plus-user-input"
-pack_ids = ["llvm-linux-x86-64-22.1.8", "osxcross-source-27d21e4977c9"]
-input_ids = ["apple-macos-sdk"]
-worker_class = "linux-x86_64"
-qualification_state = "acquisition-and-sdk-definition-reviewed"
-additional_installed_bytes_estimate = 4294967296
-additional_size_evidence = "planning-estimate-osxcross-build-plus-user-supplied-sdk"
 external_requirements = []
 
 [[route]]
@@ -57,20 +40,20 @@ external_requirements = []
 
 [[route]]
 id = "macos-arm64-apple-clang"
-label = "macOS ARM64 · native Apple Clang reference"
+label = "macOS ARM64 · native Apple Clang"
 target_id = "macos-arm64-macho"
 coverage_requirement_id = "macos-arm64-apple-clang"
 compiler_family = "apple-clang"
 target_triple = "arm64-apple-darwin"
-evidence_role = "native-reference"
+evidence_role = "primary"
 provisioning = "external-worker"
 pack_ids = []
 input_ids = []
 worker_class = "macos-native-remote"
-qualification_state = "external-definition-required"
+qualification_state = "external-definition-reviewed"
 additional_installed_bytes_estimate = 0
 additional_size_evidence = "external-worker-not-estimated"
-external_requirements = ["Xcode build", "Apple Clang build", "macOS SDK", "deployment target"]
+external_requirements = ["Apple-branded ARM64 hardware", "macOS", "Xcode build", "Apple Clang build", "macOS SDK", "deployment target", "toolchains/external/macos-arm64-apple-clang.toml"]
 
 [[route]]
 id = "windows-x86-64-msvc"

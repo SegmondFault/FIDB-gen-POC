@@ -18,6 +18,22 @@ ghidra_language = "x86:LE:64:default"
 ghidra_compiler_spec = "gcc"
 compiler_version_markers = ["Free Software Foundation"]
 
+[[routes]]
+id = "macos-arm64-apple-clang"
+target_os = "macos"
+architecture = "arm64"
+binary_format = "Mach-O"
+compiler = ["/usr/bin/xcrun", "--sdk", "macosx", "clang"]
+archiver = ["/usr/bin/xcrun", "--sdk", "macosx", "ar"]
+ranlib = ["/usr/bin/xcrun", "--sdk", "macosx", "ranlib"]
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer", "-arch", "arm64", "-mmacosx-version-min=11.0"]
+object_file_markers = ["Mach-O", "arm64", "object"]
+linked_suffix = ".dylib"
+linked_file_markers = ["Mach-O", "arm64", "dynamically linked shared library"]
+ghidra_language = "AARCH64:LE:64:v8A"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["Apple clang version"]
+
 [[treatments]]
 id = "baseline_o2"
 factor = "baseline"

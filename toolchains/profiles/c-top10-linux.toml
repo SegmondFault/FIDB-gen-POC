@@ -1,12 +1,12 @@
 schema_version = "fidb-toolchain-profile/v1"
 id = "c-top10-linux"
-label = "C top 10 · Linux-hosted cross-build"
+label = "C top 10 · Linux-managed + native macOS"
 language_id = "c"
 host_system = "linux"
 host_architecture = "x86_64"
 route_ids = [
   "linux-x86-64-gcc",
-  "macos-arm64-osxcross-clang",
+  "macos-arm64-apple-clang",
   "windows-x86-64-llvm-mingw",
   "linux-arm32-gcc",
   "linux-aarch64-gcc",
@@ -17,5 +17,5 @@ route_ids = [
   "linux-m68k-gcc",
 ]
 external_policy = "report"
-purpose = "Acquire the Linux x86-64-hosted C/C++ cross-build routes for the first ten ordered C target requirements; the macOS route remains gated on a separately supplied, pinned Apple SDK."
+purpose = "Acquire and qualify the Linux-hosted routes for the first ten ordered C target requirements while retaining native Apple Clang as an explicitly managed external-worker gate."
 authority = "coverage/c-top10-width-study.toml"

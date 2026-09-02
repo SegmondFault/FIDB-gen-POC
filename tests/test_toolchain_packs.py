@@ -5,17 +5,13 @@ import unittest
 from unittest.mock import patch
 
 from fidb_poc.toolchain_cache import CacheInspection
-from fidb_poc.toolchain_inputs import InputBindingInspection
 from fidb_poc.toolchain_packs import (
     load_toolchain_pack_catalog,
     resolve_toolchain_profile,
     resolve_toolchain_profiles,
 )
 from fidb_poc.toolchain_prepare import PreparationInspection
-from fidb_poc.toolchain_qualification import (
-    CompositionInspection,
-    QualificationInspection,
-)
+from fidb_poc.toolchain_qualification import QualificationInspection
 
 
 class ToolchainPackAuthorityTests(unittest.TestCase):
@@ -28,10 +24,10 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
 
         self.assertEqual(catalog["schema_version"], "fidb-toolchain-pack-catalog/v3")
         self.assertEqual(catalog["host"], {"system": "linux", "architecture": "x86_64"})
-        self.assertEqual(len(catalog["packs"]), 11)
-        self.assertEqual(len(catalog["inputs"]), 1)
-        self.assertEqual(len(catalog["routes"]), 12)
-        self.assertEqual(len(catalog["qualifications"]), 10)
+        self.assertEqual(len(catalog["packs"]), 9)
+        self.assertEqual(len(catalog["inputs"]), 0)
+        self.assertEqual(len(catalog["routes"]), 11)
+        self.assertEqual(len(catalog["qualifications"]), 9)
         self.assertEqual(len(catalog["profiles"]), 3)
         self.assertEqual(len(catalog["catalog_digest"]), 64)
         self.assertTrue(all(len(row["sha256"]) == 64 for row in catalog["packs"]))
@@ -44,7 +40,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             profile["route_ids"],
             [
                 "linux-x86-64-gcc",
-                "macos-arm64-osxcross-clang",
+                "macos-arm64-apple-clang",
                 "windows-x86-64-llvm-mingw",
                 "linux-arm32-gcc",
                 "linux-aarch64-gcc",
@@ -73,31 +69,34 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         self.assertTrue(plan["host"]["compatible"])
         self.assertEqual(plan["summary"]["routes"], 10)
         self.assertEqual(plan["summary"]["coverage_requirements"], 10)
-        self.assertEqual(plan["summary"]["downloadable_routes"], 10)
-        self.assertEqual(plan["summary"]["user_input_routes"], 1)
-        self.assertEqual(plan["summary"]["external_routes"], 0)
-        self.assertEqual(plan["summary"]["primary_routes"], 8)
-        self.assertEqual(plan["summary"]["cross_build_routes"], 2)
-        self.assertEqual(plan["summary"]["packs"], 11)
-        self.assertEqual(plan["summary"]["download_bytes"], 2_692_424_622)
+        self.assertEqual(plan["summary"]["downloadable_routes"], 9)
+        self.assertEqual(plan["summary"]["user_input_routes"], 0)
+        self.assertEqual(plan["summary"]["external_routes"], 1)
+        self.assertEqual(plan["summary"]["primary_routes"], 9)
+        self.assertEqual(plan["summary"]["cross_build_routes"], 1)
+        self.assertEqual(plan["summary"]["packs"], 9)
+        self.assertEqual(plan["summary"]["download_bytes"], 753_465_840)
         self.assertEqual(
-            plan["summary"]["pack_installed_bytes_estimate"], 10_769_698_488
+            plan["summary"]["pack_installed_bytes_estimate"], 3_013_863_360
         )
         self.assertEqual(
             plan["summary"]["route_additional_installed_bytes_estimate"],
-            4_294_967_296,
+            0,
         )
-        self.assertEqual(plan["summary"]["installed_bytes_estimate"], 15_064_665_784)
+        self.assertEqual(plan["summary"]["installed_bytes_estimate"], 3_013_863_360)
         self.assertEqual(plan["recommended_next_action"], "pull")
         self.assertEqual(
-            sum(row["code"] == "user-input-required" for row in plan["requirements"]),
+            sum(
+                row["code"] == "external-worker-required"
+                for row in plan["requirements"]
+            ),
             1,
         )
         self.assertEqual(
             sum(
                 row["code"] == "pack-download-required" for row in plan["requirements"]
             ),
-            11,
+            9,
         )
 
     def test_verified_downloads_do_not_claim_sdk_or_preparation_readiness(self):
@@ -109,7 +108,20 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 observed_sha256=digest,
             )
 
-        with patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=verified):
+        def missing_preparation(directory: Path, digest: str, archive_root: str):
+            return PreparationInspection(
+                path=directory / digest,
+                root=directory / digest / archive_root,
+                state="missing",
+            )
+
+        with (
+            patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=verified),
+            patch(
+                "fidb_poc.toolchain_packs.inspect_prepared",
+                side_effect=missing_preparation,
+            ),
+        ):
             plan = resolve_toolchain_profile(
                 self.root,
                 "c-top10-linux",
@@ -118,18 +130,16 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             )
 
         self.assertEqual(plan["state"], "preparation-required")
-        self.assertEqual(plan["summary"]["verified_cached_packs"], 11)
+        self.assertEqual(plan["summary"]["verified_cached_packs"], 9)
         self.assertEqual(plan["summary"]["prepared_packs"], 0)
-        self.assertEqual(plan["summary"]["missing_preparations"], 11)
+        self.assertEqual(plan["summary"]["missing_preparations"], 9)
         self.assertEqual(plan["summary"]["remaining_download_bytes"], 0)
         self.assertEqual(plan["recommended_next_action"], "prepare")
         self.assertEqual(
             next(
-                row
-                for row in plan["routes"]
-                if row["id"] == "macos-arm64-osxcross-clang"
+                row for row in plan["routes"] if row["id"] == "macos-arm64-apple-clang"
             )["state"],
-            "preparation-and-input-required",
+            "external-required",
         )
         self.assertTrue(
             all(
@@ -171,7 +181,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             {row["profile"]["id"] for row in plans},
             {"c-canary", "c-top10-linux", "c-top10-reference"},
         )
-        self.assertEqual(inspect.call_count, 11)
+        self.assertEqual(inspect.call_count, 9)
 
     def test_reference_profile_keeps_native_compilers_separate(self):
         with patch(
@@ -180,10 +190,10 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         ):
             plan = resolve_toolchain_profile(self.root, "c-top10-reference")
 
-        self.assertEqual(plan["summary"]["routes"], 12)
+        self.assertEqual(plan["summary"]["routes"], 11)
         self.assertEqual(plan["summary"]["coverage_requirements"], 10)
-        self.assertEqual(plan["summary"]["cross_build_routes"], 2)
-        self.assertEqual(plan["summary"]["native_reference_routes"], 2)
+        self.assertEqual(plan["summary"]["cross_build_routes"], 1)
+        self.assertEqual(plan["summary"]["native_reference_routes"], 1)
         self.assertEqual(plan["summary"]["external_routes"], 2)
         self.assertEqual(
             sum(
@@ -193,7 +203,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             2,
         )
 
-    def test_private_sdk_binding_advances_only_the_gated_route(self):
+    def test_ready_material_advances_through_qualification_then_external_worker(self):
         def cached(downloads: Path, digest: str) -> CacheInspection:
             return CacheInspection(
                 path=downloads / digest,
@@ -211,133 +221,9 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 manifest={"archive_root": archive_root},
             )
 
-        missing_binding = InputBindingInspection(
-            input_id="apple-macos-sdk",
-            state="missing",
-            binding_path=Path("/bindings/apple-macos-sdk.json"),
-        )
-        bound_binding = InputBindingInspection(
-            input_id="apple-macos-sdk",
-            state="bound-verified",
-            binding_path=Path("/bindings/apple-macos-sdk.json"),
-            material_path=Path("/inputs/sdk"),
-            document={
-                "sha256": "f" * 64,
-                "bytes": 123,
-                "metadata": {
-                    "sdk_version": "26.0",
-                    "deployment_target": "15.0",
-                    "package_format": "tar-xz",
-                },
-            },
-        )
         with (
             patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
             patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_input_binding",
-                return_value=missing_binding,
-            ),
-        ):
-            missing = resolve_toolchain_profile(self.root, "c-top10-linux")
-        with (
-            patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
-            patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_input_binding",
-                return_value=bound_binding,
-            ),
-        ):
-            bound = resolve_toolchain_profile(self.root, "c-top10-linux")
-
-        self.assertEqual(missing["state"], "input-required")
-        self.assertEqual(missing["summary"]["missing_inputs"], 1)
-        self.assertEqual(bound["state"], "composition-required")
-        self.assertEqual(bound["summary"]["bound_inputs"], 1)
-        self.assertEqual(
-            next(
-                row
-                for row in bound["routes"]
-                if row["id"] == "macos-arm64-osxcross-clang"
-            )["state"],
-            "composition-required",
-        )
-
-    def test_ready_material_advances_through_composition_and_qualification(self):
-        def cached(downloads: Path, digest: str) -> CacheInspection:
-            return CacheInspection(
-                path=downloads / digest,
-                state="verified-cached",
-                bytes=1,
-                observed_sha256=digest,
-            )
-
-        def prepared(directory: Path, digest: str, archive_root: str):
-            path = directory / digest
-            return PreparationInspection(
-                path=path,
-                root=path / archive_root,
-                state="prepared",
-                manifest={"archive_root": archive_root},
-            )
-
-        binding = InputBindingInspection(
-            input_id="apple-macos-sdk",
-            state="bound-verified",
-            binding_path=Path("/bindings/apple-macos-sdk.json"),
-            material_path=Path("/inputs/sdk"),
-            document={
-                "sha256": "f" * 64,
-                "bytes": 123,
-                "metadata": {
-                    "sdk_version": "26.0",
-                    "deployment_target": "15.0",
-                    "package_format": "tar-xz",
-                },
-            },
-        )
-
-        with (
-            patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
-            patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_input_binding",
-                return_value=binding,
-            ),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_composition",
-                return_value=CompositionInspection(
-                    Path("/composed"), Path("/composed/toolchain"), "missing"
-                ),
-            ),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_qualification",
-                return_value=QualificationInspection(Path("/qualified"), "missing"),
-            ),
-        ):
-            composition_required = resolve_toolchain_profile(self.root, "c-top10-linux")
-
-        self.assertEqual(composition_required["state"], "composition-required")
-        self.assertEqual(composition_required["summary"]["missing_compositions"], 1)
-        self.assertEqual(composition_required["summary"]["missing_qualifications"], 9)
-        self.assertEqual(composition_required["recommended_next_action"], "compose")
-
-        with (
-            patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
-            patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_input_binding",
-                return_value=binding,
-            ),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_composition",
-                return_value=CompositionInspection(
-                    Path("/composed"),
-                    Path("/composed/toolchain"),
-                    "composed",
-                    {},
-                ),
-            ),
             patch(
                 "fidb_poc.toolchain_packs.inspect_qualification",
                 return_value=QualificationInspection(Path("/qualified"), "missing"),
@@ -348,28 +234,13 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             )
 
         self.assertEqual(qualification_required["state"], "qualification-required")
-        self.assertEqual(qualification_required["summary"]["composed_routes"], 1)
-        self.assertEqual(
-            qualification_required["summary"]["missing_qualifications"], 10
-        )
+        self.assertEqual(qualification_required["summary"]["composed_routes"], 0)
+        self.assertEqual(qualification_required["summary"]["missing_qualifications"], 9)
         self.assertEqual(qualification_required["recommended_next_action"], "qualify")
 
         with (
             patch("fidb_poc.toolchain_packs.inspect_cached", side_effect=cached),
             patch("fidb_poc.toolchain_packs.inspect_prepared", side_effect=prepared),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_input_binding",
-                return_value=binding,
-            ),
-            patch(
-                "fidb_poc.toolchain_packs.inspect_composition",
-                return_value=CompositionInspection(
-                    Path("/composed"),
-                    Path("/composed/toolchain"),
-                    "composed",
-                    {},
-                ),
-            ),
             patch(
                 "fidb_poc.toolchain_packs.inspect_qualification",
                 return_value=QualificationInspection(
@@ -379,9 +250,9 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         ):
             qualified = resolve_toolchain_profile(self.root, "c-top10-linux")
 
-        self.assertEqual(qualified["state"], "qualified")
-        self.assertEqual(qualified["summary"]["qualified_routes"], 10)
-        self.assertEqual(qualified["recommended_next_action"], "done")
+        self.assertEqual(qualified["state"], "qualified-external-required")
+        self.assertEqual(qualified["summary"]["qualified_routes"], 9)
+        self.assertEqual(qualified["recommended_next_action"], "start-external-workers")
 
     def test_incompatible_host_is_a_structured_blocker(self):
         with patch(
