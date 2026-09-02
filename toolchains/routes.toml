@@ -201,3 +201,150 @@ qualification_state = "acquisition-reviewed"
 additional_installed_bytes_estimate = 0
 additional_size_evidence = "none"
 external_requirements = []
+
+# Android width is separated into ABI × NDK-generation routes. Each four-route
+# generation shares one immutable NDK pack; API 21 is part of route identity.
+
+[[route]]
+id = "android-arm64-ndk-r27d-clang-api21"
+label = "Android ARM64 · NDK r27d Clang 18 · API 21"
+target_id = "android-arm64-v8a-elf"
+compiler_id = "android-clang-r522817d"
+coverage_requirement_id = "android-arm64-clang"
+compiler_family = "llvm-clang"
+target_triple = "aarch64-linux-android21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r27d-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-arm32-ndk-r27d-clang-api21"
+label = "Android ARM32 · NDK r27d Clang 18 · API 21"
+target_id = "android-armeabi-v7a-elf"
+compiler_id = "android-clang-r522817d"
+coverage_requirement_id = "android-arm32-clang"
+compiler_family = "llvm-clang"
+target_triple = "armv7a-linux-androideabi21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r27d-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-x86-64-ndk-r27d-clang-api21"
+label = "Android x86-64 · NDK r27d Clang 18 · API 21"
+target_id = "android-x86-64-elf"
+compiler_id = "android-clang-r522817d"
+coverage_requirement_id = "android-x86-64-clang"
+compiler_family = "llvm-clang"
+target_triple = "x86_64-linux-android21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r27d-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-x86-32-ndk-r27d-clang-api21"
+label = "Android x86 · NDK r27d Clang 18 · API 21"
+target_id = "android-x86-32-elf"
+compiler_id = "android-clang-r522817d"
+coverage_requirement_id = "android-x86-32-clang"
+compiler_family = "llvm-clang"
+target_triple = "i686-linux-android21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r27d-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-arm64-ndk-r29-clang-api21"
+label = "Android ARM64 · NDK r29 Clang 21 · API 21"
+target_id = "android-arm64-v8a-elf"
+compiler_id = "android-clang-r563880c"
+coverage_requirement_id = "android-arm64-clang"
+compiler_family = "llvm-clang"
+target_triple = "aarch64-linux-android21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r29-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-arm32-ndk-r29-clang-api21"
+label = "Android ARM32 · NDK r29 Clang 21 · API 21"
+target_id = "android-armeabi-v7a-elf"
+compiler_id = "android-clang-r563880c"
+coverage_requirement_id = "android-arm32-clang"
+compiler_family = "llvm-clang"
+target_triple = "armv7a-linux-androideabi21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r29-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-x86-64-ndk-r29-clang-api21"
+label = "Android x86-64 · NDK r29 Clang 21 · API 21"
+target_id = "android-x86-64-elf"
+compiler_id = "android-clang-r563880c"
+coverage_requirement_id = "android-x86-64-clang"
+compiler_family = "llvm-clang"
+target_triple = "x86_64-linux-android21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r29-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []
+
+[[route]]
+id = "android-x86-32-ndk-r29-clang-api21"
+label = "Android x86 · NDK r29 Clang 21 · API 21"
+target_id = "android-x86-32-elf"
+compiler_id = "android-clang-r563880c"
+coverage_requirement_id = "android-x86-32-clang"
+compiler_family = "llvm-clang"
+target_triple = "i686-linux-android21"
+evidence_role = "cross-build"
+provisioning = "downloadable-pack"
+pack_ids = ["android-ndk-r29-linux-x86-64"]
+input_ids = []
+worker_class = "linux-android-ndk"
+qualification_state = "acquisition-reviewed"
+additional_installed_bytes_estimate = 0
+additional_size_evidence = "none"
+external_requirements = []

@@ -102,3 +102,91 @@ archiver_pattern = "bin/m68k-buildroot-linux-gnu-ar"
 version_contains = "14.3.0"
 smoke_languages = ["c", "cpp"]
 composition = "none"
+
+[[qualification]]
+route_id = "android-arm64-ndk-r27d-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r27d-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r522817d"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-arm32-ndk-r27d-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r27d-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r522817d"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r27d-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r522817d"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r27d-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r522817d"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-arm64-ndk-r29-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r29-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r563880c"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-arm32-ndk-r29-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r29-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r563880c"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-x86-64-ndk-r29-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r29-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r563880c"
+smoke_languages = ["c", "cpp"]
+composition = "none"
+
+[[qualification]]
+route_id = "android-x86-32-ndk-r29-clang-api21"
+tool_source = "pack"
+tool_pack_id = "android-ndk-r29-linux-x86-64"
+driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+cxx_driver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang++"
+archiver_pattern = "toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+version_contains = "r563880c"
+smoke_languages = ["c", "cpp"]
+composition = "none"

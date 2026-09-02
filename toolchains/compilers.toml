@@ -68,6 +68,26 @@ generation = "23"
 language_ids = ["c", "cpp"]
 release_authority = "https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.0"
 
+# Android's LLVM builds are separate compiler identities from upstream LLVM.
+# The NDK build revision is retained in the ID even where the reported Clang
+# version overlaps another distribution's compiler.
+
+[[compiler]]
+id = "android-clang-r522817d"
+family = "llvm-clang"
+version = "18.0.4"
+generation = "NDK r27d / r522817d"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/android/ndk/wiki/Changelog-r27"
+
+[[compiler]]
+id = "android-clang-r563880c"
+family = "llvm-clang"
+version = "21.0.0"
+generation = "NDK r29 / r563880c"
+language_ids = ["c", "cpp"]
+release_authority = "https://github.com/android/ndk/wiki/Changelog-r29"
+
 [[compiler]]
 id = "apple-clang-external"
 family = "apple-clang"

@@ -209,3 +209,51 @@ license_ids = ["Apache-2.0-WITH-LLVM-exception", "ZPL-2.1", "various-open-source
 upstream_release = "llvm-mingw-20260826-llvm-23.1.0"
 upstream_authority = "https://github.com/mstorsjo/llvm-mingw/releases/tag/20260826"
 archive_root = "llvm-mingw-20260826-ucrt-ubuntu-22.04-x86_64"
+
+# One Android NDK archive contains the complete Linux x86-64-hosted LLVM
+# toolchain and sysroots for all four supported Android ABIs. Two generations
+# give us compiler-width evidence without downloading one SDK per route.
+
+[[pack]]
+id = "android-ndk-r27d-linux-x86-64"
+label = "Android NDK r27d LTS · Linux x86-64 host"
+kind = "compiler-sysroot"
+target_ids = ["android-arm64-v8a-elf", "android-armeabi-v7a-elf", "android-x86-64-elf", "android-x86-32-elf"]
+compiler_family = "llvm-clang"
+compiler_version = "18.0.4"
+compiler_driver = "Clang target wrappers at Android API 21"
+linker_family = "LLD"
+linker_version = "18.0.4"
+runtime = "Android bionic"
+runtime_version = "API 21+ / NDK 27.3.13750724"
+url = "https://dl.google.com/android/repository/android-ndk-r27d-linux.zip"
+sha256 = "601246087a682d1944e1e16dd85bc6e49560fe8b6d61255be2829178c8ed15d9"
+download_bytes = 663956036
+installed_bytes_estimate = 2053701360
+size_evidence = "upstream-zip-central-directory-2026-09-02"
+license_ids = ["Android-SDK-License", "Apache-2.0", "MIT", "BSD-like", "various-open-source"]
+upstream_release = "android-ndk-r27d-27.3.13750724"
+upstream_authority = "https://developer.android.com/ndk/downloads"
+archive_root = "android-ndk-r27d"
+
+[[pack]]
+id = "android-ndk-r29-linux-x86-64"
+label = "Android NDK r29 stable · Linux x86-64 host"
+kind = "compiler-sysroot"
+target_ids = ["android-arm64-v8a-elf", "android-armeabi-v7a-elf", "android-x86-64-elf", "android-x86-32-elf"]
+compiler_family = "llvm-clang"
+compiler_version = "21.0.0"
+compiler_driver = "Clang target wrappers at Android API 21"
+linker_family = "LLD"
+linker_version = "21.0.0"
+runtime = "Android bionic"
+runtime_version = "API 21+ / NDK 29.0.14206865"
+url = "https://dl.google.com/android/repository/android-ndk-r29-linux.zip"
+sha256 = "4abbbcdc842f3d4879206e9695d52709603e52dd68d3c1fff04b3b5e7a308ecf"
+download_bytes = 783549481
+installed_bytes_estimate = 2494913783
+size_evidence = "upstream-zip-central-directory-2026-09-02"
+license_ids = ["Android-SDK-License", "Apache-2.0", "MIT", "BSD-like", "various-open-source"]
+upstream_release = "android-ndk-r29-29.0.14206865"
+upstream_authority = "https://developer.android.com/ndk/downloads"
+archive_root = "android-ndk-r29"

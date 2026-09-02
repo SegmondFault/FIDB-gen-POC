@@ -161,6 +161,7 @@ def _target_authority(
     root: Path,
     native: dict[str, object],
     toolchains: list[dict[str, object]],
+    toolchain_pack_catalog: dict[str, object],
 ) -> list[dict[str, object]]:
     result = []
     routes = native["routes"]
@@ -183,6 +184,18 @@ def _target_authority(
             if target["platform"] == "linux" and target["binary_format"] == "ELF"
             else []
         )
+        managed_routes = [
+            row
+            for row in toolchain_pack_catalog["routes"]
+            if row["target_id"] == target["id"]
+        ]
+        managed_pack_ids = list(
+            dict.fromkeys(
+                str(pack_id)
+                for route in managed_routes
+                for pack_id in route["pack_ids"]
+            )
+        )
         result.append(
             {
                 **target,
@@ -194,6 +207,8 @@ def _target_authority(
                 "archive_capable_toolchain_ids": [
                     row["id"] for row in matching_toolchains if row["archive_capable"]
                 ],
+                "managed_route_ids": [str(row["id"]) for row in managed_routes],
+                "managed_pack_ids": managed_pack_ids,
             }
         )
     return result
@@ -418,7 +433,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     coverage_universe = load_coverage_universe(coverage_path)
     coverage_universe["authority_path"] = _relative(root, coverage_path)
     recipes = [*native_recipes, *_source_authority(root)]
-    targets = _target_authority(root, native, toolchains)
+    toolchain_pack_catalog = load_toolchain_pack_catalog(root)
+    targets = _target_authority(root, native, toolchains, toolchain_pack_catalog)
     lane_registry = load_lane_registry(lane_path, target_path)
     lane_registry["authority_path"] = _relative(root, lane_path)
     width_studies = _width_study_authority(
@@ -428,7 +444,6 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     width_compilations = [compile_c_width(root)]
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]
-    toolchain_pack_catalog = load_toolchain_pack_catalog(root)
     body = {
         "schema_version": AUTHORITY_SCHEMA,
         "coverage_universe": coverage_universe,

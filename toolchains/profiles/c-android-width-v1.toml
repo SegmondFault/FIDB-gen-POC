@@ -1,0 +1,19 @@
+schema_version = "fidb-toolchain-profile/v1"
+id = "c-android-width-v1"
+label = "C Android width v1 · four ABIs × two NDK generations"
+language_id = "c"
+host_system = "linux"
+host_architecture = "x86_64"
+route_ids = [
+  "android-arm64-ndk-r27d-clang-api21",
+  "android-arm32-ndk-r27d-clang-api21",
+  "android-x86-64-ndk-r27d-clang-api21",
+  "android-x86-32-ndk-r27d-clang-api21",
+  "android-arm64-ndk-r29-clang-api21",
+  "android-arm32-ndk-r29-clang-api21",
+  "android-x86-64-ndk-r29-clang-api21",
+  "android-x86-32-ndk-r29-clang-api21",
+]
+external_policy = "report"
+purpose = "Acquire and qualify the official r27d LTS and r29 stable Android NDK compiler width across every supported ABI at an explicit API 21 baseline."
+authority = "coverage/c-top10-width-study.toml"

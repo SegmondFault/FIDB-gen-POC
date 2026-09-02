@@ -178,8 +178,8 @@ bits = 64
 catalog_state = "coverage-intent"
 evidence = ["coverage/universe.toml"]
 
-# Android remains viewer-only coverage intent.  These rows do not add recipes,
-# NDK routes, queue cells or claims that a compatible toolchain is installed.
+# Android routes use official checksum-pinned NDK archives on the Linux x86-64
+# host. Qualification state remains separate from this ABI authority.
 
 [[target]]
 id = "android-arm64-v8a-elf"
@@ -190,8 +190,8 @@ machine = "AArch64"
 binary_format = "ELF"
 endianness = "little"
 bits = 64
-catalog_state = "coverage-intent"
-evidence = ["targets/registry.toml"]
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/packs.toml", "toolchains/routes.toml"]
 
 [[target]]
 id = "android-armeabi-v7a-elf"
@@ -202,8 +202,8 @@ machine = "ARM"
 binary_format = "ELF"
 endianness = "little"
 bits = 32
-catalog_state = "coverage-intent"
-evidence = ["targets/registry.toml"]
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/packs.toml", "toolchains/routes.toml"]
 
 [[target]]
 id = "android-x86-64-elf"
@@ -214,8 +214,8 @@ machine = "x86-64"
 binary_format = "ELF"
 endianness = "little"
 bits = 64
-catalog_state = "coverage-intent"
-evidence = ["targets/registry.toml"]
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/packs.toml", "toolchains/routes.toml"]
 
 [[target]]
 id = "android-x86-32-elf"
@@ -226,8 +226,8 @@ machine = "x86"
 binary_format = "ELF"
 endianness = "little"
 bits = 32
-catalog_state = "coverage-intent"
-evidence = ["targets/registry.toml"]
+catalog_state = "reviewed-abi"
+evidence = ["toolchains/packs.toml", "toolchains/routes.toml"]
 
 [[target]]
 id = "macos-arm64-macho"

@@ -257,6 +257,28 @@ acquisition = "remote-worker"
 version_policy = "Pin MSVC toolset, Windows SDK, linker, CRT and x86 target together."
 rationale = "Legacy PE/COFF compatibility coverage."
 
+[[toolchain_requirement]]
+order = 21
+id = "android-x86-64-clang"
+target_id = "android-x86-64-elf"
+compiler_family = "llvm-clang"
+wave = "platform-expansion"
+worker_class = "linux-android-ndk"
+acquisition = "android-ndk"
+version_policy = "Pin Android NDK, Clang, API level, linker and runtime."
+rationale = "Android emulator and ChromeOS-compatible 64-bit x86 native breadth."
+
+[[toolchain_requirement]]
+order = 22
+id = "android-x86-32-clang"
+target_id = "android-x86-32-elf"
+compiler_family = "llvm-clang"
+wave = "platform-expansion"
+worker_class = "linux-android-ndk"
+acquisition = "android-ndk"
+version_policy = "Pin Android NDK, Clang, API level, linker and runtime."
+rationale = "Legacy Android emulator and device-native x86 breadth."
+
 [[family]]
 rank = 1
 id = "openssl"

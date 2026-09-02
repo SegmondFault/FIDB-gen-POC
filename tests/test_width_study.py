@@ -20,7 +20,7 @@ class WidthStudyTests(unittest.TestCase):
         self.assertEqual(document["scaling"]["comparison_family_counts"], [10, 20, 40, 80])
         self.assertEqual(document["calibration"]["sample_count"], 2)
         self.assertEqual(document["calibration"]["retained_bundle_bytes_p50"], 31_265_942)
-        self.assertEqual(len(document["toolchain_requirements"]), 20)
+        self.assertEqual(len(document["toolchain_requirements"]), 22)
         self.assertEqual(
             [
                 (row["order"], row["target_id"], row["compiler_family"])

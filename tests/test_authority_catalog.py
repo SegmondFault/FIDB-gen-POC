@@ -29,11 +29,11 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(len(document["source_digests"]["lanes_sha256"]), 64)
         self.assertEqual(len(document["toolchains"]), 41)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 29)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 31)
         self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 31)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["qualifications"]), 29)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 5)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 39)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["qualifications"]), 37)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 6)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
         self.assertEqual(len(document["native"]["routes"]), 11)
@@ -94,7 +94,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(width_study["readiness"]["queue_state"], "not-materialized")
         self.assertTrue(width_study["readiness"]["blockers"])
         requirements = width_study["toolchain_requirements"]
-        self.assertEqual(len(requirements), 20)
+        self.assertEqual(len(requirements), 22)
         self.assertEqual(requirements[0]["route_state"], "installed")
         self.assertEqual(requirements[1]["route_state"], "remote-required")
         self.assertEqual(requirements[2]["route_state"], "remote-required")
@@ -129,6 +129,16 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(targets["windows-x86-64-pecoff"]["toolchain_ids"], [])
         self.assertEqual(targets["android-arm64-v8a-elf"]["toolchain_ids"], [])
+        self.assertEqual(
+            targets["android-arm64-v8a-elf"]["managed_pack_ids"],
+            [
+                "android-ndk-r27d-linux-x86-64",
+                "android-ndk-r29-linux-x86-64",
+            ],
+        )
+        self.assertEqual(
+            len(targets["android-arm64-v8a-elf"]["managed_route_ids"]), 2
+        )
         self.assertEqual(targets["linux-riscv64-elf"]["toolchain_ids"], [])
 
     def test_catalog_contains_no_caller_supplied_command_field(self):
