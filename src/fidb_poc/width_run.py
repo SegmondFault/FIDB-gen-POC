@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import concurrent.futures
+import gzip
 import hashlib
 import json
 import multiprocessing
@@ -548,7 +549,7 @@ def _seed_group_sources(
 
 
 def _release_cell_scratch(group_root: Path) -> None:
-    """Drop reproducible bulk work while retaining logs and JVM user state."""
+    """Drop per-cell bulk; JVM state is released after the pool shuts down."""
     work = group_root / "work"
     targets = (
         work / "sources",
@@ -565,6 +566,65 @@ def _release_cell_scratch(group_root: Path) -> None:
             if target.resolve().parent != expected_parent.resolve():
                 raise PipelineError(f"width scratch target escaped its group: {target}")
             shutil.rmtree(target)
+
+
+def _release_jvm_scratch(group_root: Path) -> dict[str, int]:
+    """Archive Ghidra logs and drop its reproducible cache after JVM exit."""
+
+    work = group_root / "work"
+    user_root = work / "ghidra/user"
+    if not user_root.exists():
+        return {"user_bytes": 0, "archived_log_bytes": 0, "reclaimed_bytes": 0}
+    if (
+        user_root.is_symlink()
+        or user_root.resolve().parent != (work / "ghidra").resolve()
+    ):
+        raise PipelineError(f"refusing unsafe Ghidra user scratch target: {user_root}")
+    user_bytes = _directory_size(user_root)
+    log_sources = sorted(
+        path
+        for path in user_root.rglob("application.log*")
+        if path.is_file() and not path.is_symlink()
+    )
+    archive_root = work / "logs/ghidra-jvm"
+    archived_log_bytes = 0
+    if log_sources:
+        archive_root.mkdir(parents=True, exist_ok=True)
+    for index, source in enumerate(log_sources, start=1):
+        destination = archive_root / f"{index:03d}-{source.name}.gz"
+        temporary = destination.with_name(f".{destination.name}.part")
+        temporary.unlink(missing_ok=True)
+        try:
+            with source.open("rb") as input_stream, temporary.open("xb") as raw:
+                with gzip.GzipFile(
+                    filename=source.name,
+                    mode="wb",
+                    compresslevel=6,
+                    fileobj=raw,
+                    mtime=0,
+                ) as compressed:
+                    shutil.copyfileobj(input_stream, compressed)
+            temporary.replace(destination)
+            archived_log_bytes += destination.stat().st_size
+        finally:
+            temporary.unlink(missing_ok=True)
+    shutil.rmtree(user_root)
+    return {
+        "user_bytes": user_bytes,
+        "archived_log_bytes": archived_log_bytes,
+        "reclaimed_bytes": max(0, user_bytes - archived_log_bytes),
+    }
+
+
+def _release_pool_jvm_scratch(
+    scheduled: Iterable[tuple[int, Configuration, Path]],
+) -> dict[str, int]:
+    result = {"user_bytes": 0, "archived_log_bytes": 0, "reclaimed_bytes": 0}
+    for _index, _configuration, group_root in scheduled:
+        row = _release_jvm_scratch(group_root)
+        for name in result:
+            result[name] += row[name]
+    return result
 
 
 def _execute_cell(
@@ -772,6 +832,12 @@ def execute_width_run(
                 raise
             else:
                 executor.shutdown(wait=True)
+            jvm_scratch_cleanup = _release_pool_jvm_scratch(scheduled)
+            for measurement in measurements:
+                group_root = replay_root / f"group-{int(measurement['group']):03d}"
+                measurement["final_scratch_bytes"] = _directory_size(
+                    group_root / "work"
+                )
         cells, failures = _manifest_rows(manifests, plan.compilation)
         measurement_by_cell = {
             (str(row["route_id"]), str(row["treatment_id"])): row
@@ -801,6 +867,7 @@ def execute_width_run(
             "retained_bytes": sum(int(row["retained_bytes"]) for row in measurements),
             "peak_process_rss_bytes": sampler.peak_rss_bytes,
             "resource_samples": sampler.samples,
+            "jvm_scratch_cleanup": jvm_scratch_cleanup,
             "parallel_workers": parallel_workers,
             "manifest_sha256": [_sha256(path) for path in manifests],
             "outcomes": dict(sorted(outcomes.items())),

@@ -30,6 +30,7 @@ from .width_run import (
     _read_csv_rows,
     _seed_group_sources,
     _seed_source_cache,
+    _release_pool_jvm_scratch,
     _terminate_executor,
     compile_width_run_plan,
 )
@@ -308,6 +309,10 @@ def execute_width_benchmark(
             raise
         else:
             executor.shutdown(wait=True)
+        jvm_scratch_cleanup = _release_pool_jvm_scratch(scheduled)
+        for measurement in measurements:
+            group_root = run_root / f"group-{int(measurement['group']):03d}"
+            measurement["final_scratch_bytes"] = _directory_size(group_root / "work")
     semantic_cells, semantic_digest = _manifest_semantics(manifests)
     wall_time_ns = max(0, time.monotonic_ns() - started_ns)
     completed = sum(row["status"] == "complete" for row in semantic_cells)
@@ -328,6 +333,7 @@ def execute_width_benchmark(
         "failed_cells": len(groups) - completed,
         "peak_process_rss_bytes": sampler.peak_rss_bytes,
         "peak_scratch_bytes": sampler.peak_scratch_bytes,
+        "jvm_scratch_cleanup": jvm_scratch_cleanup,
         "retained_bytes": _directory_size(run_root),
         "signature_records": signature_records,
         "unique_signature_sum": unique_signature_sum,

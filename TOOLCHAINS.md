@@ -154,13 +154,20 @@ On `reference-host`, Linux currently sees about 94 GiB after the graphics alloca
 so the automatic starting width is eight workers.
 
 Successful cells discard reproducible bulk source, build and Ghidra-project
-scratch after measuring it, while retaining published artifacts, manifests,
-logs and JVM user evidence. A durable `replay-progress.json` checkpoint is
-rewritten after every returned cell. The completed run
+scratch after measuring it. After the process pool exits, application logs are
+gzip-archived under each group and the reproducible Ghidra user cache is
+discarded; the cleanup byte counts remain in the result. Published artifacts,
+manifests and diagnostics are retained. A durable `replay-progress.json`
+checkpoint is rewritten after every returned cell. The completed run
 writes `width-run.json` with wall time, peak and final scratch size, retained
 size, peak process RSS, per-cell failures, and coverage contribution. Per-cell
 FID signatures are retained for unique and marginal-coverage comparison; raw
 FIDB container hashes are not used as a proxy for function coverage.
+
+The 29-worker OpenSSL pressure benchmark reclaimed 516,191,925 bytes of JVM
+user state after archiving 10,166,655 bytes of application logs and retained
+241,859,821 bytes for the complete benchmark directory. Cleanup happens only
+after every worker process exits, never while its embedded JVM is live.
 
 Every completed cell publishes a deterministic `fid-signatures/*.jsonl`
 ledger. Its comparison identity is Ghidra language, full hash, specific hash,

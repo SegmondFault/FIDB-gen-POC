@@ -1,4 +1,5 @@
 import contextlib
+import gzip
 import io
 import json
 import tempfile
@@ -13,6 +14,7 @@ from fidb_poc.width_run import (
     _groups,
     _read_csv_rows,
     _release_cell_scratch,
+    _release_jvm_scratch,
     _replay_comparison,
     _terminate_executor,
     compile_width_run_plan,
@@ -167,6 +169,26 @@ class WidthRunTests(unittest.TestCase):
 
             self.assertEqual(rows[0]["status"], "complete")
             self.assertGreater(len(rows[0]["analysis_artifact_path"]), 131_072)
+
+    def test_jvm_scratch_release_archives_logs_and_drops_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            group = Path(temporary) / "group-001"
+            user = group / "work/ghidra/user"
+            application = user / ".config/ghidra/version/application.log"
+            cache = user / ".cache/ghidra/packed-db-cache/cache.gbf"
+            application.parent.mkdir(parents=True)
+            cache.parent.mkdir(parents=True)
+            application.write_text("diagnostic\n" * 100, encoding="utf-8")
+            cache.write_bytes(b"cache" * 100)
+
+            result = _release_jvm_scratch(group)
+
+            archives = list((group / "work/logs/ghidra-jvm").glob("*.gz"))
+            self.assertFalse(user.exists())
+            self.assertEqual(len(archives), 1)
+            with gzip.open(archives[0], "rt", encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), "diagnostic\n" * 100)
+            self.assertGreater(result["reclaimed_bytes"], 0)
 
     def test_width_cell_retains_pipeline_stage_timing(self):
         configuration = _groups(compile_width_run_plan(self.root, canary=True))[0]
