@@ -430,6 +430,19 @@ class LocalApiTests(unittest.TestCase):
         )
         self.assertTrue(document["plans"])
 
+    def test_lane_inventory_endpoint_is_read_only_and_rejects_query(self):
+        status, document, _ = self.request("GET", "/api/v1/lane-inventory")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(document["schema_version"], "fidb-lane-inventory/v1")
+        self.assertEqual(document["detection_mode"], "read-only-metadata")
+        self.assertEqual(document["summary"]["materialized_generations"], 0)
+        self.assertFalse((self.root / "var/fidb-lanes").exists())
+
+        status, document, _ = self.request("GET", "/api/v1/lane-inventory?path=outside")
+        self.assertEqual(status, 400)
+        self.assertEqual(document["error"]["code"], "invalid-query")
+
     def test_capabilities_detection_never_mutates_cache(self):
         managed_cache = self.root / capabilities.TOOLCHAIN_CACHE
         result = capabilities.detect_capabilities(self.root, environment={"PATH": ""})

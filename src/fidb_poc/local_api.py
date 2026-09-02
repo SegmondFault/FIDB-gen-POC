@@ -29,6 +29,7 @@ from .coordinator import (
     CoordinatorError,
     QueueConfig,
 )
+from .lane_inventory import detect_lane_inventory
 from .operations_policy import evaluate_operations
 from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
 
@@ -50,6 +51,7 @@ _GET_PATHS = {
     "/api/v1/events",
     "/api/v1/capabilities",
     "/api/v1/authority",
+    "/api/v1/lane-inventory",
     "/api/v1/timings",
     "/api/v1/preflight",
 }
@@ -556,6 +558,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self._json_response(
                 HTTPStatus.OK,
                 authority_catalog(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
+        if path == "/api/v1/lane-inventory":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "lane inventory takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                detect_lane_inventory(self.api_server.config.project_root),
                 origin=origin,
             )
             return
