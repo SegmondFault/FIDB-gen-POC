@@ -1,0 +1,126 @@
+schema_version = "fidb-toolchain-qualification-snapshot/v1"
+id = "c-top10-linux-reference-host-2026-09-02"
+profile_id = "c-top10-linux"
+observed_at = "2026-09-02T08:14:20Z"
+source_revision = "17886c1c211c6fc78cda25c1c96cb2b507c83375"
+host_id = "reference-host"
+host_system = "linux"
+host_architecture = "x86_64"
+kernel_release = "7.1.8-1-cachyos"
+catalog_digest = "207d63ea2e7111819a6501525c7d08a04e2836bbaa48376fbea2ff96646b2dd3"
+profile_digest = "e8ea48e13bacaf0bb89c8dcdd71e490a9c34c9864f636471b6f03d4080f22cab"
+profile_state = "qualified-external-required"
+qualification_scope = "fixed C and C++17 compilation, target-object identity, and static ar archive"
+qualified_routes = 9
+missing_qualifications = 0
+broken_routes = 0
+deferred_external_routes = ["macos-arm64-apple-clang"]
+
+[storage]
+selected_archive_bytes = 753465840
+selected_extracted_file_bytes = 3852132920
+selected_pack_count = 9
+selected_prepared_pack_count = 9
+store_downloads_allocated_bytes = 2766053376
+store_prepared_allocated_bytes = 16102191104
+store_qualified_allocated_bytes = 184320
+store_totals_include_unselected_retained_material = true
+
+[[route]]
+id = "linux-x86-64-gcc"
+target_id = "linux-x86-64-elf"
+compiler_family = "gcc"
+compiler_version = "x86_64-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "72e0c8c40caede3038be8a24de1aaefcc0eeff2030e427eea74af8fc27a84433"
+qualification_record_digest = "1d3980098d2341abe20f59dc9cb49854e1c5011a0ff27205443c7c85d7f240b0"
+languages = ["c", "cpp"]
+object_identity = "ELF64 little-endian machine 62 (x86-64)"
+archive_format = "ar"
+
+[[route]]
+id = "windows-x86-64-llvm-mingw"
+target_id = "windows-x86-64-pecoff"
+compiler_family = "llvm-clang"
+compiler_version = "clang version 23.1.0 (llvm-project ea7d852a70e8bdfaf601d6626a760f9771b2c4b4)"
+route_material_digest = "ac6d2586f1aa05de0ccae198bcbaf30185b768c359346e992ba45bbff8b1fe21"
+qualification_record_digest = "ac3f50d3715f9066db2c8930ada88ce936252c5c39a9ebea58a43b8ec7ee0cec"
+languages = ["c", "cpp"]
+object_identity = "PE/COFF machine 34404 (AMD64)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-arm32-gcc"
+target_id = "linux-arm32-elf"
+compiler_family = "gcc"
+compiler_version = "arm-buildroot-linux-gnueabihf-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "214f018369b7402bb5d040e0347278a8d4feaab6387820bfbd5dd037542b36a5"
+qualification_record_digest = "1b676cbe7e250434f498f84576c7a106628110177bb80cb793eb109eb98f1e8b"
+languages = ["c", "cpp"]
+object_identity = "ELF32 little-endian machine 40 (ARM)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-aarch64-gcc"
+target_id = "linux-aarch64-elf"
+compiler_family = "gcc"
+compiler_version = "aarch64-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "946ce98fb81abe17a3db6ee9303937b26c482501542556f621caa3995d0e1789"
+qualification_record_digest = "6d38d2ff22b974653abb750dfddf8fb21df7865fca9292d6feb0dfb1e44a2fc6"
+languages = ["c", "cpp"]
+object_identity = "ELF64 little-endian machine 183 (AArch64)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-mips32-be-gcc"
+target_id = "linux-mips32-be-elf"
+compiler_family = "gcc"
+compiler_version = "mips-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "12872aee2010aaf2751eac4d75a7add320615375f3b36ff4c95c2eb752c81c65"
+qualification_record_digest = "2df6eaa16a3ad90637044b2199c8541ff58a2a35a297afc4dbd731750ddf8b87"
+languages = ["c", "cpp"]
+object_identity = "ELF32 big-endian machine 8 (MIPS)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-mips32-le-gcc"
+target_id = "linux-mips32-le-elf"
+compiler_family = "gcc"
+compiler_version = "mipsel-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "f4ebced36c177f2822b281a1bc2650bb1e3ec59b92f8f3f0efcc58a341365835"
+qualification_record_digest = "dbad32c9d5596aac3eaa7031a2c638ca544a7aeb22da47a1db342689f9c897c7"
+languages = ["c", "cpp"]
+object_identity = "ELF32 little-endian machine 8 (MIPS)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-powerpc32-be-gcc"
+target_id = "linux-powerpc32-be-elf"
+compiler_family = "gcc"
+compiler_version = "powerpc-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "ed947064c170ce5e00dbb673dab046ed319d949db9aeb0a2da4c6da33d1ab33c"
+qualification_record_digest = "dde3e5ce4806b2a1d8854719f83a07cdddb752b37f526b51f46c2e86e8beaefc"
+languages = ["c", "cpp"]
+object_identity = "ELF32 big-endian machine 20 (PowerPC)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-sh32-gcc"
+target_id = "linux-sh32-le-elf"
+compiler_family = "gcc"
+compiler_version = "sh4-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "15841cbcadf9e078af96be23508594e6490e63414df78e082b7a68671c1f6b62"
+qualification_record_digest = "510f4842d2751c3aee2aa9c9997e3923229a591f110adef843c718d9f285e0c8"
+languages = ["c", "cpp"]
+object_identity = "ELF32 little-endian machine 42 (SuperH)"
+archive_format = "ar"
+
+[[route]]
+id = "linux-m68k-gcc"
+target_id = "linux-m68k-elf"
+compiler_family = "gcc"
+compiler_version = "m68k-buildroot-linux-gnu-gcc.br_real (Buildroot 2021.11-18033-g83947c7bb6) 14.3.0"
+route_material_digest = "5f31baa399988068f3696e07793e60d1623f288cf1b8aca650ba07948b77c9e4"
+qualification_record_digest = "ee1444d0ab19fc09e9f4bafaa55049caa6c98eb554d95a7e3818a1e0b34081cf"
+languages = ["c", "cpp"]
+object_identity = "ELF32 big-endian machine 4 (M68K)"
+archive_format = "ar"

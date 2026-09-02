@@ -228,8 +228,15 @@ All operations emit stable JSON. `plan` and `status` are read-only. The mutation
 commands form a fixed lifecycle: checksum-pinned pull, traversal-safe
 preparation, optional reviewed composition, and fixed route-specific
 qualification. They accept reviewed IDs, never caller-supplied URLs or
-commands. The nine archives total 753,465,840 bytes compressed; the current
-3,013,863,360-byte prepared estimate is planning evidence, not a measurement.
+commands. The nine archives total 753,465,840 bytes compressed; their safely
+extracted files measured 3,852,132,920 bytes on 2026-09-02.
+
+All nine Linux-managed routes passed their fixed C, C++17, target-object, and
+static-archive qualification probes on `reference-host`. The committed audit
+snapshot is
+[`toolchains/evidence/c-top10-linux-reference-host-2026-09-02.toml`](toolchains/evidence/c-top10-linux-reference-host-2026-09-02.toml).
+The Apple route remains deliberately external and unqualified, and no library
+batch was run as part of this qualification.
 
 The public project does not copy or redistribute Xcode or an Apple SDK. The
 definition in `toolchains/external/` keeps those tools on Apple hardware and

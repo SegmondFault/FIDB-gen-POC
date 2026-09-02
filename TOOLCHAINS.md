@@ -21,10 +21,11 @@ implementations:
 | Windows x86-64 | checksum-pinned llvm-mingw | PE/COFF |
 | macOS ARM64 | native Apple worker defined in `toolchains/external/` | Mach-O |
 
-The nine downloadable archives total 753,465,840 bytes. Their current
-prepared-size estimate is 3,013,863,360 bytes. The macOS worker's Xcode,
-Ghidra, build scratch, and temporary output are additional host-local capacity,
-not part of the Linux pack estimate.
+The nine downloadable archives total 753,465,840 bytes. Their prepared files
+measure 3,852,132,920 bytes after safe extraction. Filesystem allocation and
+retained packs outside this profile are separate totals. The macOS worker's
+Xcode, Ghidra, build scratch, and temporary output are additional host-local
+capacity, not part of the Linux pack measurement.
 
 `c-top10-reference` uses the same ten target requirements and adds native MSVC
 as a second Windows implementation. Cross-built PE/COFF never claims native
@@ -65,6 +66,23 @@ Profile state is intentionally more precise than installed/not-installed:
 `recommended_next_action` is the machine-followable transition. For the
 current top-ten profile, the final transition is `start-external-workers`; it
 does not mean that a run should be armed.
+
+## Current non-Apple qualification
+
+On 2026-09-02, `reference-host` qualified all nine Linux-managed routes at revision
+`17886c1c211c6fc78cda25c1c96cb2b507c83375`. Each route emitted both C and
+C++17 objects with the expected target identity and a static `ar` archive.
+The result was 9 qualified routes, 0 missing qualifications, 0 broken routes,
+and one deliberately deferred external Apple route. No library or FIDB batch
+was executed.
+
+The compact audit record is
+`toolchains/evidence/c-top10-linux-reference-host-2026-09-02.toml`. Full records and
+smoke objects remain host-local beneath `var/fidb-toolchains/qualified/` so a
+clone cannot inherit qualification without possessing and checking the tools.
+Re-run `status`, `qualify`, and `status` on another Linux x86-64 host; matching
+profile, route-material, and qualification-record digests provide the
+reproducibility comparison.
 
 ## Native Apple worker
 

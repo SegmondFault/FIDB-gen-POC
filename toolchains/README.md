@@ -22,16 +22,22 @@ digest excludes cache state so acquisition does not change experiment identity.
 
 ## Current profiles
 
-| Profile | Requirements / routes | Download packs | Exact bytes | Prepared estimate | External |
+| Profile | Requirements / routes | Download packs | Exact bytes | Prepared files | External |
 | --- | ---: | ---: | ---: | ---: | --- |
-| `c-canary` | 1 / 1 | 1 | 93,215,060 | 372,860,240 | none |
-| `c-top10-linux` | 10 / 10 | 9 | 753,465,840 | 3,013,863,360 | native Apple Clang |
-| `c-top10-reference` | 10 / 11 | 9 | 753,465,840 | 3,013,863,360 | Apple Clang + native MSVC definition gap |
+| `c-canary` | 1 / 1 | 1 | 93,215,060 | 460,835,547 | none |
+| `c-top10-linux` | 10 / 10 | 9 | 753,465,840 | 3,852,132,920 | native Apple Clang |
+| `c-top10-reference` | 10 / 11 | 9 | 753,465,840 | 3,852,132,920 | Apple Clang + native MSVC definition gap |
 
 The nine packs are eight Bootlin GCC/binutils/glibc target SDKs and one
 llvm-mingw/Clang/LLD/MinGW UCRT pack. macOS ARM64 is not a pack: its reviewed
 definition is `external/macos-arm64-apple-clang.toml`, and Xcode/SDK use stays
-on the Apple worker.
+on the Apple worker. The prepared figures are measured extracted-file bytes
+from the 2026-09-02 qualification cycle, not four-times-compressed estimates.
+
+`evidence/c-top10-linux-reference-host-2026-09-02.toml` records the successful
+nine-route qualification at the exact reviewed revision. See
+`evidence/README.md` for the distinction between committed audit evidence and
+host-local current readiness.
 
 ## Operator lifecycle
 
