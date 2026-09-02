@@ -4,6 +4,7 @@ artifacts/libs/
 # compiled malware corpus never gets pushed -- fidb/fidbf output + recipes do
 artifacts/malware/
 artifacts/runs/
+artifacts/width-runs/
 var/
 dist/
 build/

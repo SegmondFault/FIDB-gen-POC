@@ -104,6 +104,32 @@ feasible build/analysis cells and 108 full-path executions after two replays;
 the 4,800-build theoretical one-family maximum remains visible as capacity
 intent, not executable work.
 
+Preview the exact measured-run schedule without downloading or compiling:
+
+```sh
+fidb-poc run-width --project-root .
+```
+
+The command is disarmed by default. The first live gate is the fixed zlib
+baseline canary across all nine qualified non-Apple routes:
+
+```sh
+fidb-poc run-width --project-root . --canary --execute
+```
+
+Only after that succeeds should the complete feasible width be run:
+
+```sh
+fidb-poc run-width --project-root . --execute
+```
+
+Each live invocation creates a new immutable run directory under
+`artifacts/width-runs/c-width-v1/`; it never replaces an earlier run. The full
+run executes the 54 applicability-approved route/profile cells twice and
+writes `width-run.json` with wall time, peak and final scratch size, retained
+size, peak process RSS, per-cell failures, coverage contribution, and replay
+comparison.
+
 ## Current non-Apple qualification
 
 On 2026-09-02, `reference-host` qualified all nine Linux-managed routes at revision

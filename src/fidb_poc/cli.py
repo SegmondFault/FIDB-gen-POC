@@ -72,6 +72,52 @@ def _compile_width_main(argv: list[str]) -> int:
         return 1
 
 
+def _run_width_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc run-width",
+        description=(
+            "Preview or explicitly execute the applicability-compiled C width."
+        ),
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument(
+        "--canary",
+        action="store_true",
+        help="select only the nine-route baseline O2 canary and one replay",
+    )
+    result.add_argument(
+        "--execute",
+        action="store_true",
+        help="perform downloads, builds and analysis (otherwise preview only)",
+    )
+    result.add_argument("--verbose", "-v", action="store_true")
+    arguments = result.parse_args(argv)
+    try:
+        from .width_run import (
+            compile_width_run_plan,
+            execute_width_run,
+            width_run_preview,
+        )
+
+        if not arguments.execute:
+            plan = compile_width_run_plan(
+                arguments.project_root, canary=arguments.canary
+            )
+            print(json.dumps(width_run_preview(plan), indent=2, sort_keys=True))
+            return 0
+        outcome, path = execute_width_run(
+            arguments.project_root,
+            canary=arguments.canary,
+            progress=print,
+            verbose=arguments.verbose,
+        )
+        print(f"Width result: {path}")
+        return 0 if outcome["state"] == "measured-complete" else 1
+    except (OSError, ValueError, PipelineError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description=(
@@ -215,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
         return _resolve_plan_main(tokens[1:])
     if tokens and tokens[0] == "compile-width":
         return _compile_width_main(tokens[1:])
+    if tokens and tokens[0] == "run-width":
+        return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "queue":
         from .queue_cli import main as queue_main
 
