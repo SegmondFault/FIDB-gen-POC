@@ -10,6 +10,7 @@ import tomllib
 from .config import load_configuration
 from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
+from .lane_registry import load_lane_registry
 from .plan_request import (
     REQUEST_SCHEMA,
     _factor_variants,
@@ -24,7 +25,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v8"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v9"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -412,11 +413,14 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     toolchains = _toolchain_authority(root)
     factors, variants, sensitivity_digests = _sensitivity_authority(root)
     target_path = root / "targets/registry.toml"
+    lane_path = root / "lanes/registry.toml"
     coverage_path = root / "coverage/universe.toml"
     coverage_universe = load_coverage_universe(coverage_path)
     coverage_universe["authority_path"] = _relative(root, coverage_path)
     recipes = [*native_recipes, *_source_authority(root)]
     targets = _target_authority(root, native, toolchains)
+    lane_registry = load_lane_registry(lane_path, target_path)
+    lane_registry["authority_path"] = _relative(root, lane_path)
     width_studies = _width_study_authority(
         root, recipes, native, targets, coverage_universe
     )
@@ -434,6 +438,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "recipes": recipes,
         "native": native,
         "targets": targets,
+        "lane_registry": lane_registry,
         "toolchains": toolchains,
         "toolchain_pack_catalog": toolchain_pack_catalog,
         "factors": factors,
@@ -443,6 +448,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "recipes": "recipes/",
             "routes": "worker.toml",
             "targets": "targets/registry.toml",
+            "lanes": "lanes/registry.toml",
             "toolchains": "toolchains/registry.toml",
             "toolchain_packs": "toolchains/packs.toml + compilers.toml + routes.toml + inputs.toml + qualifications.toml + profiles/",
             "factors": "sensitivity/factors.toml",
@@ -457,6 +463,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "source_digests": {
             **sensitivity_digests,
             "targets_sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),
+            "lanes_sha256": hashlib.sha256(lane_path.read_bytes()).hexdigest(),
             "coverage_universe_sha256": hashlib.sha256(
                 coverage_path.read_bytes()
             ).hexdigest(),

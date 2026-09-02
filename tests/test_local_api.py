@@ -63,6 +63,7 @@ class LocalApiTests(unittest.TestCase):
         for name in (
             "batches",
             "coverage",
+            "lanes",
             "plans",
             "recipes",
             "sensitivity",
@@ -404,9 +405,10 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v8")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v9")
         self.assertEqual(len(document["recipes"]), 5)
-        self.assertEqual(len(document["targets"]), 22)
+        self.assertEqual(len(document["targets"]), 24)
+        self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["toolchains"]), 41)
         self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 29)

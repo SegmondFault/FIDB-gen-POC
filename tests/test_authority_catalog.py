@@ -12,9 +12,22 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v8")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v9")
         self.assertEqual(len(document["recipes"]), 5)
-        self.assertEqual(len(document["targets"]), 22)
+        self.assertEqual(len(document["targets"]), 24)
+        self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
+        self.assertEqual(
+            {
+                row["target_id"]
+                for row in next(
+                    lane
+                    for lane in document["lane_registry"]["lanes"]
+                    if lane["id"] == "linux-x86"
+                )["sublanes"]
+            },
+            {"linux-x86-32-elf", "linux-x86-64-elf"},
+        )
+        self.assertEqual(len(document["source_digests"]["lanes_sha256"]), 64)
         self.assertEqual(len(document["toolchains"]), 41)
         self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 29)
         self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
