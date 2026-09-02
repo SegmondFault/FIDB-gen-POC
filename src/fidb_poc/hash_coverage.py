@@ -12,13 +12,15 @@ from typing import Callable, Iterable
 SCHEMA = "fidb-hash-coverage/v1"
 MANIFEST_FIELD_LIMIT = 16 * 1024 * 1024
 SIGNATURE_FIELDS = (
+    "target_id",
     "language",
     "full_hash",
     "specific_hash",
     "specific_hash_additional_size",
     "code_unit_size",
 )
-Signature = tuple[str, str, str, int, int]
+RawSignature = tuple[str, str, str, int, int]
+Signature = tuple[str, str, str, str, int, int]
 
 
 def _sha256(path: Path) -> str:
@@ -29,8 +31,8 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_signatures(path: Path) -> set[Signature]:
-    signatures: set[Signature] = set()
+def load_signatures(path: Path) -> set[RawSignature]:
+    signatures: set[RawSignature] = set()
     with path.open(encoding="utf-8") as stream:
         for line_number, line in enumerate(stream, start=1):
             try:
@@ -214,18 +216,20 @@ def analyze_signature_coverage(
                 raise ValueError("FID signature ledger escapes its run group")
             if _sha256(signature_path) != row["fid_signatures_sha256"]:
                 raise ValueError(f"FID signature digest differs: {signature_path}")
-            signatures = load_signatures(signature_path)
-            if len(signatures) != int(row["fid_unique_signatures"]):
+            raw_signatures = load_signatures(signature_path)
+            if len(raw_signatures) != int(row["fid_unique_signatures"]):
                 raise ValueError(
                     f"FID unique signature count differs: {signature_path}"
                 )
             route = routes[row["route"]]
+            target_id = str(route["target_id"])
+            signatures = {(target_id, *signature) for signature in raw_signatures}
             cost = costs.get((row["route"], row["treatment"]), {})
             cells.append(
                 {
                     "cell_id": f"{row['route']}/{row['treatment']}",
                     "route_id": row["route"],
-                    "target_id": str(route["target_id"]),
+                    "target_id": target_id,
                     "compiler_id": str(route["compiler_id"]),
                     "compiler_family": str(route["compiler_family"]),
                     "treatment_id": row["treatment"],
@@ -238,7 +242,10 @@ def analyze_signature_coverage(
                 }
             )
     all_signatures = _union(cell["signatures"] for cell in cells)
-    full_hashes = {(signature[0], signature[1]) for signature in all_signatures}
+    full_hashes = {
+        (signature[0], signature[1], signature[2])
+        for signature in all_signatures
+    }
     pairwise = _pairwise_same_target(cells)
     compiler_marginals = _member_marginals(
         cells,

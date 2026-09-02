@@ -158,6 +158,43 @@ class HashCoverageTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "empty"):
                 load_signatures(path)
 
+    def test_equal_numeric_hashes_on_different_targets_do_not_collapse(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first = self._manifest(
+                root,
+                "linux-route",
+                [("0000000000000001", "1000000000000001")],
+            )
+            second = self._manifest(
+                root,
+                "windows-route",
+                [("0000000000000001", "1000000000000001")],
+            )
+            result = analyze_signature_coverage(
+                [first, second],
+                {
+                    "routes": [
+                        {
+                            "id": "linux-route",
+                            "target_id": "linux-x86-64-elf",
+                            "compiler_id": "gcc-14",
+                            "compiler_family": "gcc",
+                        },
+                        {
+                            "id": "windows-route",
+                            "target_id": "windows-x86-64-pecoff",
+                            "compiler_id": "clang-23",
+                            "compiler_family": "llvm-clang",
+                        },
+                    ]
+                },
+            )
+
+        self.assertEqual(result["comparison_identity"][0], "target_id")
+        self.assertEqual(result["totals"]["unique_full_hashes"], 2)
+        self.assertEqual(result["totals"]["unique_signatures"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
