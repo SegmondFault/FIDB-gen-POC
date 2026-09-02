@@ -663,6 +663,8 @@ export type AuthorityTarget = {
   toolchain_ids: string[];
   source_capable_toolchain_ids: string[];
   archive_capable_toolchain_ids: string[];
+  managed_route_ids: string[];
+  managed_pack_ids: string[];
 };
 
 export type AuthorityLaneSublane = {
@@ -672,7 +674,7 @@ export type AuthorityLaneSublane = {
   definition_state: 'mapped' | 'unresolved';
   ghidra_language_ids: string[];
   compiler_spec_ids: string[];
-  target: Omit<AuthorityTarget, 'native_route_ids' | 'toolchain_ids' | 'source_capable_toolchain_ids' | 'archive_capable_toolchain_ids'>;
+  target: Omit<AuthorityTarget, 'native_route_ids' | 'toolchain_ids' | 'source_capable_toolchain_ids' | 'archive_capable_toolchain_ids' | 'managed_route_ids' | 'managed_pack_ids'>;
 };
 
 export type AuthorityLane = {

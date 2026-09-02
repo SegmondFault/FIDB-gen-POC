@@ -1776,14 +1776,17 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
       </div>
       <div className="lane-grid">{lanes.map(lane => {
         const mapped = lane.sublanes.filter(sublane => sublane.definition_state === 'mapped').length;
+        const targetIds = new Set(lane.sublanes.map(sublane => sublane.target_id));
+        const buildRoutes = [...plannedPackRouteById.values()].filter(route => targetIds.has(route.target_id));
+        const qualifiedBuildRoutes = buildRoutes.filter(route => route.state === 'qualified').length;
         const databases = laneDatabases.filter(database => database.lane_id === lane.id);
         const raw = databases.filter(database => database.kind === 'raw').length;
         const compact = databases.filter(database => database.kind === 'compact').length;
         return <article className={`lane-card ${databases.length ? 'materialized' : ''}`} key={lane.id}>
-          <header><div><strong>{lane.label}</strong><small>{lane.id} · {lane.platform} / {lane.architecture_family}</small></div><span className="lane-count">{mapped}/{lane.sublanes.length} mapped</span></header>
+          <header><div><strong>{lane.label}</strong><small>{lane.id} · {lane.platform} / {lane.architecture_family}</small></div><span className="lane-count">{mapped}/{lane.sublanes.length} mapped · {qualifiedBuildRoutes}/{buildRoutes.length} routes ready</span></header>
           <p>{lane.description}</p>
           <div className="lane-sublane-list">{lane.sublanes.map(sublane => <div key={sublane.id}><span className={`cap-dot ${sublane.definition_state === 'mapped' ? 'ready' : 'warning'}`} /><div><strong>{sublane.target.label}</strong><small>{sublane.id}</small></div><code>{sublane.target.bits}-bit · {sublane.target.endianness} · {sublane.target.binary_format}</code><b>{sublane.definition_state}</b></div>)}</div>
-          <footer>One analyst pack · {lane.sublanes.length} internal selector{lane.sublanes.length === 1 ? '' : 's'} · {raw} raw / {compact} compact generations</footer>
+          <footer>One analyst pack · {lane.sublanes.length} internal selector{lane.sublanes.length === 1 ? '' : 's'} · {buildRoutes.length ? `${qualifiedBuildRoutes}/${buildRoutes.length} executable build routes` : 'no executable build route yet'} · {raw} raw / {compact} compact generations</footer>
         </article>;
       })}</div>
       {laneDatabases.length > 0 && <div className="lane-database-ledger"><header><span>DISCOVERED MANAGED DATABASES</span><span>GENERATION</span><span>EVIDENCE</span><span>STORAGE</span><span>ADMISSION</span></header>{laneDatabases.map(database => <article key={database.path}><div><strong>{database.lane_id}</strong><small>{database.path}</small></div><code>{database.generation_id}</code><span><b>{database.kind}</b><small>{database.raw_observations.toLocaleString()} occurrences{database.unique_signatures === null ? '' : ` · ${database.unique_signatures.toLocaleString()} unique`}</small></span><strong>{formatBytes(database.bytes)}</strong><span className={`evidence-badge ${database.active ? 'ready' : 'cold'}`}>{database.active ? 'active' : database.ecological_validation_state.replaceAll('-', ' ')}</span></article>)}</div>}
