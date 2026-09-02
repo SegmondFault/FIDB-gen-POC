@@ -18,6 +18,7 @@ from fidb_poc.width_run import (
     _replay_comparison,
     _terminate_executor,
     compile_width_run_plan,
+    default_width_workers,
     width_run_preview,
 )
 
@@ -103,6 +104,28 @@ class WidthRunTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIsNone(document["ghidra_heap_mib"])
         self.assertEqual(document["java_tool_options"], "")
+
+    def test_default_workers_select_measured_knee_with_memory_headroom(self):
+        visible = int(93.93 * 1024**3)
+
+        self.assertEqual(
+            default_width_workers(
+                logical_cpus=32, available_memory_bytes=visible, heap_mib=4096
+            ),
+            20,
+        )
+        self.assertEqual(
+            default_width_workers(
+                logical_cpus=32, available_memory_bytes=visible, heap_mib=8192
+            ),
+            10,
+        )
+        self.assertEqual(
+            default_width_workers(
+                logical_cpus=32, available_memory_bytes=6 * 1024**3, heap_mib=4096
+            ),
+            1,
+        )
 
     def test_replay_comparison_separates_artifact_fidb_and_semantics(self):
         baseline = {

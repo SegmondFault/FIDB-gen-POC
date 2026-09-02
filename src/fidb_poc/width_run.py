@@ -241,19 +241,36 @@ def _groups(plan: WidthRunPlan) -> tuple[Configuration, ...]:
     )
 
 
-def default_width_workers() -> int:
-    """Choose a conservative bound for concurrent embedded Ghidra JVMs."""
-    cpu_bound = max(1, (os.cpu_count() or 1) // 4)
-    memory_bytes = 0
-    try:
-        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
-            if line.startswith("MemAvailable:"):
-                memory_bytes = int(line.split()[1]) * 1024
-                break
-    except (OSError, ValueError, IndexError):
-        pass
-    memory_bound = max(1, memory_bytes // (8 * 1024**3)) if memory_bytes else 1
-    return min(12, cpu_bound, memory_bound)
+def default_width_workers(
+    *,
+    heap_mib: int | None = DEFAULT_WIDTH_GHIDRA_HEAP_MIB,
+    logical_cpus: int | None = None,
+    available_memory_bytes: int | None = None,
+) -> int:
+    """Choose the measured throughput knee while preserving memory headroom."""
+
+    cpus = max(1, logical_cpus if logical_cpus is not None else (os.cpu_count() or 1))
+    cpu_bound = max(1, (cpus * 5 + 7) // 8)
+    memory_bytes = available_memory_bytes
+    if memory_bytes is None:
+        memory_bytes = 0
+        try:
+            for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+                if line.startswith("MemAvailable:"):
+                    memory_bytes = int(line.split()[1]) * 1024
+                    break
+        except (OSError, ValueError, IndexError):
+            pass
+    per_worker_bytes = (
+        8 * 1024**3 if heap_mib is None else max(3 * 1024**3, int(heap_mib) * 1024**2)
+    )
+    reserve_bytes = 6 * 1024**3
+    memory_bound = (
+        max(1, max(0, memory_bytes - reserve_bytes) // per_worker_bytes)
+        if memory_bytes
+        else 1
+    )
+    return min(20, cpu_bound, memory_bound)
 
 
 def width_run_preview(
@@ -263,7 +280,9 @@ def width_run_preview(
     heap_mib: int | None = DEFAULT_WIDTH_GHIDRA_HEAP_MIB,
     core_limit: int | None = None,
 ) -> dict[str, object]:
-    parallel_workers = default_width_workers() if workers is None else workers
+    parallel_workers = (
+        default_width_workers(heap_mib=heap_mib) if workers is None else workers
+    )
     if parallel_workers < 1 or parallel_workers > 32:
         raise ValueError("width workers must be between 1 and 32")
     configured_java_options = java_options(heap_mib, core_limit, inherited="")
@@ -721,7 +740,9 @@ def execute_width_run(
     root = Path(project_root).expanduser().resolve()
     plan = compile_width_run_plan(root, canary=canary, authority_id=authority_id)
     announce = progress or (lambda _message: None)
-    parallel_workers = default_width_workers() if workers is None else workers
+    parallel_workers = (
+        default_width_workers(heap_mib=heap_mib) if workers is None else workers
+    )
     if parallel_workers < 1 or parallel_workers > 32:
         raise ValueError("width workers must be between 1 and 32")
     run_root = _validated_run_root(root, str(plan.compilation["id"]), _run_id(plan))

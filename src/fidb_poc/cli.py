@@ -121,7 +121,7 @@ def _run_width_main(argv: list[str]) -> int:
         type=int,
         help=(
             "bounded parallel cell workers "
-            "(default: memory/CPU-aware and capped at 12; explicit maximum: 32)"
+            "(default: memory/CPU-aware and capped at 20; explicit maximum: 32)"
         ),
     )
     heap = result.add_mutually_exclusive_group()

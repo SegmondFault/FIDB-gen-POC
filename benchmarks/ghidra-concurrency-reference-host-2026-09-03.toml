@@ -1,0 +1,67 @@
+schema_version = "fidb-performance-evidence/v1"
+id = "ghidra-concurrency-reference-host-2026-09-03"
+host = "reference-host"
+subject = "openssl-3.5.8"
+ghidra_version = "12.1.2"
+java_major = 21
+logical_cpus = 32
+visible_memory_gib = 93.93
+ghidra_heap_mib = 4096
+decision = "Use 20 as the automatic worker ceiling on this 32-thread, 94 GiB host. Keep 29 as explicit burst mode: it increased records/hour by 20.94% over the 20-worker case for 29.41% more peak RSS. Retain at least 6 GiB host headroom and scale down automatically for larger heaps or smaller hosts."
+caveat = "The 10, 20 and 29 cases contain progressively broader route sets, so route-dependent record counts confound direct hashes/hour comparison. They establish safe pressure bounds and a throughput knee, not a universal scaling curve; a fixed-cell sweep remains a follow-up experiment."
+
+[[case]]
+id = "heap4096-ten-workers"
+route_count = 10
+workers = 10
+wall_time_ns = 843186843488
+peak_process_rss_bytes = 24613445632
+peak_scratch_bytes = 1385697280
+signature_records = 133052
+unique_signature_sum = 97254
+signature_records_per_wall_hour = 568067.6871315732
+unique_signature_sum_per_wall_hour = 415227.54144465335
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-ten-workers-20260902T211711Z-4b5832c5041a/benchmark-result.json"
+raw_result_sha256 = "bc39a28b24eb535c291f90d9adcd86b68b107a4403462361a819c4dcaff68205"
+
+[[case]]
+id = "heap4096-twenty-workers"
+route_count = 20
+workers = 20
+wall_time_ns = 1160886049450
+peak_process_rss_bytes = 47878119424
+peak_scratch_bytes = 2843734016
+signature_records = 291966
+unique_signature_sum = 205090
+signature_records_per_wall_hour = 905409.7949561677
+unique_signature_sum_per_wall_hour = 636000.4070595906
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-twenty-workers-20260902T214036Z-553ef1d7fcf8/benchmark-result.json"
+raw_result_sha256 = "b9dabea6860c2fdd6542fc34e28b52cf9b6ab46a0679e7633afe34705900da60"
+
+[[case]]
+id = "heap4096-twenty-nine-workers"
+route_count = 29
+workers = 29
+wall_time_ns = 1342491219839
+peak_process_rss_bytes = 61956857856
+peak_scratch_bytes = 4880011264
+retained_bytes = 241859821
+jvm_user_bytes = 526358580
+jvm_archived_log_bytes = 10166655
+jvm_reclaimed_bytes = 516191925
+signature_records = 408328
+unique_signature_sum = 281932
+signature_records_per_wall_hour = 1094964.9266058435
+unique_signature_sum_per_wall_hour = 756023.7154636437
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-twenty-nine-workers-20260902T220059Z-572b463f23a9/benchmark-result.json"
+raw_result_sha256 = "31d1070092aef7338b7e1b0ecd8aaf848d1733a564faa240c91fddc0aae97789"
+
+[comparison.twenty_to_ten]
+cells_per_hour_increase_percent = 45.266082556075474
+signature_records_per_hour_increase_percent = 59.38413950773806
+peak_rss_increase_percent = 94.5201827482193
+
+[comparison.twenty_nine_to_twenty]
+cells_per_hour_increase_percent = 25.385160575155965
+signature_records_per_hour_increase_percent = 20.93583841324054
+peak_rss_increase_percent = 29.405370556268572

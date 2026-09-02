@@ -147,11 +147,12 @@ independent embedded Ghidra JVMs concurrently. Width runs now add a measured
 4 GiB maximum heap to each JVM unless an equivalent inherited `-Xmx` already
 exists. A conflicting inherited maximum fails closed. The old ergonomic route
 is preserved for controlled comparison with `--unbounded-ghidra-heap`; it is
-not the safe default. The default worker count remains the lowest of the CPU
-bound, one worker per 8 GiB of currently available host RAM, and twelve;
-override it explicitly with `--workers N` only after checking a measured peak.
-On `reference-host`, Linux currently sees about 94 GiB after the graphics allocation,
-so the automatic starting width is eight workers.
+not the safe default. The automatic worker count uses five workers per eight
+logical CPUs, reserves 6 GiB for the host, budgets at least the configured heap
+per worker, and caps at twenty. An unbounded JVM is conservatively budgeted at
+8 GiB. Override it explicitly with `--workers N` only after checking a measured
+peak. On `reference-host`, 32 logical CPUs and about 94 GiB visible memory therefore
+select twenty workers with the default 4 GiB heap.
 
 Successful cells discard reproducible bulk source, build and Ghidra-project
 scratch after measuring it. After the process pool exits, application logs are
@@ -219,7 +220,18 @@ ten-route/ten-worker pressure case then completed in 843.19 seconds at
 24,613,445,632 bytes peak aggregate RSS and 568,068 signature records/hour.
 Every compiled-artifact and signature-ledger digest matched the corresponding
 cell in the earlier uncapped full-width run. This evidence adopts the heap
-bound; it does not yet justify a worker count above ten.
+bound.
+
+The subsequent pressure record is
+`benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml`. Twenty workers
+completed 20 cells in 1,160.89 seconds at 44.59 GiB peak RSS and 905,410
+signature records/hour. All 29 non-Android routes then completed in 1,342.49
+seconds at 57.70 GiB peak RSS and 1,094,965 records/hour. The latter gained
+20.94% records/hour over the 20-worker case for 29.41% more peak RAM, so twenty
+is the automatic throughput knee and twenty-nine remains explicit burst mode.
+Because the pressure cases contain different route mixes, this is a safe host
+policy rather than a universal scaling curve; a fixed-cell worker sweep remains
+planned.
 
 ### Frozen route/toolchain-canary measurement
 
