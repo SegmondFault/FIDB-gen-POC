@@ -33,6 +33,8 @@ class WidthRunTests(unittest.TestCase):
 
         self.assertEqual(preview["state"], "disarmed-preview")
         self.assertEqual(preview["mode"], "full")
+        self.assertEqual(preview["ghidra_heap_mib"], 4096)
+        self.assertEqual(preview["java_tool_options"], "-Xmx4096m")
         self.assertEqual(preview["build_cells_per_replay"], qualified * 6)
         self.assertEqual(preview["replays"], 1)
         self.assertEqual(preview["scheduled_executions"], qualified * 6)
@@ -70,6 +72,24 @@ class WidthRunTests(unittest.TestCase):
             document["scheduled_executions"],
             compile_c_width(self.root)["summary"]["qualified_routes"],
         )
+
+    def test_unbounded_width_heap_remains_an_explicit_preview_choice(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(
+                [
+                    "run-width",
+                    "--project-root",
+                    str(self.root),
+                    "--canary",
+                    "--unbounded-ghidra-heap",
+                ]
+            )
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertIsNone(document["ghidra_heap_mib"])
+        self.assertEqual(document["java_tool_options"], "")
 
     def test_replay_comparison_separates_artifact_fidb_and_semantics(self):
         baseline = {
@@ -169,9 +189,7 @@ class WidthRunTests(unittest.TestCase):
             timing = measurement["stage_timing"]
             self.assertEqual(timing["schema_version"], "fidb-execution-timing/v1")
             self.assertIn("compile", timing["summary"]["stage_duration_ns"])
-            self.assertEqual(
-                timing["summary"]["terminal_event_counts"]["skipped"], 1
-            )
+            self.assertEqual(timing["summary"]["terminal_event_counts"]["skipped"], 1)
 
     def test_pool_termination_uses_supported_executor_api(self):
         class Executor:

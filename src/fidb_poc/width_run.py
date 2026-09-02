@@ -20,6 +20,7 @@ from typing import Callable, Iterable
 from .c_width import compile_c_width, materialize_width_configuration
 from .config import Configuration
 from .hash_coverage import analyze_signature_coverage
+from .jvm_policy import DEFAULT_WIDTH_GHIDRA_HEAP_MIB, java_options
 from .toolchain_packs import resolve_toolchain_profile
 from .pipeline import PipelineError, download_library, execute
 from .timing import TimingRecorder, utc_now
@@ -250,11 +251,16 @@ def default_width_workers() -> int:
 
 
 def width_run_preview(
-    plan: WidthRunPlan, *, workers: int | None = None
+    plan: WidthRunPlan,
+    *,
+    workers: int | None = None,
+    heap_mib: int | None = DEFAULT_WIDTH_GHIDRA_HEAP_MIB,
+    core_limit: int | None = None,
 ) -> dict[str, object]:
     parallel_workers = default_width_workers() if workers is None else workers
     if parallel_workers < 1 or parallel_workers > 32:
         raise ValueError("width workers must be between 1 and 32")
+    configured_java_options = java_options(heap_mib, core_limit, inherited="")
     cells = [
         {
             "route_id": route,
@@ -276,6 +282,9 @@ def width_run_preview(
         "scheduled_executions": plan.cell_count * plan.replays,
         "groups_per_replay": len(_groups(plan)),
         "parallel_workers": parallel_workers,
+        "ghidra_heap_mib": heap_mib,
+        "ghidra_core_limit": core_limit,
+        "java_tool_options": configured_java_options,
         "cells": cells,
     }
 
@@ -559,9 +568,17 @@ def _release_cell_scratch(group_root: Path) -> None:
 
 
 def _execute_cell(
-    configuration: Configuration, group_root_text: str, verbose: bool
+    configuration: Configuration,
+    group_root_text: str,
+    verbose: bool,
+    java_options_text: str | None = None,
 ) -> dict[str, object]:
     """Process-pool entry point for one isolated route/treatment cell."""
+    if java_options_text is not None:
+        if java_options_text:
+            os.environ["JAVA_TOOL_OPTIONS"] = java_options_text
+        else:
+            os.environ.pop("JAVA_TOOL_OPTIONS", None)
     group_root = Path(group_root_text)
     route_id = configuration.routes[0].id
     treatment_id = configuration.treatments[0].id
@@ -632,6 +649,8 @@ def execute_width_run(
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
     workers: int | None = None,
+    heap_mib: int | None = DEFAULT_WIDTH_GHIDRA_HEAP_MIB,
+    core_limit: int | None = None,
 ) -> tuple[dict[str, object], Path]:
     root = Path(project_root).expanduser().resolve()
     plan = compile_width_run_plan(root, canary=canary)
@@ -640,7 +659,13 @@ def execute_width_run(
     if parallel_workers < 1 or parallel_workers > 32:
         raise ValueError("width workers must be between 1 and 32")
     run_root = _validated_run_root(root, str(plan.compilation["id"]), _run_id(plan))
-    preview = width_run_preview(plan, workers=parallel_workers)
+    preview = width_run_preview(
+        plan,
+        workers=parallel_workers,
+        heap_mib=heap_mib,
+        core_limit=core_limit,
+    )
+    effective_java_options = java_options(heap_mib, core_limit)
     _atomic_json(run_root / "width-run-plan.json", preview)
     source_cache = _seed_source_cache(root, run_root, plan.configuration)
     started_at = utc_now()
@@ -673,7 +698,11 @@ def execute_width_run(
             try:
                 future_rows = {
                     executor.submit(
-                        _execute_cell, configuration, str(group_root), verbose
+                        _execute_cell,
+                        configuration,
+                        str(group_root),
+                        verbose,
+                        effective_java_options,
                     ): (group_index, configuration, group_root)
                     for group_index, configuration, group_root in scheduled
                 }
@@ -807,6 +836,9 @@ def execute_width_run(
         "build_cells_per_replay": plan.cell_count,
         "scheduled_executions": expected,
         "parallel_workers": parallel_workers,
+        "ghidra_heap_mib": heap_mib,
+        "ghidra_core_limit": core_limit,
+        "java_tool_options": effective_java_options,
         "source_cache_bytes": _directory_size(run_root / "source-cache"),
         "completed_executions": completed,
         "failed_executions": expected - completed,

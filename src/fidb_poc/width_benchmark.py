@@ -15,11 +15,11 @@ import multiprocessing
 import os
 from pathlib import Path
 import re
-import shlex
 import time
 from typing import Callable, Iterable
 
 from .config import Configuration
+from .jvm_policy import java_options
 from .timing import utc_now
 from .width_run import (
     _ResourceSampler,
@@ -81,31 +81,9 @@ def _selected_groups(
 
 
 def _java_options(heap_mib: int | None, core_limit: int | None) -> str:
-    inherited = os.environ.get("JAVA_TOOL_OPTIONS", "").strip()
-    parsed = shlex.split(inherited)
-    if heap_mib is not None and any(item.startswith("-Xmx") for item in parsed):
-        raise ValueError(
-            "JAVA_TOOL_OPTIONS already contains -Xmx; remove it before selecting "
-            "--ghidra-heap-mib"
-        )
-    if core_limit is not None and any(
-        item.startswith("-Dcpu.core.limit=") or item.startswith("-Dcpu.core.override=")
-        for item in parsed
-    ):
-        raise ValueError(
-            "JAVA_TOOL_OPTIONS already contains a Ghidra CPU limit; remove it before "
-            "selecting --ghidra-core-limit"
-        )
-    additions = []
-    if heap_mib is not None:
-        if heap_mib < 1024 or heap_mib > 32768:
-            raise ValueError("Ghidra heap must be between 1024 and 32768 MiB")
-        additions.append(f"-Xmx{heap_mib}m")
-    if core_limit is not None:
-        if core_limit < 1 or core_limit > 32:
-            raise ValueError("Ghidra core limit must be between 1 and 32")
-        additions.append(f"-Dcpu.core.limit={core_limit}")
-    return " ".join([*parsed, *additions])
+    """Compatibility wrapper retained for callers and focused unit tests."""
+
+    return java_options(heap_mib, core_limit)
 
 
 def width_benchmark_preview(

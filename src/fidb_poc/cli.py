@@ -122,6 +122,26 @@ def _run_width_main(argv: list[str]) -> int:
             "(default: memory/CPU-aware and capped at 12; explicit maximum: 32)"
         ),
     )
+    heap = result.add_mutually_exclusive_group()
+    heap.add_argument(
+        "--ghidra-heap-mib",
+        type=int,
+        dest="ghidra_heap_mib",
+        help="maximum heap per embedded Ghidra JVM (default: 4096 MiB)",
+    )
+    heap.add_argument(
+        "--unbounded-ghidra-heap",
+        action="store_const",
+        const=None,
+        dest="ghidra_heap_mib",
+        help="preserve an inherited -Xmx or use Java's ergonomic heap",
+    )
+    result.set_defaults(ghidra_heap_mib=4096)
+    result.add_argument(
+        "--ghidra-core-limit",
+        type=int,
+        help="optional Ghidra cpu.core.limit per embedded JVM",
+    )
     result.add_argument("--verbose", "-v", action="store_true")
     arguments = result.parse_args(argv)
     try:
@@ -137,7 +157,12 @@ def _run_width_main(argv: list[str]) -> int:
             )
             print(
                 json.dumps(
-                    width_run_preview(plan, workers=arguments.workers),
+                    width_run_preview(
+                        plan,
+                        workers=arguments.workers,
+                        heap_mib=arguments.ghidra_heap_mib,
+                        core_limit=arguments.ghidra_core_limit,
+                    ),
                     indent=2,
                     sort_keys=True,
                 )
@@ -149,6 +174,8 @@ def _run_width_main(argv: list[str]) -> int:
             progress=print,
             verbose=arguments.verbose,
             workers=arguments.workers,
+            heap_mib=arguments.ghidra_heap_mib,
+            core_limit=arguments.ghidra_core_limit,
         )
         print(f"Width result: {path}")
         return 0 if outcome["state"] == "measured-complete" else 1
