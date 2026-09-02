@@ -77,7 +77,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         width_study = document["width_studies"][0]
         self.assertEqual(width_study["id"], "batch-010")
         self.assertEqual(width_study["readiness"]["reviewed_recipe_families"], 1)
-        self.assertEqual(width_study["readiness"]["source_evidence_families"], 1)
+        self.assertEqual(width_study["readiness"]["source_evidence_families"], 10)
         self.assertEqual(width_study["readiness"]["queue_state"], "not-materialized")
         self.assertTrue(width_study["readiness"]["blockers"])
         requirements = width_study["toolchain_requirements"]
