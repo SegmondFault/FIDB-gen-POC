@@ -29,7 +29,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         self.assertEqual(len(catalog["inputs"]), 0)
         self.assertEqual(len(catalog["routes"]), 39)
         self.assertEqual(len(catalog["qualifications"]), 37)
-        self.assertEqual(len(catalog["profiles"]), 6)
+        self.assertEqual(len(catalog["profiles"]), 7)
         self.assertEqual(len(catalog["catalog_digest"]), 64)
         self.assertTrue(all(len(row["sha256"]) == 64 for row in catalog["packs"]))
 
@@ -189,6 +189,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 "c-android-width-v1",
                 "c-compiler-width-v1",
                 "c-nonapple-baseline-v1",
+                "c-nonapple-width-v2",
                 "c-top10-linux",
                 "c-top10-reference",
             },
