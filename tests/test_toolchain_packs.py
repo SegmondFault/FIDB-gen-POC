@@ -25,11 +25,11 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         self.assertEqual(catalog["schema_version"], "fidb-toolchain-pack-catalog/v4")
         self.assertGreaterEqual(len(catalog["compilers"]), 10)
         self.assertEqual(catalog["host"], {"system": "linux", "architecture": "x86_64"})
-        self.assertEqual(len(catalog["packs"]), 9)
+        self.assertEqual(len(catalog["packs"]), 29)
         self.assertEqual(len(catalog["inputs"]), 0)
-        self.assertEqual(len(catalog["routes"]), 11)
-        self.assertEqual(len(catalog["qualifications"]), 9)
-        self.assertEqual(len(catalog["profiles"]), 4)
+        self.assertEqual(len(catalog["routes"]), 31)
+        self.assertEqual(len(catalog["qualifications"]), 29)
+        self.assertEqual(len(catalog["profiles"]), 5)
         self.assertEqual(len(catalog["catalog_digest"]), 64)
         self.assertTrue(all(len(row["sha256"]) == 64 for row in catalog["packs"]))
 
@@ -186,12 +186,13 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
             {row["profile"]["id"] for row in plans},
             {
                 "c-canary",
+                "c-compiler-width-v1",
                 "c-nonapple-baseline-v1",
                 "c-top10-linux",
                 "c-top10-reference",
             },
         )
-        self.assertEqual(inspect.call_count, 9)
+        self.assertEqual(inspect.call_count, 29)
 
     def test_reference_profile_keeps_native_compilers_separate(self):
         with patch(

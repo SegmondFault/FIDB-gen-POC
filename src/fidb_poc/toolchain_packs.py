@@ -17,6 +17,7 @@ import tomllib
 
 from .coverage_universe import load_coverage_universe
 from .compiler_identities import load_compiler_identities
+from .compiler_width_assets import load_compiler_width_assets
 from .target_registry import load_targets
 from .toolchain_cache import CacheInspection, MANAGED_DOWNLOADS, inspect_cached
 from .toolchain_inputs import (
@@ -386,6 +387,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
     inputs_path = root / "toolchains/inputs.toml"
     qualifications_path = root / "toolchains/qualifications.toml"
     compilers_path = root / "toolchains/compilers.toml"
+    compiler_width_path = root / "toolchains/compiler-width.toml"
     profiles_directory = root / "toolchains/profiles"
     header, packs = _load_packs(packs_path)
     routes = _load_routes(routes_path)
@@ -393,6 +395,10 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
     qualifications = _load_qualifications(qualifications_path)
     profiles, profile_paths = _load_profiles(profiles_directory)
     compilers = load_compiler_identities(compilers_path)
+    compiler_width = load_compiler_width_assets(compiler_width_path)
+    packs.extend(compiler_width["packs"])
+    routes.extend(compiler_width["routes"])
+    qualifications.extend(compiler_width["qualifications"])
 
     targets = load_targets(root / "targets/registry.toml")
     target_ids = {str(row["id"]) for row in targets}
@@ -549,6 +555,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "qualifications": "toolchains/qualifications.toml",
         "profiles": "toolchains/profiles/*.toml",
         "compilers": "toolchains/compilers.toml",
+        "compiler_width": "toolchains/compiler-width.toml",
     }
     source_digests = {
         "packs_sha256": _sha256(packs_path),
@@ -559,6 +566,7 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
             b"".join(path.read_bytes() for path in profile_paths)
         ).hexdigest(),
         "compilers_sha256": _sha256(compilers_path),
+        "compiler_width_sha256": _sha256(compiler_width_path),
     }
     body: dict[str, object] = {
         "schema_version": CATALOG_SCHEMA,
@@ -570,6 +578,18 @@ def load_toolchain_pack_catalog(project_root: str | Path) -> dict[str, object]:
         "cache_policy": header["cache_policy"],
         "packs": packs,
         "compilers": compilers,
+        "compiler_width": {
+            key: compiler_width[key]
+            for key in (
+                "schema_version",
+                "host_system",
+                "host_architecture",
+                "purpose",
+                "gcc_generations",
+                "gcc_targets",
+                "selection",
+            )
+        },
         "inputs": inputs,
         "routes": routes,
         "qualifications": qualifications,

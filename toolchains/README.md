@@ -32,6 +32,7 @@ digest excludes cache state so acquisition does not change experiment identity.
 | `c-canary` | 1 / 1 | 1 | 93,215,060 | 460,835,547 | none |
 | `c-top10-linux` | 10 / 10 | 9 | 753,465,840 | 3,852,132,920 | native Apple Clang |
 | `c-top10-reference` | 10 / 11 | 9 | 753,465,840 | 3,852,132,920 | Apple Clang + native MSVC definition gap |
+| `c-compiler-width-v1` | 9 / 29 | 29 | 2,850,394,000 | 14,836,042,019 estimated | none |
 
 The nine packs are eight Bootlin GCC/binutils/glibc target SDKs and one
 llvm-mingw/Clang/LLD/MinGW UCRT pack. macOS ARM64 is not a pack: its reviewed
@@ -43,6 +44,13 @@ from the 2026-09-02 qualification cycle, not four-times-compressed estimates.
 nine-route qualification at the exact reviewed revision. See
 `evidence/README.md` for the distinction between committed audit evidence and
 host-local current readiness.
+
+`c-compiler-width-v1` deliberately repeats targets across compiler
+generations: GCC 12.3, 13.3 and 14.3 on each of the eight Linux targets, plus
+llvm-mingw Clang 15.0, 17.0, 19.1, 20.1 and 23.1 on Windows x86-64. Its twenty
+new archives require 2,096,928,160 additional download bytes on a host that
+already has the nine baseline packs. Prepared-size figures for those additions
+remain estimates until the first safe extraction records their exact bytes.
 
 ## Operator lifecycle
 

@@ -1,0 +1,258 @@
+schema_version = "fidb-compiler-width-assets/v1"
+host_system = "linux"
+host_architecture = "x86_64"
+purpose = "Enumerate historical availability and select a bounded, downloadable compiler-generation width for the first OpenSSL measurement."
+
+# Bootlin stable releases are downloadable for all eight selected Linux
+# targets from 2023.11 onward. Earlier availability differs by target; it is
+# retained here as an enumerated expansion queue rather than silently omitted.
+
+[[gcc_generation]]
+id = "bootlin-stable-2023.11-1"
+compiler_id = "gcc-12.3.0"
+release = "2023.11-1"
+archive_suffix = "tar.bz2"
+linker_version = "2.40"
+runtime_version = "2.38-27-g750a45a783906a19591fb8ff6b7841470f1f5701"
+
+[[gcc_generation]]
+id = "bootlin-stable-2024.05-1"
+compiler_id = "gcc-13.3.0"
+release = "2024.05-1"
+archive_suffix = "tar.xz"
+linker_version = "2.41"
+runtime_version = "2.39-74-g198632a05f6c7b9ab67d3331d8caace9ceabb685"
+
+[[gcc_target]]
+id = "x86-64"
+label = "Linux x86-64"
+target_id = "linux-x86-64-elf"
+coverage_requirement_id = "linux-x86-64-gcc"
+route_prefix = "linux-x86-64-gcc"
+target_triple = "x86_64-buildroot-linux-gnu"
+driver_prefix = "x86_64-buildroot-linux-gnu"
+available_stable_releases = ["2021.11-5", "2022.08-1", "2023.08-1", "2023.11-1", "2024.02-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "armv7-eabihf"
+label = "Linux ARMv7 EABIhf"
+target_id = "linux-arm32-elf"
+coverage_requirement_id = "linux-arm32-gcc"
+route_prefix = "linux-arm32-gcc"
+target_triple = "arm-buildroot-linux-gnueabihf"
+driver_prefix = "arm-buildroot-linux-gnueabihf"
+available_stable_releases = ["2018.11-1", "2020.08-1", "2021.11-1", "2022.08-1", "2023.11-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "aarch64"
+label = "Linux AArch64"
+target_id = "linux-aarch64-elf"
+coverage_requirement_id = "linux-aarch64-gcc"
+route_prefix = "linux-aarch64-gcc"
+target_triple = "aarch64-buildroot-linux-gnu"
+driver_prefix = "aarch64-buildroot-linux-gnu"
+available_stable_releases = ["2018.11-1", "2020.08-1", "2021.11-1", "2022.08-1", "2023.11-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "mips32"
+label = "Linux MIPS32 big-endian"
+target_id = "linux-mips32-be-elf"
+coverage_requirement_id = "linux-mips32-be-gcc"
+route_prefix = "linux-mips32-be-gcc"
+target_triple = "mips-buildroot-linux-gnu"
+driver_prefix = "mips-buildroot-linux-gnu"
+available_stable_releases = ["2018.11-1", "2020.08-1", "2021.11-1", "2022.08-1", "2023.11-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "mips32el"
+label = "Linux MIPS32 little-endian"
+target_id = "linux-mips32-le-elf"
+coverage_requirement_id = "linux-mips32-le-gcc"
+route_prefix = "linux-mips32-le-gcc"
+target_triple = "mipsel-buildroot-linux-gnu"
+driver_prefix = "mipsel-buildroot-linux-gnu"
+available_stable_releases = ["2018.11-1", "2020.08-1", "2021.11-1", "2022.08-1", "2023.11-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "powerpc-e500mc"
+label = "Linux PowerPC e500mc"
+target_id = "linux-powerpc32-be-elf"
+coverage_requirement_id = "linux-powerpc32-be-gcc"
+route_prefix = "linux-powerpc32-be-gcc"
+target_triple = "powerpc-buildroot-linux-gnu"
+driver_prefix = "powerpc-buildroot-linux-gnu"
+available_stable_releases = ["2018.11-1", "2020.08-1", "2021.11-1", "2022.08-1", "2023.11-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "sh-sh4"
+label = "Linux SuperH SH4"
+target_id = "linux-sh32-le-elf"
+coverage_requirement_id = "linux-sh32-gcc"
+route_prefix = "linux-sh32-gcc"
+target_triple = "sh4-buildroot-linux-gnu"
+driver_prefix = "sh4-buildroot-linux-gnu"
+available_stable_releases = ["2018.11-1", "2020.08-1", "2021.11-1", "2022.08-1", "2023.11-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_target]]
+id = "m68k-68xxx"
+label = "Linux M68K 68xxx"
+target_id = "linux-m68k-elf"
+coverage_requirement_id = "linux-m68k-gcc"
+route_prefix = "linux-m68k-gcc"
+target_triple = "m68k-buildroot-linux-gnu"
+driver_prefix = "m68k-buildroot-linux-gnu"
+available_stable_releases = ["2023.11-1", "2024.02-1", "2024.05-1", "2025.08-1"]
+
+[[gcc_asset]]
+target = "x86-64"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "e3c0ef1618df3a3100a8a167066e7b19fdd25ee2c4285cf2cfe3ef34f0456867"
+download_bytes = 158042420
+installed_bytes_estimate = 790212100
+
+[[gcc_asset]]
+target = "x86-64"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "932823ca9a3e067e7e2a29810a666d20c9cc5bb550de947f6879e38ace1aa955"
+download_bytes = 86382404
+installed_bytes_estimate = 431912020
+
+[[gcc_asset]]
+target = "armv7-eabihf"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "d0a575b156e5c481dbe079cd3e292fb8eefed39392a90cdde871e7b9e77fd420"
+download_bytes = 143834231
+installed_bytes_estimate = 719171155
+
+[[gcc_asset]]
+target = "armv7-eabihf"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "608263bc9dc3eadf0962ddb1165f1c2291001190f9927dee47d464e26374462c"
+download_bytes = 78809824
+installed_bytes_estimate = 394049120
+
+[[gcc_asset]]
+target = "aarch64"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "5b1fde169c9ed678ee75a729286531a291c6ce5ee9d8a8b598b3abbef35c05f2"
+download_bytes = 152852957
+installed_bytes_estimate = 764264785
+
+[[gcc_asset]]
+target = "aarch64"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "b0fad860eb94b503a56d66ca8b9ba06d2d4826943e37ebd1d7217423f6ea5bb2"
+download_bytes = 83754052
+installed_bytes_estimate = 418770260
+
+[[gcc_asset]]
+target = "mips32"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "062d5df972b7b628337fdecba84cbe2b33f9c863e59c9702556ef252e7b44750"
+download_bytes = 140813476
+installed_bytes_estimate = 704067380
+
+[[gcc_asset]]
+target = "mips32"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "677402719c545e49eb71c3d27a5f495af38f60463b40ed705e24e43a9834c137"
+download_bytes = 75921876
+installed_bytes_estimate = 379609380
+
+[[gcc_asset]]
+target = "mips32el"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "60fc28d1521dfeefbfedb20776eeadec5b9bade7a55d0ea0c901766f722da3bd"
+download_bytes = 140549360
+installed_bytes_estimate = 702746800
+
+[[gcc_asset]]
+target = "mips32el"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "d0139b6ade7f3b72a5f9c33814696af817661e826c9c501f6cefcab4ac684c8f"
+download_bytes = 76777748
+installed_bytes_estimate = 383888740
+
+[[gcc_asset]]
+target = "powerpc-e500mc"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "e0b50deb4ffba15fcead9ecea75a6f4af6feca6012a60ddd76591874a47e5338"
+download_bytes = 145215432
+installed_bytes_estimate = 726077160
+
+[[gcc_asset]]
+target = "powerpc-e500mc"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "365e30fda99630e5bcf04c4913f905640025b90cc9d1a4b17cccfc729827d335"
+download_bytes = 79506396
+installed_bytes_estimate = 397531980
+
+[[gcc_asset]]
+target = "sh-sh4"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "e957c0854780cb48b0fcb54eddf9ef40ed496b8fb3d0c905f9c36dd8263f3cf0"
+download_bytes = 133493812
+installed_bytes_estimate = 667469060
+
+[[gcc_asset]]
+target = "sh-sh4"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "6290f90417b194c467cf432d9c012d4321827160407c5b4664a443910a54c7d8"
+download_bytes = 75115132
+installed_bytes_estimate = 375575660
+
+[[gcc_asset]]
+target = "m68k-68xxx"
+generation = "bootlin-stable-2023.11-1"
+sha256 = "79b120e67b7f17a1f265f5a5685b602ee3755f32047c657d837e9fc5c9ac7afa"
+download_bytes = 130125968
+installed_bytes_estimate = 650629840
+
+[[gcc_asset]]
+target = "m68k-68xxx"
+generation = "bootlin-stable-2024.05-1"
+sha256 = "77f22dcafc78cde84e6441bd450aa3edb628b8f36ef6c1a160c942f38b38e5ea"
+download_bytes = 69793268
+installed_bytes_estimate = 348966340
+
+# llvm-mingw publishes self-contained Linux-hosted Clang/LLD/UCRT packs. Five
+# spaced generations (15, 17, 19, 20 and 23) are selected; Clang 23 is already
+# present in packs.toml and the four historical additions are expanded here.
+
+[[llvm_mingw_asset]]
+release = "20220906"
+compiler_id = "llvm-clang-15.0.0"
+ubuntu = "18.04"
+sha256 = "ee00708bdd65eeaa88d5fa89ad7e3fa1d6bae8093ee4559748e431e55f7568ec"
+download_bytes = 75295528
+installed_bytes_estimate = 455210129
+
+[[llvm_mingw_asset]]
+release = "20231128"
+compiler_id = "llvm-clang-17.0.6"
+ubuntu = "20.04"
+sha256 = "0f21ff3be90311092fe32e0e30878ef3ae9d9437b8d9ac25ef279e0d84e9bb8e"
+download_bytes = 72800008
+installed_bytes_estimate = 461376829
+
+[[llvm_mingw_asset]]
+release = "20241217"
+compiler_id = "llvm-clang-19.1.6"
+ubuntu = "20.04"
+sha256 = "cfe4aac3d245a77d8cd0c41bdcd7971b1002c771d3bba2ac39702733b0fb0c12"
+download_bytes = 88422244
+installed_bytes_estimate = 601402920
+
+[[llvm_mingw_asset]]
+release = "20250613"
+compiler_id = "llvm-clang-20.1.7"
+ubuntu = "22.04"
+sha256 = "936f82221fa4ad4ff1829f28f1cdf4c1e304cfd589323212e2b7ef8be428784a"
+download_bytes = 89422024
+installed_bytes_estimate = 610977441
+
+[selection]
+gcc_compiler_ids = ["gcc-12.3.0", "gcc-13.3.0", "gcc-14.3.0"]
+llvm_mingw_compiler_ids = ["llvm-clang-15.0.0", "llvm-clang-17.0.6", "llvm-clang-19.1.6", "llvm-clang-20.1.7", "llvm-clang-23.1.0"]
+deferred_families = ["ELF Clang paired with explicit sysroots", "GNU MinGW GCC generations", "native MSVC", "Apple Clang"]
+selection_reason = "First measurable breadth tranche: three GCC majors on every qualified Linux target and five spaced self-contained llvm-mingw Clang generations on Windows x86-64. Deferred families remain explicit denominator gaps."

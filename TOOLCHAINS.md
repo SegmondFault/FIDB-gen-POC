@@ -200,6 +200,36 @@ version. Qualification records remain content-addressed by the full pack
 material, so the added explicit ID does not invalidate an otherwise identical
 existing qualification.
 
+## First compiler-generation width
+
+`toolchains/compiler-width.toml` records both the historical releases found
+for each target and the bounded first selection. The executable selection is
+three GCC generations on every Linux target and five spaced llvm-mingw Clang
+generations on Windows x86-64:
+
+| Target set | Compiler identities | Routes |
+| --- | --- | ---: |
+| Eight Linux ELF targets | GCC 12.3.0, 13.3.0, 14.3.0 | 24 |
+| Windows x86-64 PE/COFF | Clang 15.0.0, 17.0.6, 19.1.6, 20.1.7, 23.1.0 | 5 |
+
+The profile is `c-compiler-width-v1`: 29 routes backed by 29 immutable packs.
+On the already-qualified host, the twenty additions require 2,096,928,160
+download bytes. Acquire them through the same project-local lifecycle:
+
+```sh
+./scripts/toolchains/plan.sh c-compiler-width-v1
+./scripts/toolchains/pull.sh c-compiler-width-v1
+./scripts/toolchains/prepare.sh c-compiler-width-v1
+./scripts/toolchains/qualify.sh c-compiler-width-v1
+./scripts/toolchains/status.sh c-compiler-width-v1
+```
+
+This is an intentional first tranche, not a claim that compiler width is
+complete. ELF Clang paired with explicit target sysroots, GNU MinGW GCC,
+native MSVC and Apple Clang remain named denominator gaps. The first OpenSSL
+measurement determines which existing generations and treatments contribute
+enough new FID signatures to retain before those families are added.
+
 ## Native Apple worker
 
 The public project does not download, package, bind, copy, or redistribute an

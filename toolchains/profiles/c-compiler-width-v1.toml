@@ -1,0 +1,40 @@
+schema_version = "fidb-toolchain-profile/v1"
+id = "c-compiler-width-v1"
+label = "C compiler width v1 · 29 Linux-hosted routes"
+language_id = "c"
+host_system = "linux"
+host_architecture = "x86_64"
+route_ids = [
+  "linux-x86-64-gcc-12",
+  "linux-x86-64-gcc-13",
+  "linux-x86-64-gcc",
+  "linux-arm32-gcc-12",
+  "linux-arm32-gcc-13",
+  "linux-arm32-gcc",
+  "linux-aarch64-gcc-12",
+  "linux-aarch64-gcc-13",
+  "linux-aarch64-gcc",
+  "linux-mips32-be-gcc-12",
+  "linux-mips32-be-gcc-13",
+  "linux-mips32-be-gcc",
+  "linux-mips32-le-gcc-12",
+  "linux-mips32-le-gcc-13",
+  "linux-mips32-le-gcc",
+  "linux-powerpc32-be-gcc-12",
+  "linux-powerpc32-be-gcc-13",
+  "linux-powerpc32-be-gcc",
+  "linux-sh32-gcc-12",
+  "linux-sh32-gcc-13",
+  "linux-sh32-gcc",
+  "linux-m68k-gcc-12",
+  "linux-m68k-gcc-13",
+  "linux-m68k-gcc",
+  "windows-x86-64-llvm-mingw-clang-15",
+  "windows-x86-64-llvm-mingw-clang-17",
+  "windows-x86-64-llvm-mingw-clang-19",
+  "windows-x86-64-llvm-mingw-clang-20",
+  "windows-x86-64-llvm-mingw",
+]
+external_policy = "report"
+purpose = "Acquire and qualify three GCC generations on every current Linux target plus five spaced llvm-mingw Clang generations on Windows x86-64 for marginal FID-hash measurement."
+authority = "coverage/c-top10-width-study.toml"
