@@ -2,7 +2,7 @@ schema_version = "fidb-c-width/v1"
 id = "c-width-v1"
 label = "C width v1"
 language_id = "c"
-state = "candidate-disarmed"
+state = "frozen-measured"
 fixed_recipe = "zlib@1.3.1"
 toolchain_profile = "c-nonapple-baseline-v1"
 selected_replay = 2
@@ -99,3 +99,15 @@ id = "coverage-exploration"
 label = "Coverage exploration"
 state = "guarded"
 description = "Measure recall-oriented alternatives without admitting them into the active database set."
+
+[freeze]
+evidence_path = "coverage/evidence/c-width-v1-reference-host-2026-09-02.toml"
+evidence_sha256 = "01f62bc8fd8371bd4804d6867c8a20c9af16602ff0f6c8d0923049087be18d50"
+executed_compilation_digest = "6c2bb1a798db1860310abd8492a5d3fd75b380365bd6276bea5dd17407440051"
+completed_executions = 108
+wall_time_ns = 492456917639
+peak_active_replay_scratch_bytes = 1356658659
+final_scratch_bytes = 2684774362
+retained_bytes = 1852298
+artifact_byte_identical_cells = 48
+fid_semantic_identical_cells = 53

@@ -16,6 +16,19 @@ from .width_study import load_width_study
 WIDTH_AUTHORITY_SCHEMA = "fidb-c-width/v1"
 WIDTH_COMPILATION_SCHEMA = "fidb-width-compilation/v1"
 PROFILE_STATES = {"registered", "desired", "guarded"}
+WIDTH_STATES = {"candidate-disarmed", "frozen-measured"}
+FREEZE_FIELDS = {
+    "evidence_path",
+    "evidence_sha256",
+    "executed_compilation_digest",
+    "completed_executions",
+    "wall_time_ns",
+    "peak_active_replay_scratch_bytes",
+    "final_scratch_bytes",
+    "retained_bytes",
+    "artifact_byte_identical_cells",
+    "fid_semantic_identical_cells",
+}
 
 
 def _rows(
@@ -56,6 +69,7 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
         "artifact_profile",
         "analysis_profile",
         "admission_profile",
+        "freeze",
     }
     if (
         set(document) != allowed
@@ -67,6 +81,7 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
         "analysis_profile",
         "admission_profile",
         "selected_replay",
+        "freeze",
     }:
         if not isinstance(document.get(field), str) or not document[field]:
             raise ValueError(f"C width authority {field} must be a non-empty string")
@@ -78,6 +93,76 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
         or replay > 3
     ):
         raise ValueError("C width selected_replay must be between one and three")
+    state = document["state"]
+    if state not in WIDTH_STATES:
+        raise ValueError(f"C width authority has invalid state: {state}")
+    freeze = document.get("freeze")
+    if state == "candidate-disarmed" and freeze is not None:
+        raise ValueError("candidate C width authority cannot carry freeze evidence")
+    if state == "frozen-measured":
+        if not isinstance(freeze, dict) or set(freeze) != FREEZE_FIELDS:
+            raise ValueError("frozen C width authority requires exact freeze evidence")
+        for field in (
+            "evidence_path",
+            "evidence_sha256",
+            "executed_compilation_digest",
+        ):
+            if not isinstance(freeze[field], str) or not freeze[field]:
+                raise ValueError(f"C width freeze {field} must be a non-empty string")
+        for field in FREEZE_FIELDS - {
+            "evidence_path",
+            "evidence_sha256",
+            "executed_compilation_digest",
+        }:
+            if (
+                not isinstance(freeze[field], int)
+                or isinstance(freeze[field], bool)
+                or freeze[field] < 0
+            ):
+                raise ValueError(f"C width freeze {field} must be non-negative")
+        for field in ("evidence_sha256", "executed_compilation_digest"):
+            value = str(freeze[field])
+            if len(value) != 64 or any(
+                character not in "0123456789abcdef" for character in value
+            ):
+                raise ValueError(f"C width freeze {field} is not a SHA-256 digest")
+        root = authority_path.expanduser().resolve().parent.parent
+        evidence_path = (root / str(freeze["evidence_path"])).resolve()
+        if root not in evidence_path.parents or not evidence_path.is_file():
+            raise ValueError("C width freeze evidence path is unavailable or escapes the project")
+        evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        if evidence_digest != freeze["evidence_sha256"]:
+            raise ValueError("C width freeze evidence digest does not match")
+        evidence = tomllib.loads(evidence_path.read_text(encoding="utf-8"))
+        if (
+            evidence.get("schema_version") != "fidb-width-freeze/v1"
+            or evidence.get("width_id") != document["id"]
+            or evidence.get("state") != state
+            or evidence.get("executed_compilation_digest")
+            != freeze["executed_compilation_digest"]
+        ):
+            raise ValueError("C width freeze evidence identity does not match authority")
+        measurements = evidence.get("measurements")
+        reproducibility = evidence.get("reproducibility")
+        if not isinstance(measurements, dict) or not isinstance(reproducibility, dict):
+            raise ValueError("C width freeze evidence lacks measured sections")
+        expected = {
+            "completed_executions": measurements.get("completed_executions"),
+            "wall_time_ns": measurements.get("wall_time_ns"),
+            "peak_active_replay_scratch_bytes": measurements.get(
+                "peak_active_replay_scratch_bytes"
+            ),
+            "final_scratch_bytes": measurements.get("final_scratch_bytes"),
+            "retained_bytes": measurements.get("retained_bytes"),
+            "artifact_byte_identical_cells": reproducibility.get(
+                "artifact_byte_identical_cells"
+            ),
+            "fid_semantic_identical_cells": reproducibility.get(
+                "fid_semantic_identical_cells"
+            ),
+        }
+        if any(freeze[field] != value for field, value in expected.items()):
+            raise ValueError("C width freeze summary does not match its evidence")
     artifacts = _rows(
         document,
         "artifact_profile",
@@ -119,6 +204,7 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
         "artifact_profiles": artifacts,
         "analysis_profiles": analyses,
         "admission_profiles": admissions,
+        "freeze": dict(freeze) if isinstance(freeze, dict) else None,
         "authority_path": str(authority_path),
     }
 
@@ -249,6 +335,7 @@ def compile_c_width(project_root: str | Path) -> dict[str, object]:
         "fixed_recipe": authority["fixed_recipe"],
         "toolchain_profile": authority["toolchain_profile"],
         "route_profile_digest": route_plan["profile_digest"],
+        "freeze": authority["freeze"],
         "authorities": {
             "width": "coverage/c-width-v1.toml",
             "study": "coverage/c-top10-width-study.toml",

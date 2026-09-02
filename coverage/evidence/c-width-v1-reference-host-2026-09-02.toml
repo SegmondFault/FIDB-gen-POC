@@ -1,0 +1,134 @@
+schema_version = "fidb-width-freeze/v1"
+width_id = "c-width-v1"
+state = "frozen-measured"
+language_id = "c"
+fixed_recipe = "zlib@1.3.1"
+host = "reference-host"
+host_architecture = "x86_64-linux"
+started_at_utc = "2026-09-02T09:40:35.312604Z"
+finished_at_utc = "2026-09-02T09:48:47.769513Z"
+executed_code_revision = "9cb094b25b258cac5cc9c565e9a331c69b227e83"
+executed_compilation_digest = "6c2bb1a798db1860310abd8492a5d3fd75b380365bd6276bea5dd17407440051"
+route_profile_digest = "0b6e0c5b3da7a4b4a342cb8c345c49f96501ee0fc6b6a24c6c801d08682707cc"
+source_run_sha256 = "388359bd8d90ca2755a9125734bcc9f0c1b6239febbf0ef02737da63b6e31c42"
+source_plan_sha256 = "968e1eab59df2b2ea0061c6b81a87815146bfe3fe57d6e36ae44fc1e8568638c"
+replay_1_manifest_sha256 = "493687c041b1ade5de5728ea6f1da59e5fd72083904677f34f7ac01fac49dd83"
+replay_2_manifest_sha256 = "9dfbbe6da09efdcf3965818d4cd6e50a7ac1c2c3ac9cb1a981ad2a1b34a7c07d"
+canary_run_sha256 = "ffcc6c428e668405c7ca468b23168606b49bfb2b60060d94a4b44117774c3c90"
+
+route_ids = [
+  "linux-x86-64-gcc",
+  "windows-x86-64-llvm-mingw",
+  "linux-arm32-gcc",
+  "linux-aarch64-gcc",
+  "linux-mips32-be-gcc",
+  "linux-mips32-le-gcc",
+  "linux-powerpc32-be-gcc",
+  "linux-sh32-gcc",
+  "linux-m68k-gcc",
+]
+treatment_ids = [
+  "baseline_o2",
+  "optimization_o0",
+  "optimization_o3",
+  "optimization_os",
+  "frame_pointer_omitted",
+  "stack_protector_strong",
+]
+
+[environment]
+ghidra_version = "12.1.2"
+ghidra_release = "DEV"
+ghidra_build = "2026-Jun-29 1514 GMT"
+ghidra_application_properties_sha256 = "6c9c4c2ea57918ad96e14e85d0ecb37fe6ccb4648f972bc62392629dbec8b45d"
+pyghidra_version = "3.1.0"
+java_version = "21.0.11"
+gcc_version = "14.3.0"
+clang_version = "23.1.0"
+
+[canary]
+scheduled_executions = 9
+completed_executions = 9
+failed_executions = 0
+wall_time_ns = 51282563566
+peak_scratch_bytes = 240560471
+retained_bytes = 151308
+peak_process_rss_bytes = 4338679808
+
+[measurements]
+replays = 2
+build_cells_per_replay = 54
+scheduled_executions = 108
+completed_executions = 108
+failed_executions = 0
+wall_time_ns = 492456917639
+peak_active_replay_scratch_bytes = 1356658659
+final_scratch_bytes = 2684774362
+retained_bytes = 1852298
+run_directory_bytes = 2701407346
+peak_process_rss_bytes = 7457091584
+successful_route_profile_pairs = 54
+
+[replay_1]
+wall_time_ns = 251685758154
+peak_scratch_bytes = 1356658659
+final_scratch_bytes = 1356658659
+retained_bytes = 926254
+peak_process_rss_bytes = 7457091584
+resource_samples = 230
+fid_programs = 810
+fid_attempted = 10002
+fid_added = 6947
+fid_excluded = 3055
+fidb_bytes = 631695
+
+[replay_2]
+wall_time_ns = 240560252519
+peak_scratch_bytes = 1328115703
+final_scratch_bytes = 1328115703
+retained_bytes = 926044
+peak_process_rss_bytes = 5619474432
+resource_samples = 219
+fid_programs = 810
+fid_attempted = 10010
+fid_added = 6947
+fid_excluded = 3063
+fidb_bytes = 631485
+
+[reproducibility]
+compared_cells = 54
+artifact_byte_identical_cells = 48
+artifact_byte_mismatch_cells = 6
+fid_semantic_identical_cells = 53
+fid_semantic_mismatch_cells = 1
+fidb_container_byte_identical_cells = 0
+fidb_container_byte_mismatch_cells = 54
+interpretation = "Build artifacts repeat exactly on all eight ELF routes. All six PE/COFF cells differ at the compiled-object level. Recovered FID additions are stable in all 54 cells, while SH4 Os attempted and excluded counts differ by eight. Raw FIDB container digests differ in every cell and are not treated as a semantic mismatch."
+
+[[reproducibility.artifact_mismatch]]
+route_id = "windows-x86-64-llvm-mingw"
+treatment_ids = ["baseline_o2", "optimization_o0", "optimization_o3", "optimization_os", "frame_pointer_omitted", "stack_protector_strong"]
+
+[[reproducibility.semantic_mismatch]]
+route_id = "linux-sh32-gcc"
+treatment_id = "optimization_os"
+replay_1_fid_programs = 15
+replay_1_fid_attempted = 320
+replay_1_fid_added = 137
+replay_1_fid_excluded = 183
+replay_2_fid_programs = 15
+replay_2_fid_attempted = 328
+replay_2_fid_added = 137
+replay_2_fid_excluded = 191
+
+[linear_projection]
+status = "provisional"
+assumption = "One fixed library scales linearly with no parallelism, cache benefit, cross-library Ghidra batching effect, failure retry, or corpus-dependent size effect. Validate with the top-10 batch before planning 80 libraries."
+ten_libraries_wall_time_ns = 4924569176390
+ten_libraries_final_scratch_bytes = 26847743620
+ten_libraries_retained_bytes = 18522980
+ten_libraries_run_directory_bytes = 27014073460
+eighty_libraries_wall_time_ns = 39396553411120
+eighty_libraries_final_scratch_bytes = 214781948960
+eighty_libraries_retained_bytes = 148183840
+eighty_libraries_run_directory_bytes = 216112587680

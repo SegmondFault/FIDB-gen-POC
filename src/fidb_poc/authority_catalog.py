@@ -437,6 +437,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
             "width_compilations": "coverage/c-width-v1.toml",
+            "width_evidence": "coverage/evidence/c-width-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
         },
         "source_digests": {
@@ -450,6 +451,12 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()
+            ).hexdigest(),
+            "c_width_evidence_sha256": hashlib.sha256(
+                (
+                    root
+                    / "coverage/evidence/c-width-v1-reference-host-2026-09-02.toml"
+                ).read_bytes()
             ).hexdigest(),
         },
     }

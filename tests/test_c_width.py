@@ -41,11 +41,14 @@ class CWidthCompilerTests(unittest.TestCase):
             all(row["reasons"] for row in cells if row["state"] != "executable")
         )
 
-    def test_layer_authority_is_bounded_and_disarmed(self):
+    def test_layer_authority_is_bounded_and_bound_to_measured_freeze(self):
         authority = load_c_width_authority(self.root / "coverage/c-width-v1.toml")
 
-        self.assertEqual(authority["state"], "candidate-disarmed")
+        self.assertEqual(authority["state"], "frozen-measured")
         self.assertEqual(authority["selected_replay"], 2)
+        self.assertEqual(authority["freeze"]["completed_executions"], 108)
+        self.assertEqual(authority["freeze"]["artifact_byte_identical_cells"], 48)
+        self.assertEqual(authority["freeze"]["fid_semantic_identical_cells"], 53)
         self.assertEqual(
             [row["state"] for row in authority["artifact_profiles"]],
             ["registered", "desired", "guarded", "desired"],

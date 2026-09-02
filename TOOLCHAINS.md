@@ -132,6 +132,29 @@ comparison. Replay comparison deliberately separates compiled-object bytes,
 FID semantic counts, and raw FIDB container bytes; a container digest change
 must not be reported as a recovered-function change.
 
+### Frozen `c-width-v1` measurement
+
+The 2026-09-02 `reference-host` run completed all 108 scheduled executions: nine
+routes by six build profiles by two isolated replays. It took 492.46 seconds
+(8m12.46s), peaked at 1,356,658,659 bytes of active-replay scratch and
+7,457,091,584 bytes of process RSS, retained 2,684,774,362 bytes of final
+scratch across both replays, and produced 1,852,298 bytes beneath the retained
+FIDB/manifest roots. There were no build or FID failures.
+
+Replay comparison found byte-identical object sets in 48 of 54 cells: all
+eight ELF routes repeated exactly, while all six PE/COFF profiles did not.
+FID semantic counts repeated in 53 of 54 cells. SH4 `-Os` added the same 137
+functions in both runs but attempted/excluded counts differed by eight. Raw
+FIDB container bytes differed in all 54 cells and are therefore tracked
+separately from semantic results. The checksum-bound compact record is
+`coverage/evidence/c-width-v1-reference-host-2026-09-02.toml`.
+
+A deliberately naive linear projection puts the same width over ten libraries
+at about 1h22m and 26.85 GB final scratch, and over 80 libraries at about 10h57m
+and 214.78 GB final scratch. Those are calibration projections, not an ETA:
+the top-10 run must measure cross-library batching, caching, corpus size, and
+failure-retry effects before the 80-library plan is fixed.
+
 ## Current non-Apple qualification
 
 On 2026-09-02, `reference-host` qualified all nine Linux-managed routes at revision
@@ -139,7 +162,8 @@ On 2026-09-02, `reference-host` qualified all nine Linux-managed routes at revis
 C++17 objects with the expected target identity and a static `ar` archive.
 The result was 9 qualified routes, 0 missing qualifications, 0 broken routes,
 and one deliberately deferred external Apple route. No library or FIDB batch
-was executed.
+had been executed at the point that qualification record was written; the
+later `c-width-v1` measurement above is separate evidence.
 
 The compact audit record is
 `toolchains/evidence/c-top10-linux-reference-host-2026-09-02.toml`. Full records and

@@ -821,6 +821,18 @@ export type WidthCompilation = {
   fixed_recipe: string;
   toolchain_profile: string;
   route_profile_digest: string;
+  freeze?: {
+    evidence_path: string;
+    evidence_sha256: string;
+    executed_compilation_digest: string;
+    completed_executions: number;
+    wall_time_ns: number;
+    peak_active_replay_scratch_bytes: number;
+    final_scratch_bytes: number;
+    retained_bytes: number;
+    artifact_byte_identical_cells: number;
+    fid_semantic_identical_cells: number;
+  };
   routes: Array<{
     id: string;
     label: string;
