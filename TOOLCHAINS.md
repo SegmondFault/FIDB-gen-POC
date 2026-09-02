@@ -141,7 +141,19 @@ fidb-poc run-width --project-root . --execute
 
 Each live invocation creates a new immutable run directory under
 `artifacts/width-runs/c-width-v1/`; it never replaces an earlier run. The full
-run executes the 174 applicability-approved route/profile cells once and
+run executes the 174 applicability-approved route/profile cells once. Each
+cell has an isolated work and artifact root, while a bounded process pool runs
+independent embedded Ghidra JVMs concurrently. The default worker count is the
+lowest of the CPU bound, one worker per 8 GiB of currently available host RAM,
+and twelve; override it explicitly with `--workers N` only after checking a
+measured peak. On `reference-host`, Linux currently sees about 62 GiB of the 128 GB
+unified-memory machine because of the graphics allocation, so the automatic
+starting width is six workers.
+
+Successful cells discard reproducible bulk source, build and Ghidra-project
+scratch after measuring it, while retaining published artifacts, manifests,
+logs and JVM user evidence. A durable `replay-progress.json` checkpoint is
+rewritten after every returned cell. The completed run
 writes `width-run.json` with wall time, peak and final scratch size, retained
 size, peak process RSS, per-cell failures, and coverage contribution. Per-cell
 FID signatures are retained for unique and marginal-coverage comparison; raw
@@ -152,10 +164,15 @@ ledger. Its comparison identity is Ghidra language, full hash, specific hash,
 specific-hash additional size and code-unit size; function name and object
 domain path remain attached as diagnostic evidence. The run summary reports
 union and exclusive signature counts by compiler and treatment, compiler
-marginals within each target/treatment, treatment marginals within each route,
-all same-target pairwise overlaps, and near-duplicate pairs at Jaccard 0.98 or
-higher. This preserves the raw function evidence so later regrouping does not
-require recompilation.
+marginals within each fixed target/treatment, treatment marginals within each
+fixed route, and clean pairwise comparisons along both axes. Wall time and
+retained bytes are attached to the same cells, yielding marginal/exclusive
+signatures per wall hour. The report explicitly lists one-percent-or-less
+marginal members and pairs at Jaccard 0.98 or higher as candidates for an
+over-stressed factor; these are evidence for review, not automatic deletion.
+The broader same-target overlaps remain available too. Preserving the raw
+function evidence means later thresholds and regrouping do not require
+recompilation.
 
 ### Frozen route/toolchain-canary measurement
 

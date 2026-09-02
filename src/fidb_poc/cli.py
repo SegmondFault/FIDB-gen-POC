@@ -90,6 +90,14 @@ def _run_width_main(argv: list[str]) -> int:
         action="store_true",
         help="perform downloads, builds and analysis (otherwise preview only)",
     )
+    result.add_argument(
+        "--workers",
+        type=int,
+        help=(
+            "bounded parallel cell workers "
+            "(default: memory/CPU-aware and capped at 12; explicit maximum: 32)"
+        ),
+    )
     result.add_argument("--verbose", "-v", action="store_true")
     arguments = result.parse_args(argv)
     try:
@@ -103,13 +111,20 @@ def _run_width_main(argv: list[str]) -> int:
             plan = compile_width_run_plan(
                 arguments.project_root, canary=arguments.canary
             )
-            print(json.dumps(width_run_preview(plan), indent=2, sort_keys=True))
+            print(
+                json.dumps(
+                    width_run_preview(plan, workers=arguments.workers),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
             return 0
         outcome, path = execute_width_run(
             arguments.project_root,
             canary=arguments.canary,
             progress=print,
             verbose=arguments.verbose,
+            workers=arguments.workers,
         )
         print(f"Width result: {path}")
         return 0 if outcome["state"] == "measured-complete" else 1

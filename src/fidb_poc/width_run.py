@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import csv
+import concurrent.futures
 import hashlib
 import json
+import multiprocessing
 import os
 import re
+import shutil
 import threading
 import time
 from collections import Counter
@@ -18,7 +21,7 @@ from .c_width import compile_c_width, materialize_width_configuration
 from .config import Configuration
 from .hash_coverage import analyze_signature_coverage
 from .toolchain_packs import resolve_toolchain_profile
-from .pipeline import PipelineError, execute
+from .pipeline import PipelineError, download_library, execute
 from .timing import utc_now
 
 WIDTH_RUN_SCHEMA = "fidb-width-run/v1"
@@ -46,23 +49,31 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _directory_size(path: Path) -> int:
+def _directory_size(path: Path, seen: set[tuple[int, int]] | None = None) -> int:
     total = 0
+    observed = seen if seen is not None else set()
     if not path.exists():
         return total
     for parent, _directories, files in os.walk(path):
         for name in files:
             candidate = Path(parent) / name
             try:
-                total += candidate.stat(follow_symlinks=False).st_size
+                metadata = candidate.stat(follow_symlinks=False)
             except FileNotFoundError:
                 continue
+            identity = (metadata.st_dev, metadata.st_ino)
+            if identity in observed:
+                continue
+            observed.add(identity)
+            total += metadata.st_size
     return total
 
 
-def _rss_bytes() -> int:
+def _pid_rss_bytes(pid: int) -> int:
     try:
-        for line in Path("/proc/self/status").read_text(encoding="utf-8").splitlines():
+        for line in (
+            Path(f"/proc/{pid}/status").read_text(encoding="utf-8").splitlines()
+        ):
             if line.startswith("VmRSS:"):
                 return int(line.split()[1]) * 1024
     except (OSError, ValueError, IndexError):
@@ -70,24 +81,69 @@ def _rss_bytes() -> int:
     return 0
 
 
+def _process_tree_pids(root_pid: int) -> set[int]:
+    pending = [root_pid]
+    observed: set[int] = set()
+    while pending:
+        pid = pending.pop()
+        if pid in observed:
+            continue
+        observed.add(pid)
+        try:
+            children = Path(f"/proc/{pid}/task/{pid}/children").read_text(
+                encoding="utf-8"
+            )
+            pending.extend(int(value) for value in children.split())
+        except (FileNotFoundError, OSError, ValueError):
+            continue
+    return observed
+
+
+def _rss_bytes() -> int:
+    return sum(_pid_rss_bytes(pid) for pid in _process_tree_pids(os.getpid()))
+
+
 def _scratch_size(replay_root: Path) -> int:
-    return sum(_directory_size(path) for path in replay_root.glob("group-*/work"))
+    grouped = list(replay_root.glob("group-*/work"))
+    direct = replay_root / "work"
+    if direct.is_dir():
+        grouped.append(direct)
+    observed: set[tuple[int, int]] = set()
+    return sum(_directory_size(path, observed) for path in grouped)
 
 
 class _ResourceSampler:
-    def __init__(self, run_root: Path, interval_seconds: float = 1.0):
+    def __init__(
+        self,
+        run_root: Path,
+        interval_seconds: float = 5.0,
+        *,
+        filesystem_scratch: bool = False,
+    ):
         self.run_root = run_root
         self.interval_seconds = interval_seconds
+        self.filesystem_scratch = filesystem_scratch
         self.peak_scratch_bytes = 0
         self.peak_rss_bytes = 0
         self.samples = 0
+        self._available_at_start = self._available_bytes()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._sample, daemon=True)
 
+    def _available_bytes(self) -> int:
+        try:
+            values = os.statvfs(self.run_root)
+            return values.f_bavail * values.f_frsize
+        except OSError:
+            return 0
+
     def _measure(self) -> None:
-        self.peak_scratch_bytes = max(
-            self.peak_scratch_bytes, _scratch_size(self.run_root)
-        )
+        if self.filesystem_scratch:
+            available = self._available_bytes()
+            scratch = max(0, self._available_at_start - available)
+        else:
+            scratch = _scratch_size(self.run_root)
+        self.peak_scratch_bytes = max(self.peak_scratch_bytes, scratch)
         self.peak_rss_bytes = max(self.peak_rss_bytes, _rss_bytes())
         self.samples += 1
 
@@ -110,9 +166,7 @@ def compile_width_run_plan(project_root: str | Path, *, canary: bool) -> WidthRu
     root = Path(project_root).expanduser().resolve()
     compilation = compile_c_width(root)
     fixed_recipe = str(compilation["fixed_recipe"])
-    route_plan = resolve_toolchain_profile(
-        root, str(compilation["toolchain_profile"])
-    )
+    route_plan = resolve_toolchain_profile(root, str(compilation["toolchain_profile"]))
     configuration = materialize_width_configuration(root, fixed_recipe, route_plan)
     executable = [
         row for row in compilation["applicability"] if row["state"] == "executable"
@@ -163,25 +217,43 @@ def compile_width_run_plan(project_root: str | Path, *, canary: bool) -> WidthRu
 
 
 def _groups(plan: WidthRunPlan) -> tuple[Configuration, ...]:
-    """Group routes sharing a treatment set without adding Cartesian cells."""
+    """Materialize one isolated configuration per applicable width cell."""
     route_by_id = {route.id: route for route in plan.configuration.routes}
     treatment_by_id = {
         treatment.id: treatment for treatment in plan.configuration.treatments
     }
-    grouped: dict[tuple[str, ...], list[str]] = {}
-    for route, treatments in plan.route_treatments:
-        grouped.setdefault(treatments, []).append(route)
     return tuple(
         replace(
             plan.configuration,
-            routes=tuple(route_by_id[route] for route in routes),
-            treatments=tuple(treatment_by_id[item] for item in treatments),
+            routes=(route_by_id[route],),
+            treatments=(treatment_by_id[treatment],),
         )
-        for treatments, routes in grouped.items()
+        for route, treatments in plan.route_treatments
+        for treatment in treatments
     )
 
 
-def width_run_preview(plan: WidthRunPlan) -> dict[str, object]:
+def default_width_workers() -> int:
+    """Choose a conservative bound for concurrent embedded Ghidra JVMs."""
+    cpu_bound = max(1, (os.cpu_count() or 1) // 4)
+    memory_bytes = 0
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                memory_bytes = int(line.split()[1]) * 1024
+                break
+    except (OSError, ValueError, IndexError):
+        pass
+    memory_bound = max(1, memory_bytes // (8 * 1024**3)) if memory_bytes else 1
+    return min(12, cpu_bound, memory_bound)
+
+
+def width_run_preview(
+    plan: WidthRunPlan, *, workers: int | None = None
+) -> dict[str, object]:
+    parallel_workers = default_width_workers() if workers is None else workers
+    if parallel_workers < 1 or parallel_workers > 32:
+        raise ValueError("width workers must be between 1 and 32")
     cells = [
         {
             "route_id": route,
@@ -202,6 +274,7 @@ def width_run_preview(plan: WidthRunPlan) -> dict[str, object]:
         "build_cells_per_replay": plan.cell_count,
         "scheduled_executions": plan.cell_count * plan.replays,
         "groups_per_replay": len(_groups(plan)),
+        "parallel_workers": parallel_workers,
         "cells": cells,
     }
 
@@ -415,21 +488,132 @@ def _replay_comparison(replays: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _seed_source_cache(
+    project_root: Path, run_root: Path, configuration: Configuration
+) -> dict[str, Path]:
+    cache = run_root / "source-cache"
+    cache.mkdir()
+    result: dict[str, Path] = {}
+    for library in configuration.libraries:
+        name = f"{library.identifier}.tar.gz"
+        existing = project_root / "work/downloads" / name
+        destination = cache / name
+        if (
+            existing.is_file()
+            and existing.stat().st_size > 0
+            and _sha256(existing) == library.sha256
+        ):
+            try:
+                os.link(existing, destination)
+            except OSError:
+                shutil.copy2(existing, destination)
+        archive = download_library(library, cache)
+        result[library.identifier] = archive
+    return result
+
+
+def _seed_group_sources(
+    configuration: Configuration,
+    group_root: Path,
+    source_cache: dict[str, Path],
+) -> None:
+    downloads = group_root / "work/downloads"
+    downloads.mkdir(parents=True)
+    for library in configuration.libraries:
+        source = source_cache[library.identifier]
+        destination = downloads / f"{library.identifier}.tar.gz"
+        try:
+            os.link(source, destination)
+        except OSError:
+            shutil.copy2(source, destination)
+
+
+def _release_cell_scratch(group_root: Path) -> None:
+    """Drop reproducible bulk work while retaining logs and JVM user state."""
+    work = group_root / "work"
+    targets = (
+        work / "sources",
+        work / "builds",
+        work / "ghidra/projects",
+        work / "ghidra/references",
+        work / "ghidra/candidates",
+    )
+    for target in targets:
+        if target.is_symlink():
+            raise PipelineError(f"refusing symlinked width scratch target: {target}")
+        if target.exists():
+            expected_parent = work if target.parent == work else work / "ghidra"
+            if target.resolve().parent != expected_parent.resolve():
+                raise PipelineError(f"width scratch target escaped its group: {target}")
+            shutil.rmtree(target)
+
+
+def _execute_cell(
+    configuration: Configuration, group_root_text: str, verbose: bool
+) -> dict[str, object]:
+    """Process-pool entry point for one isolated route/treatment cell."""
+    group_root = Path(group_root_text)
+    route_id = configuration.routes[0].id
+    treatment_id = configuration.treatments[0].id
+    started_at = utc_now()
+    started_ns = time.monotonic_ns()
+    manifest: Path | None = None
+    pipeline_error = ""
+    with _ResourceSampler(group_root) as sampler:
+        try:
+            manifest = execute(configuration, group_root, verbose=verbose)
+        except (OSError, ValueError, PipelineError) as error:
+            pipeline_error = str(error)
+            candidate = group_root / "artifacts/libs/fidb_manifest.csv"
+            if candidate.is_file():
+                manifest = candidate
+    generated_scratch_bytes = _directory_size(group_root / "work")
+    if manifest is not None and not pipeline_error:
+        _release_cell_scratch(group_root)
+    return {
+        "route_id": route_id,
+        "treatment_id": treatment_id,
+        "started_at_utc": started_at,
+        "finished_at_utc": utc_now(),
+        "wall_time_ns": max(0, time.monotonic_ns() - started_ns),
+        "peak_scratch_bytes": sampler.peak_scratch_bytes,
+        "generated_scratch_bytes": generated_scratch_bytes,
+        "final_scratch_bytes": _directory_size(group_root / "work"),
+        "retained_bytes": _directory_size(group_root / "artifacts/libs"),
+        "peak_process_rss_bytes": sampler.peak_rss_bytes,
+        "resource_samples": sampler.samples,
+        "manifest": str(manifest) if manifest is not None else "",
+        "pipeline_error": pipeline_error,
+    }
+
+
+def _cell_status(manifest: Path | None) -> str:
+    if manifest is None or not manifest.is_file():
+        return "pipeline_error"
+    with manifest.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    statuses = {row["status"] for row in rows}
+    return next(iter(statuses)) if len(statuses) == 1 else "mixed"
+
+
 def execute_width_run(
     project_root: str | Path,
     *,
     canary: bool,
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
+    workers: int | None = None,
 ) -> tuple[dict[str, object], Path]:
     root = Path(project_root).expanduser().resolve()
     plan = compile_width_run_plan(root, canary=canary)
     announce = progress or (lambda _message: None)
-    run_root = _validated_run_root(
-        root, str(plan.compilation["id"]), _run_id(plan)
-    )
-    preview = width_run_preview(plan)
+    parallel_workers = default_width_workers() if workers is None else workers
+    if parallel_workers < 1 or parallel_workers > 32:
+        raise ValueError("width workers must be between 1 and 32")
+    run_root = _validated_run_root(root, str(plan.compilation["id"]), _run_id(plan))
+    preview = width_run_preview(plan, workers=parallel_workers)
     _atomic_json(run_root / "width-run-plan.json", preview)
+    source_cache = _seed_source_cache(root, run_root, plan.configuration)
     started_at = utc_now()
     started_ns = time.monotonic_ns()
     replay_results: list[dict[str, object]] = []
@@ -441,35 +625,106 @@ def execute_width_run(
         replay_started_ns = time.monotonic_ns()
         manifests: list[Path] = []
         pipeline_errors: list[str] = []
+        measurements: list[dict[str, object]] = []
         announce(
             f"[width replay {replay_index}/{plan.replays}] "
-            f"{plan.cell_count} build cells"
+            f"{plan.cell_count} build cells; workers={parallel_workers}"
         )
-        with _ResourceSampler(replay_root) as sampler:
+        with _ResourceSampler(replay_root, filesystem_scratch=True) as sampler:
+            scheduled = []
             for group_index, configuration in enumerate(groups, start=1):
-                group_root = replay_root / f"group-{group_index:02d}"
+                group_root = replay_root / f"group-{group_index:03d}"
                 group_root.mkdir()
-                announce(
-                    f"[width group {group_index}/{len(groups)}] "
-                    f"routes={len(configuration.routes)} "
-                    f"treatments={len(configuration.treatments)}"
-                )
-                try:
-                    manifest = execute(
-                        configuration,
-                        group_root,
-                        progress=announce,
-                        verbose=verbose,
+                _seed_group_sources(configuration, group_root, source_cache)
+                scheduled.append((group_index, configuration, group_root))
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=parallel_workers,
+                mp_context=multiprocessing.get_context("spawn"),
+            ) as executor:
+                future_rows = {
+                    executor.submit(
+                        _execute_cell, configuration, str(group_root), verbose
+                    ): (group_index, configuration, group_root)
+                    for group_index, configuration, group_root in scheduled
+                }
+                for completed_index, future in enumerate(
+                    concurrent.futures.as_completed(future_rows), start=1
+                ):
+                    group_index, configuration, group_root = future_rows[future]
+                    route_id = configuration.routes[0].id
+                    treatment_id = configuration.treatments[0].id
+                    try:
+                        measurement = future.result()
+                    except Exception as error:
+                        measurement = {
+                            "route_id": route_id,
+                            "treatment_id": treatment_id,
+                            "started_at_utc": "",
+                            "finished_at_utc": utc_now(),
+                            "wall_time_ns": 0,
+                            "peak_scratch_bytes": 0,
+                            "generated_scratch_bytes": _directory_size(
+                                group_root / "work"
+                            ),
+                            "final_scratch_bytes": _directory_size(group_root / "work"),
+                            "retained_bytes": _directory_size(
+                                group_root / "artifacts/libs"
+                            ),
+                            "peak_process_rss_bytes": 0,
+                            "resource_samples": 0,
+                            "manifest": "",
+                            "pipeline_error": (
+                                f"worker {type(error).__name__}: {error}"
+                            ),
+                        }
+                    manifest_text = str(measurement.pop("manifest"))
+                    manifest = Path(manifest_text) if manifest_text else None
+                    if manifest is not None:
+                        manifests.append(manifest)
+                    pipeline_error = str(measurement["pipeline_error"])
+                    if pipeline_error:
+                        pipeline_errors.append(
+                            f"{route_id}/{treatment_id}: {pipeline_error}"
+                        )
+                    measurement["group"] = group_index
+                    measurement["status"] = _cell_status(manifest)
+                    measurements.append(measurement)
+                    wall_seconds = int(measurement["wall_time_ns"]) / 1_000_000_000
+                    announce(
+                        f"[width cell {completed_index}/{len(groups)}] "
+                        f"{route_id}/{treatment_id} "
+                        f"{measurement['status']} {wall_seconds:.1f}s"
                     )
-                except (OSError, ValueError, PipelineError) as error:
-                    pipeline_errors.append(str(error))
-                    candidate = group_root / "artifacts/libs/fidb_manifest.csv"
-                    if candidate.is_file():
-                        manifests.append(candidate)
-                else:
-                    manifests.append(manifest)
+                    _atomic_json(
+                        replay_root / "replay-progress.json",
+                        {
+                            "schema_version": WIDTH_RUN_SCHEMA,
+                            "state": "running",
+                            "completed_cells": completed_index,
+                            "scheduled_cells": len(groups),
+                            "measurements": sorted(
+                                measurements, key=lambda row: int(row["group"])
+                            ),
+                        },
+                    )
         cells, failures = _manifest_rows(manifests, plan.compilation)
-        hash_coverage = analyze_signature_coverage(manifests, plan.compilation)
+        measurement_by_cell = {
+            (str(row["route_id"]), str(row["treatment_id"])): row
+            for row in measurements
+        }
+        for cell in cells:
+            measurement = measurement_by_cell[(cell["route_id"], cell["treatment_id"])]
+            for name in (
+                "wall_time_ns",
+                "peak_scratch_bytes",
+                "final_scratch_bytes",
+                "retained_bytes",
+                "peak_process_rss_bytes",
+            ):
+                cell[name] = measurement[name]
+        hash_coverage = analyze_signature_coverage(
+            manifests, plan.compilation, measurements
+        )
         outcomes = Counter(row["status"] for row in cells)
         replay_result: dict[str, object] = {
             "replay": replay_index,
@@ -478,15 +733,14 @@ def execute_width_run(
             "wall_time_ns": max(0, time.monotonic_ns() - replay_started_ns),
             "peak_scratch_bytes": sampler.peak_scratch_bytes,
             "final_scratch_bytes": _scratch_size(replay_root),
-            "retained_bytes": sum(
-                _directory_size(replay_root / f"group-{index:02d}/artifacts/libs")
-                for index in range(1, len(groups) + 1)
-            ),
+            "retained_bytes": sum(int(row["retained_bytes"]) for row in measurements),
             "peak_process_rss_bytes": sampler.peak_rss_bytes,
             "resource_samples": sampler.samples,
+            "parallel_workers": parallel_workers,
             "manifest_sha256": [_sha256(path) for path in manifests],
             "outcomes": dict(sorted(outcomes.items())),
             "cells": cells,
+            "measurements": sorted(measurements, key=lambda row: int(row["group"])),
             "failures": failures,
             "pipeline_errors": pipeline_errors,
             "hash_coverage": hash_coverage,
@@ -516,6 +770,8 @@ def execute_width_run(
         "replays": plan.replays,
         "build_cells_per_replay": plan.cell_count,
         "scheduled_executions": expected,
+        "parallel_workers": parallel_workers,
+        "source_cache_bytes": _directory_size(run_root / "source-cache"),
         "completed_executions": completed,
         "failed_executions": expected - completed,
         "peak_scratch_bytes": max(

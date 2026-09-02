@@ -1,12 +1,15 @@
 import contextlib
 import io
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
 from fidb_poc.cli import main
 from fidb_poc.c_width import compile_c_width
 from fidb_poc.width_run import (
+    _groups,
+    _release_cell_scratch,
     _replay_comparison,
     compile_width_run_plan,
     width_run_preview,
@@ -32,6 +35,11 @@ class WidthRunTests(unittest.TestCase):
         self.assertEqual(len(preview["cells"]), qualified * 6)
         self.assertEqual(len({row["route_id"] for row in preview["cells"]}), qualified)
         self.assertTrue(all(row["profile_id"] for row in preview["cells"]))
+        groups = _groups(plan)
+        self.assertEqual(len(groups), preview["scheduled_executions"])
+        self.assertTrue(
+            all(len(group.routes) == len(group.treatments) == 1 for group in groups)
+        )
 
     def test_canary_selects_one_baseline_cell_per_route(self):
         preview = width_run_preview(compile_width_run_plan(self.root, canary=True))
@@ -99,6 +107,27 @@ class WidthRunTests(unittest.TestCase):
         self.assertEqual(comparison["fidb_container_bytes"]["matching_cells"], 0)
         self.assertEqual(comparison["fid_semantics"]["matching_cells"], 0)
         self.assertEqual(len(comparison["fid_semantics"]["mismatches"]), 1)
+
+    def test_scratch_release_keeps_logs_and_ghidra_user_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            group = Path(temporary) / "group-001"
+            removable = (
+                "work/sources",
+                "work/builds",
+                "work/ghidra/projects",
+                "work/ghidra/references",
+                "work/ghidra/candidates",
+            )
+            retained = ("work/logs", "work/downloads", "work/ghidra/user")
+            for relative in removable + retained:
+                path = group / relative
+                path.mkdir(parents=True)
+                (path / "evidence").write_text("x", encoding="utf-8")
+
+            _release_cell_scratch(group)
+
+            self.assertTrue(all(not (group / path).exists() for path in removable))
+            self.assertTrue(all((group / path).is_dir() for path in retained))
 
 
 if __name__ == "__main__":
