@@ -141,10 +141,10 @@ paths do not consume lane databases. To abandon the experiment safely:
 2. Preserve any generated `var/fidb-lanes/` directory as experimental evidence,
    or remove it only after an explicit data-retention decision. It is ignored by
    Git and is not an input to the existing worker.
-3. Revert the feature commits in reverse chronological order. The deduplication
-   experiment is isolated in `64a1fbf` and can be reverted alone. The remaining
-   implementation commits are `19f9068`, `cff79ea`, `d20305b`, `da9ac8f`,
-   `1b5f8bc`, `77fccb8`, `7bfbe91` and `b55b73d`.
+3. Inspect `git log` and revert every lane-related commit in reverse
+   chronological order, including later formatting or documentation follow-ups.
+   The experiment begins at `b55b73d`. The deduplication experiment is isolated
+   in `64a1fbf` and can be reverted alone if only that design is rejected.
 4. Run the ordinary unit/format/control-panel checks. The original per-cell
    FIDB/FIDBF artifacts and width evidence are untouched and require no restore.
 
