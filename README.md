@@ -204,47 +204,46 @@ each attempt; only the immutable verified input is shared.
 
 ### Portable toolchain profiles
 
-The broader width study uses C-family profiles rather than a collection of
-machine-local installation notes. C libraries are the active scope; C++ is
-included only where an in-scope C library or C API requires it. No other
-language ecosystem is part of the current campaign.
+The broader width study uses language-scoped profiles rather than a collection
+of machine-local installation notes. C libraries are the active campaign;
+C++ is included where an in-scope library requires it. The transport and
+worker model are language-neutral so later languages can add their own finite
+profiles and reviewed probes without inheriting C's multiplier.
 
-The `c-top10-linux` profile implements all ten ordered target requirements from
-a Linux x86-64 acquisition host: eight Bootlin GCC routes, an llvm-mingw Windows
-route, and an LLVM/Clang + osxcross macOS route. The macOS route also reports a
-separately supplied, pinned Apple SDK requirement. Inspect or pull it with:
+The `c-top10-linux` profile implements ten ordered target requirements: eight
+Bootlin GCC routes and an llvm-mingw Windows route are managed from Linux;
+native Apple Clang runs as a separately registered macOS ARM64 worker. Inspect
+or prepare the Linux-managed side with:
 
 ```sh
 ./scripts/toolchains/plan.sh c-top10-linux
 ./scripts/toolchains/status.sh c-top10-linux
 ./scripts/toolchains/pull.sh c-top10-linux
 ./scripts/toolchains/prepare.sh c-top10-linux
-./scripts/toolchains/bind-apple-sdk.sh \
-  /path/to/MacOSX.sdk.tar.xz SHA256 BYTES XCODE_VERSION SDK_VERSION DEPLOYMENT_TARGET
 ./scripts/toolchains/compose.sh c-top10-linux
 ./scripts/toolchains/qualify.sh c-top10-linux
 ```
 
 All operations emit stable JSON. `plan` and `status` are read-only. The mutation
 commands form a fixed lifecycle: checksum-pinned pull, traversal-safe
-preparation, private SDK binding, reviewed LLVM-flavour osxcross composition,
-and fixed C/C++17 target-format qualification. They accept reviewed IDs and
-metadata, never caller-supplied URLs or commands. The 11 archives total
-2,692,424,622 bytes (about 2.51 GiB) compressed. The current
-15,064,665,784-byte (about 14.03 GiB) prepared/composed estimate is planning
-evidence, not a measurement. A fresh checkout has downloaded none of these
-materials; the Apple SDK is never redistributed by the project.
+preparation, optional reviewed composition, and fixed route-specific
+qualification. They accept reviewed IDs, never caller-supplied URLs or
+commands. The nine archives total 753,465,840 bytes compressed; the current
+3,013,863,360-byte prepared estimate is planning evidence, not a measurement.
 
-The optional `c-top10-reference` profile keeps the same ten cross-build target
-requirements and adds native Apple Clang and MSVC implementations as separate
-reference evidence. The Targets & toolchains GUI shows cache, preparation,
-input-binding, composition and qualification as separate states, offers
-copyable commands, and remains read-only.
+The public project does not copy or redistribute Xcode or an Apple SDK. The
+definition in `toolchains/external/` keeps those tools on Apple hardware and
+records platform, Xcode, SDK, compiler, Ghidra, Java, resource, and language
+capabilities before the worker may register. A deliberately disarmed zlib
+canary is present for later review; repository preparation does not start a
+worker or run it. The optional `c-top10-reference` profile additionally keeps
+native MSVC as distinct Windows reference evidence.
 
-See [`TOOLCHAINS.md`](TOOLCHAINS.md) for the complete operator setup and Apple
-SDK handoff. See [`toolchains/README.md`](toolchains/README.md) for the authority
-layers, extension workflow, state vocabulary, safety contract, and
-machine/LLM-facing interface.
+See [`TOOLCHAINS.md`](TOOLCHAINS.md) for the complete operator setup, native
+Mac result handoff, and public/legal boundary. See
+[`toolchains/README.md`](toolchains/README.md) for the authority layers,
+extension workflow, state vocabulary, safety contract, and machine/LLM-facing
+interface.
 
 The optional `[queue]` table controls deterministic materialization order. Its
 `recipe_order` is the left-hand build order; `strategy` chooses whether all
@@ -381,6 +380,14 @@ seal/FIDB/FIDBF with digests, and asks the host to publish. The host rechecks
 lease ownership, resolved cell identity, seal contents, artifact sizes/digests
 and timing before fenced completion. Worker tokens live only in mode-0600
 environment/credential files; TOML and SQLite contain no plaintext token.
+The `macos-native` pool additionally requires a reviewed external-toolchain
+preflight registration. The Mac uploads only the three sealed outputs; Xcode,
+the SDK, Apple credentials, source/build scratch, and signing material remain
+on the Mac. The Linux coordinator validates and atomically publishes accepted
+outputs under `artifacts/runs/`, after which the ordinary GUI evidence view
+uses the same SQLite result references as Linux attempts.
+Large outputs use idempotent 8 MiB chunks and receive a final whole-file
+SHA-256 check before publication; the default per-artifact ceiling is 4 GiB.
 
 Every worker uses a fixed typed dispatcher and re-resolves the reviewed recipe,
 pins, target, toolchain, adapter and executor before running. A terminal success
@@ -598,7 +605,8 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |
 | `src/fidb_poc/toolchain_cache.py` | locked, checksum-verified content-addressed acquisition |
 | `src/fidb_poc/toolchain_prepare.py`, `toolchain_inputs.py` | safe prepared roots and private non-redistributed input binding |
-| `src/fidb_poc/toolchain_qualification.py` | reviewed osxcross composition and fixed C-family target smoke qualification |
+| `src/fidb_poc/toolchain_qualification.py` | reviewed route composition boundary and fixed target/language smoke qualification |
+| `src/fidb_poc/external_workers.py` | command-free external definitions, native preflight, and registration validation |
 | `src/fidb_poc/toolchain_packs.py` | strict pack/input/route/qualification/profile authority and read-only lifecycle resolution |
 | `src/fidb_poc/toolchain_cli.py` | typed registry acquisition and profile lifecycle commands |
 | `toolchains/packs.toml`, `inputs.toml`, `routes.toml`, `qualifications.toml`, `profiles/` | portable Linux x86-64 acquisition and qualification authority |

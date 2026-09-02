@@ -231,14 +231,36 @@ systemctl --user status fidb-remote-worker-api.service
 
 On a remote Linux worker with the same reviewed repository authorities and
 tooling, install `remote-worker.env.example` as mode 0600, then review and
-install `fidb-remote-library-worker.service`. The environment supplies the HTTPS
-origin, worker identity and plaintext token. The client checks its own schedule
-and resource gates, re-resolves every leased cell locally, renews the fence,
-streams timing, and uploads only the three material sealed outputs. The
-coordinator repeats identity, timing, path, size and digest checks before it can
-mark the job complete.
+install `fidb-remote-library-worker.service`. The `library-local` pool covers
+native Linux libraries, explicit-local source cross-builds, and archive
+extraction.
 
-The current authorized pool is still `library-local`: native Linux libraries,
-explicit-local source cross-builds and archive extraction. This transport is
-ready for remote Linux workers, but it does not invent macOS/Windows recipes or
-make the present Linux-only cells portable to those hosts.
+The same authenticated transport now has a distinct `macos-native` pool. Add a
+separate credential row using that pool, give the plaintext token only to the
+Mac, and use a local Mac checkout at the exact coordinator revision. Install
+`macos-worker.env.example` as
+`~/.config/fidb-factory/macos-worker.env` with mode 0600, then run the read-only
+host check:
+
+```sh
+./scripts/workers/macos-preflight.sh
+```
+
+This checks the command-free definition in `toolchains/external/`, Apple
+hardware, ARM64 macOS, Xcode/SDK/Apple Clang, Java, Ghidra/PyGhidra, resources,
+declared language smokes, and Mach-O/archive format. It does not contact the
+coordinator, claim a lease, or build a library.
+
+Only after a later run is explicitly reviewed and the queue is armed, use:
+
+```sh
+./scripts/workers/macos-run.sh --until-drained
+```
+
+The worker first registers its definition-bound preflight identity, checks its
+own schedule and resource gates, re-resolves every leased cell locally, renews
+the fence, streams timings, and uploads only the FIDB, FIDBF, and cell seal. The
+coordinator repeats lease, identity, path, size, digest, seal, and timing checks
+before atomic publication. Xcode, SDKs, credentials, build trees, and scratch
+never return to Linux. See `TOOLCHAINS.md` and
+`toolchains/external/README.md` for the complete boundary.

@@ -1,239 +1,207 @@
 # FIDB toolchains
 
-FIDB keeps the compiler breadth used by the C-library study inside a
-reproducible, project-local toolchain system. A profile describes the required
-target/compiler routes; reviewed TOML pins downloadable materials; the CLI
-acquires, prepares, composes, and qualifies them; and the GUI projects the same
-state for operators. Nothing in this workflow installs a compiler globally.
+FIDB models compiler breadth as reviewed project data. Profiles select target
+and compiler routes; TOML pins downloadable packs or declares external native
+workers; typed CLIs report and advance lifecycle state; and the GUI projects
+the same authority. Nothing installs a compiler globally.
 
-The active programme is for C libraries and C APIs. C++ is included where an
-in-scope library requires it, but this is not a general multi-language
-toolchain campaign.
+The current experiment is C libraries, with C++ included where an in-scope
+library needs it. The worker and artifact protocols are language-neutral:
+future languages get their own profiles, route definitions, probe adapters,
+and language capabilities without changing the coordinator transport.
 
-## Quick start
+## Current top-ten shape
 
-Run the workflow on a Linux x86-64 host from the repository root:
+`c-top10-linux` covers ten ordered target requirements with ten route
+implementations:
+
+| Route group | Provisioning | Output |
+| --- | --- | --- |
+| Linux x86-64, ARMv7, AArch64, MIPS BE/LE, PowerPC, SuperH, M68K | 8 checksum-pinned Bootlin GCC packs | ELF |
+| Windows x86-64 | checksum-pinned llvm-mingw | PE/COFF |
+| macOS ARM64 | native Apple worker defined in `toolchains/external/` | Mach-O |
+
+The nine downloadable archives total 753,465,840 bytes. Their current
+prepared-size estimate is 3,013,863,360 bytes. The macOS worker's Xcode,
+Ghidra, build scratch, and temporary output are additional host-local capacity,
+not part of the Linux pack estimate.
+
+`c-top10-reference` uses the same ten target requirements and adds native MSVC
+as a second Windows implementation. Cross-built PE/COFF never claims native
+MSVC equivalence. The macOS route is deliberately native Apple Clang primary
+evidence rather than Linux-produced Mach-O evidence.
+
+## Linux pack preparation
+
+From the Linux x86-64 coordinator checkout:
 
 ```sh
 ./scripts/toolchains/plan.sh c-top10-linux
 ./scripts/toolchains/status.sh c-top10-linux
 ./scripts/toolchains/pull.sh c-top10-linux
 ./scripts/toolchains/prepare.sh c-top10-linux
-```
-
-The `c-top10-linux` profile then pauses at `input-required` until an operator
-supplies an Apple macOS SDK. After binding that private input, finish the local
-routes with:
-
-```sh
-./scripts/toolchains/compose.sh c-top10-linux
 ./scripts/toolchains/qualify.sh c-top10-linux
 ./scripts/toolchains/status.sh c-top10-linux
 ```
 
-Every command emits structured JSON. `plan` and `status` are read-only. The
-other operations are idempotent and publish verified results atomically.
+`plan` and `status` are read-only. Pull verifies reviewed URLs, exact byte
+counts, and SHA-256 values. Prepare rejects unsafe archives before atomic
+publication. Qualify resolves only reviewed tools and runs fixed language,
+archive, and target-format probes. The GUI is an inspector for this lifecycle;
+it does not install toolchains.
 
-## What the top-ten profile contains
-
-`c-top10-linux` covers ten ordered C target requirements with eleven archives:
-
-| Route group | Compiler/toolchain | Output |
-| --- | --- | --- |
-| Linux x86-64 | Bootlin GCC, binutils, and glibc | x86-64 ELF |
-| Linux ARMv7 | Bootlin GCC, binutils, and glibc | ARM32 little-endian ELF |
-| Linux AArch64 | Bootlin GCC, binutils, and glibc | AArch64 ELF |
-| Linux MIPS | Two Bootlin GCC packs | MIPS32 big- and little-endian ELF |
-| Linux PowerPC | Bootlin GCC, binutils, and glibc | PowerPC e500mc ELF |
-| Linux SuperH | Bootlin GCC, binutils, and glibc | SH4 ELF |
-| Linux M68K | Bootlin GCC, binutils, and glibc | M68K ELF |
-| Windows x86-64 | llvm-mingw, Clang, LLD, and MinGW UCRT | PE/COFF |
-| macOS ARM64 | LLVM/Clang plus osxcross and an operator-supplied Apple SDK | Mach-O |
-
-The profile has 2,692,424,622 bytes of checksum-pinned downloads. Its retained
-prepared/composed planning estimate is 15,064,665,784 bytes, excluding extra
-temporary headroom needed for safe extraction and atomic publication.
-
-Cross-compiling PE/COFF or Mach-O on Linux proves those cross-build routes. It
-does not claim equivalence with native MSVC or Apple Clang. The
-`c-top10-reference` profile keeps native Windows and macOS workers as separate
-reference evidence for the same target requirements.
-
-## Lifecycle and states
-
-The lifecycle deliberately separates possession of an archive from evidence
-that a compiler route works:
-
-1. **Plan** resolves a reviewed profile and reports its identity, requirements,
-   host compatibility, disk estimate, and local state.
-2. **Pull** downloads immutable archives by reviewed URL, exact byte count, and
-   SHA-256 digest.
-3. **Prepare** safely extracts each verified archive into a sealed,
-   content-addressed root.
-4. **Bind input** copies a non-redistributed operator input, such as an Apple
-   SDK, into the same private store and records its provenance metadata.
-5. **Compose** builds a reviewed derived toolchain. The current composition is
-   the LLVM-flavour osxcross macOS ARM64 route.
-6. **Qualify** resolves fixed compiler tools and performs version, C, C++17,
-   archive, and target-object-format checks.
-7. **Run planning** may use the qualified routes in a separately reviewed
-   library experiment. Qualification alone does not admit a route to a batch.
-
-The JSON field `recommended_next_action` is the canonical machine-followable
-transition. Typical profile states are:
+Profile state is intentionally more precise than installed/not-installed:
 
 | State | Meaning |
 | --- | --- |
 | `acquisition-required` | One or more reviewed archives must be pulled. |
-| `preparation-required` | Cached archives still need safe extraction. |
-| `input-required` | A private operator input must be bound. |
-| `composition-required` | All inputs exist and a derived route can be built. |
-| `qualification-required` | One or more local routes need smoke qualification. |
-| `qualified-external-required` | Local routes passed; native reference workers remain external. |
-| `qualified` | Every route required by the profile is qualified. |
-| `blocked` | Integrity, authority, or host checks failed closed. |
+| `preparation-required` | Cached archives require safe extraction. |
+| `composition-required` | A reviewed multi-pack route requires composition. |
+| `qualification-required` | One or more local routes require fixed probes. |
+| `qualified-external-required` | Linux-managed routes passed; an external native worker must register. |
+| `qualified` | All routes in the profile are locally qualified. |
+| `blocked` | Authority, integrity, or host checks failed closed. |
 
-Do not collapse `verified-cached`, `prepared`, `bound-verified`, `composed`, and
-`qualified` into one installed/not-installed flag. They carry different
-evidence and make failures diagnosable.
+`recommended_next_action` is the machine-followable transition. For the
+current top-ten profile, the final transition is `start-external-workers`; it
+does not mean that a run should be armed.
 
-## Apple SDK handoff
+## Native Apple worker
 
-Apple SDK material participates in the same profile, status, composition, and
-qualification system, but it is an operator-supplied input rather than a
-redistributed pack. The repository commits its input definition and required
-metadata, not the SDK payload.
+The public project does not download, package, bind, copy, or redistribute an
+Apple SDK. Xcode and the macOS SDK remain installed and used on Apple-branded
+hardware running macOS. This is a deliberate technical boundary informed by
+Apple's [Xcode and Apple SDKs Agreement](https://www.apple.com/legal/sla/docs/xcode.pdf);
+each operator remains responsible for the terms applicable to their use.
 
-On a Mac with an appropriately licensed Xcode or Apple Command Line Tools
-installation:
+The reviewed definition is
+`toolchains/external/macos-arm64-apple-clang.toml`. It declares:
 
-1. Record the Xcode version with `xcodebuild -version` and the SDK version with
-   `xcrun --sdk macosx --show-sdk-version`.
-2. Package the SDK as `MacOSX*.sdk.tar.xz` by following the
-   [osxcross SDK packaging instructions](https://github.com/tpoechtrager/osxcross/blob/master/README.SDK.md).
-   The project pins osxcross commit
-   `27d21e4977c9751d01199c7a226a6faf494c3dd9` for composition.
-3. Copy the package to this Linux host. When using the `linux-home-share` Samba mount,
-   the following paths refer to the same checkout:
+- the `macos-native` worker pool and `macos-native-remote` class;
+- Darwin/ARM64 host and Mach-O/ARM64 target identities;
+- the fixed `apple-xcode` probe adapter;
+- current `c` and `cpp` capabilities;
+- deployment target, required tools and provenance fields; and
+- worker-specific memory, disk, and load floors.
 
-   ```text
-   macOS: /Volumes/linux-home-share/Projects/circl/FIDB-POC-unified
-   Linux: /home/fidb-operator/Projects/circl/FIDB-POC-unified
-   ```
+No TOML field contains a command. Adding another language to the protocol
+means adding a reviewed language profile and a fixed probe implementation,
+then declaring that capability in an external definition. It does not grant a
+caller or an LLM arbitrary command execution.
 
-   A suitable ignored staging location is
-   `var/fidb-toolchains/incoming/` beneath the checkout.
-4. On Linux, calculate the exact digest and byte count:
-
-   ```sh
-   sha256sum var/fidb-toolchains/incoming/MacOSX.sdk.tar.xz
-   stat -c '%s' var/fidb-toolchains/incoming/MacOSX.sdk.tar.xz
-   ```
-
-5. Bind the package, replacing every placeholder with the recorded value:
-
-   ```sh
-   ./scripts/toolchains/bind-apple-sdk.sh \
-     var/fidb-toolchains/incoming/MacOSX.sdk.tar.xz \
-     SHA256 BYTES XCODE_VERSION SDK_VERSION DEPLOYMENT_TARGET
-   ```
-
-`DEPLOYMENT_TARGET` is an explicit experiment choice, not necessarily the SDK
-version. The bind operation checks the supplied size and SHA-256, copies the
-package to the content-addressed input store, and writes the
-`apple-macos-sdk` binding record. It does not download Apple material.
-
-Confirm the transition before composition:
-
-```sh
-./scripts/toolchains/status.sh c-top10-linux
-```
-
-The expected next state is `composition-required`. Composition requires the
-host tools listed in `toolchains/README.md`, builds only from the pinned LLVM,
-osxcross, and bound SDK materials, and seals its output before qualification.
-
-## Project-local storage
-
-Runtime material lives beneath `var/fidb-toolchains/` and is ignored by Git:
+On the M1 Max, use a local checkout at the exact reviewed Linux coordinator
+revision. Do not use the Samba-mounted checkout as build scratch. The Samba
+path mapping remains useful for inspection:
 
 ```text
-var/fidb-toolchains/
-├── downloads/   verified upstream archives, keyed by digest
-├── prepared/    safely extracted and sealed pack roots
-├── incoming/    optional operator staging area
-├── inputs/      verified, non-redistributed input payloads
-├── bindings/    input metadata and content bindings
-├── composed/    derived route toolchains, keyed by route and material identity
-├── qualified/   qualification records and smoke artifacts
-└── locks/       operation locks
+Linux: /home/fidb-operator/Projects/circl/FIDB-POC-unified
+macOS: /Volumes/linux-home-share/Projects/circl/FIDB-POC-unified
 ```
 
-This layout makes a checkout self-contained without making large or restricted
-payloads part of source control. Removing `var/fidb-toolchains/` removes local
-toolchain state, so do not use it as disposable build output when preserving a
-prepared installation matters.
-
-The repository commits only the reproducible authority:
-
-- `toolchains/packs.toml` pins downloadable archives and size evidence;
-- `toolchains/inputs.toml` defines private inputs and their metadata contract;
-- `toolchains/routes.toml` maps packs and inputs to targets and compilers;
-- `toolchains/qualifications.toml` fixes the permitted smoke checks;
-- `toolchains/profiles/*.toml` selects ordered route breadth; and
-- `scripts/toolchains/` exposes the typed operator workflow.
-
-## GUI and automation
-
-The Targets & toolchains GUI reads the same plan/status projection as the CLI.
-It should be used to inspect profile breadth, missing materials, lifecycle
-state, disk estimates, route evidence roles, and copyable next commands. It is
-not a second package manager and currently does not perform installation.
-
-Automation and future LLM operators should use the JSON schema rather than
-scraping terminal prose. They select a reviewed profile ID, inspect `state`,
-`requirements`, `summary`, and `recommended_next_action`, and invoke only the
-corresponding typed operation. TOML never accepts arbitrary acquisition URLs or
-shell commands from the caller.
-
-## Extending the matrix
-
-Widen the toolchain system as reviewed data:
-
-1. Define and checksum-pin a pack in `toolchains/packs.toml`, or define a
-   non-redistributed input in `toolchains/inputs.toml`.
-2. Map it to an existing target and compiler family in
-   `toolchains/routes.toml`.
-3. Add a fixed qualification row for every locally buildable route.
-4. Add the route to the appropriate C-family profile, preserving its explicit
-   coverage-requirement mapping and evidence role.
-5. Run `plan`, the unit suite, and the GUI build before reviewing any pull.
-6. Acquire, prepare, compose if necessary, and qualify only after the authority
-   change is reviewed.
-
-See [`toolchains/README.md`](toolchains/README.md) for the complete catalogue
-contract, strict validation rules, extension sequence, and machine-facing JSON
-fields.
-
-## Checks and troubleshooting
-
-Start with the read-only status command:
+Prepare the Mac without contacting the coordinator:
 
 ```sh
-./scripts/toolchains/status.sh c-top10-linux
+./scripts/workers/macos-preflight.sh
 ```
 
-Use its structured requirements instead of manually changing store contents.
-An invalid cache entry is quarantined; unsafe archives and escaping links are
-rejected; partially prepared or composed outputs are not published as valid.
-If the state is `blocked`, retain the JSON and build log, repair the reported
-integrity or host dependency, and rerun the same idempotent operation.
+The preflight checks Apple hardware, macOS ARM64, Xcode, SDK and Apple Clang
+identity, Java 21+, Ghidra, PyGhidra, local resource floors, C and C++ ARM64
+Mach-O objects, and a static archive. Its JSON includes the external-definition
+digest and required provenance metadata.
 
-For disk inspection on Linux:
+When a run is later approved, install a private environment from
+`operations/macos-worker.env.example`, authorize that worker credential only
+for `macos-native`, expose the Linux worker API through reviewed tailnet-only
+HTTPS, synchronize the still-reviewed queue, and use:
 
 ```sh
-du -sh var/fidb-toolchains/downloads var/fidb-toolchains/prepared \
-  var/fidb-toolchains/inputs var/fidb-toolchains/composed 2>/dev/null
-df -h .
+./scripts/workers/macos-run.sh --until-drained
 ```
 
+That command is documented for future execution; preparing this repository
+does not run it or arm the queue. The Mac initiates the connection, so the
+Linux coordinator never SSHs into the Mac.
+
+## How Mac results return to Linux
+
+The Linux coordinator remains the source of truth:
+
+```text
+reviewed cell on Linux
+  -> authenticated macos-native lease
+  -> native build + Ghidra analysis on Mac
+  -> result.fidb + result.fidbf + cell-seal.json
+  -> authenticated upload staging on Linux
+  -> lease/cell/path/size/digest/seal/timing validation
+  -> atomic artifacts/runs/<job-id>/attempt-<generation>/ publication
+  -> SQLite result references and GUI evidence view
+```
+
+The Mac never opens or copies the coordinator SQLite database. The Linux host
+does not receive Xcode, the SDK, signing material, Apple credentials, source
+trees, or build scratch. Heartbeats preserve the registered toolchain
+capabilities so the GUI can show worker online/offline state and the exact
+Xcode, SDK, compiler, Ghidra, Java, host, definition digest, and supported
+languages used by an attempt.
+
+Artifacts are transferred as idempotent 8 MiB chunks. Linux records the whole
+artifact identity, durably resumes from an existing partial upload, and checks
+the final whole-file SHA-256 before publication. The default safety ceiling is
+4 GiB per artifact; an extended-run review must still compare expected output
+sizes and coordinator free space with that explicit limit.
+
+## Deliberately disarmed canary
+
+`plans/macos-arm64-canary.toml` defines one zlib/Apple-Clang/Mach-O cell.
+`plans/priority-queue.toml` references it but remains `armed = false`.
+Synchronizing a disarmed queue only materializes intent; it does not claim or
+execute a cell. Before any later run, inspect the resolved plan, Mac preflight,
+credential scope, HTTPS boundary, disk headroom, and upload-size risk, then
+explicitly review the arming change.
+
+## Storage and committed authority
+
+Linux-managed runtime material is ignored beneath `var/`:
+
+```text
+var/fidb-toolchains/downloads/   verified upstream archives
+var/fidb-toolchains/prepared/    safely extracted pack roots
+var/fidb-toolchains/composed/    reviewed derived routes, when defined
+var/fidb-toolchains/qualified/   qualification records and smoke artifacts
+var/fidb-remote-upload-locks/    coordinator-local transfer serialization
+artifacts/runs/remote-staging/   incomplete authenticated uploads
+artifacts/runs/                  atomically published sealed attempts
+```
+
+The Mac uses its own ignored `var/fidb-remote-worker/` attempt scratch. Only
+the three sealed outputs return to Linux.
+
+Git contains the reproducibility contract:
+
+- `toolchains/packs.toml`: downloadable archives and size evidence;
+- `toolchains/routes.toml`: target/compiler/provisioning mappings;
+- `toolchains/qualifications.toml`: fixed local route probes;
+- `toolchains/profiles/*.toml`: language-scoped ordered breadth;
+- `toolchains/external/*.toml`: native worker definitions and capabilities;
+- `worker.toml`: typed executable native routes; and
+- `scripts/toolchains/` and `scripts/workers/`: typed operator entrypoints.
+
+## Extending to more languages or platforms
+
+1. Define the language and its finite treatment policy in the coverage
+   authority; do not reuse the C multiplier implicitly.
+2. Add or reuse target/compiler requirements and a language-scoped profile.
+3. For a downloadable route, pin the pack and add fixed qualification probes.
+4. For a platform-restricted route, add a command-free external TOML and a
+   reviewed fixed probe adapter; declare its language capabilities explicitly.
+5. Add a pool-routing test, one disarmed canary plan, and GUI projection.
+6. Run the backend suite and control-panel build before any acquisition or
+   execution is authorized.
+
+Automation and future LLM operators consume stable JSON identities and invoke
+typed operations only. They may select reviewed IDs and surface blockers; they
+may not invent URLs, checksums, commands, credentials, worker pools, or route
+capabilities.
+
+See `toolchains/README.md` for the catalogue schema and
+`toolchains/external/README.md` for the external-worker boundary.
