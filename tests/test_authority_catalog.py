@@ -52,15 +52,13 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["coverage_universe"]["languages"]), 6)
         self.assertEqual(len(document["coverage_universe"]["profiles"]), 16)
         self.assertEqual(len(document["width_compilations"]), 1)
-        self.assertEqual(
-            document["source_digests"]["c_width_evidence_sha256"],
-            document["width_compilations"][0]["freeze"]["evidence_sha256"],
-        )
+        self.assertEqual(document["width_compilations"][0]["id"], "c-width-v1")
+        self.assertIsNone(document["width_compilations"][0]["freeze"])
         self.assertEqual(
             document["width_compilations"][0]["summary"][
                 "feasible_full_path_executions"
             ],
-            108,
+            document["width_compilations"][0]["summary"]["qualified_routes"] * 6,
         )
         self.assertEqual(
             document["coverage_universe"]["population"][

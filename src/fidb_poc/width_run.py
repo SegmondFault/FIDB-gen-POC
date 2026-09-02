@@ -14,8 +14,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable
 
-from .c_width import compile_c_width
-from .config import Configuration, load_configuration
+from .c_width import compile_c_width, materialize_width_configuration
+from .config import Configuration
+from .toolchain_packs import resolve_toolchain_profile
 from .pipeline import PipelineError, execute
 from .timing import utc_now
 
@@ -108,7 +109,10 @@ def compile_width_run_plan(project_root: str | Path, *, canary: bool) -> WidthRu
     root = Path(project_root).expanduser().resolve()
     compilation = compile_c_width(root)
     fixed_recipe = str(compilation["fixed_recipe"])
-    configuration = load_configuration(root / "worker.toml", (fixed_recipe,))
+    route_plan = resolve_toolchain_profile(
+        root, str(compilation["toolchain_profile"])
+    )
+    configuration = materialize_width_configuration(root, fixed_recipe, route_plan)
     executable = [
         row for row in compilation["applicability"] if row["state"] == "executable"
     ]

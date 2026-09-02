@@ -1,0 +1,101 @@
+schema_version = "fidb-c-width/v1"
+id = "c-width-v1"
+label = "C compiler and treatment width v1"
+language_id = "c"
+state = "candidate-disarmed"
+fixed_recipe = "openssl@3.5.8"
+toolchain_profile = "c-compiler-width-v1"
+selected_replay = 1
+purpose = "Measure unique and marginal FID-signature coverage, wall time and storage across the first compiler-generation and treatment width using one fixed rank-one C library release."
+
+[[artifact_profile]]
+id = "static-archive-members"
+label = "Static archive members"
+state = "registered"
+execution = "native-archive-object-selection"
+supported_formats = ["ELF", "PE/COFF", "Mach-O"]
+description = "Analyze every attributable object extracted from the reviewed static archive."
+
+[[artifact_profile]]
+id = "linked-shared-library"
+label = "Linked shared library"
+state = "desired"
+execution = "unmet-cross-platform-link-adapter"
+supported_formats = ["ELF", "PE/COFF", "Mach-O"]
+description = "Analyze one linked shared image while retaining route-specific linker and runtime identity."
+
+[[artifact_profile]]
+id = "stripped-linked-library"
+label = "Stripped linked library"
+state = "guarded"
+execution = "unmet-truth-attribution-policy"
+supported_formats = ["ELF", "PE/COFF", "Mach-O"]
+description = "Retain stripped linked evidence only in a truth-safe lane."
+
+[[artifact_profile]]
+id = "debug-static-members"
+label = "Static members with debug information"
+state = "desired"
+execution = "unmet-debug-treatment"
+supported_formats = ["ELF", "PE/COFF", "Mach-O"]
+description = "Preserve debug-emitting compile objects as a separate analysis identity."
+
+[[analysis_profile]]
+id = "fid-safe-default"
+label = "FID-safe route-selected recovery"
+state = "registered"
+variant_id = "recovery:route-selected"
+description = "The current fixed PyGhidra analysis configuration and route-selected language/compiler specification."
+
+[[analysis_profile]]
+id = "maximal-built-in"
+label = "Maximal built-in search"
+state = "guarded"
+variant_id = "recovery:maximal-built-in"
+description = "Aggressive built-in recovery, retained outside admission until validated."
+
+[[analysis_profile]]
+id = "shared-return-permissive"
+label = "Permissive shared returns"
+state = "guarded"
+variant_id = "recovery:shared-return-permissive"
+description = "Permissive shared-return recovery with known route-specific regression risk."
+
+[[analysis_profile]]
+id = "direct-call"
+label = "Direct-call recovery"
+state = "desired"
+variant_id = "recovery:direct-call"
+description = "Recover starts from direct call destinations under a named profile."
+
+[[analysis_profile]]
+id = "isolated-entry"
+label = "Isolated-entry recovery"
+state = "guarded"
+variant_id = "recovery:isolated-entry"
+description = "Recover isolated entries while preserving false-positive evidence."
+
+[[analysis_profile]]
+id = "maximal-isolated"
+label = "Maximal plus isolated flow"
+state = "guarded"
+variant_id = "recovery:maximal-isolated"
+description = "The widest declared recovery combination and highest-risk analysis lane."
+
+[[admission_profile]]
+id = "fid-safe-default"
+label = "FID-safe default"
+state = "registered"
+description = "Standard minimum size, explicit ambiguity, attributable truth and experiment-only admission."
+
+[[admission_profile]]
+id = "precision-first"
+label = "Precision-first"
+state = "desired"
+description = "Raise matching and attribution evidence requirements before admitting a reference."
+
+[[admission_profile]]
+id = "coverage-exploration"
+label = "Coverage exploration"
+state = "guarded"
+description = "Measure recall-oriented alternatives without admitting them into the active database set."

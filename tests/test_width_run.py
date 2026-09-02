@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from fidb_poc.cli import main
+from fidb_poc.c_width import compile_c_width
 from fidb_poc.width_run import (
     _replay_comparison,
     compile_width_run_plan,
@@ -20,14 +21,16 @@ class WidthRunTests(unittest.TestCase):
     def test_full_preview_is_exactly_the_compiled_feasible_width(self):
         plan = compile_width_run_plan(self.root, canary=False)
         preview = width_run_preview(plan)
+        compilation = compile_c_width(self.root)
+        qualified = compilation["summary"]["qualified_routes"]
 
         self.assertEqual(preview["state"], "disarmed-preview")
         self.assertEqual(preview["mode"], "full")
-        self.assertEqual(preview["build_cells_per_replay"], 54)
-        self.assertEqual(preview["replays"], 2)
-        self.assertEqual(preview["scheduled_executions"], 108)
-        self.assertEqual(len(preview["cells"]), 54)
-        self.assertEqual(len({row["route_id"] for row in preview["cells"]}), 9)
+        self.assertEqual(preview["build_cells_per_replay"], qualified * 6)
+        self.assertEqual(preview["replays"], 1)
+        self.assertEqual(preview["scheduled_executions"], qualified * 6)
+        self.assertEqual(len(preview["cells"]), qualified * 6)
+        self.assertEqual(len({row["route_id"] for row in preview["cells"]}), qualified)
         self.assertTrue(all(row["profile_id"] for row in preview["cells"]))
 
     def test_canary_selects_one_baseline_cell_per_route(self):
@@ -35,7 +38,10 @@ class WidthRunTests(unittest.TestCase):
 
         self.assertEqual(preview["mode"], "canary")
         self.assertEqual(preview["replays"], 1)
-        self.assertEqual(preview["scheduled_executions"], 9)
+        self.assertEqual(
+            preview["scheduled_executions"],
+            compile_c_width(self.root)["summary"]["qualified_routes"],
+        )
         self.assertEqual(
             {row["treatment_id"] for row in preview["cells"]}, {"baseline_o2"}
         )
@@ -48,7 +54,10 @@ class WidthRunTests(unittest.TestCase):
         document = json.loads(output.getvalue())
         self.assertEqual(status, 0)
         self.assertEqual(document["state"], "disarmed-preview")
-        self.assertEqual(document["scheduled_executions"], 9)
+        self.assertEqual(
+            document["scheduled_executions"],
+            compile_c_width(self.root)["summary"]["qualified_routes"],
+        )
 
     def test_replay_comparison_separates_artifact_fidb_and_semantics(self):
         baseline = {

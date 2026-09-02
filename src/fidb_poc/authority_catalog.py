@@ -436,7 +436,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "factor_variants": "sensitivity/variants.toml",
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
-            "width_compilations": "coverage/c-route-toolchain-canary-v1.toml",
+            "width_compilations": "coverage/c-width-v1.toml",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
         },
@@ -450,7 +450,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 b"".join(path.read_bytes() for path in width_paths)
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
-                (root / "coverage/c-route-toolchain-canary-v1.toml").read_bytes()
+                (root / "coverage/c-width-v1.toml").read_bytes()
             ).hexdigest(),
             "c_width_evidence_sha256": hashlib.sha256(
                 (

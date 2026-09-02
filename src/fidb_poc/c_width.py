@@ -4,19 +4,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
+import re
 import tomllib
 
-from .config import load_configuration
+from .config import Configuration, Route, load_configuration
 from .coverage_universe import load_coverage_universe
 from .plan_request import _sensitivity_catalog
-from .toolchain_packs import resolve_toolchain_profile
+from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_profile
+from .toolchain_qualification import (
+    QualificationError,
+    resolve_qualified_route_tools,
+)
 from .width_study import load_width_study
 
 WIDTH_AUTHORITY_SCHEMA = "fidb-c-width/v1"
 WIDTH_COMPILATION_SCHEMA = "fidb-width-compilation/v1"
 PROFILE_STATES = {"registered", "desired", "guarded"}
 WIDTH_STATES = {"candidate-disarmed", "frozen-measured"}
+WIDTH_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
 FREEZE_FIELDS = {
     "evidence_path",
     "evidence_sha256",
@@ -72,7 +79,7 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
         "freeze",
     }
     if (
-        set(document) != allowed
+        set(document) not in (allowed, allowed - {"freeze"})
         or document.get("schema_version") != WIDTH_AUTHORITY_SCHEMA
     ):
         raise ValueError("C width authority has an unsupported schema or fields")
@@ -234,17 +241,117 @@ def _factor_space(root: Path) -> list[dict[str, object]]:
     ]
 
 
-def compile_c_width(project_root: str | Path) -> dict[str, object]:
+def materialize_width_configuration(
+    project_root: str | Path,
+    fixed_recipe: str,
+    route_plan: dict[str, object],
+) -> Configuration:
+    """Project target-independent compiler routes into executable workers.
+
+    `worker.toml` retains one build/analysis template per target. Compiler
+    generations come from the toolchain authority and inherit only the target
+    mechanics; tool paths and qualification identities are resolved afresh.
+    """
+
     root = Path(project_root).expanduser().resolve()
-    authority = load_c_width_authority(
-        root / "coverage/c-route-toolchain-canary-v1.toml"
-    )
+    configuration = load_configuration(root / "worker.toml", (fixed_recipe,))
+    catalog = load_toolchain_pack_catalog(root)
+    catalog_routes = {str(row["id"]): row for row in catalog["routes"]}
+    qualifications = {
+        str(row["route_id"]): row for row in catalog["qualifications"]
+    }
+    compilers = {str(row["id"]): row for row in catalog["compilers"]}
+    worker_routes = {route.id: route for route in configuration.routes}
+
+    template_by_target_family: dict[tuple[str, str], Route] = {}
+    for worker in configuration.routes:
+        if worker.managed_toolchain_route is None:
+            continue
+        catalog_route = catalog_routes.get(worker.managed_toolchain_route)
+        if catalog_route is None:
+            continue
+        key = (str(catalog_route["target_id"]), worker.compiler_family)
+        if key in template_by_target_family:
+            raise ValueError(f"multiple worker templates for target/compiler {key}")
+        template_by_target_family[key] = worker
+
+    materialized: list[Route] = []
+    for planned in route_plan["routes"]:
+        route_id = str(planned["id"])
+        existing = worker_routes.get(route_id)
+        if existing is not None:
+            materialized.append(existing)
+            continue
+        catalog_route = catalog_routes.get(route_id)
+        qualification = qualifications.get(route_id)
+        if catalog_route is None or qualification is None:
+            raise ValueError(f"width route lacks managed authority: {route_id}")
+        key = (
+            str(catalog_route["target_id"]),
+            str(catalog_route["compiler_family"]),
+        )
+        template = template_by_target_family.get(key)
+        if template is None:
+            raise ValueError(f"width route has no target worker template: {route_id}")
+        compiler = compilers[str(catalog_route["compiler_id"])]
+        version = str(compiler["version"])
+        markers = (
+            (f"clang version {version}",)
+            if catalog_route["compiler_family"] == "llvm-clang"
+            else (version, "Free Software Foundation")
+        )
+        worker = replace(
+            template,
+            id=route_id,
+            compiler=(f"@managed/{route_id}/c",),
+            archiver=(f"@managed/{route_id}/archiver",),
+            ranlib=(f"@managed/{route_id}/ranlib",),
+            compiler_version_markers=markers,
+            managed_toolchain_route=route_id,
+            toolchain_state="unavailable",
+            toolchain_identity="unresolved",
+            toolchain_blocker="managed route is not qualified",
+        )
+        try:
+            tools = resolve_qualified_route_tools(
+                root,
+                catalog_route,
+                qualification,
+                catalog["packs"],
+                catalog["inputs"],
+            )
+        except QualificationError as error:
+            worker = replace(worker, toolchain_blocker=str(error))
+        else:
+            worker = replace(
+                worker,
+                compiler=(str(tools.compiler),),
+                archiver=(str(tools.archiver),),
+                ranlib=(str(tools.ranlib),),
+                toolchain_state="qualified",
+                toolchain_identity=(
+                    f"qualified:{tools.route_material_digest}:{tools.record_digest}"
+                ),
+                toolchain_blocker="",
+            )
+        materialized.append(worker)
+    return replace(configuration, routes=tuple(materialized))
+
+
+def compile_c_width(
+    project_root: str | Path, authority_id: str = "c-width-v1"
+) -> dict[str, object]:
+    root = Path(project_root).expanduser().resolve()
+    if WIDTH_ID.fullmatch(authority_id) is None:
+        raise ValueError("C width authority id is not safe")
+    authority_relative = f"coverage/{authority_id}.toml"
+    authority = load_c_width_authority(root / authority_relative)
     study = load_width_study(root / "coverage/c-top10-width-study.toml")
     universe = load_coverage_universe(root / "coverage/universe.toml")
-    configuration = load_configuration(
-        root / "worker.toml", (str(authority["fixed_recipe"]),)
-    )
     route_plan = resolve_toolchain_profile(root, str(authority["toolchain_profile"]))
+    configuration = materialize_width_configuration(
+        root, str(authority["fixed_recipe"]), route_plan
+    )
     worker_routes = {route.id: route for route in configuration.routes}
     treatments = {row.id: row for row in configuration.treatments}
     routes = []
@@ -340,7 +447,7 @@ def compile_c_width(project_root: str | Path) -> dict[str, object]:
         "route_profile_digest": route_plan["profile_digest"],
         "freeze": authority["freeze"],
         "authorities": {
-            "width": "coverage/c-route-toolchain-canary-v1.toml",
+            "width": authority_relative,
             "study": "coverage/c-top10-width-study.toml",
             "universe": "coverage/universe.toml",
             "worker": "worker.toml",

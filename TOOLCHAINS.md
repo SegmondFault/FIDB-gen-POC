@@ -102,20 +102,23 @@ OpenSSL platform target from the route's OS/architecture, disables shared
 libraries, tests, documentation and modules, and builds `libcrypto.a` plus
 `libssl.a`. Recipes still cannot provide commands.
 
-Compile the authority without executing anything:
+`coverage/c-width-v1.toml` is the disarmed substantive authority. It combines
+that OpenSSL release with `c-compiler-width-v1`, the six bounded treatments,
+static archive members and the registered FID-safe analysis/admission lane.
+Compile it without executing anything:
 
 ```sh
-fidb-poc compile-width --project-root . --output /tmp/c-route-toolchain-canary-v1.json
+fidb-poc compile-width --project-root . --output /tmp/c-width-v1.json
 ```
 
 The output retains four distinct states for each route/profile pair:
 `executable`, `unimplemented`, `unavailable`, and `inapplicable`. It also
 projects every one of the 41 sensitivity factors, including factors with no
 named variant yet. The GUI renders the same route-by-profile map and the full
-factor ledger. On the qualified 2026-09-02 host, the compiler resolves 54
-feasible build/analysis cells and 108 full-path executions after two replays;
-the 4,800-build theoretical one-family maximum remains visible as capacity
-intent, not executable work.
+factor ledger. Once all 29 selected routes are qualified, the compiler resolves
+174 feasible build/analysis cells: six treatments for each route and one
+selected replay. The 4,800-build theoretical one-family maximum remains
+visible as capacity intent, not executable work.
 
 Preview the exact measured-run schedule without downloading or compiling:
 
@@ -123,8 +126,8 @@ Preview the exact measured-run schedule without downloading or compiling:
 fidb-poc run-width --project-root .
 ```
 
-The command is disarmed by default. The first live gate is the fixed zlib
-baseline canary across all nine qualified non-Apple routes:
+The command is disarmed by default. The first live gate is the fixed OpenSSL
+baseline treatment across every qualified selected compiler route:
 
 ```sh
 fidb-poc run-width --project-root . --canary --execute
@@ -137,13 +140,12 @@ fidb-poc run-width --project-root . --execute
 ```
 
 Each live invocation creates a new immutable run directory under
-`artifacts/width-runs/c-route-toolchain-canary-v1/`; it never replaces an earlier run. The full
-run executes the 54 applicability-approved route/profile cells twice and
+`artifacts/width-runs/c-width-v1/`; it never replaces an earlier run. The full
+run executes the 174 applicability-approved route/profile cells once and
 writes `width-run.json` with wall time, peak and final scratch size, retained
-size, peak process RSS, per-cell failures, coverage contribution, and replay
-comparison. Replay comparison deliberately separates compiled-object bytes,
-FID semantic counts, and raw FIDB container bytes; a container digest change
-must not be reported as a recovered-function change.
+size, peak process RSS, per-cell failures, and coverage contribution. Per-cell
+FID signatures are retained for unique and marginal-coverage comparison; raw
+FIDB container hashes are not used as a proxy for function coverage.
 
 ### Frozen route/toolchain-canary measurement
 
