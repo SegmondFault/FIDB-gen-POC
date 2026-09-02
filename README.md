@@ -241,9 +241,10 @@ reference evidence. The Targets & toolchains GUI shows cache, preparation,
 input-binding, composition and qualification as separate states, offers
 copyable commands, and remains read-only.
 
-See [`toolchains/README.md`](toolchains/README.md) for the authority layers,
-extension workflow, state vocabulary, safety contract, and machine/LLM-facing
-interface.
+See [`TOOLCHAINS.md`](TOOLCHAINS.md) for the complete operator setup and Apple
+SDK handoff. See [`toolchains/README.md`](toolchains/README.md) for the authority
+layers, extension workflow, state vocabulary, safety contract, and
+machine/LLM-facing interface.
 
 The optional `[queue]` table controls deterministic materialization order. Its
 `recipe_order` is the left-hand build order; `strategy` chooses whether all
