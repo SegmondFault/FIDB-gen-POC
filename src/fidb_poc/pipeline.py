@@ -712,6 +712,16 @@ def build_library(
     skipped: SkipCallback | None = None,
 ) -> tuple[BuildRecord, list[Path]]:
     record = _base_record(library, route, treatment, detection)
+    if route.toolchain_state == "unavailable":
+        record.status = "unsupported"
+        record.error = route.toolchain_blocker
+        _skip(
+            skipped,
+            "compile",
+            "managed toolchain route is unavailable",
+            {"library": library.identifier, "route": route.id},
+        )
+        return record, []
     if not treatment.applies_to(route):
         record.status = "unsupported"
         record.error = "treatment is not valid for this route"
@@ -1385,7 +1395,10 @@ def plan(configuration: Configuration) -> list[str]:
         for route in configuration.routes
         for treatment in configuration.treatments
     ]
-    runnable = sum(treatment.applies_to(route) for _, route, treatment in cells)
+    runnable = sum(
+        treatment.applies_to(route) and route.toolchain_state != "unavailable"
+        for _, route, treatment in cells
+    )
     lines = [
         f"Plan: {len(configuration.libraries)} libraries; "
         f"{len(configuration.routes)} routes; "
@@ -1393,7 +1406,11 @@ def plan(configuration: Configuration) -> list[str]:
         f"{len(cells)} cells ({runnable} runnable)"
     ]
     for library, route, treatment in cells:
-        status = "runnable" if treatment.applies_to(route) else "unsupported"
+        status = (
+            "runnable"
+            if treatment.applies_to(route) and route.toolchain_state != "unavailable"
+            else "unsupported"
+        )
         lines.append(f"- {library.identifier} | {route.id} | {treatment.id} | {status}")
     return lines
 

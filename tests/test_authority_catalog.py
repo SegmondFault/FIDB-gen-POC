@@ -20,12 +20,27 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
         self.assertEqual(len(document["toolchain_pack_catalog"]["routes"]), 11)
         self.assertEqual(len(document["toolchain_pack_catalog"]["qualifications"]), 9)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 3)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["profiles"]), 4)
         self.assertEqual(len(document["factors"]), 41)
         self.assertGreater(len(document["factor_variants"]), 30)
+        self.assertEqual(len(document["native"]["routes"]), 11)
         self.assertEqual(
-            {row["id"] for row in document["native"]["routes"]},
-            {"linux-x86_64-gnu-gcc", "macos-arm64-apple-clang"},
+            {
+                row["id"]
+                for row in document["native"]["routes"]
+                if row["toolchain_state"] == "qualified"
+            },
+            {
+                "linux-x86-64-gcc",
+                "windows-x86-64-llvm-mingw",
+                "linux-arm32-gcc",
+                "linux-aarch64-gcc",
+                "linux-mips32-be-gcc",
+                "linux-mips32-le-gcc",
+                "linux-powerpc32-be-gcc",
+                "linux-sh32-gcc",
+                "linux-m68k-gcc",
+            },
         )
         self.assertIn(
             "plans/coverage-baseline.toml",
@@ -61,7 +76,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(requirements[0]["route_state"], "installed")
         self.assertEqual(requirements[1]["route_state"], "remote-required")
         self.assertEqual(requirements[2]["route_state"], "remote-required")
-        self.assertEqual(requirements[7]["route_state"], "pinned-source")
+        self.assertEqual(requirements[7]["route_state"], "installed")
         self.assertEqual(requirements[11]["route_state"], "definition-required")
         self.assertEqual(
             width_study["readiness"]["default_route_state_counts"],
@@ -77,7 +92,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         targets = {row["id"]: row for row in document["targets"]}
         self.assertEqual(
             targets["linux-x86-64-elf"]["native_route_ids"],
-            ["linux-x86_64-gnu-gcc"],
+            ["linux-x86_64-gnu-gcc", "linux-x86-64-gcc"],
         )
         self.assertEqual(
             len(targets["linux-powerpc32-be-elf"]["source_capable_toolchain_ids"]),

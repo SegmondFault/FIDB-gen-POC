@@ -32,6 +32,7 @@ ROUTE_FIELDS = {
     "target_os",
     "architecture",
     "binary_format",
+    "compiler_family",
     "compiler",
     "archiver",
     "ranlib",
@@ -42,6 +43,7 @@ ROUTE_FIELDS = {
     "ghidra_language",
     "ghidra_compiler_spec",
     "compiler_version_markers",
+    "managed_toolchain_route",
 }
 TREATMENT_FIELDS = {
     "id",
@@ -94,6 +96,7 @@ class Route:
     target_os: str
     architecture: str
     binary_format: str
+    compiler_family: str
     compiler: tuple[str, ...]
     archiver: tuple[str, ...]
     ranlib: tuple[str, ...]
@@ -104,6 +107,10 @@ class Route:
     ghidra_language: str
     ghidra_compiler_spec: str = "default"
     compiler_version_markers: tuple[str, ...] = ()
+    managed_toolchain_route: str | None = None
+    toolchain_state: str = "host-command"
+    toolchain_identity: str = "execution-probed"
+    toolchain_blocker: str = ""
 
     def __post_init__(self) -> None:
         _path_component(self.id, "route id")
@@ -235,6 +242,104 @@ def _resolve_requests(
     return tuple(libraries)
 
 
+def _load_route(row: dict, project_root: Path) -> Route:
+    route_id = _path_component(_required(row, "id", "route"), "route id")
+    managed = row.get("managed_toolchain_route")
+    if managed is not None:
+        managed = _path_component(managed, f"route {route_id} managed_toolchain_route")
+        if managed != route_id:
+            raise ValueError(
+                f"managed route {route_id} must use its canonical toolchain route id"
+            )
+        forbidden = {"compiler", "archiver", "ranlib"} & set(row)
+        if forbidden:
+            raise ValueError(
+                f"managed route {route_id} cannot persist resolved tool paths: "
+                f"{sorted(forbidden)}"
+            )
+        compiler = (f"@managed/{route_id}/c",)
+        archiver = (f"@managed/{route_id}/archiver",)
+        ranlib = (f"@managed/{route_id}/ranlib",)
+        toolchain_state = "unavailable"
+        toolchain_identity = "unresolved"
+        toolchain_blocker = "managed toolchain authority is unavailable"
+        authority_files = (
+            project_root / "toolchains/routes.toml",
+            project_root / "toolchains/packs.toml",
+            project_root / "toolchains/inputs.toml",
+            project_root / "toolchains/qualifications.toml",
+            project_root / "targets/registry.toml",
+            project_root / "coverage/universe.toml",
+            project_root / "toolchains/profiles",
+        )
+        if all(path.exists() for path in authority_files):
+            from .toolchain_packs import load_toolchain_pack_catalog
+            from .toolchain_qualification import (
+                QualificationError,
+                resolve_qualified_route_tools,
+            )
+
+            catalog = load_toolchain_pack_catalog(project_root)
+            routes = [item for item in catalog["routes"] if item["id"] == managed]
+            qualifications = [
+                item
+                for item in catalog["qualifications"]
+                if item["route_id"] == managed
+            ]
+            if len(routes) != 1 or len(qualifications) != 1:
+                raise ValueError(
+                    f"managed route {managed} does not resolve exactly once in authority"
+                )
+            try:
+                tools = resolve_qualified_route_tools(
+                    project_root,
+                    routes[0],
+                    qualifications[0],
+                    catalog["packs"],
+                    catalog["inputs"],
+                )
+            except QualificationError as error:
+                toolchain_blocker = str(error)
+            else:
+                compiler = (str(tools.compiler),)
+                archiver = (str(tools.archiver),)
+                ranlib = (str(tools.ranlib),)
+                toolchain_state = "qualified"
+                toolchain_identity = (
+                    f"qualified:{tools.route_material_digest}:" f"{tools.record_digest}"
+                )
+                toolchain_blocker = ""
+    else:
+        compiler = tuple(_required(row, "compiler", "route"))
+        archiver = tuple(_required(row, "archiver", "route"))
+        ranlib = tuple(row.get("ranlib", row["archiver"]))
+        toolchain_state = "host-command"
+        toolchain_identity = "execution-probed"
+        toolchain_blocker = ""
+
+    return Route(
+        id=route_id,
+        target_os=_required(row, "target_os", "route"),
+        architecture=_required(row, "architecture", "route"),
+        binary_format=_required(row, "binary_format", "route"),
+        compiler_family=_required(row, "compiler_family", "route"),
+        compiler=compiler,
+        archiver=archiver,
+        ranlib=ranlib,
+        compiler_flags=tuple(row.get("compiler_flags", [])),
+        object_file_markers=tuple(_required(row, "object_file_markers", "route")),
+        linked_suffix=_required(row, "linked_suffix", "route"),
+        linked_file_markers=tuple(_required(row, "linked_file_markers", "route")),
+        ghidra_language=_required(row, "ghidra_language", "route"),
+        ghidra_compiler_spec=row.get("ghidra_compiler_spec", "default"),
+        compiler_version_markers=tuple(row.get("compiler_version_markers", [])),
+        managed_toolchain_route=managed,
+        toolchain_state=toolchain_state,
+        toolchain_identity=toolchain_identity,
+        toolchain_blocker=toolchain_blocker,
+    )
+
+
 def load_configuration(
     path: Path,
     request_override: tuple[str, ...] | None = None,
@@ -248,25 +353,7 @@ def load_configuration(
     route_rows = _required(document, "routes", "worker configuration")
     for row in route_rows:
         _reject_unknown(row, ROUTE_FIELDS, "route")
-    routes = tuple(
-        Route(
-            id=_path_component(_required(row, "id", "route"), "route id"),
-            target_os=_required(row, "target_os", "route"),
-            architecture=_required(row, "architecture", "route"),
-            binary_format=_required(row, "binary_format", "route"),
-            compiler=tuple(_required(row, "compiler", "route")),
-            archiver=tuple(_required(row, "archiver", "route")),
-            ranlib=tuple(row.get("ranlib", row["archiver"])),
-            compiler_flags=tuple(row.get("compiler_flags", [])),
-            object_file_markers=tuple(_required(row, "object_file_markers", "route")),
-            linked_suffix=_required(row, "linked_suffix", "route"),
-            linked_file_markers=tuple(_required(row, "linked_file_markers", "route")),
-            ghidra_language=_required(row, "ghidra_language", "route"),
-            ghidra_compiler_spec=row.get("ghidra_compiler_spec", "default"),
-            compiler_version_markers=tuple(row.get("compiler_version_markers", [])),
-        )
-        for row in route_rows
-    )
+    routes = tuple(_load_route(row, path.parent.resolve()) for row in route_rows)
     treatment_rows = _required(document, "treatments", "worker configuration")
     for row in treatment_rows:
         _reject_unknown(row, TREATMENT_FIELDS, "treatment")

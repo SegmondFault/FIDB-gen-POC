@@ -58,12 +58,17 @@ def _native_authority(root: Path) -> tuple[list[dict[str, object]], dict[str, ob
             "target_os": row.target_os,
             "architecture": row.architecture,
             "binary_format": row.binary_format,
+            "compiler_family": row.compiler_family,
             "compiler": list(row.compiler),
             "archiver": list(row.archiver),
             "ranlib": list(row.ranlib),
             "compiler_flags": list(row.compiler_flags),
             "ghidra_language": row.ghidra_language,
             "ghidra_compiler_spec": row.ghidra_compiler_spec,
+            "managed_toolchain_route": row.managed_toolchain_route,
+            "toolchain_state": row.toolchain_state,
+            "toolchain_identity": row.toolchain_identity,
+            "toolchain_blocker": row.toolchain_blocker,
         }
         for row in configuration.routes
     ]

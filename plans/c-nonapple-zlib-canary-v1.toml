@@ -1,0 +1,42 @@
+schema_version = "fidb-plan/v1"
+name = "c-nonapple-zlib-canary-v1"
+
+[policy]
+max_cells = 9
+priority = "normal"
+
+[coverage]
+factor_variants = [
+  "optimization:o2",
+  "compiler-family:route-default",
+  "compiler-version:exact",
+  "frame-pointer:retained",
+  "stack-protection:off",
+  "sanitizer:off",
+  "pac-bti:off",
+  "lto:off",
+  "symbol-stripping:unstripped",
+  "recovery:route-selected",
+  "language:route-mapped",
+]
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["zlib@1.3.1"]
+
+[[matrix]]
+id = "c-nonapple-zlib-canary-v1"
+kind = "native"
+recipes = ["zlib@1.3.1"]
+routes = [
+  "linux-x86-64-gcc",
+  "windows-x86-64-llvm-mingw",
+  "linux-arm32-gcc",
+  "linux-aarch64-gcc",
+  "linux-mips32-be-gcc",
+  "linux-mips32-le-gcc",
+  "linux-powerpc32-be-gcc",
+  "linux-sh32-gcc",
+  "linux-m68k-gcc",
+]
+treatments = ["baseline_o2"]

@@ -624,10 +624,12 @@ def _native_cells(
         for route in configuration.routes:
             for treatment in configuration.treatments:
                 flags = list(treatment.flags_for(route))
-                status = "planned" if treatment.applies_to(route) else "blocked"
-                blockers = (
-                    [] if status == "planned" else ["treatment does not support route"]
-                )
+                blockers = []
+                if not treatment.applies_to(route):
+                    blockers.append("treatment does not support route")
+                if route.toolchain_state == "unavailable":
+                    blockers.append(route.toolchain_blocker)
+                status = "planned" if not blockers else "blocked"
                 cells.append(
                     {
                         "id": f'{matrix["id"]}:{library.identifier}:{route.id}:{treatment.id}',
@@ -652,7 +654,7 @@ def _native_cells(
                             "compiler": list(route.compiler),
                             "archiver": list(route.archiver),
                             "ranlib": list(route.ranlib),
-                            "identity": "execution-probed",
+                            "identity": route.toolchain_identity,
                         },
                         "build": {
                             "adapter": library.preferred_build_system,
@@ -689,7 +691,7 @@ def _native_cells(
                             },
                             "compiler-family": {
                                 "state": "execution-probed",
-                                "value": route.id,
+                                "value": route.compiler_family,
                             },
                             "compiler-version": {
                                 "state": "execution-probed",

@@ -7,6 +7,7 @@ id = "linux-x86_64-gnu-gcc"
 target_os = "linux"
 architecture = "x86_64"
 binary_format = "ELF"
+compiler_family = "gcc"
 compiler = ["/usr/bin/gcc"]
 archiver = ["/usr/bin/ar"]
 ranlib = ["/usr/bin/ranlib"]
@@ -18,11 +19,150 @@ ghidra_language = "x86:LE:64:default"
 ghidra_compiler_spec = "gcc"
 compiler_version_markers = ["Free Software Foundation"]
 
+# Managed routes persist only stable authority IDs. Their executable paths and
+# qualification digests are recovered from var/fidb-toolchains at load time.
+
+[[routes]]
+id = "linux-x86-64-gcc"
+managed_toolchain_route = "linux-x86-64-gcc"
+target_os = "linux"
+architecture = "x86_64"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 64-bit LSB", "relocatable", "x86-64"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 64-bit LSB", "x86-64", "shared object"]
+ghidra_language = "x86:LE:64:default"
+ghidra_compiler_spec = "gcc"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "windows-x86-64-llvm-mingw"
+managed_toolchain_route = "windows-x86-64-llvm-mingw"
+target_os = "windows"
+architecture = "x86_64"
+binary_format = "PE/COFF"
+compiler_family = "llvm-clang"
+compiler_flags = ["-O2", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["x86-64 COFF object file"]
+linked_suffix = ".dll"
+linked_file_markers = ["PE32+", "x86-64", "DLL"]
+ghidra_language = "x86:LE:64:default"
+ghidra_compiler_spec = "clangwindows"
+compiler_version_markers = ["clang version 23.1.0"]
+
+[[routes]]
+id = "linux-arm32-gcc"
+managed_toolchain_route = "linux-arm32-gcc"
+target_os = "linux"
+architecture = "arm"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "ARM", "EABI5"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "ARM", "shared object"]
+ghidra_language = "ARM:LE:32:v7"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "linux-aarch64-gcc"
+managed_toolchain_route = "linux-aarch64-gcc"
+target_os = "linux"
+architecture = "aarch64"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 64-bit LSB", "relocatable", "ARM aarch64"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 64-bit LSB", "ARM aarch64", "shared object"]
+ghidra_language = "AARCH64:LE:64:v8A"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "linux-mips32-be-gcc"
+managed_toolchain_route = "linux-mips32-be-gcc"
+target_os = "linux"
+architecture = "mips"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 32-bit MSB", "relocatable", "MIPS"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit MSB", "MIPS", "shared object"]
+ghidra_language = "MIPS:BE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "linux-mips32-le-gcc"
+managed_toolchain_route = "linux-mips32-le-gcc"
+target_os = "linux"
+architecture = "mipsel"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "MIPS"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "MIPS", "shared object"]
+ghidra_language = "MIPS:LE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "linux-powerpc32-be-gcc"
+managed_toolchain_route = "linux-powerpc32-be-gcc"
+target_os = "linux"
+architecture = "powerpc"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 32-bit MSB", "relocatable", "PowerPC"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit MSB", "PowerPC", "shared object"]
+ghidra_language = "PowerPC:BE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "linux-sh32-gcc"
+managed_toolchain_route = "linux-sh32-gcc"
+target_os = "linux"
+architecture = "sh4"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 32-bit LSB", "relocatable", "Renesas SH"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit LSB", "Renesas SH", "shared object"]
+ghidra_language = "SuperH4:LE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
+[[routes]]
+id = "linux-m68k-gcc"
+managed_toolchain_route = "linux-m68k-gcc"
+target_os = "linux"
+architecture = "m68k"
+binary_format = "ELF"
+compiler_family = "gcc"
+compiler_flags = ["-O2", "-fPIC", "-fno-lto", "-fno-omit-frame-pointer"]
+object_file_markers = ["ELF 32-bit MSB", "relocatable", "Motorola m68k"]
+linked_suffix = ".so"
+linked_file_markers = ["ELF 32-bit MSB", "Motorola m68k", "shared object"]
+ghidra_language = "68000:BE:32:default"
+ghidra_compiler_spec = "default"
+compiler_version_markers = ["14.3.0", "Free Software Foundation"]
+
 [[routes]]
 id = "macos-arm64-apple-clang"
 target_os = "macos"
 architecture = "arm64"
 binary_format = "Mach-O"
+compiler_family = "apple-clang"
 compiler = ["/usr/bin/xcrun", "--sdk", "macosx", "clang"]
 archiver = ["/usr/bin/xcrun", "--sdk", "macosx", "ar"]
 ranlib = ["/usr/bin/xcrun", "--sdk", "macosx", "ranlib"]

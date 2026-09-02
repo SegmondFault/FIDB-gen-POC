@@ -28,7 +28,7 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
         self.assertEqual(len(catalog["inputs"]), 0)
         self.assertEqual(len(catalog["routes"]), 11)
         self.assertEqual(len(catalog["qualifications"]), 9)
-        self.assertEqual(len(catalog["profiles"]), 3)
+        self.assertEqual(len(catalog["profiles"]), 4)
         self.assertEqual(len(catalog["catalog_digest"]), 64)
         self.assertTrue(all(len(row["sha256"]) == 64 for row in catalog["packs"]))
 
@@ -183,7 +183,12 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
 
         self.assertEqual(
             {row["profile"]["id"] for row in plans},
-            {"c-canary", "c-top10-linux", "c-top10-reference"},
+            {
+                "c-canary",
+                "c-nonapple-baseline-v1",
+                "c-top10-linux",
+                "c-top10-reference",
+            },
         )
         self.assertEqual(inspect.call_count, 9)
 

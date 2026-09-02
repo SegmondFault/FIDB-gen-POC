@@ -32,6 +32,15 @@ as a second Windows implementation. Cross-built PE/COFF never claims native
 MSVC equivalence. The macOS route is deliberately native Apple Clang primary
 evidence rather than Linux-produced Mach-O evidence.
 
+`c-nonapple-baseline-v1` freezes the nine locally qualified routes as the
+current executable width denominator. `worker.toml` refers to those routes by
+stable `managed_toolchain_route` IDs; it does not commit cache paths. At load
+time the worker recomputes the route-material digest, validates the
+qualification record, resolves the compiler, archiver and derived ranlib
+beneath the checksum-addressed prepared root, and places both the material and
+qualification-record digests in resolved cells. A missing or altered pack is
+visible but blocked from execution.
+
 ## Linux pack preparation
 
 From the Linux x86-64 coordinator checkout:
@@ -66,6 +75,11 @@ Profile state is intentionally more precise than installed/not-installed:
 `recommended_next_action` is the machine-followable transition. For the
 current top-ten profile, the final transition is `start-external-workers`; it
 does not mean that a run should be armed.
+
+`plans/c-nonapple-zlib-canary-v1.toml` is the disarmed execution proof for the
+frozen baseline: one fixed zlib release, one O2 treatment and all nine managed
+routes. Resolve it before execution; its cells are blocked automatically if a
+qualification identity cannot be recovered.
 
 ## Current non-Apple qualification
 

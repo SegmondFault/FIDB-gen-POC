@@ -76,6 +76,19 @@ class QualificationResult:
     cache_hit: bool
 
 
+@dataclass(frozen=True)
+class QualifiedRouteTools:
+    """Executable tools recovered from one intact qualification authority."""
+
+    compiler: Path
+    cxx_compiler: Path
+    archiver: Path
+    ranlib: Path
+    route_material_digest: str
+    record_digest: str
+    compiler_version_output: str
+
+
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -566,6 +579,100 @@ def inspect_qualification(
         ):
             return QualificationInspection(destination, "broken")
     return QualificationInspection(destination, "qualified", record)
+
+
+def resolve_qualified_route_tools(
+    project_root: Path,
+    route: dict[str, object],
+    qualification: dict[str, object],
+    packs: Sequence[dict[str, object]],
+    inputs: Sequence[dict[str, object]],
+) -> QualifiedRouteTools:
+    """Resolve a qualified route to tools without trusting cached path text.
+
+    The qualification record contributes the exact material identity, but each
+    executable is resolved again beneath the checksum-addressed prepared (or
+    composed) root.  Callers therefore keep stable route IDs in TOML rather
+    than persisting workstation-specific cache paths.
+    """
+
+    material_digest = route_material_digest(route, qualification, packs, inputs)
+    inspection = inspect_qualification(project_root, str(route["id"]), material_digest)
+    if inspection.state != "qualified" or inspection.record is None:
+        raise QualificationError(
+            f"route {route['id']} is not qualified: {inspection.state}"
+        )
+
+    if qualification["tool_source"] == "pack":
+        from .toolchain_prepare import MANAGED_PREPARED, inspect_prepared
+
+        pack = next(
+            (row for row in packs if row["id"] == qualification["tool_pack_id"]),
+            None,
+        )
+        if pack is None:
+            raise QualificationError(
+                f"route {route['id']} references an unknown qualification pack"
+            )
+        preparation = inspect_prepared(
+            project_root / MANAGED_PREPARED,
+            str(pack["sha256"]),
+            str(pack["archive_root"]),
+        )
+        if preparation.state != "prepared":
+            raise QualificationError(
+                f"route {route['id']} preparation is not ready: {preparation.state}"
+            )
+        tool_root = preparation.root
+    else:
+        composition = inspect_composition(
+            project_root, str(route["id"]), material_digest
+        )
+        if composition.state != "composed":
+            raise QualificationError(
+                f"route {route['id']} composition is not ready: {composition.state}"
+            )
+        tool_root = composition.root
+
+    compiler = _safe_tool(tool_root, str(qualification["driver_pattern"]))
+    cxx_compiler = _safe_tool(tool_root, str(qualification["cxx_driver_pattern"]))
+    archiver = _safe_tool(tool_root, str(qualification["archiver_pattern"]))
+    if archiver.name == "llvm-ar":
+        ranlib_name = "llvm-ranlib"
+    elif archiver.name.endswith("-ar"):
+        ranlib_name = f"{archiver.name[:-3]}-ranlib"
+    elif archiver.name == "ar":
+        ranlib_name = "ranlib"
+    else:
+        raise QualificationError(
+            f"route {route['id']} has no reviewed ranlib derivation for {archiver.name}"
+        )
+    ranlib = _safe_tool(
+        tool_root,
+        str(
+            PurePosixPath(str(qualification["archiver_pattern"])).with_name(ranlib_name)
+        ),
+    )
+
+    record_tools = inspection.record.get("tools")
+    expected_tools = {
+        "c": str(compiler.relative_to(tool_root)),
+        "cpp": str(cxx_compiler.relative_to(tool_root)),
+        "archiver": str(archiver.relative_to(tool_root)),
+    }
+    if record_tools != expected_tools:
+        raise QualificationError(
+            f"route {route['id']} qualification tool paths no longer match authority"
+        )
+    return QualifiedRouteTools(
+        compiler=compiler,
+        cxx_compiler=cxx_compiler,
+        archiver=archiver,
+        ranlib=ranlib,
+        route_material_digest=material_digest,
+        record_digest=str(inspection.record["record_digest"]),
+        compiler_version_output=str(inspection.record["compiler_version_output"]),
+    )
 
 
 def qualify_route(

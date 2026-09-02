@@ -19,15 +19,30 @@ class ConfigurationTests(unittest.TestCase):
             [row.identifier for row in configuration.libraries],
             ["zlib-1.3.1", "bzip2-1.0.7"],
         )
-        self.assertEqual(len(configuration.routes), 2)
+        self.assertEqual(len(configuration.routes), 11)
         self.assertEqual(
-            [route.id for route in configuration.routes],
-            ["linux-x86_64-gnu-gcc", "macos-arm64-apple-clang"],
+            {
+                route.id
+                for route in configuration.routes
+                if route.toolchain_state == "qualified"
+            },
+            {
+                "linux-x86-64-gcc",
+                "windows-x86-64-llvm-mingw",
+                "linux-arm32-gcc",
+                "linux-aarch64-gcc",
+                "linux-mips32-be-gcc",
+                "linux-mips32-le-gcc",
+                "linux-powerpc32-be-gcc",
+                "linux-sh32-gcc",
+                "linux-m68k-gcc",
+            },
         )
         gcc_route = configuration.routes[0]
         self.assertEqual(gcc_route.target_os, "linux")
         self.assertEqual(gcc_route.architecture, "x86_64")
         self.assertEqual(gcc_route.binary_format, "ELF")
+        self.assertEqual(gcc_route.compiler_family, "gcc")
         self.assertEqual(gcc_route.compiler, ("/usr/bin/gcc",))
         self.assertEqual(gcc_route.archiver, ("/usr/bin/ar",))
         self.assertEqual(gcc_route.ranlib, ("/usr/bin/ranlib",))
@@ -43,6 +58,26 @@ class ConfigurationTests(unittest.TestCase):
             "O2, compiled without -g or LTO, frame pointer retained",
         )
         self.assertEqual(configuration.profiles, {"smoke": ("baseline_o2",)})
+
+        managed = next(
+            row for row in configuration.routes if row.id == "linux-aarch64-gcc"
+        )
+        self.assertEqual(managed.managed_toolchain_route, managed.id)
+        self.assertTrue(managed.toolchain_identity.startswith("qualified:"))
+        self.assertTrue(Path(managed.compiler[0]).is_absolute())
+
+    def test_managed_routes_do_not_persist_cache_paths(self):
+        root = Path(__file__).resolve().parents[1]
+        document = tomllib.loads((root / "worker.toml").read_text(encoding="utf-8"))
+        managed = [
+            row for row in document["routes"] if "managed_toolchain_route" in row
+        ]
+
+        self.assertEqual(len(managed), 9)
+        for row in managed:
+            self.assertNotIn("compiler", row)
+            self.assertNotIn("archiver", row)
+            self.assertNotIn("ranlib", row)
 
     def test_work_request_contains_library_names_not_source_details(self):
         root = Path(__file__).resolve().parents[1]

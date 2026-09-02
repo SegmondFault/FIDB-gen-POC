@@ -363,7 +363,7 @@ def _resolve_native(
         "compiler": list(route.compiler),
         "archiver": list(route.archiver),
         "ranlib": list(route.ranlib),
-        "identity": "execution-probed",
+        "identity": route.toolchain_identity,
     }
     reviewed_build = {
         "adapter": library.preferred_build_system,

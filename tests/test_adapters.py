@@ -32,6 +32,7 @@ def route() -> Route:
         target_os="linux",
         architecture="x86_64",
         binary_format="ELF",
+        compiler_family="gcc",
         compiler=("/usr/bin/gcc",),
         archiver=("/usr/bin/ar",),
         ranlib=("/usr/bin/ranlib",),

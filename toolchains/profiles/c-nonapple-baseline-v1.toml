@@ -1,0 +1,20 @@
+schema_version = "fidb-toolchain-profile/v1"
+id = "c-nonapple-baseline-v1"
+label = "C non-Apple baseline v1 · nine qualified routes"
+language_id = "c"
+host_system = "linux"
+host_architecture = "x86_64"
+route_ids = [
+  "linux-x86-64-gcc",
+  "windows-x86-64-llvm-mingw",
+  "linux-arm32-gcc",
+  "linux-aarch64-gcc",
+  "linux-mips32-be-gcc",
+  "linux-mips32-le-gcc",
+  "linux-powerpc32-be-gcc",
+  "linux-sh32-gcc",
+  "linux-m68k-gcc",
+]
+external_policy = "report"
+purpose = "Freeze the nine locally qualified Linux-hosted C/C++ routes as the executable non-Apple width baseline."
+authority = "coverage/c-top10-width-study.toml"
