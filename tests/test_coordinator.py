@@ -296,6 +296,26 @@ matrices = ["tier0-uclibc-powerpc"]
                 },
             )
         )
+
+    def test_native_pools_are_separated_by_reviewed_routing(self):
+        linux = {
+            "kind": "native",
+            "routing": {
+                "executor": "native-local",
+                "worker_pool": "library-local",
+            },
+        }
+        macos = {
+            "kind": "native",
+            "routing": {
+                "executor": "native-local",
+                "worker_pool": "macos-native",
+            },
+        }
+        self.assertTrue(worker_pool_accepts_cell("library-local", linux))
+        self.assertFalse(worker_pool_accepts_cell("library-local", macos))
+        self.assertTrue(worker_pool_accepts_cell("macos-native", macos))
+        self.assertFalse(worker_pool_accepts_cell("macos-native", linux))
         self.assertFalse(
             worker_pool_accepts_cell(
                 "library-local",

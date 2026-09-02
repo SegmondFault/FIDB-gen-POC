@@ -143,12 +143,13 @@ class LocalApiTests(unittest.TestCase):
 
         status, snapshot, _ = self.request("GET", "/api/v1/snapshot")
         self.assertEqual(status, 200)
-        self.assertEqual(len(snapshot["jobs"]), 2)
+        self.assertEqual(len(snapshot["jobs"]), 3)
         self.assertEqual(
             {row["base_cell"] for row in snapshot["jobs"]},
             {
                 "tier0-zlib-native:zlib-1.3.1:linux-x86_64-gnu-gcc:baseline_o2",
                 "bzip2-native:bzip2-1.0.7:linux-x86_64-gnu-gcc:baseline_o2",
+                "macos-zlib-native:zlib-1.3.1:macos-arm64-apple-clang:baseline_o2",
             },
         )
         self.assertNotIn("events", snapshot)
@@ -381,12 +382,14 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(
             document["executors"]["qemu"]["required_for_library_local_pool"]
         )
-        self.assertTrue(
-            all(
+        self.assertEqual(
+            sum(
                 row["library_local_eligible"]
                 for row in document["active_job_readiness"]
-            )
+            ),
+            2,
         )
+        self.assertEqual(document["worker_pools"]["macos-native"]["eligible_jobs"], 1)
         self.assertEqual(
             {
                 (row["kind"], row["executor"])
@@ -404,8 +407,8 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(len(document["targets"]), 22)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
         self.assertEqual(len(document["toolchains"]), 41)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 11)
-        self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 1)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 9)
+        self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
         self.assertEqual(len(document["factors"]), 41)
         self.assertEqual(document["width_studies"][0]["id"], "batch-010")
         self.assertEqual(

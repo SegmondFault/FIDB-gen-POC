@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from dataclasses import replace
 from datetime import datetime
 import hashlib
 import json
@@ -20,7 +21,12 @@ from urllib.request import Request, urlopen
 
 from .cell_runner import CellResolutionError, ProgressEvent, run_cell
 from .coordinator import QueueConfig, WORKER_POOLS
+from .external_workers import (
+    load_external_toolchain,
+    preflight_external_toolchain,
+)
 from .operations_policy import evaluate_operations
+from .remote_api import MAX_CHUNK_BYTES
 
 
 class RemoteWorkerError(RuntimeError):
@@ -182,16 +188,57 @@ def _upload(
     path: Path,
     attempt_root: Path,
 ) -> None:
-    content = path.read_bytes()
-    client.request(
-        "upload",
-        {
-            **client.lease_fields(lease),
-            "relative_path": _relative(path, attempt_root),
-            "sha256": hashlib.sha256(content).hexdigest(),
-            "content_base64": base64.b64encode(content).decode("ascii"),
-        },
-    )
+    artifact_sha256 = hashlib.sha256()
+    artifact_bytes = 0
+    with path.open("rb") as stream:
+        for content in iter(lambda: stream.read(1024 * 1024), b""):
+            artifact_sha256.update(content)
+            artifact_bytes += len(content)
+    if artifact_bytes < 1:
+        raise RemoteWorkerError(f"generated artifact is empty: {path}")
+    digest = artifact_sha256.hexdigest()
+    offset = 0
+    with path.open("rb") as stream:
+        while offset < artifact_bytes:
+            content = stream.read(MAX_CHUNK_BYTES)
+            response = client.request(
+                "upload",
+                {
+                    **client.lease_fields(lease),
+                    "relative_path": _relative(path, attempt_root),
+                    "artifact_sha256": digest,
+                    "artifact_bytes": artifact_bytes,
+                    "offset": offset,
+                    "chunk_sha256": hashlib.sha256(content).hexdigest(),
+                    "content_base64": base64.b64encode(content).decode("ascii"),
+                    "final": offset + len(content) == artifact_bytes,
+                },
+            )
+            artifact = response.get("artifact")
+            expected_offset = offset + len(content)
+            if (
+                isinstance(artifact, dict)
+                and artifact.get("complete") is True
+                and artifact.get("next_offset") == artifact_bytes
+                and artifact.get("sha256") == digest
+                and artifact.get("bytes") == artifact_bytes
+            ):
+                return
+            if (
+                not isinstance(artifact, dict)
+                or isinstance(artifact.get("next_offset"), bool)
+                or not isinstance(artifact.get("next_offset"), int)
+                or not expected_offset <= artifact["next_offset"] <= artifact_bytes
+                or artifact.get("complete") is not False
+            ):
+                raise RemoteWorkerError(
+                    "remote coordinator returned an invalid upload acknowledgement"
+                )
+            if artifact["next_offset"] == artifact_bytes and not artifact["complete"]:
+                offset = max(0, artifact_bytes - MAX_CHUNK_BYTES)
+            else:
+                offset = artifact["next_offset"]
+            stream.seek(offset)
 
 
 def execute_remote_lease(
@@ -300,8 +347,13 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--worker-id", required=True)
     result.add_argument("--token-env", default="FIDB_REMOTE_WORKER_TOKEN")
     result.add_argument("--pool", choices=WORKER_POOLS, required=True)
+    result.add_argument(
+        "--external-toolchain",
+        help="reviewed toolchains/external definition id for this worker",
+    )
     result.add_argument("--poll-seconds", type=int, default=5)
     result.add_argument("--once", action="store_true")
+    result.add_argument("--until-drained", action="store_true")
     result.add_argument("--verbose", "-v", action="store_true")
     result.add_argument(
         "--allow-http-loopback", action="store_true", help=argparse.SUPPRESS
@@ -311,6 +363,11 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
+    if arguments.once and arguments.until_drained:
+        print(
+            "error: --once and --until-drained are mutually exclusive", file=sys.stderr
+        )
+        return 1
     root = arguments.project_root.expanduser().resolve()
     queue_path = (
         arguments.queue if arguments.queue.is_absolute() else root / arguments.queue
@@ -324,6 +381,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             token,
             allow_http_loopback=arguments.allow_http_loopback,
         )
+        if arguments.external_toolchain:
+            definition = load_external_toolchain(arguments.external_toolchain, root)
+            if definition.worker_pool != arguments.pool:
+                raise ValueError("external toolchain worker_pool does not match --pool")
+            preflight = preflight_external_toolchain(definition, root)
+            if not preflight["ready"]:
+                print(json.dumps(preflight, indent=2, sort_keys=True))
+                raise RemoteWorkerError("external toolchain preflight did not pass")
+            queue = replace(
+                queue,
+                operations=replace(
+                    queue.operations,
+                    resources=definition.resources,
+                ),
+            )
+            client.request("register", {"preflight": preflight})
         previous_sigterm = signal.getsignal(signal.SIGTERM)
 
         def interrupt(_signum: int, _frame: object) -> None:
@@ -342,6 +415,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 response = client.request("claim", {"pool": arguments.pool})
                 lease = response.get("lease")
                 if lease is None:
+                    pool_status = response.get("pool")
+                    if (
+                        arguments.until_drained
+                        and isinstance(pool_status, dict)
+                        and pool_status.get("drained") is True
+                    ):
+                        return 0
+                    if arguments.until_drained and isinstance(
+                        response.get("gate"), dict
+                    ):
+                        print(json.dumps(response["gate"], indent=2, sort_keys=True))
+                        return 1
                     if arguments.once:
                         return 0
                     time.sleep(arguments.poll_seconds)

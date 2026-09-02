@@ -532,14 +532,14 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         connection=coordinator.connection,
                     )
                     status = coordinator.status()
-                pool = result["worker_pools"]["library-local"]
-                pool.update(
-                    {
-                        "max_workers": status["max_workers"],
-                        "active_workers": status["active_workers"],
-                        "available_worker_slots": status["available_worker_slots"],
-                    }
-                )
+                for pool in result["worker_pools"].values():
+                    pool.update(
+                        {
+                            "max_workers": status["max_workers"],
+                            "active_workers": status["active_workers"],
+                            "available_worker_slots": status["available_worker_slots"],
+                        }
+                    )
             else:
                 result = detect_capabilities(self.api_server.config.project_root)
             self._json_response(HTTPStatus.OK, result, origin=origin)

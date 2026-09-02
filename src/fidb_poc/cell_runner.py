@@ -382,7 +382,12 @@ def _resolve_native(
     _expect(toolchain, reviewed_toolchain, "native toolchain route")
     _expect(build, reviewed_build, "native build adapter and flags")
     _expect(analysis, reviewed_analysis, "native analysis route")
-    _expect(routing, {"executor": "native-local"}, "native executor")
+    worker_pool = "macos-native" if route.target_os == "macos" else "library-local"
+    _expect(
+        routing,
+        {"executor": "native-local", "worker_pool": worker_pool},
+        "native executor",
+    )
     return configuration, {
         "recipe": reviewed_recipe,
         "toolchain": reviewed_toolchain,

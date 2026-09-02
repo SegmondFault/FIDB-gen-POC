@@ -8,8 +8,10 @@ import os
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
+import re
 import shutil
 import stat
+import subprocess
 from typing import Mapping, Sequence
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -185,10 +187,36 @@ class ResourceState:
 
 
 def _available_memory_bytes() -> int:
-    for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
-        if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) * 1024
-    raise OSError("/proc/meminfo does not report MemAvailable")
+    linux_memory = Path("/proc/meminfo")
+    if linux_memory.is_file():
+        for line in linux_memory.read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+        raise OSError("/proc/meminfo does not report MemAvailable")
+    if (
+        Path("/usr/bin/memory_pressure").is_file()
+        and Path("/usr/sbin/sysctl").is_file()
+    ):
+        pressure = subprocess.run(
+            ["/usr/bin/memory_pressure", "-Q"],
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        total = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "hw.memsize"],
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        match = re.search(
+            r"System-wide memory free percentage:\s*(\d+)%", pressure.stdout
+        )
+        if pressure.returncode == 0 and total.returncode == 0 and match:
+            return int(total.stdout.strip()) * int(match.group(1)) // 100
+    raise OSError("available-memory probe is unsupported on this host")
 
 
 def _temperature_c() -> float | None:

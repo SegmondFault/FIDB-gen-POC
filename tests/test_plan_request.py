@@ -56,6 +56,17 @@ class PlanRequestTests(unittest.TestCase):
         factors = {row["id"]: row for row in first["sensitivity_catalog"]["factors"]}
         self.assertEqual(factors["ghidra-language"]["confidence"], "observed-sensitive")
 
+    def test_native_routes_resolve_to_platform_specific_worker_pools(self):
+        linux = resolve_plan(self.root / "plans/bzip2-native.toml", self.root)["cells"][
+            0
+        ]
+        macos = resolve_plan(self.root / "plans/macos-arm64-canary.toml", self.root)[
+            "cells"
+        ][0]
+        self.assertEqual(linux["routing"]["worker_pool"], "library-local")
+        self.assertEqual(macos["routing"]["worker_pool"], "macos-native")
+        self.assertEqual(macos["target"]["binary_format"], "Mach-O")
+
     def test_request_cannot_supply_a_raw_command(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "bad.toml"

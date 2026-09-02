@@ -1,3 +1,4 @@
+import base64
 import hashlib
 from pathlib import Path
 import tempfile
@@ -43,6 +44,17 @@ class RemoteWorkerTests(unittest.TestCase):
                 requests.append((operation, document))
                 if operation == "complete":
                     return {"job": {"state": "complete"}}
+                if operation == "upload":
+                    content = base64.b64decode(document["content_base64"])
+                    return {
+                        "artifact": {
+                            "path": document["relative_path"],
+                            "sha256": document["artifact_sha256"],
+                            "bytes": document["artifact_bytes"],
+                            "next_offset": document["offset"] + len(content),
+                            "complete": document["final"],
+                        }
+                    }
                 return {"ok": True}
 
         lease = {

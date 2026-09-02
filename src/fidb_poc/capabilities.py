@@ -455,8 +455,9 @@ def detect_capabilities(
     native_routes = _native_routes(root, effective_environment)
     registry = _registry_inventory(root)
     toolchain_profiles = resolve_toolchain_profiles(root)
+    active_cells = _active_cells(connection)
     active = _job_readiness(
-        _active_cells(connection),
+        active_cells,
         native_routes=native_routes,
         tools=tools,
         analysis_ready=analysis_ready,
@@ -468,6 +469,11 @@ def detect_capabilities(
         row
         for row in eligible
         if row["readiness"] in {"ready", "download-required", "prepare-required"}
+    ]
+    macos_jobs = [
+        row
+        for row in active_cells
+        if worker_pool_accepts_cell("macos-native", row["cell"])
     ]
     qemu_ready = bool(
         tools["qemu-img"]["available"] and tools["qemu-system-x86_64"]["available"]
@@ -522,7 +528,22 @@ def detect_capabilities(
                 "ready_now": len(immediately_ready),
                 "runnable_with_pinned_acquisition": len(acquisition_ready),
                 "blocked": len(eligible) - len(acquisition_ready),
-            }
+            },
+            "macos-native": {
+                "cell_kinds": ["native"],
+                "source_executor": "native-local",
+                "excluded_cell_kinds": [
+                    "source-library",
+                    "archive-library",
+                    "malware",
+                ],
+                "qemu_required": False,
+                "eligible_jobs": len(macos_jobs),
+                "ready_now": 0,
+                "runnable_with_pinned_acquisition": 0,
+                "blocked": 0,
+                "external_registration_required": True,
+            },
         },
         "active_job_readiness": active,
         "toolchains": {

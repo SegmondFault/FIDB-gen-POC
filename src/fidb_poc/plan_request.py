@@ -666,7 +666,14 @@ def _native_cells(
                             "ghidra_version": "execution-probed",
                             "analysis_profile": "fid-safe-default",
                         },
-                        "routing": {"executor": "native-local"},
+                        "routing": {
+                            "executor": "native-local",
+                            "worker_pool": (
+                                "macos-native"
+                                if route.target_os == "macos"
+                                else "library-local"
+                            ),
+                        },
                         "sensitivity": {
                             "source-identity": {
                                 "state": "controlled",

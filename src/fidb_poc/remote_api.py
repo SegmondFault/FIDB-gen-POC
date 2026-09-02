@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 from dataclasses import dataclass
+import fcntl
 import hashlib
 import hmac
 from http import HTTPStatus
@@ -20,6 +21,7 @@ from urllib.parse import urlsplit
 
 from .cell_runner import CellRunResult
 from .coordinator import Coordinator, CoordinatorError, QueueConfig, WORKER_POOLS
+from .external_workers import load_external_toolchain, validate_registration
 from .queue_cli import (
     JOB_TIMING_SCHEMA,
     _durably_publish,
@@ -36,11 +38,13 @@ DEFAULT_PORT = 8766
 DEFAULT_STATE = Path("var/fidb-coordinator/ledger.sqlite3")
 DEFAULT_QUEUE = Path("plans/priority-queue.toml")
 MAX_JSON_BYTES = 96 * 1024 * 1024
-MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
+MAX_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024
+MAX_CHUNK_BYTES = 8 * 1024 * 1024
 _TOKEN_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _JOB_ID = re.compile(r"job-[0-9a-f]{64}\Z")
 _WORKER_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _ROUTES = {
+    "/api/v1/worker/register",
     "/api/v1/worker/claim",
     "/api/v1/worker/renew",
     "/api/v1/worker/stage",
@@ -255,6 +259,39 @@ def _staging(config: RemoteApiConfig, job_id: str, generation: int) -> Path:
     return staging
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _upload_lock_path(
+    config: RemoteApiConfig, staging: Path, relative: Path
+) -> Path:
+    lock_root = config.project_root / "var/fidb-remote-upload-locks"
+    if lock_root.is_symlink():
+        raise RemoteApiError(
+            HTTPStatus.CONFLICT,
+            "unsafe-staging",
+            "remote upload lock root is a symlink",
+        )
+    lock_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(lock_root, 0o700)
+    identity = hashlib.sha256(
+        f"{staging.name}\0{relative.as_posix()}".encode()
+    ).hexdigest()
+    lock_path = lock_root / f"{identity}.lock"
+    if lock_path.is_symlink():
+        raise RemoteApiError(
+            HTTPStatus.CONFLICT,
+            "unsafe-staging",
+            "remote upload lock path is a symlink",
+        )
+    return lock_path
+
+
 def _store_upload(
     config: RemoteApiConfig,
     staging: Path,
@@ -314,6 +351,226 @@ def _store_upload(
     finally:
         temporary.unlink(missing_ok=True)
     return {"path": str(relative), "sha256": digest, "bytes": len(content)}
+
+
+def _store_upload_chunk(
+    config: RemoteApiConfig,
+    staging: Path,
+    relative: Path,
+    content: bytes,
+    *,
+    artifact_sha256: str,
+    artifact_bytes: object,
+    offset: object,
+    chunk_sha256: str,
+    final: object,
+) -> dict[str, object]:
+    if (
+        isinstance(artifact_bytes, bool)
+        or not isinstance(artifact_bytes, int)
+        or not 0 < artifact_bytes <= config.max_artifact_bytes
+    ):
+        raise RemoteApiError(
+            HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            "artifact-too-large",
+            "remote artifact size is invalid or exceeds the configured limit",
+        )
+    if (
+        isinstance(offset, bool)
+        or not isinstance(offset, int)
+        or offset < 0
+        or offset >= artifact_bytes
+    ):
+        raise RemoteApiError(
+            HTTPStatus.BAD_REQUEST, "invalid-offset", "artifact chunk offset is invalid"
+        )
+    if (
+        not content
+        or len(content) > MAX_CHUNK_BYTES
+        or offset + len(content) > artifact_bytes
+    ):
+        raise RemoteApiError(
+            HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            "chunk-too-large",
+            "artifact chunk is empty, oversized, or exceeds the declared artifact",
+        )
+    if not isinstance(final, bool) or final != (
+        offset + len(content) == artifact_bytes
+    ):
+        raise RemoteApiError(
+            HTTPStatus.BAD_REQUEST,
+            "invalid-final-chunk",
+            "final must identify exactly the last artifact chunk",
+        )
+    observed_chunk = hashlib.sha256(content).hexdigest()
+    if (
+        not _TOKEN_DIGEST.fullmatch(chunk_sha256)
+        or not hmac.compare_digest(observed_chunk, chunk_sha256)
+        or not _TOKEN_DIGEST.fullmatch(artifact_sha256)
+    ):
+        raise RemoteApiError(
+            HTTPStatus.BAD_REQUEST, "digest-mismatch", "artifact chunk digest mismatch"
+        )
+
+    destination = staging / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    current = staging
+    for part in relative.parts[:-1]:
+        current /= part
+        if current.is_symlink():
+            raise RemoteApiError(
+                HTTPStatus.CONFLICT, "unsafe-staging", "artifact parent is a symlink"
+            )
+    partial = destination.with_name(f".{destination.name}.upload")
+    metadata_path = destination.with_name(f".{destination.name}.upload.json")
+    lock_path = _upload_lock_path(config, staging, relative)
+    for candidate in (destination, partial, metadata_path):
+        if candidate.is_symlink():
+            raise RemoteApiError(
+                HTTPStatus.CONFLICT,
+                "unsafe-staging",
+                "artifact upload path is a symlink",
+            )
+    lock_fd = os.open(
+        lock_path,
+        os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        if destination.is_file():
+            complete_size = destination.stat().st_size
+            complete_digest = _sha256_file(destination)
+            if complete_size == artifact_bytes and hmac.compare_digest(
+                complete_digest, artifact_sha256
+            ):
+                return {
+                    "path": str(relative),
+                    "sha256": complete_digest,
+                    "bytes": complete_size,
+                    "next_offset": complete_size,
+                    "complete": True,
+                }
+            raise RemoteApiError(
+                HTTPStatus.CONFLICT,
+                "artifact-conflict",
+                "completed artifact upload already exists with another identity",
+            )
+        if destination.exists():
+            raise RemoteApiError(
+                HTTPStatus.CONFLICT,
+                "artifact-conflict",
+                "artifact destination is invalid",
+            )
+
+        expected_metadata = {
+            "schema_version": "fidb-remote-artifact-upload/v1",
+            "path": str(relative),
+            "sha256": artifact_sha256,
+            "bytes": artifact_bytes,
+        }
+        if partial.exists() or metadata_path.exists():
+            if not partial.is_file() or not metadata_path.is_file():
+                raise RemoteApiError(
+                    HTTPStatus.CONFLICT,
+                    "artifact-conflict",
+                    "partial artifact upload is inconsistent",
+                )
+            try:
+                existing_metadata = json.loads(
+                    metadata_path.read_text(encoding="utf-8")
+                )
+            except (OSError, UnicodeError, json.JSONDecodeError) as error:
+                raise RemoteApiError(
+                    HTTPStatus.CONFLICT,
+                    "artifact-conflict",
+                    "partial artifact metadata is invalid",
+                ) from error
+            if existing_metadata != expected_metadata:
+                raise RemoteApiError(
+                    HTTPStatus.CONFLICT,
+                    "artifact-conflict",
+                    "partial artifact identity changed",
+                )
+        elif offset == 0:
+            with metadata_path.open("x", encoding="utf-8") as metadata_stream:
+                metadata_stream.write(
+                    json.dumps(expected_metadata, sort_keys=True, separators=(",", ":"))
+                )
+                metadata_stream.flush()
+                os.fsync(metadata_stream.fileno())
+            os.chmod(metadata_path, 0o600)
+            partial.touch(mode=0o600)
+        else:
+            raise RemoteApiError(
+                HTTPStatus.CONFLICT,
+                "artifact-offset-conflict",
+                "artifact upload must begin at offset zero",
+            )
+
+        current_size = partial.stat().st_size
+        if current_size < offset:
+            raise RemoteApiError(
+                HTTPStatus.CONFLICT,
+                "artifact-offset-conflict",
+                "artifact chunk begins after the durable upload offset",
+            )
+        if current_size > offset:
+            with partial.open("rb") as stream:
+                stream.seek(offset)
+                existing = stream.read(len(content))
+            if existing != content:
+                raise RemoteApiError(
+                    HTTPStatus.CONFLICT,
+                    "artifact-offset-conflict",
+                    "replayed artifact chunk differs from durable bytes",
+                )
+        else:
+            with partial.open("ab") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+        next_offset = max(current_size, offset + len(content))
+        complete = False
+        if final:
+            if partial.stat().st_size != artifact_bytes:
+                raise RemoteApiError(
+                    HTTPStatus.CONFLICT,
+                    "artifact-offset-conflict",
+                    "final artifact is not durably complete",
+                )
+            observed = _sha256_file(partial)
+            if not hmac.compare_digest(observed, artifact_sha256):
+                partial.unlink(missing_ok=True)
+                metadata_path.unlink(missing_ok=True)
+                raise RemoteApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "digest-mismatch",
+                    "completed remote artifact digest mismatch",
+                )
+            os.chmod(partial, 0o644)
+            os.replace(partial, destination)
+            metadata_path.unlink()
+            directory_fd = os.open(
+                destination.parent,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+            )
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+            complete = True
+        return {
+            "path": str(relative),
+            "sha256": artifact_sha256,
+            "bytes": artifact_bytes,
+            "next_offset": next_offset,
+            "complete": complete,
+        }
+    finally:
+        os.close(lock_fd)
 
 
 class RemoteWorkerHandler(BaseHTTPRequestHandler):
@@ -427,16 +684,17 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                 )
             document = self._body()
             credential = self._authenticate(document)
-            with Coordinator(
-                self.remote_server.config.state_path,
-                self.remote_server.config.project_root,
-            ) as coordinator:
-                coordinator.touch_worker(
-                    credential.worker_id,
-                    transport="remote-http",
-                    pools=credential.pools,
-                    metadata={"last_operation": target.path.rsplit("/", 1)[-1]},
-                )
+            if target.path != "/api/v1/worker/register":
+                with Coordinator(
+                    self.remote_server.config.state_path,
+                    self.remote_server.config.project_root,
+                ) as coordinator:
+                    coordinator.touch_worker(
+                        credential.worker_id,
+                        transport="remote-http",
+                        pools=credential.pools,
+                        metadata={"last_operation": target.path.rsplit("/", 1)[-1]},
+                    )
             result = self._operation(target.path, document, credential)
             self._response(HTTPStatus.OK, result)
         except RemoteApiError as error:
@@ -465,6 +723,43 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
         credential: WorkerCredential,
     ) -> dict[str, object]:
         config = self.remote_server.config
+        if path == "/api/v1/worker/register":
+            _only_fields(document, {"worker_id", "preflight"})
+            raw_preflight = document.get("preflight")
+            if not isinstance(raw_preflight, dict):
+                raise RemoteApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-preflight",
+                    "worker registration requires a structured preflight",
+                )
+            identity = raw_preflight.get("definition")
+            definition_id = identity.get("id") if isinstance(identity, dict) else None
+            if not isinstance(definition_id, str):
+                raise RemoteApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-preflight",
+                    "worker preflight has no definition identity",
+                )
+            definition = load_external_toolchain(definition_id, config.project_root)
+            if definition.worker_pool not in credential.pools:
+                raise RemoteApiError(
+                    HTTPStatus.FORBIDDEN,
+                    "pool-denied",
+                    "worker is not authorized for the external toolchain pool",
+                )
+            preflight = validate_registration(raw_preflight, definition)
+            with Coordinator(config.state_path, config.project_root) as coordinator:
+                worker = coordinator.touch_worker(
+                    credential.worker_id,
+                    transport="remote-http",
+                    pools=credential.pools,
+                    metadata={
+                        "last_operation": "register",
+                        "external_toolchain": preflight,
+                    },
+                )
+            return {"schema_version": REMOTE_API_SCHEMA, "worker": worker}
+
         if path == "/api/v1/worker/claim":
             _only_fields(document, {"worker_id", "pool"})
             pool = _text(document, "pool", 64)
@@ -477,6 +772,8 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
             queue = QueueConfig.load(config.queue_path, config.project_root)
             schedule = queue.operations.schedule.evaluate()
             if not queue.armed or not schedule.claims_allowed:
+                with Coordinator(config.state_path, config.project_root) as coordinator:
+                    pool_status = coordinator.pool_status(pool)
                 return {
                     "schema_version": REMOTE_API_SCHEMA,
                     "lease": None,
@@ -484,11 +781,17 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                         "queue_armed": queue.armed,
                         "schedule": schedule.document(),
                     },
+                    "pool": pool_status,
                 }
             with Coordinator(config.state_path, config.project_root) as coordinator:
                 lease = coordinator.claim(credential.worker_id, pool=pool)
+                pool_status = coordinator.pool_status(pool)
             if lease is None:
-                return {"schema_version": REMOTE_API_SCHEMA, "lease": None}
+                return {
+                    "schema_version": REMOTE_API_SCHEMA,
+                    "lease": None,
+                    "pool": pool_status,
+                }
             try:
                 _staging(config, str(lease["job_id"]), int(lease["lease_generation"]))
             except Exception as error:
@@ -501,7 +804,11 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                         retryable=True,
                     )
                 raise
-            return {"schema_version": REMOTE_API_SCHEMA, "lease": lease}
+            return {
+                "schema_version": REMOTE_API_SCHEMA,
+                "lease": lease,
+                "pool": pool_status,
+            }
 
         common = {"worker_id", "job_id", "lease_token", "lease_generation"}
         job_id, token, generation = _lease_fields(document)
@@ -573,10 +880,21 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                     pass
                 return {"schema_version": REMOTE_API_SCHEMA, "job": job}
             if path == "/api/v1/worker/upload":
-                _only_fields(
-                    document,
-                    common | {"relative_path", "sha256", "content_base64"},
+                chunked = "offset" in document
+                fields = (
+                    {
+                        "relative_path",
+                        "artifact_sha256",
+                        "artifact_bytes",
+                        "offset",
+                        "chunk_sha256",
+                        "content_base64",
+                        "final",
+                    }
+                    if chunked
+                    else {"relative_path", "sha256", "content_base64"}
                 )
+                _only_fields(document, common | fields)
                 coordinator.renew(job_id, token, generation)
                 relative = _relative(document.get("relative_path"), "relative_path")
                 encoded = _text(document, "content_base64", config.max_json_bytes)
@@ -588,13 +906,26 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                         "invalid-base64",
                         "artifact content is not valid base64",
                     ) from error
-                artifact = _store_upload(
-                    config,
-                    _staging(config, job_id, generation),
-                    relative,
-                    content,
-                    _text(document, "sha256", 64),
-                )
+                if chunked:
+                    artifact = _store_upload_chunk(
+                        config,
+                        _staging(config, job_id, generation),
+                        relative,
+                        content,
+                        artifact_sha256=_text(document, "artifact_sha256", 64),
+                        artifact_bytes=document.get("artifact_bytes"),
+                        offset=document.get("offset"),
+                        chunk_sha256=_text(document, "chunk_sha256", 64),
+                        final=document.get("final"),
+                    )
+                else:
+                    artifact = _store_upload(
+                        config,
+                        _staging(config, job_id, generation),
+                        relative,
+                        content,
+                        _text(document, "sha256", 64),
+                    )
                 return {"schema_version": REMOTE_API_SCHEMA, "artifact": artifact}
             if path == "/api/v1/worker/complete":
                 _only_fields(

@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 from fidb_poc.coordinator import Coordinator, QueueConfig
+from fidb_poc.external_workers import load_external_toolchain
 from fidb_poc.remote_api import (
     CREDENTIALS_SCHEMA,
     RemoteApiConfig,
@@ -65,7 +66,14 @@ class RemoteApiTests(unittest.TestCase):
         self.root.mkdir()
         for name in ("pyproject.toml", "worker.toml"):
             shutil.copy2(self.source_root / name, self.root / name)
-        for name in ("plans", "recipes", "sensitivity", "toolchains"):
+        for name in (
+            "coverage",
+            "plans",
+            "recipes",
+            "sensitivity",
+            "targets",
+            "toolchains",
+        ):
             shutil.copytree(self.source_root / name, self.root / name)
         self.state = self.root / "var/ledger.sqlite3"
         self.queue = self.root / "queue.toml"
@@ -106,7 +114,7 @@ plan = "plans/bzip2-native.toml"
                             "token_sha256": hashlib.sha256(
                                 self.second_token.encode()
                             ).hexdigest(),
-                            "pools": ["library-local"],
+                            "pools": ["library-local", "macos-native"],
                         },
                     ],
                 }
@@ -159,6 +167,64 @@ plan = "plans/bzip2-native.toml"
         self.assertEqual(document["error"]["code"], "pool-denied")
         with Coordinator(self.state, self.root) as coordinator:
             self.assertEqual(coordinator.status()["counts"]["leased"], 0)
+
+    def test_external_worker_registers_reviewed_capabilities_and_keeps_them(self):
+        definition = load_external_toolchain("macos-arm64-apple-clang", self.root)
+        metadata = {name: f"test-{name}" for name in definition.required_metadata}
+        preflight = {
+            "schema_version": "fidb-external-worker-preflight/v1",
+            "checked_at": "2026-09-02T08:00:00+00:00",
+            "ready": True,
+            "definition": definition.registration_identity(),
+            "host": {"system": "darwin", "architecture": "arm64"},
+            "toolchain": {},
+            "analysis": {},
+            "smoke": {"languages": {"c": {"passed": True}}},
+            "resources": {"passed": True, "reasons": [], "metrics": {}},
+            "metadata": metadata,
+            "blockers": [],
+        }
+
+        status, registered, _ = self.request(
+            "register",
+            {"preflight": preflight},
+            token=self.second_token,
+            worker_id="remote-test-2",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            registered["worker"]["metadata"]["external_toolchain"]["definition"],
+            definition.registration_identity(),
+        )
+
+        status, response, _ = self.request(
+            "claim",
+            {"pool": "macos-native"},
+            token=self.second_token,
+            worker_id="remote-test-2",
+        )
+        self.assertEqual(status, 200)
+        self.assertIsNone(response["lease"])
+        self.assertTrue(response["pool"]["drained"])
+        with Coordinator(self.state, self.root) as coordinator:
+            worker = next(
+                row
+                for row in coordinator.snapshot()["workers"]
+                if row["worker_id"] == "remote-test-2"
+            )
+        self.assertEqual(worker["metadata"]["last_operation"], "claim")
+        self.assertEqual(worker["metadata"]["external_toolchain"]["metadata"], metadata)
+
+        changed = json.loads(json.dumps(preflight))
+        changed["definition"]["sha256"] = "0" * 64
+        status, document, _ = self.request(
+            "register",
+            {"preflight": changed},
+            token=self.second_token,
+            worker_id="remote-test-2",
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(document["error"]["code"], "operation-failed")
 
     def test_remote_claim_upload_and_server_validated_publication(self):
         status, claimed, _ = self.request("claim", {"pool": "library-local"})
@@ -257,6 +323,58 @@ plan = "plans/bzip2-native.toml"
             ),
             1,
         )
+
+    def test_chunked_upload_is_idempotent_and_final_digest_gated(self):
+        status, claimed, _ = self.request("claim", {"pool": "library-local"})
+        self.assertEqual(status, 200)
+        lease = claimed["lease"]
+        fields = {
+            "job_id": lease["job_id"],
+            "lease_token": lease["lease_token"],
+            "lease_generation": lease["lease_generation"],
+        }
+        content = b"chunked remote artifact"
+        digest = hashlib.sha256(content).hexdigest()
+        relative = "artifacts/result.fidb"
+
+        def upload(offset: int, chunk: bytes, final: bool):
+            return self.request(
+                "upload",
+                {
+                    **fields,
+                    "relative_path": relative,
+                    "artifact_sha256": digest,
+                    "artifact_bytes": len(content),
+                    "offset": offset,
+                    "chunk_sha256": hashlib.sha256(chunk).hexdigest(),
+                    "content_base64": base64.b64encode(chunk).decode(),
+                    "final": final,
+                },
+            )
+
+        first = content[:8]
+        status, uploaded, _ = upload(0, first, False)
+        self.assertEqual(status, 200)
+        self.assertEqual(uploaded["artifact"]["next_offset"], 8)
+        self.assertFalse(uploaded["artifact"]["complete"])
+
+        status, replayed, _ = upload(0, first, False)
+        self.assertEqual(status, 200)
+        self.assertEqual(replayed["artifact"]["next_offset"], 8)
+
+        status, completed, _ = upload(8, content[8:], True)
+        self.assertEqual(status, 200)
+        self.assertTrue(completed["artifact"]["complete"])
+        staging = (
+            self.root
+            / "artifacts/runs/remote-staging"
+            / f"{lease['job_id']}-g{lease['lease_generation']}"
+            / relative
+        )
+        self.assertEqual(staging.read_bytes(), content)
+        self.assertFalse(staging.with_name(".result.fidb.upload").exists())
+        self.assertFalse(staging.with_name(".result.fidb.upload.json").exists())
+        self.assertFalse(staging.with_name(".result.fidb.upload.lock").exists())
 
     def test_lease_owner_paths_and_completed_identity_fail_closed(self):
         status, claimed, _ = self.request("claim", {"pool": "library-local"})

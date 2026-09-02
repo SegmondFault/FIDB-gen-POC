@@ -39,7 +39,7 @@ _JOB_STATES = {
     "failed",
 }
 _LEASED_STATES = {"leased", "running"}
-WORKER_POOLS = ("library-local",)
+WORKER_POOLS = ("library-local", "macos-native")
 STAGE_STATUSES = ("started", "completed", "failed", "skipped")
 STAGE_TERMINAL_STATES = ("completed", "failed", "skipped", "interrupted")
 DEFAULT_TIMING_LIMIT = 100
@@ -414,9 +414,19 @@ def worker_pool_accepts_cell(pool: str, cell: object) -> bool:
     executor = routing.get("executor")
     if pool == "library-local":
         return (
-            (kind == "native" and executor == "native-local")
+            (
+                kind == "native"
+                and executor == "native-local"
+                and routing.get("worker_pool", "library-local") == "library-local"
+            )
             or (kind == "source-library" and executor == "local")
             or (kind == "archive-library" and executor == "archive-local")
+        )
+    if pool == "macos-native":
+        return (
+            kind == "native"
+            and executor == "native-local"
+            and routing.get("worker_pool") == "macos-native"
         )
     return False
 
@@ -2247,14 +2257,17 @@ class Coordinator:
             raise ValueError("worker pools contain an unsupported pool")
         if len(set(pools)) != len(pools):
             raise ValueError("worker pools contain duplicates")
-        metadata_document = dict(metadata or {})
-        metadata_json = _canonical_json(metadata_document)
         timestamp = self._now(now)
         occurred_at = self._timestamp(timestamp)
         with self._transaction():
             existing = self._connection.execute(
                 "SELECT * FROM workers WHERE worker_id = ?", (worker,)
             ).fetchone()
+            metadata_document = (
+                json.loads(existing["metadata_json"]) if existing is not None else {}
+            )
+            metadata_document.update(dict(metadata or {}))
+            metadata_json = _canonical_json(metadata_document)
             self._connection.execute(
                 """
                 INSERT INTO workers (
@@ -2288,6 +2301,46 @@ class Coordinator:
             "SELECT * FROM workers WHERE worker_id = ?", (worker,)
         ).fetchone()
         return self._worker_payload(row)
+
+    def pool_status(self, pool: str) -> dict[str, object]:
+        """Return actionable job counts for one fail-closed worker pool."""
+
+        if pool not in WORKER_POOLS:
+            raise ValueError(f"unsupported worker pool: {pool}")
+        state = self._state_locked()
+        rows = self._connection.execute("""
+            SELECT jobs.state, jobs.eligible_at, cells.cell_json
+            FROM jobs
+            JOIN batches ON batches.batch_id = jobs.batch_id
+            JOIN resolved_cells AS cells
+              ON cells.plan_digest = jobs.plan_digest
+             AND cells.cell_id = jobs.base_cell_id
+            WHERE jobs.active = 1 AND batches.active = 1
+            """).fetchall()
+        accepted = [
+            row
+            for row in rows
+            if worker_pool_accepts_cell(pool, json.loads(row["cell_json"]))
+        ]
+        counts = {job_state: 0 for job_state in sorted(_JOB_STATES)}
+        for row in accepted:
+            counts[str(row["state"])] += 1
+        now = self._now()
+        eligible = sum(
+            1
+            for row in accepted
+            if row["state"] == "queued" and float(row["eligible_at"]) <= now
+        )
+        remaining = counts["queued"] + counts["leased"] + counts["running"]
+        return {
+            "pool": pool,
+            "armed": bool(state["armed"]),
+            "paused": bool(state["paused"]),
+            "counts": counts,
+            "eligible": eligible,
+            "remaining": remaining,
+            "drained": remaining == 0,
+        }
 
     @staticmethod
     def _worker_payload(row: sqlite3.Row) -> dict[str, object]:

@@ -12,6 +12,7 @@ max_workers = 2
 batch_order = [
   "batch-000",
   "batch-005",
+  "batch-010-macos-canary",
 ]
 poll_seconds = 5
 lease_seconds = 3600
@@ -65,3 +66,8 @@ matrices = ["tier0-zlib-native"]
 id = "batch-005"
 name = "bzip2-native-baseline"
 plan = "plans/bzip2-native.toml"
+
+[[batch]]
+id = "batch-010-macos-canary"
+name = "macos-arm64-native-canary"
+plan = "plans/macos-arm64-canary.toml"
