@@ -428,6 +428,29 @@ uses the same SQLite result references as Linux attempts.
 Large outputs use idempotent 8 MiB chunks and receive a final whole-file
 SHA-256 check before publication; the default per-artifact ceiling is 4 GiB.
 
+## Experimental lane databases
+
+The repository now contains an additive lane-database experiment. A broad lane
+is the analyst-facing device/platform-family pack (`linux-x86`, `windows-x86`,
+`android-arm`, and so on); exact format, ISA, bitness, endianness, OS/ABI,
+Ghidra language/compiler specification and FID policy remain internal
+query-compatible sublanes selected from inspected program facts. Compiler
+version, treatment, library and release remain provenance rather than forcing a
+user-visible database choice.
+
+The current implementation can validate the registry, preview a measured width
+run and explicitly build a new immutable **raw** SQLite generation containing
+every observation. It does not deduplicate by default, does not modify source
+evidence and does not activate a native Ghidra database. Deduplication is an
+independent, dry-run-by-default Python experiment. Native projection and
+operational admission remain gated on relationship-complete worker evidence,
+query-equivalence testing and held-out ecological false-positive validation.
+
+See [`LANE_DATABASES.md`](LANE_DATABASES.md) for the exact model, commands,
+deduplication key, current limitations and rollback procedure. The Targets &
+toolchains GUI projects the same registry and deliberately reports zero active
+packs.
+
 Every worker uses a fixed typed dispatcher and re-resolves the reviewed recipe,
 pins, target, toolchain, adapter and executor before running. A terminal success
 requires preparation/build, artifact validation, Ghidra analysis, FID
@@ -651,6 +674,9 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/toolchain_packs.py` | strict pack/input/route/qualification/profile authority and read-only lifecycle resolution |
 | `src/fidb_poc/toolchain_cli.py` | typed registry acquisition and profile lifecycle commands |
 | `toolchains/packs.toml`, `inputs.toml`, `routes.toml`, `qualifications.toml`, `profiles/` | portable Linux x86-64 acquisition and qualification authority |
+| `lanes/registry.toml`, `src/fidb_poc/lane_registry.py` | experimental broad-lane/exact-sublane authority and conservative resolver |
+| `src/fidb_poc/lane_database.py`, `lane_compiler.py` | immutable raw occurrence store and preview-first width-evidence compiler |
+| `scripts/deduplicate_lane_db.py` | standalone inspectable, dry-run-by-default compact-copy experiment |
 | `src/fidb_poc/recipe_generator.py` | recipe x toolchain registry -> resolved build cells |
 | `src/fidb_poc/libc_catalog.py` | cell selection, download, extraction and VM-isolated source build |
 | `src/fidb_poc/malware_build.py` | cell -> linked malware binary + provenance manifest |
