@@ -29,7 +29,7 @@ _FIELDS = {
     "source_ids",
     "width_authority",
     "width_authority_sha256",
-    "width_compilation_digest",
+    "width_route_profile_digest",
     "width_study",
     "width_study_sha256",
     "recipe_policy",
@@ -173,21 +173,34 @@ def load_width_batch(project_root: str | Path, path: str | Path) -> dict[str, ob
         raise ValueError("width batch authority language does not match")
     if width["authorities"]["width"] != width_relative:  # type: ignore[index]
         raise ValueError("width batch compiler resolved a different width authority")
-    pinned_compilation = _digest(
-        document["width_compilation_digest"], "width_compilation_digest"
+    pinned_route_profile = _digest(
+        document["width_route_profile_digest"], "width_route_profile_digest"
     )
-    if width["compilation_digest"] != pinned_compilation:
+    if width["route_profile_digest"] != pinned_route_profile:
         raise ValueError(
-            "width batch compilation digest no longer matches reviewed width"
+            "width batch route profile digest no longer matches reviewed width"
         )
 
-    executable = [
-        row for row in width["applicability"] if row["state"] == "executable"  # type: ignore[index]
+    selected_pairs = [
+        row
+        for row in width["applicability"]  # type: ignore[index]
+        if row["state"] in {"executable", "unavailable"}
     ]
-    treatment_ids = {str(row["treatment_id"]) for row in executable}
+    treatment_ids = {str(row["treatment_id"]) for row in selected_pairs}
     compiler_ids = {str(row["compiler_id"]) for row in width["routes"]}  # type: ignore[index]
-    executions_per_library = int(
-        width["summary"]["feasible_full_path_executions"]  # type: ignore[index]
+    registered_artifacts = sum(
+        row["state"] == "registered"
+        for row in width["artifact_profiles"]  # type: ignore[index]
+    )
+    registered_analyses = sum(
+        row["state"] == "registered"
+        for row in width["analysis_profiles"]  # type: ignore[index]
+    )
+    executions_per_library = (
+        len(selected_pairs)
+        * registered_artifacts
+        * registered_analyses
+        * int(width["summary"]["selected_replay"])  # type: ignore[index]
     )
     actual = {
         "libraries": len(selected),
@@ -220,7 +233,7 @@ def load_width_batch(project_root: str | Path, path: str | Path) -> dict[str, ob
             "source_pack_sha256": document["source_pack_sha256"],
             "width": width_relative,
             "width_sha256": document["width_authority_sha256"],
-            "width_compilation_digest": pinned_compilation,
+            "width_route_profile_digest": pinned_route_profile,
             "study": study_relative,
             "study_sha256": document["width_study_sha256"],
         },
@@ -248,9 +261,21 @@ def load_width_batch(project_root: str | Path, path: str | Path) -> dict[str, ob
             * int(
                 width["summary"]["declared_maximum_build_cells_one_family"]  # type: ignore[index]
             ),
+            "locally_qualified_routes": width["summary"]["qualified_routes"],  # type: ignore[index]
+            "locally_executable_per_library": width["summary"][  # type: ignore[index]
+                "feasible_full_path_executions"
+            ],
         },
     }
-    canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    stable_body = {
+        **body,
+        "summary": {
+            key: value
+            for key, value in body["summary"].items()
+            if not key.startswith("locally_")
+        },
+    }
+    canonical = json.dumps(stable_body, sort_keys=True, separators=(",", ":")).encode()
     return {**body, "batch_digest": hashlib.sha256(canonical).hexdigest()}
 
 
@@ -285,6 +310,16 @@ def project_width_batch_readiness(
     executions_per_library = int(
         batch["summary"]["executions_per_library"]  # type: ignore[index]
     )
+    locally_executable = int(
+        batch["summary"]["locally_executable_per_library"]  # type: ignore[index]
+    )
+    qualified_routes = int(batch["summary"]["locally_qualified_routes"])  # type: ignore[index]
+    route_profiles = int(batch["summary"]["route_profiles"])  # type: ignore[index]
+    if qualified_routes < route_profiles:
+        blockers.append(
+            f"{route_profiles - qualified_routes} of {route_profiles} route profiles are not locally qualified"
+        )
+    materializable = ready * locally_executable
     projected = {
         **batch,
         "libraries": libraries,
@@ -292,8 +327,11 @@ def project_width_batch_readiness(
             "source_pins": len(libraries),
             "recipe_ready_libraries": ready,
             "recipe_blocked_libraries": len(libraries) - ready,
-            "materializable_executions": ready * executions_per_library,
-            "blocked_executions": (len(libraries) - ready) * executions_per_library,
+            "toolchain_ready_routes": qualified_routes,
+            "toolchain_blocked_routes": route_profiles - qualified_routes,
+            "materializable_executions": materializable,
+            "blocked_executions": len(libraries) * executions_per_library
+            - materializable,
             "queue_state": "not-materialized-disarmed",
             "blockers": blockers,
         },

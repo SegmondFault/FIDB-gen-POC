@@ -20,7 +20,7 @@ source_ids = [
 ]
 width_authority = "coverage/c-width-v1.toml"
 width_authority_sha256 = "fd1849f1821559b735dbd9eb1e0af9a5eacd3f94d197d8355812c80bc0a7cd30"
-width_compilation_digest = "0da1396951e5a0550eaad8ce2c6ff95909a783dec396205d6df6038ba1691a59"
+width_route_profile_digest = "433c95107adfc64095308e10f886d1a06d4c4ef0f7f08595146ac23d0bdcce95"
 width_study = "coverage/c-top10-width-study.toml"
 width_study_sha256 = "194a4b4c955461e843eabe111af2ceca268ffb76a06613068c325c1e7834f7b8"
 recipe_policy = "Resolve each selected source as <source-id>@<pinned-version>; require its reviewed native recipe to match the source URL and SHA-256 before materialization."

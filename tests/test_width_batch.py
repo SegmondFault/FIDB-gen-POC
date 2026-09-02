@@ -35,6 +35,8 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(batch["summary"]["executable_treatments"], 6)
         self.assertEqual(batch["summary"]["executions_per_library"], 174)
         self.assertEqual(batch["summary"]["total_executions"], 1_566)
+        self.assertEqual(batch["summary"]["locally_qualified_routes"], 29)
+        self.assertEqual(batch["summary"]["locally_executable_per_library"], 174)
         self.assertEqual(len(batch["batch_digest"]), 64)
 
     def test_recipe_gates_keep_unimplemented_libraries_out_of_queue(self):

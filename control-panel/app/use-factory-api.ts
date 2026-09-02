@@ -928,7 +928,7 @@ export type WidthBatch = {
     source_pack_sha256: string;
     width: string;
     width_sha256: string;
-    width_compilation_digest: string;
+    width_route_profile_digest: string;
     study: string;
     study_sha256: string;
   };
@@ -953,11 +953,15 @@ export type WidthBatch = {
     applicable_pairs_per_library: number;
     unimplemented_pairs_per_library: number;
     declared_maximum_build_cells: number;
+    locally_qualified_routes: number;
+    locally_executable_per_library: number;
   };
   readiness: {
     source_pins: number;
     recipe_ready_libraries: number;
     recipe_blocked_libraries: number;
+    toolchain_ready_routes: number;
+    toolchain_blocked_routes: number;
     materializable_executions: number;
     blocked_executions: number;
     queue_state: 'not-materialized-disarmed';
