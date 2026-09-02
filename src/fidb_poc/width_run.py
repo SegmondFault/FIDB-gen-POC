@@ -304,42 +304,97 @@ def _manifest_rows(paths: Iterable[Path], compilation: dict[str, object]):
 
 def _replay_comparison(replays: list[dict[str, object]]) -> dict[str, object]:
     if len(replays) < 2:
-        return {"comparable": False, "matching_cells": 0, "mismatches": []}
-    baseline = {
-        (row["route_id"], row["treatment_id"]): (
-            row["analysis_artifact_sha256"],
-            row["fidb_sha256"],
-        )
-        for row in replays[0]["cells"]
-        if row["status"] == "complete"
-    }
-    mismatches = []
-    matching = 0
-    for replay in replays[1:]:
-        current = {
-            (row["route_id"], row["treatment_id"]): (
-                row["analysis_artifact_sha256"],
-                row["fidb_sha256"],
-            )
+        return {
+            "comparable": False,
+            "compared_cells": 0,
+            "artifact_bytes": {"matching_cells": 0, "mismatches": []},
+            "fidb_container_bytes": {"matching_cells": 0, "mismatches": []},
+            "fid_semantics": {"matching_cells": 0, "mismatches": []},
+        }
+
+    def keyed(replay: dict[str, object]) -> dict[tuple[str, str], dict[str, str]]:
+        return {
+            (row["route_id"], row["treatment_id"]): row
             for row in replay["cells"]
             if row["status"] == "complete"
         }
+
+    def identity(key: tuple[str, str]) -> dict[str, str]:
+        return {"route_id": key[0], "treatment_id": key[1]}
+
+    semantic_fields = (
+        "fid_programs",
+        "fid_attempted",
+        "fid_added",
+        "fid_excluded",
+    )
+    baseline = keyed(replays[0])
+    artifact_matches = 0
+    fidb_matches = 0
+    semantic_matches = 0
+    artifact_mismatches: list[dict[str, str]] = []
+    fidb_mismatches: list[dict[str, str]] = []
+    semantic_mismatches: list[dict[str, object]] = []
+    compared = 0
+    for replay_index, replay in enumerate(replays[1:], start=2):
+        current = keyed(replay)
         for key in sorted(set(baseline) | set(current)):
-            if baseline.get(key) == current.get(key):
-                matching += 1
+            compared += 1
+            first = baseline.get(key)
+            second = current.get(key)
+            mismatch_identity = {**identity(key), "replay": replay_index}
+            if (
+                first is not None
+                and second is not None
+                and first["analysis_artifact_sha256"]
+                == second["analysis_artifact_sha256"]
+            ):
+                artifact_matches += 1
             else:
-                mismatches.append(
+                artifact_mismatches.append(mismatch_identity)
+            if (
+                first is not None
+                and second is not None
+                and first["fidb_sha256"] == second["fidb_sha256"]
+            ):
+                fidb_matches += 1
+            else:
+                fidb_mismatches.append(mismatch_identity)
+            first_semantics = (
+                {field: first[field] for field in semantic_fields}
+                if first is not None
+                else None
+            )
+            second_semantics = (
+                {field: second[field] for field in semantic_fields}
+                if second is not None
+                else None
+            )
+            if first_semantics == second_semantics and first_semantics is not None:
+                semantic_matches += 1
+            else:
+                semantic_mismatches.append(
                     {
-                        "route_id": key[0],
-                        "treatment_id": key[1],
-                        "baseline": baseline.get(key),
-                        "replay": current.get(key),
+                        **mismatch_identity,
+                        "baseline": first_semantics,
+                        "observed": second_semantics,
                     }
                 )
     return {
         "comparable": True,
-        "matching_cells": matching,
-        "mismatches": mismatches,
+        "compared_cells": compared,
+        "artifact_bytes": {
+            "matching_cells": artifact_matches,
+            "mismatches": artifact_mismatches,
+        },
+        "fidb_container_bytes": {
+            "matching_cells": fidb_matches,
+            "mismatches": fidb_mismatches,
+        },
+        "fid_semantics": {
+            "matching_cells": semantic_matches,
+            "mismatches": semantic_mismatches,
+        },
     }
 
 

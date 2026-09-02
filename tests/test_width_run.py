@@ -50,7 +50,7 @@ class WidthRunTests(unittest.TestCase):
         self.assertEqual(document["state"], "disarmed-preview")
         self.assertEqual(document["scheduled_executions"], 9)
 
-    def test_replay_comparison_reports_byte_and_fidb_mismatch(self):
+    def test_replay_comparison_separates_artifact_fidb_and_semantics(self):
         baseline = {
             "cells": [
                 {
@@ -59,6 +59,10 @@ class WidthRunTests(unittest.TestCase):
                     "status": "complete",
                     "analysis_artifact_sha256": "a" * 64,
                     "fidb_sha256": "b" * 64,
+                    "fid_programs": "1",
+                    "fid_attempted": "10",
+                    "fid_added": "8",
+                    "fid_excluded": "2",
                 }
             ]
         }
@@ -70,6 +74,10 @@ class WidthRunTests(unittest.TestCase):
                     "status": "complete",
                     "analysis_artifact_sha256": "a" * 64,
                     "fidb_sha256": "c" * 64,
+                    "fid_programs": "1",
+                    "fid_attempted": "11",
+                    "fid_added": "8",
+                    "fid_excluded": "3",
                 }
             ]
         }
@@ -77,8 +85,11 @@ class WidthRunTests(unittest.TestCase):
         comparison = _replay_comparison([baseline, changed])
 
         self.assertTrue(comparison["comparable"])
-        self.assertEqual(comparison["matching_cells"], 0)
-        self.assertEqual(len(comparison["mismatches"]), 1)
+        self.assertEqual(comparison["compared_cells"], 1)
+        self.assertEqual(comparison["artifact_bytes"]["matching_cells"], 1)
+        self.assertEqual(comparison["fidb_container_bytes"]["matching_cells"], 0)
+        self.assertEqual(comparison["fid_semantics"]["matching_cells"], 0)
+        self.assertEqual(len(comparison["fid_semantics"]["mismatches"]), 1)
 
 
 if __name__ == "__main__":

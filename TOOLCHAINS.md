@@ -128,7 +128,9 @@ Each live invocation creates a new immutable run directory under
 run executes the 54 applicability-approved route/profile cells twice and
 writes `width-run.json` with wall time, peak and final scratch size, retained
 size, peak process RSS, per-cell failures, coverage contribution, and replay
-comparison.
+comparison. Replay comparison deliberately separates compiled-object bytes,
+FID semantic counts, and raw FIDB container bytes; a container digest change
+must not be reported as a recovered-function change.
 
 ## Current non-Apple qualification
 
