@@ -143,12 +143,15 @@ Each live invocation creates a new immutable run directory under
 `artifacts/width-runs/c-width-v1/`; it never replaces an earlier run. The full
 run executes the 174 applicability-approved route/profile cells once. Each
 cell has an isolated work and artifact root, while a bounded process pool runs
-independent embedded Ghidra JVMs concurrently. The default worker count is the
-lowest of the CPU bound, one worker per 8 GiB of currently available host RAM,
-and twelve; override it explicitly with `--workers N` only after checking a
-measured peak. On `reference-host`, Linux currently sees about 62 GiB of the 128 GB
-unified-memory machine because of the graphics allocation, so the automatic
-starting width is six workers.
+independent embedded Ghidra JVMs concurrently. Width runs now add a measured
+4 GiB maximum heap to each JVM unless an equivalent inherited `-Xmx` already
+exists. A conflicting inherited maximum fails closed. The old ergonomic route
+is preserved for controlled comparison with `--unbounded-ghidra-heap`; it is
+not the safe default. The default worker count remains the lowest of the CPU
+bound, one worker per 8 GiB of currently available host RAM, and twelve;
+override it explicitly with `--workers N` only after checking a measured peak.
+On `reference-host`, Linux currently sees about 94 GiB after the graphics allocation,
+so the automatic starting width is eight workers.
 
 Successful cells discard reproducible bulk source, build and Ghidra-project
 scratch after measuring it, while retaining published artifacts, manifests,
@@ -199,6 +202,17 @@ hour, peak process-tree RSS and scratch, the JVM's observed maximum and
 committed heap, and a semantic digest over every selected cell's deterministic
 FID-signature ledger. Configurations may be compared only when their selected
 routes, treatments and semantic digest agree.
+
+The 2026-09-02 `reference-host` comparison is retained in
+`benchmarks/ghidra-heap-reference-host-2026-09-02.toml`. On the same x86-64 GCC 13
+OpenSSL cell, 4 GiB reduced peak RSS from 6,269,710,336 to 2,720,817,152 bytes
+(56.60%) while increasing wall time from 706.14 to 718.66 seconds (1.77%). The
+signature count, unique-signature count and semantic digest were identical. A
+ten-route/ten-worker pressure case then completed in 843.19 seconds at
+24,613,445,632 bytes peak aggregate RSS and 568,068 signature records/hour.
+Every compiled-artifact and signature-ledger digest matched the corresponding
+cell in the earlier uncapped full-width run. This evidence adopts the heap
+bound; it does not yet justify a worker count above ten.
 
 ### Frozen route/toolchain-canary measurement
 

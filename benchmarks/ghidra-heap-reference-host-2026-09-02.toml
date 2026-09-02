@@ -1,0 +1,89 @@
+schema_version = "fidb-performance-evidence/v1"
+id = "ghidra-heap-reference-host-2026-09-02"
+host = "reference-host"
+subject = "openssl-3.5.8"
+ghidra_version = "12.1.2"
+java_major = 21
+logical_cpus = 32
+visible_memory_gib = 93.93
+decision = "Adopt a 4096 MiB maximum heap as the width-run default. Preserve an explicit unbounded compatibility route and benchmark worker counts above ten separately."
+
+[[case]]
+id = "ergonomic-one"
+route_ids = ["linux-x86-64-gcc-13"]
+treatment_ids = ["baseline_o2"]
+workers = 1
+ghidra_heap_mib = 0
+wall_time_ns = 706135376072
+peak_process_rss_bytes = 6269710336
+peak_scratch_bytes = 161443840
+signature_records = 12157
+unique_signature_sum = 9504
+signature_records_per_wall_hour = 61978.48384746206
+jvm_max_heap_bytes = 25216155648
+jvm_committed_heap_bytes = 5284823040
+jvm_used_heap_bytes = 3630413840
+semantic_digest = "041cde25869b7bc0732c06a455bcfbddc0af8ce90ad51c9d7046d4ca27f53799"
+raw_result = "artifacts/benchmarks/width-pipeline/ergonomic-one-fixed-20260902T205142Z-869be3e55e85/benchmark-result.json"
+raw_result_sha256 = "adf02c74bb0332c5430dc6dbfc8a09569b828769c24680d209d8fbd39a9912ad"
+
+[[case]]
+id = "heap4096-one"
+route_ids = ["linux-x86-64-gcc-13"]
+treatment_ids = ["baseline_o2"]
+workers = 1
+ghidra_heap_mib = 4096
+wall_time_ns = 718659192732
+peak_process_rss_bytes = 2720817152
+peak_scratch_bytes = 166551552
+signature_records = 12157
+unique_signature_sum = 9504
+signature_records_per_wall_hour = 60898.4069815145
+jvm_max_heap_bytes = 4294967296
+jvm_committed_heap_bytes = 1539309568
+jvm_used_heap_bytes = 1096118624
+semantic_digest = "041cde25869b7bc0732c06a455bcfbddc0af8ce90ad51c9d7046d4ca27f53799"
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-one-20260902T210414Z-a4982d9bffe3/benchmark-result.json"
+raw_result_sha256 = "77fffe80f3e9c56ed88d0b190ffe4b37afe21c33883762156d5da0702d976c31"
+
+[[case]]
+id = "heap4096-ten-workers"
+route_ids = [
+  "linux-x86-64-gcc-12",
+  "linux-x86-64-gcc-13",
+  "linux-x86-64-gcc",
+  "linux-arm32-gcc-12",
+  "linux-arm32-gcc-13",
+  "linux-arm32-gcc",
+  "linux-aarch64-gcc-12",
+  "linux-aarch64-gcc-13",
+  "linux-aarch64-gcc",
+  "windows-x86-64-llvm-mingw-clang-20",
+]
+treatment_ids = ["baseline_o2"]
+workers = 10
+ghidra_heap_mib = 4096
+wall_time_ns = 843186843488
+peak_process_rss_bytes = 24613445632
+peak_scratch_bytes = 1385697280
+signature_records = 133052
+unique_signature_sum = 97254
+signature_records_per_wall_hour = 568067.6871315732
+unique_signature_sum_per_wall_hour = 415227.54144465335
+semantic_digest = "41f5cd9cb5e5da2aae3ec7ed3b4e33c3b5dd3edf758600677dcf1f1e04fa4629"
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-ten-workers-20260902T211711Z-4b5832c5041a/benchmark-result.json"
+raw_result_sha256 = "bc39a28b24eb535c291f90d9adcd86b68b107a4403462361a819c4dcaff68205"
+
+[comparison.one_cell]
+rss_reduction_percent = 56.60378221339252
+wall_time_increase_percent = 1.7735716244193702
+signature_records_equal = true
+unique_signature_counts_equal = true
+semantic_digest_equal = true
+
+[comparison.ten_worker_prior_width]
+compared_cells = 10
+analysis_artifact_sha256_equal = 10
+fid_signatures_sha256_equal = 10
+signature_record_counts_equal = 10
+unique_signature_counts_equal = 10
