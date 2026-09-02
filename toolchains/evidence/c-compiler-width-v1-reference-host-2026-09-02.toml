@@ -1,0 +1,76 @@
+schema_version = "fidb-toolchain-qualification-snapshot/v1"
+id = "c-compiler-width-v1-reference-host-2026-09-02"
+profile_id = "c-compiler-width-v1"
+observed_at = "2026-09-02T11:24:12Z"
+source_revision = "aa94bb0b4f2505c251346705ac9bc30131cfc200"
+host_id = "reference-host"
+host_system = "linux"
+host_architecture = "x86_64"
+kernel_release = "7.1.8-1-cachyos"
+catalog_digest = "438424708bc85b5bcf8e1c7f2c80cfed9f30a2fdca22e7aa6910f3ba69bf97c4"
+profile_digest = "433c95107adfc64095308e10f886d1a06d4c4ef0f7f08595146ac23d0bdcce95"
+profile_state = "qualified"
+qualification_scope = "fixed C and C++17 compilation, target-object identity, and static ar archive"
+qualified_routes = 29
+missing_qualifications = 0
+broken_routes = 0
+route_material_digest_set_sha256 = "ceb8a213d4c084ab30035f98198a1ead8385c433eadf8da4f0cb9780b670beee"
+qualification_record_digest_set_sha256 = "8ac27b63db23a24a2e9c20921a600bb725893a59e0112dc72a0aeb9f3d4dceee"
+
+[storage]
+selected_archive_bytes = 2850394000
+selected_extracted_file_bytes = 12890591603
+selected_pack_count = 29
+selected_prepared_pack_count = 29
+store_downloads_allocated_bytes = 4863016960
+store_prepared_allocated_bytes = 25433141248
+store_qualified_allocated_bytes = 593920
+store_totals_include_unselected_retained_material = true
+
+[[compiler]]
+id = "gcc-12.3.0"
+family = "gcc"
+route_count = 8
+route_ids = ["linux-x86-64-gcc-12", "linux-arm32-gcc-12", "linux-aarch64-gcc-12", "linux-mips32-be-gcc-12", "linux-mips32-le-gcc-12", "linux-powerpc32-be-gcc-12", "linux-sh32-gcc-12", "linux-m68k-gcc-12"]
+
+[[compiler]]
+id = "gcc-13.3.0"
+family = "gcc"
+route_count = 8
+route_ids = ["linux-x86-64-gcc-13", "linux-arm32-gcc-13", "linux-aarch64-gcc-13", "linux-mips32-be-gcc-13", "linux-mips32-le-gcc-13", "linux-powerpc32-be-gcc-13", "linux-sh32-gcc-13", "linux-m68k-gcc-13"]
+
+[[compiler]]
+id = "gcc-14.3.0"
+family = "gcc"
+route_count = 8
+route_ids = ["linux-x86-64-gcc", "linux-arm32-gcc", "linux-aarch64-gcc", "linux-mips32-be-gcc", "linux-mips32-le-gcc", "linux-powerpc32-be-gcc", "linux-sh32-gcc", "linux-m68k-gcc"]
+
+[[compiler]]
+id = "llvm-clang-15.0.0"
+family = "llvm-clang"
+route_count = 1
+route_ids = ["windows-x86-64-llvm-mingw-clang-15"]
+
+[[compiler]]
+id = "llvm-clang-17.0.6"
+family = "llvm-clang"
+route_count = 1
+route_ids = ["windows-x86-64-llvm-mingw-clang-17"]
+
+[[compiler]]
+id = "llvm-clang-19.1.6"
+family = "llvm-clang"
+route_count = 1
+route_ids = ["windows-x86-64-llvm-mingw-clang-19"]
+
+[[compiler]]
+id = "llvm-clang-20.1.7"
+family = "llvm-clang"
+route_count = 1
+route_ids = ["windows-x86-64-llvm-mingw-clang-20"]
+
+[[compiler]]
+id = "llvm-clang-23.1.0"
+family = "llvm-clang"
+route_count = 1
+route_ids = ["windows-x86-64-llvm-mingw"]

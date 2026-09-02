@@ -238,6 +238,11 @@ same project-local lifecycle:
 ./scripts/toolchains/status.sh c-compiler-width-v1
 ```
 
+The 2026-09-02 `reference-host` qualification completed all 29 routes with no
+missing or broken record. Its compact audit snapshot is
+`toolchains/evidence/c-compiler-width-v1-reference-host-2026-09-02.toml`; full smoke
+objects and records stay in the checksum-addressed host-local store.
+
 This is an intentional first tranche, not a claim that compiler width is
 complete. ELF Clang paired with explicit target sysroots, GNU MinGW GCC,
 native MSVC and Apple Clang remain named denominator gaps. The first OpenSSL

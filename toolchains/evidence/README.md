@@ -24,3 +24,9 @@ machine's runtime state.
 The 2026-09-02 `reference-host` snapshot covers the nine Linux-managed routes in
 `c-top10-linux`. Native Apple Clang was deliberately deferred and has no entry
 in the qualified route list.
+
+`c-compiler-width-v1-reference-host-2026-09-02.toml` records the first complete
+29-route compiler-generation qualification. Its grouped compiler rows preserve
+the target multiplicity, while digest-set hashes bind the complete ordered
+route-material and qualification-record sets. Full smoke objects and records
+remain in the host-local qualification store.
