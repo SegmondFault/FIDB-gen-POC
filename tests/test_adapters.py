@@ -106,6 +106,25 @@ class AdapterTests(unittest.TestCase):
             ),
         )
 
+    def test_openssl_adapter_selects_reviewed_target_and_static_libraries(self):
+        commands = build_commands(
+            "openssl-configure", route=route(), compiler_flags=("-O2",), jobs=8
+        )
+
+        self.assertEqual(
+            commands[0],
+            (
+                "perl",
+                "Configure",
+                "linux-x86_64",
+                "no-shared",
+                "no-tests",
+                "no-docs",
+                "no-module",
+            ),
+        )
+        self.assertEqual(commands[1], ("make", "-j8", "build_libs"))
+
     def test_link_adapter_materialises_archive_without_raw_recipe_commands(self):
         treatment = Treatment(
             id="linked_demo",

@@ -50,6 +50,7 @@ The two reviewed recipes exercise different upstream build shapes:
 | Library | Version | Build shape | Worker adapter |
 | ------- | ------: | ----------- | -------------- |
 | zlib | 1.3.1 | Autoconf | fixed Autoconf adapter |
+| OpenSSL | 3.5.8 | OpenSSL Configure | fixed static-library adapter |
 | bzip2 | 1.0.7 | Make | fixed Make adapter |
 
 ## Requirements

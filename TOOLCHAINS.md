@@ -95,6 +95,13 @@ Ghidra FID production work end to end. Because each target used only one
 compiler build, it does not measure compiler-family or compiler-generation
 hash coverage and is not substantive `c-width-v1` evidence.
 
+The substantive compiler-width subject is OpenSSL 3.5.8, the rank-one family
+in the frozen top-ten study. `recipes/openssl.toml` pins the official LTS
+archive and checksum. The fixed `openssl-configure` adapter selects a reviewed
+OpenSSL platform target from the route's OS/architecture, disables shared
+libraries, tests, documentation and modules, and builds `libcrypto.a` plus
+`libssl.a`. Recipes still cannot provide commands.
+
 Compile the authority without executing anything:
 
 ```sh

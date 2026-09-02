@@ -107,6 +107,17 @@ class ConfigurationTests(unittest.TestCase):
             ["zlib-1.3.1"],
         )
 
+    def test_openssl_recipe_is_pinned_and_static(self):
+        root = Path(__file__).resolve().parents[1]
+        configuration = load_configuration(
+            root / "worker.toml", request_override=("openssl@3.5.8",)
+        )
+
+        recipe = configuration.libraries[0]
+        self.assertEqual(recipe.name, "openssl")
+        self.assertEqual(recipe.preferred_build_system, "openssl-configure")
+        self.assertEqual(recipe.static_archives, ("libcrypto.a", "libssl.a"))
+
     def test_unknown_library_request_fails_closed(self):
         root = Path(__file__).resolve().parents[1]
         with self.assertRaisesRegex(ValueError, "no approved recipe"):

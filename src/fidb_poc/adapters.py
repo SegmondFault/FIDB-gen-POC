@@ -109,6 +109,38 @@ def build_commands(
     archiver = tool_text(route.archiver)
     ranlib = tool_text(route.ranlib)
     flags = " ".join(compiler_flags)
+    if build_system == "openssl-configure":
+        if route.target_os == "windows" and route.architecture == "x86_64":
+            target = "mingw64"
+        elif route.target_os == "linux":
+            target = {
+                "x86_64": "linux-x86_64",
+                "arm": "linux-armv4",
+                "aarch64": "linux-aarch64",
+                "mips": "linux-mips32",
+                "mipsel": "linux-mips32",
+                "powerpc": "linux-ppc",
+                "sh4": "linux-generic32",
+                "m68k": "linux-generic32",
+            }.get(route.architecture, "")
+        else:
+            target = ""
+        if not target:
+            raise AdapterError(
+                f"no OpenSSL Configure target for {route.target_os}/{route.architecture}"
+            )
+        return (
+            (
+                "perl",
+                "Configure",
+                target,
+                "no-shared",
+                "no-tests",
+                "no-docs",
+                "no-module",
+            ),
+            ("make", f"-j{jobs}", "build_libs"),
+        )
     if build_system == "autoconf":
         return (
             ("sh", "configure", "--static"),
@@ -144,7 +176,7 @@ def build_environment(
     route: Route,
     compiler_flags: tuple[str, ...],
 ) -> dict[str, str]:
-    if build_system != "autoconf":
+    if build_system not in {"autoconf", "openssl-configure"}:
         return {}
     return {
         "CC": tool_text(route.compiler),

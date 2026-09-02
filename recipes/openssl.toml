@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "openssl"
+version = "3.5.8"
+url = "https://www.openssl.org/source/openssl-3.5.8.tar.gz"
+sha256 = "a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2"
+source_directory = "openssl-3.5.8"
+project_markers = ["Configure", "include/openssl/ssl.h.in"]
+allowed_build_systems = ["openssl-configure"]
+preferred_build_system = "openssl-configure"
+static_archives = ["libcrypto.a", "libssl.a"]
