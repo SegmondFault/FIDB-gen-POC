@@ -518,6 +518,81 @@ export type FactoryCapabilities = {
   };
 };
 
+export type LaneWidthRun = {
+  width_id: string;
+  run_id: string;
+  path: string;
+  state: string;
+  mode: string | null;
+  fixed_recipe: string | null;
+  started_at_utc: string | null;
+  finished_at_utc: string | null;
+  wall_time_ns: number;
+  parallel_workers: number;
+  scheduled_executions: number;
+  completed_executions: number;
+  failed_executions: number;
+  successful_route_profile_pairs: number;
+  signature_records: number;
+  unique_signatures: number;
+  retained_bytes: number;
+  peak_scratch_bytes: number;
+  result_bytes: number;
+  modified_at_utc: string;
+};
+
+export type LaneDatabaseGeneration = {
+  kind: 'raw' | 'compact';
+  path: string;
+  bytes: number;
+  modified_at_utc: string;
+  generation_id: string;
+  source_generation_id: string | null;
+  source_run_id: string | null;
+  lane_id: string;
+  sublane_ids: string[];
+  state: string;
+  created_at: string;
+  evidence_kind: string;
+  raw_observations: number;
+  unique_signatures: number | null;
+  repeated_observations: number | null;
+  repetition_fraction: number | null;
+  relationships: number;
+  native_projections: number;
+  native_projection_state: string;
+  ecological_validation_state: string;
+  admission_states?: Record<string, number>;
+  active: boolean;
+};
+
+export type LaneInventory = {
+  schema_version: 'fidb-lane-inventory/v1';
+  detection_mode: 'read-only-metadata';
+  roots: { width_runs: string; lane_databases: string };
+  inspection: {
+    sqlite_open_mode: string;
+    content_digests: string;
+    full_integrity_check: string;
+  };
+  summary: {
+    width_runs: number;
+    complete_width_runs: number;
+    raw_generations: number;
+    compact_generations: number;
+    materialized_generations: number;
+    active_packs: number;
+    lane_database_bytes: number;
+    raw_observations: number;
+    compact_unique_signatures: number;
+    issues: number;
+  };
+  latest_complete_width_run: LaneWidthRun | null;
+  width_runs: LaneWidthRun[];
+  databases: LaneDatabaseGeneration[];
+  issues: Array<{ path: string; reason: string }>;
+};
+
 type WorkerPoolCapabilities = {
       cell_kinds: string[];
       source_executor: 'local' | 'native-local';
@@ -1074,6 +1149,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [snapshot, setSnapshot] = useState<CoordinatorSnapshot | null>(null);
   const [capabilities, setCapabilities] = useState<FactoryCapabilities | null>(null);
   const [authority, setAuthority] = useState<FactoryAuthority | null>(null);
+  const [laneInventory, setLaneInventory] = useState<LaneInventory | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
   const [preflight, setPreflight] = useState<OperationsPreflight | null>(null);
@@ -1147,15 +1223,17 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult] = await Promise.all([
+        const [capabilityResult, authorityResult, laneInventoryResult] = await Promise.all([
           json<FactoryCapabilities>('capabilities'),
           json<FactoryAuthority>('authority'),
+          json<LaneInventory>('lane-inventory'),
         ]);
         capabilityCache.current = capabilityResult;
         authorityCache.current = authorityResult;
         lastCapabilityRead.current = Date.now();
         setCapabilities(capabilityResult);
         setAuthority(authorityResult);
+        setLaneInventory(laneInventoryResult);
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
@@ -1255,6 +1333,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     snapshot,
     capabilities,
     authority,
+    laneInventory,
     events,
     timings,
     preflight,

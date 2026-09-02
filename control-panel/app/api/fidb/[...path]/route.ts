@@ -10,6 +10,7 @@ const readRoutes = new Set([
   'timings',
   'capabilities',
   'authority',
+  'lane-inventory',
   'preflight',
 ]);
 const writeRoutes = new Set([

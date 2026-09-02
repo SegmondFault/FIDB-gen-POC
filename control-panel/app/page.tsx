@@ -1738,30 +1738,57 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
   const sourceTargets = targetRows.filter(row => row.target.native_route_ids.length || row.target.source_capable_toolchain_ids.length || row.targetPackRoutes.length).length;
   const gapTargets = targetRows.length - sourceTargets;
   const campaignScenario = languageScenarios.find(row => row.id === 'c-campaign-b-four-source-n80');
+  const laneInventory = factory.laneInventory;
+  const laneSummary = laneInventory?.summary;
+  const latestWidthRun = laneInventory?.latest_complete_width_run;
+  const laneDatabases = laneInventory?.databases ?? [];
+  const widthQualified = compilerWidthPlan?.summary.qualified_routes ?? 0;
+  const widthRoutes = compilerWidthPlan?.summary.routes ?? 0;
   return <div className="view-stack">
     <ViewIntro kicker={`${selectedLanguage?.label.toUpperCase() ?? selectedLanguageId.toUpperCase()} COVERAGE POSSIBILITY SPACE`} title={`${selectedLanguage?.label ?? selectedLanguageId} libraries, targets & toolchains`} copy="Each language owns its treatment profile while sharing the target, worker, provenance, and artifact lifecycle. Cross-build routes expose target breadth from this host; platform-native workers remain distinct evidence." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
 
     <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
+    <section className="panel lane-workflow-panel">
+      <div className="panel-header"><div><p className="panel-kicker">ACTUAL EVIDENCE → ANALYST DATABASE WORKFLOW</p><h3>The control panel follows what exists, then names the next gated step</h3><p>Counts below come from qualified pack state, measured width-run results and managed lane databases on this host. Nothing here activates, compacts or deletes evidence.</p></div><span className="plan-state ready">READ-ONLY LIVE INVENTORY</span></div>
+      <div className="lane-workflow-track">
+        <article className={widthRoutes > 0 && widthQualified === widthRoutes ? 'complete' : 'pending'}><b>01</b><span>TOOLCHAIN WIDTH</span><strong>{widthQualified} / {widthRoutes || '—'}</strong><small>qualified executable routes</small></article><i>→</i>
+        <article className={latestWidthRun ? 'complete' : 'pending'}><b>02</b><span>MEASURED EVIDENCE</span><strong>{latestWidthRun ? `${latestWidthRun.completed_executions}/${latestWidthRun.scheduled_executions}` : 'NONE'}</strong><small>{latestWidthRun ? `${latestWidthRun.fixed_recipe} · ${formatPlanningDurationNs(latestWidthRun.wall_time_ns)}` : 'complete one fixed-library width run'}</small></article><i>→</i>
+        <article className={(laneSummary?.raw_generations ?? 0) > 0 ? 'complete' : latestWidthRun ? 'next' : 'blocked'}><b>03</b><span>RAW LANE GENERATIONS</span><strong>{laneSummary?.raw_generations ?? 0}</strong><small>{latestWidthRun ? 'next: compile selected broad lanes' : 'requires measured evidence'}</small></article><i>→</i>
+        <article className={(laneSummary?.compact_generations ?? 0) > 0 ? 'complete' : 'held'}><b>04</b><span>COMPACT COPY</span><strong>{laneSummary?.compact_generations ?? 0}</strong><small>held as a separate explicit experiment</small></article><i>→</i>
+        <article className="gated"><b>05</b><span>ECOLOGICAL VALIDATION</span><strong>GATE</strong><small>held-out binaries + false positives</small></article><i>→</i>
+        <article className="blocked"><b>06</b><span>NATIVE PROJECTION</span><strong>{laneDatabases.reduce((total, row) => total + row.native_projections, 0)}</strong><small>relationship-complete evidence required</small></article><i>→</i>
+        <article className={(laneSummary?.active_packs ?? 0) > 0 ? 'complete' : 'blocked'}><b>07</b><span>ACTIVE ANALYST PACKS</span><strong>{laneSummary?.active_packs ?? 0}</strong><small>none until every admission gate passes</small></article>
+      </div>
+      {latestWidthRun && <div className="latest-width-evidence"><span>Latest complete evidence</span><strong>{latestWidthRun.fixed_recipe}</strong><code>{latestWidthRun.run_id}</code><p>{latestWidthRun.successful_route_profile_pairs} route × treatment pairs · {latestWidthRun.signature_records.toLocaleString()} observations · {latestWidthRun.unique_signatures.toLocaleString()} unique signatures · {formatBytes(latestWidthRun.retained_bytes)} retained · {formatBytes(latestWidthRun.peak_scratch_bytes)} peak scratch</p><small>{latestWidthRun.path}</small></div>}
+    </section>
+
     <section className="panel lane-model-panel">
-      <div className="panel-header lane-model-header"><div><p className="panel-kicker">ANALYST DATABASE BOUNDARIES · {laneRegistry?.schema_version ?? 'LOADING'}</p><h3>One broad pack per device family; exact compatibility stays internal</h3><p>The binary loader and Ghidra metadata resolve the sublane. Compiler generation, treatment and library release remain occurrence provenance—not databases the analyst must choose.</p></div><span className="plan-state">EXPERIMENTAL · NO ACTIVE PACK</span></div>
+      <div className="panel-header lane-model-header"><div><p className="panel-kicker">ANALYST DATABASE BOUNDARIES · {laneRegistry?.schema_version ?? 'LOADING'}</p><h3>One broad pack per device family; exact compatibility stays internal</h3><p>The binary loader and Ghidra metadata resolve the sublane. Compiler generation, treatment and library release remain occurrence provenance—not databases the analyst must choose.</p></div><span className="plan-state">EXPERIMENTAL · {laneSummary?.active_packs ?? 0} ACTIVE PACKS</span></div>
       <div className="lane-summary-strip">
         <article><span>USER-VISIBLE LANES</span><strong>{laneRegistry ? lanes.length : '—'}</strong><small>install and selection boundary</small></article>
         <article><span>EXACT SUBLANES</span><strong>{laneRegistry ? sublaneCount : '—'}</strong><small>query-compatibility boundary</small></article>
         <article className="ready"><span>GHIDRA MAPPED</span><strong>{laneRegistry ? mappedSublaneCount : '—'}</strong><small>language + compiler spec defined</small></article>
         <article className="warn"><span>UNRESOLVED</span><strong>{laneRegistry ? sublaneCount - mappedSublaneCount : '—'}</strong><small>coverage intent, not admission</small></article>
-        <article><span>MATERIALIZED PACKS</span><strong>0</strong><small>raw compiler only; no activation</small></article>
+        <article><span>RAW / COMPACT DBS</span><strong>{laneInventory ? `${laneSummary?.raw_generations} / ${laneSummary?.compact_generations}` : '—'}</strong><small>{formatBytes(laneSummary?.lane_database_bytes ?? 0)} managed evidence</small></article>
+        <article><span>ACTIVE PACKS</span><strong>{laneInventory ? laneSummary?.active_packs : '—'}</strong><small>separate publication boundary</small></article>
       </div>
       <div className="lane-grid">{lanes.map(lane => {
         const mapped = lane.sublanes.filter(sublane => sublane.definition_state === 'mapped').length;
-        return <article className="lane-card" key={lane.id}>
+        const databases = laneDatabases.filter(database => database.lane_id === lane.id);
+        const raw = databases.filter(database => database.kind === 'raw').length;
+        const compact = databases.filter(database => database.kind === 'compact').length;
+        return <article className={`lane-card ${databases.length ? 'materialized' : ''}`} key={lane.id}>
           <header><div><strong>{lane.label}</strong><small>{lane.id} · {lane.platform} / {lane.architecture_family}</small></div><span className="lane-count">{mapped}/{lane.sublanes.length} mapped</span></header>
           <p>{lane.description}</p>
           <div className="lane-sublane-list">{lane.sublanes.map(sublane => <div key={sublane.id}><span className={`cap-dot ${sublane.definition_state === 'mapped' ? 'ready' : 'warning'}`} /><div><strong>{sublane.target.label}</strong><small>{sublane.id}</small></div><code>{sublane.target.bits}-bit · {sublane.target.endianness} · {sublane.target.binary_format}</code><b>{sublane.definition_state}</b></div>)}</div>
-          <footer>One analyst pack · {lane.sublanes.length} internal selector{lane.sublanes.length === 1 ? '' : 's'}</footer>
+          <footer>One analyst pack · {lane.sublanes.length} internal selector{lane.sublanes.length === 1 ? '' : 's'} · {raw} raw / {compact} compact generations</footer>
         </article>;
       })}</div>
+      {laneDatabases.length > 0 && <div className="lane-database-ledger"><header><span>DISCOVERED MANAGED DATABASES</span><span>GENERATION</span><span>EVIDENCE</span><span>STORAGE</span><span>ADMISSION</span></header>{laneDatabases.map(database => <article key={database.path}><div><strong>{database.lane_id}</strong><small>{database.path}</small></div><code>{database.generation_id}</code><span><b>{database.kind}</b><small>{database.raw_observations.toLocaleString()} occurrences{database.unique_signatures === null ? '' : ` · ${database.unique_signatures.toLocaleString()} unique`}</small></span><strong>{formatBytes(database.bytes)}</strong><span className={`evidence-badge ${database.active ? 'ready' : 'cold'}`}>{database.active ? 'active' : database.ecological_validation_state.replaceAll('-', ' ')}</span></article>)}</div>}
+      {laneInventory && laneDatabases.length === 0 && <div className="lane-database-empty"><span>NEXT MATERIALIZATION STEP</span><p>No lane database exists under <code>{laneInventory.roots.lane_databases}</code>. The completed {latestWidthRun?.fixed_recipe ?? 'width'} evidence remains untouched and is ready for preview-first raw lane compilation. Deduplication stays held.</p><small>Inventory opens SQLite metadata read-only; refresh does not compute digests or run a full integrity scan.</small></div>}
+      {(laneSummary?.issues ?? 0) > 0 && <div className="inline-warning">{laneSummary?.issues} managed inventory item{laneSummary?.issues === 1 ? '' : 's'} could not be inspected. Review the lane inventory API before using them.</div>}
       <div className="lane-experiment-note"><span>REVERSIBLE EXPERIMENT</span><p>The current per-cell FIDB workflow is unchanged. Lane definitions and raw SQLite generations are parallel evidence; semantic deduplication and native Ghidra projection remain separate, gated steps.</p><code>{laneRegistry?.authority_path ?? 'lanes/registry.toml'}</code></div>
     </section>
 
