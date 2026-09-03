@@ -25,9 +25,11 @@ from typing import Sequence
 
 from .cell_runner import (
     SEAL_SCHEMA,
+    CellAuthorityResolver,
     CellResolutionError,
     CellRunResult,
     ProgressEvent,
+    preflight_cell_authority,
     run_cell,
 )
 from .coordinator import (
@@ -132,6 +134,18 @@ def parser() -> argparse.ArgumentParser:
         "preflight",
         parents=[_common_parser(queue=True)],
         help="evaluate schedule and host resource gates without claiming work",
+    )
+
+    resolution = commands.add_parser(
+        "resolve-preflight",
+        parents=[_common_parser(queue=False)],
+        help="re-resolve exact active jobs without building or starting Java",
+    )
+    resolution.add_argument(
+        "--batch",
+        action="append",
+        dest="batches",
+        help="limit validation to an exact active batch id; repeat as needed",
     )
 
     commands.add_parser(
@@ -712,6 +726,7 @@ def _execute_claim(
     *,
     verbose: bool,
     build_jobs_per_cell: int = 4,
+    authority_resolver: CellAuthorityResolver | None = None,
     notifications: NotificationPolicy = NotificationPolicy(),
 ) -> bool:
     staging, final = _staging_root(root, lease)
@@ -757,6 +772,7 @@ def _execute_claim(
             progress=progress,
             verbose=verbose,
             build_jobs_per_cell=build_jobs_per_cell,
+            authority_resolver=authority_resolver,
         )
         heartbeat.check()
         _validate_cell_timing(result.timing)
@@ -889,6 +905,91 @@ def _preflight(arguments: argparse.Namespace) -> int:
     return 0 if document["ready"] else 1
 
 
+def _resolution_preflight(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    selected = tuple(arguments.batches) if arguments.batches else None
+    with Coordinator(state, root) as coordinator:
+        rows = coordinator.resolution_inputs(selected)
+    if not rows:
+        raise QueueCliError("resolution preflight selected no active jobs")
+
+    resolver = CellAuthorityResolver(root)
+    by_batch: dict[str, dict[str, object]] = {}
+    failure_classes: dict[str, int] = {}
+    route_ids: set[str] = set()
+    treatment_ids: set[str] = set()
+    passed = 0
+    failures = []
+    for row in rows:
+        batch_id = str(row["batch_id"])
+        batch = by_batch.setdefault(
+            batch_id,
+            {
+                "total": 0,
+                "passed": 0,
+                "failed": 0,
+                "states": {},
+            },
+        )
+        batch["total"] = int(batch["total"]) + 1
+        states = batch["states"]
+        assert isinstance(states, dict)
+        state_name = str(row["state"])
+        states[state_name] = int(states.get(state_name, 0)) + 1
+        try:
+            result = preflight_cell_authority(
+                row["cell"],
+                row["factor_variants"],
+                root,
+                authority_resolver=resolver,
+            )
+        except Exception as error:
+            failure_class = f"{type(error).__name__}: {error}"
+            failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
+            batch["failed"] = int(batch["failed"]) + 1
+            if len(failures) < 20:
+                failures.append(
+                    {
+                        "job_id": row["job_id"],
+                        "batch_id": batch_id,
+                        "cell_id": row["cell"].get("id"),
+                        "error": failure_class,
+                    }
+                )
+            continue
+        passed += 1
+        batch["passed"] = int(batch["passed"]) + 1
+        if result["route_id"] is not None:
+            route_ids.add(str(result["route_id"]))
+        if result["treatment_id"] is not None:
+            treatment_ids.add(str(result["treatment_id"]))
+
+    document = {
+        "schema_version": "fidb-execution-resolution-preflight/v1",
+        "project_root": str(root),
+        "selected_batches": list(selected) if selected is not None else None,
+        "summary": {
+            "active_jobs": len(rows),
+            "passed": passed,
+            "failed": len(rows) - passed,
+            "routes": len(route_ids),
+            "treatments": len(treatment_ids),
+            "ready": passed == len(rows),
+        },
+        "batches": by_batch,
+        "failure_classes": [
+            {"error": error, "count": count}
+            for error, count in sorted(
+                failure_classes.items(), key=lambda item: (-item[1], item[0])
+            )
+        ],
+        "failure_examples": failures,
+    }
+    _print_json(document)
+    return 0 if document["summary"]["ready"] else 1
+
+
 def _start_block(arguments: argparse.Namespace) -> int:
     root, state, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
@@ -926,6 +1027,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
             ) from error
         build_jobs_per_cell = settings.build_jobs_per_cell
 
+    authority_resolver = CellAuthorityResolver(root)
     previous_sigterm = signal.getsignal(signal.SIGTERM)
 
     def interrupt_worker(_signum: int, _frame: object) -> None:
@@ -1027,6 +1129,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                             config.lease_seconds,
                             verbose=arguments.verbose,
                             build_jobs_per_cell=build_jobs_per_cell,
+                            authority_resolver=authority_resolver,
                             notifications=config.operations.notifications,
                         )
                     except KeyboardInterrupt:
@@ -1095,6 +1198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pause": _pause,
         "resume": _resume,
         "preflight": _preflight,
+        "resolve-preflight": _resolution_preflight,
         "start-block": _start_block,
         "run": _run_worker,
     }

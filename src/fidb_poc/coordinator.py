@@ -2457,6 +2457,49 @@ class Coordinator:
             "error": row["error"],
         }
 
+    def resolution_inputs(
+        self, batch_ids: tuple[str, ...] | None = None
+    ) -> list[dict[str, object]]:
+        """Return exact active job inputs for execution-free authority checks."""
+
+        selected = None
+        if batch_ids is not None:
+            selected = tuple(
+                _identifier(value, "preflight batch id") for value in batch_ids
+            )
+            if not selected:
+                raise ValueError("preflight batch selection cannot be empty")
+        query = """
+            SELECT jobs.job_id, jobs.batch_id, jobs.state,
+                   jobs.factor_variants_json, cells.cell_json,
+                   batches.position AS batch_position, jobs.position AS job_position
+            FROM jobs
+            JOIN batches ON batches.batch_id = jobs.batch_id
+            JOIN resolved_cells AS cells
+              ON cells.plan_digest = jobs.plan_digest
+             AND cells.cell_id = jobs.base_cell_id
+            WHERE jobs.active = 1 AND batches.active = 1
+        """
+        parameters: list[object] = []
+        if selected is not None:
+            placeholders = ",".join("?" for _value in selected)
+            query += f" AND jobs.batch_id IN ({placeholders})"
+            parameters.extend(selected)
+        query += " ORDER BY batches.position, jobs.position, jobs.job_id"
+        rows = self._connection.execute(query, parameters).fetchall()
+        return [
+            {
+                "job_id": str(row["job_id"]),
+                "batch_id": str(row["batch_id"]),
+                "state": str(row["state"]),
+                "batch_position": int(row["batch_position"]),
+                "job_position": int(row["job_position"]),
+                "factor_variants": json.loads(row["factor_variants_json"]),
+                "cell": json.loads(row["cell_json"]),
+            }
+            for row in rows
+        ]
+
     @staticmethod
     def _attempt_payload(row: sqlite3.Row) -> dict[str, object]:
         ended_at = str(row["ended_at"]) if row["ended_at"] is not None else None

@@ -265,6 +265,44 @@ finish_started_batch = true
         self.assertIn("available_memory_gib", document["resources"]["metrics"])
         self.assertFalse(self.database.exists())
 
+    def test_resolution_preflight_checks_exact_active_jobs_without_execution(self):
+        queue = self._queue(armed=False)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync_queue(queue, now=10)
+        output = io.StringIO()
+        resolved = {
+            "cell_id": "resolved-cell",
+            "kind": "malware",
+            "executor": "qemu",
+            "route_id": None,
+            "treatment_id": None,
+            "toolchain_identity": None,
+            "factor_variants_catalog_sha256": "a" * 64,
+            "factor_variant_count": 0,
+            "pins_sha256": "b" * 64,
+        }
+        with (
+            patch(
+                "fidb_poc.queue_cli.preflight_cell_authority",
+                return_value=resolved,
+            ) as preflight,
+            patch("fidb_poc.queue_cli.run_cell") as run_cell,
+            contextlib.redirect_stdout(output),
+        ):
+            status = main(self._arguments("resolve-preflight"))
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertEqual(
+            document["schema_version"],
+            "fidb-execution-resolution-preflight/v1",
+        )
+        self.assertEqual(document["summary"]["active_jobs"], 1)
+        self.assertEqual(document["summary"]["passed"], 1)
+        self.assertTrue(document["summary"]["ready"])
+        preflight.assert_called_once()
+        run_cell.assert_not_called()
+
     def test_hard_cutoff_requeues_once_worker_without_becoming_operator_interrupt(
         self,
     ) -> None:

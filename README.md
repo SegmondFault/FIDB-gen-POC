@@ -383,7 +383,13 @@ Synchronize and inspect its durable state without executing anything:
 ```sh
 uv run fidb-poc queue sync
 uv run fidb-poc queue status --full
+uv run fidb-poc queue resolve-preflight
 ```
+
+The resolution preflight is an execution-free gate over the exact active ledger
+jobs. It uses the worker's canonical runtime resolver, including versioned width
+routes and compiler identities, but performs no compilation and starts no JVM.
+Every active job must pass before the queue is armed.
 
 After an operator deliberately changes `armed` to `true`, one or more workers
 can consume it continuously:

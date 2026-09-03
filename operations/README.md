@@ -37,7 +37,14 @@ Inspect the complete resolution while it is still disarmed:
 cd /home/fidb-operator/Projects/circl/FIDB-POC-unified
 .venv/bin/fidb-poc queue sync --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --full
 .venv/bin/fidb-poc queue status --state var/fidb-coordinator/ledger.sqlite3 --full
+.venv/bin/fidb-poc queue resolve-preflight --state var/fidb-coordinator/ledger.sqlite3
 ```
+
+`resolve-preflight` re-resolves every exact active ledger cell through the same
+reviewed width, recipe and toolchain authorities used by execution. It performs
+no compilation, starts no JVM, and writes no queue transition. Do not arm a
+campaign unless it reports every active job as passed; `--batch ID` may be
+repeated when checking a deliberately bounded subset.
 
 Confirm that `/opt/ghidra/support/analyzeHeadless`, Java 21, the native route
 tools, required pinned source/toolchain archives or network access, and ample
