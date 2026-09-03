@@ -97,7 +97,36 @@ show that its failure rate and hashes/hour remain favourable.
 6. Update the TOML qualification and bind a compact evidence file only after a
    repeatable result.
 
-Compile/analysis stage separation and largest-first scheduling remain promising
-experiments because they may reduce the under-filled final wave. They are not
-represented as enabled profile settings until they have an implemented normal
-route and fixed-workload evidence.
+## Staged-backend experiment
+
+Compile/analysis separation now has an isolated, disarmed qualification path;
+it is not selected by a performance profile or queue. Compiler-only processes
+stream digest-sealed object sets into a bounded pool of long-lived PyGhidra
+processes. The normal executor remains the production route.
+
+On ten fixed OpenSSL baseline cells, the normal executor completed in 843.187
+seconds. Process-staged Python completed in 839.860 seconds and the Rust/Tokio
+supervisor in 839.857 seconds. The 3.2 millisecond difference between the two
+staged schedulers is zero for operational purposes, and both were only 0.395%
+ahead of the normal executor. All 133,052 canonical FID records matched.
+Consequently Rust is not promoted and no Rust toolchain is required to run the
+project. The optional crate is retained only as a reversible experiment.
+
+The Python thread-pool prototype took 864.123 seconds because concurrent source
+extraction amplified Python/GIL contention; spawned build processes corrected
+that. Peak proportional memory was 25.46 GB for process-staged Python and 20.72
+GB for the Rust observation, but their summed per-cell PSS maxima were almost
+equal. Treat the whole-run difference as scheduling/overlap evidence, not proof
+that Rust makes a JVM smaller. The observed ten-worker envelope was roughly
+2.1–2.5 GB PSS per simultaneous worker, below the 4 GB heap ceiling.
+
+A concurrent multi-slot service inside one JVM remains deliberately outside
+this experiment. Ghidra exposes process-wide managers and PyGhidra/JVM startup
+state; sharing them between simultaneous projects requires an explicit
+thread-safety and fault-isolation qualification. Sequential JVM reuse already
+occurs in the worker pools.
+
+The tracked measurements and raw-result hashes are in
+[`benchmarks/staged-backends-reference-host-2026-09-03.toml`](../benchmarks/staged-backends-reference-host-2026-09-03.toml).
+The optional runner and rollback boundary are documented in
+[`experiments/rust-staged/README.md`](../experiments/rust-staged/README.md).

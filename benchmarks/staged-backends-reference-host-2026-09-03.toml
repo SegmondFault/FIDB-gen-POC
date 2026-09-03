@@ -1,0 +1,167 @@
+schema_version = "fidb-performance-evidence/v1"
+id = "staged-backends-reference-host-2026-09-03"
+host = "reference-host"
+logical_cpus = 32
+visible_memory_gib = 93.93
+ghidra_reported_version = "12.1.2"
+ghidra_release_name = "DEV"
+java_major = 21
+ghidra_heap_mib = 4096
+decision = "Keep the normal Python/PyGhidra executor as the production backend. The process-staged Python and Rust/Tokio supervisors were indistinguishable on ten OpenSSL cells (3.2 ms over roughly 840 s) and only 0.395% faster than the existing backend. Retain the staged Python path as an isolated scheduling/memory experiment; do not promote Rust or add a Rust runtime requirement."
+correctness_gate = "Resolved width authority plus canonical FID records and population counts must match. Object reproducibility and packed-FIDB byte reproducibility are reported separately."
+memory_caveat = "PSS is a sampled simultaneous process-tree peak. The Rust case was 18.61% below the process-staged Python case, but summed per-cell PSS maxima were nearly equal; this demonstrates different overlap/timing, not smaller JVMs. The older OpenSSL control predates PSS collection and exposes summed RSS only."
+
+[openssl_ten_route]
+subject = "openssl-3.5.8"
+route_count = 10
+treatment_ids = ["baseline_o2"]
+build_jobs_per_cell = 4
+analysis_workers = 10
+signature_records = 133052
+unique_signature_sum = 97254
+semantic_digest = "41f5cd9cb5e5da2aae3ec7ed3b4e33c3b5dd3edf758600677dcf1f1e04fa4629"
+
+[[openssl_ten_route.case]]
+id = "current-backend-control"
+backend = "current-python-pyghidra"
+wall_time_ns = 843186843488
+peak_process_rss_bytes = 24613445632
+peak_process_pss_bytes_measured = false
+aggregate_compile_ns = 702412401889
+aggregate_source_extract_ns = 25349954945
+aggregate_ghidra_import_analysis_ns = 6867058217676
+aggregate_ghidra_startup_ns = 31767806430
+semantic_match = true
+raw_result = "artifacts/benchmarks/width-pipeline/heap4096-ten-workers-20260902T211711Z-4b5832c5041a/benchmark-result.json"
+raw_result_sha256 = "bc39a28b24eb535c291f90d9adcd86b68b107a4403462361a819c4dcaff68205"
+
+[[openssl_ten_route.case]]
+id = "python-thread-staged-rejected"
+backend = "python-staged-v1-thread-build-prototype"
+build_workers = 16
+wall_time_ns = 864122595981
+peak_process_rss_bytes = 25036091392
+peak_process_pss_bytes = 24543247360
+peak_process_uss_bytes = 24511758336
+aggregate_compile_ns = 689442231609
+aggregate_source_extract_ns = 154207381866
+aggregate_ghidra_import_analysis_ns = 6846432574209
+aggregate_ghidra_startup_ns = 31783251239
+semantic_match = true
+artifact_reproducibility_match = true
+decision = "Rejected: Python-heavy extraction serialized under thread scheduling and made the run 2.48% slower than control."
+raw_result = "artifacts/benchmarks/backend-experiments/backend-python-openssl10-20260903T071322Z-7d5a15f3ff5f/benchmark-result.json"
+raw_result_sha256 = "cf966960e44d4cae4862d106e508988e68fb83ceabbf236da95366ba33ad8181"
+
+[[openssl_ten_route.case]]
+id = "rust-process-staged"
+backend = "rust-staged-v1"
+build_workers = 16
+rust_version = "1.98.0"
+wall_time_ns = 839856594447
+peak_process_rss_bytes = 21408399360
+peak_process_pss_bytes = 20720451584
+peak_process_uss_bytes = 20685582336
+aggregate_compile_ns = 690482271476
+aggregate_source_extract_ns = 27309019935
+aggregate_ghidra_import_analysis_ns = 6850804847202
+aggregate_ghidra_startup_ns = 29730610332
+semantic_match = true
+artifact_reproducibility_match = true
+raw_result = "artifacts/benchmarks/backend-experiments/backend-rust-openssl10-20260903T072819Z-5cebd1fbb9be/benchmark-result.json"
+raw_result_sha256 = "f456ef67d4cfdfdd0c93af4316009f6506db172e1c0d2ddabcd265b9ea90d585"
+
+[[openssl_ten_route.case]]
+id = "python-process-staged"
+backend = "python-staged-v1"
+build_workers = 16
+wall_time_ns = 839859795358
+peak_process_rss_bytes = 26005397504
+peak_process_pss_bytes = 25459160064
+peak_process_uss_bytes = 25421492224
+aggregate_compile_ns = 692463281670
+aggregate_source_extract_ns = 26269395052
+aggregate_ghidra_import_analysis_ns = 6848429856057
+aggregate_ghidra_startup_ns = 30685178576
+semantic_match = true
+artifact_reproducibility_match = true
+raw_result = "artifacts/benchmarks/backend-experiments/backend-python-process-openssl10-20260903T074250Z-7d5a15f3ff5f/benchmark-result.json"
+raw_result_sha256 = "5e47ac64a0c575162dacbbb3af99eab38f055fad8bfae622983768a641edb71d"
+
+[openssl_ten_route.comparison]
+python_process_to_control_wall_percent = -0.394580176
+rust_to_control_wall_percent = -0.394959796
+rust_to_python_process_wall_percent = -0.000381124
+rust_to_python_process_wall_difference_ns = -3200911
+thread_to_process_wall_percent = 2.888910835
+rust_to_python_process_peak_pss_percent = -18.612980429
+python_process_sum_cell_peak_pss_bytes = 27557608448
+rust_sum_cell_peak_pss_bytes = 27605429248
+canonical_fid_equal = true
+
+[zlib_nine_route]
+subject = "zlib-1.3.1"
+route_count = 9
+treatment_ids = ["baseline_o2"]
+control_workers = 4
+staged_build_workers = 8
+staged_analysis_workers = 4
+repetitions = 2
+all_canonical_fid_equal = true
+caveat = "The current LLVM-MinGW route changed object bytes on rebuild while retaining equal canonical FID records. Packed FIDB bytes differed in every candidate cell because container metadata/order is not the semantic identity."
+
+[[zlib_nine_route.case]]
+backend = "current-python-pyghidra"
+median_wall_time_ns = 20444882137
+median_peak_process_pss_bytes = 7312210944
+wall_observations_ns = [20436423184, 20453341090]
+pss_observations_bytes = [7546251264, 7078170624]
+raw_results = [
+  "artifacts/benchmarks/width-pipeline/backend-current-zlib9-valid-20260903T062310Z-00b84a04d87b/benchmark-result.json",
+  "artifacts/benchmarks/width-pipeline/backend-current-zlib9-r2-20260903T071052Z-00b84a04d87b/benchmark-result.json",
+]
+raw_result_sha256 = [
+  "7a52821cf33f94077aad1f43040776ae87d9cb10709d1505dfb4ab6018d93d95",
+  "4e4b7cbd772e62b62cfb33d61696a086d66229dd4220864bed4ab6fd993fa8b1",
+]
+
+[[zlib_nine_route.case]]
+backend = "python-staged-v1-thread-build-prototype"
+median_wall_time_ns = 19770415532
+median_peak_process_pss_bytes = 6436797440
+wall_observations_ns = [19597234017, 19943597046]
+pss_observations_bytes = [6021223424, 6852371456]
+raw_results = [
+  "artifacts/benchmarks/backend-experiments/backend-python-zlib9-20260903T062443Z-e11a3be48daf/benchmark-result.json",
+  "artifacts/benchmarks/backend-experiments/backend-python-zlib9-r2-20260903T071158Z-e11a3be48daf/benchmark-result.json",
+]
+raw_result_sha256 = [
+  "13d97083e0c93e2c8d3225fd96d9555bb891928807c4f18dabf1f86f39238e08",
+  "cc4cc75343db8f1c4980ea970865ecf795de25b1b54ed50df478af787f3d66a1",
+]
+
+[[zlib_nine_route.case]]
+backend = "rust-staged-v1"
+median_wall_time_ns = 18946061681
+median_peak_process_pss_bytes = 6507368960
+wall_observations_ns = [19014902660, 18877220701]
+pss_observations_bytes = [6387111936, 6627625984]
+raw_results = [
+  "artifacts/benchmarks/backend-experiments/backend-rust-zlib9-framed-20260903T070942Z-8a7dcd498fd2/benchmark-result.json",
+  "artifacts/benchmarks/backend-experiments/backend-rust-zlib9-r2-20260903T071125Z-8a7dcd498fd2/benchmark-result.json",
+]
+raw_result_sha256 = [
+  "4ac43c906bf2f9d34e15eeeea5bd0707b836425525c26aa5a1f2d0d43b737d92",
+  "44da094b421fb663fc3fd91dcc62dbee4dbc5aba89503a2200ad7dff7cbe05a9",
+]
+
+[ledger_transform_probe]
+subject = "29-cell OpenSSL signature ledgers"
+input_files = 29
+input_bytes = 95752753
+records = 408328
+python_canonical_json_sha256_seconds = [1.7109, 1.6426, 1.5306]
+median_seconds = 1.6426
+throughput_megabytes_per_second = 58.3
+share_of_measured_full_width_wall_percent = 0.12
+decision = "Do not add WGPU or py2wgsl for the measured path. Ledger canonicalization is not a material end-to-end cost; revisit GPU kernels only if a later database or deduplication profile identifies one as dominant. uvloop is likewise irrelevant to the process-pool implementation because it does not use asyncio networking."

@@ -68,3 +68,13 @@ valid, but it must beat the reference semantic digest and target analysis or
 scheduling costs; replacing the coarse JPype calls alone cannot explain the
 dominant wall time. A Rust implementation is therefore best scoped first as an
 optional scheduler/ledger supervisor, with the Python/PyGhidra route retained.
+
+That scheduler experiment is now complete. Process-staged Python and the
+Rust/Tokio supervisor took 839.860 and 839.857 seconds respectively on the same
+ten OpenSSL cells, versus 843.187 seconds for the current executor. The staged
+implementations reproduced every canonical FID record, but their 3.2 ms wall
+difference and 0.395% improvement over control do not justify promoting Rust.
+The Python staged harness remains isolated for future scheduling experiments;
+the normal backend remains unchanged. See
+`staged-backends-reference-host-2026-09-03.toml` for the bounded zlib and OpenSSL
+measurements, memory caveat and GPU/async-loop triage.

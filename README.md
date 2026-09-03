@@ -221,6 +221,13 @@ on their named host class. The control panel exposes the same authority under
 **Timing**. See [`performance/README.md`](performance/README.md) for selection,
 hardware interpretation and qualification.
 
+An optional staged-backend benchmark can separate compiler work from a bounded
+long-lived Ghidra pool and compare either a Python or Rust supervisor against a
+normal-run result. It is disarmed by default and does not alter queue execution.
+The fixed OpenSSL qualification found no meaningful Rust throughput advantage;
+see [`performance/README.md`](performance/README.md#staged-backend-experiment)
+and [`experiments/rust-staged/README.md`](experiments/rust-staged/README.md).
+
 `worker.toml` is trusted operator configuration for the single Linux route, one
 treatment and one profile. It is not untrusted request data.
 
