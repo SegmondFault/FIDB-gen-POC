@@ -1,5 +1,10 @@
 # Staged backend experiment
 
+**Decision:** tried Rust/Tokio orchestration against the optimized
+process-staged Python route. The measured throughput difference was negligible,
+so the production path stays Python/PyGhidra and this crate remains an optional,
+disarmed experiment.
+
 This crate is an optional scheduler experiment. It does not replace the
 normal Python/PyGhidra executor and is not selected by any queue or performance
 profile.
