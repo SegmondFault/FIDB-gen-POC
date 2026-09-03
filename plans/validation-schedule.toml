@@ -1,0 +1,20 @@
+schema_version = "fidb-validation-schedule/v1"
+name = "machine-validation"
+state = "waiting-for-cohort"
+production_queue_mutation = false
+
+# The validation reconciler replaces this waiting state with a pinned manifest
+# reference automatically when all ten libraries satisfy the live width. The
+# first generated run remains claim-blocked until its post-cohort canary has
+# validated the new composite executor. Later validated cohorts may chain in
+# the normal 01:00--05:30 scheduler window.
+[[trigger]]
+id = "c-top10-cohort-001"
+kind = "validation-run"
+authority = "validation/machine-validation.toml"
+after = "complete-ten-library-cohort"
+automatic_materialization = true
+automatic_scheduling = true
+state = "waiting-for-cohort"
+claim_gate = "first-run-canary-after-cohort-complete"
+manifest = ""

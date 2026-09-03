@@ -180,6 +180,27 @@ Verified bytes are stored content-addressed under the ignored
 `var/fidb-sources/downloads/` cache. See [`sources/README.md`](sources/README.md)
 for the extension and trust model.
 
+## Continuous machine validation
+
+The first ten-library cohort has a frozen, seeded five/five validation design
+in [`validation/machine-validation.toml`](validation/machine-validation.toml).
+Its live width is compiled from every applicable route/compiler/
+treatment identity, so newly added variables automatically become required
+inputs. Inspect the admission gate without changing the active build queue:
+
+```sh
+uv run fidb-poc machine-validation status --project-root .
+```
+
+After a production batch drains, the worker performs the same read-only check.
+Once all cohort libraries are complete it automatically materialises a separate
+`validation-run` and registers it in
+[`plans/validation-schedule.toml`](plans/validation-schedule.toml). The first
+real validation remains claim-blocked for a post-cohort canary. Normal cohorts
+contain ten libraries; a final 2--9-library remainder requires an explicit,
+justified TOML override. See [`validation/README.md`](validation/README.md) for
+the split, TP/FP/TN/FN report and collision/miss evidence contract.
+
 The disarmed next-run campaign is split between
 [`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml) and
 [`batches/c-openssl-android-gap.toml`](batches/c-openssl-android-gap.toml).

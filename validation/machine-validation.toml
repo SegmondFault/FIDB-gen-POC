@@ -1,0 +1,112 @@
+schema_version = "fidb-machine-validation/v1"
+id = "c-top10-cohort-001"
+label = "C top-ten frozen five/five machine validation"
+state = "designed-dormant"
+language_id = "c"
+batch_kind = "validation-run"
+source_pack = "sources/c-top10-v1.toml"
+width_authority = "coverage/c-width-v2.toml"
+cohort_size = 10
+fold_size = 5
+
+[cohort_policy]
+nominal_size = 10
+minimum_final_partial_size = 2
+final_partial_override = false
+final_partial_justification = ""
+split_policy = "balanced-seeded-random"
+
+[eligibility]
+required_complete_libraries = 10
+baseline_exact_identities_per_library = 222
+identity_policy = "all-applicable-execution-identities"
+materialize_only_when_eligible = true
+ledger = "var/fidb-coordinator/ledger.sqlite3"
+width_run_glob = "artifacts/width-runs/*/*/width-run.json"
+report_glob = "artifacts/validation-runs/c-top10-cohort-001/*/report.json"
+
+[randomization]
+method = "uniform-random-five-five"
+algorithm = "sha256-ranked-v1"
+seed = "ed61d29b20488c89afe82dbd8e8c94b01f4cc3b01008f7e0618183212db4b221"
+canonical_ids = [
+  "gettext@1.0",
+  "gmp@6.3.0",
+  "lz4@1.10.0",
+  "nghttp2@1.70.0",
+  "openssl@3.5.8",
+  "pcre2@10.48",
+  "readline@8.3",
+  "sqlite@3.53.4",
+  "xz@5.8.3",
+  "zstd@1.5.7",
+]
+fold_a = [
+  "zstd@1.5.7",
+  "xz@5.8.3",
+  "nghttp2@1.70.0",
+  "openssl@3.5.8",
+  "readline@8.3",
+]
+fold_b = [
+  "gmp@6.3.0",
+  "lz4@1.10.0",
+  "gettext@1.0",
+  "sqlite@3.53.4",
+  "pcre2@10.48",
+]
+
+[batch]
+automatic_materialization = true
+automatic_scheduling = true
+scheduler_registry = "plans/validation-schedule.toml"
+production_queue_mutation = false
+first_run_requires_canary = true
+output_root = "plans/validation-materialized"
+input_strategy = "rebuild-from-reviewed-recipes"
+harness_mode = "whole-archive-link-map"
+execute_target_binaries = false
+truth_copy = "unstripped-with-link-map"
+query_copy = "stripped"
+exact_inclusion_sanity = "bounded-canary-only"
+trigger = "after-complete-ten-library-cohort"
+
+[queries]
+primary_projections = [
+  "correct-fold-exact-identity-withheld",
+  "opposite-fold",
+  "complete-owner-labelled-candidate-db",
+]
+
+[metrics]
+required = [
+  "correct-library-recovery",
+  "cross-fold-misattribution",
+  "shared-or-ambiguous-signatures",
+  "leave-one-compiler-version-treatment-out-recall",
+  "marginal-coverage-by-factor",
+  "regressions",
+  "wall-time",
+  "peak-and-continuous-rss",
+  "scratch-bytes",
+  "retained-bytes",
+]
+
+[planning]
+estimate_class = "code-volume-analogue-unmeasured"
+central_wall_hours = 25.0
+lower_wall_hours = 15.0
+upper_wall_hours = 35.0
+safe_ram_gib_lower = 60
+safe_ram_gib_upper = 80
+scratch_headroom_gib_lower = 75
+scratch_headroom_gib_upper = 100
+raw_retained_gib_lower = 17
+raw_retained_gib_upper = 65
+compact_output_gib_upper = 1
+
+[ecological_validation]
+state = "final-dataset-only"
+included_in_validation_batch = false
+gate = "final-dataset-lane-generation-and-matching-policy-frozen"
+mode = "held-out-real-binaries-tag-only-shadow"
