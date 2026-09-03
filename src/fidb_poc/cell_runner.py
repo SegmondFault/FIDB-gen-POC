@@ -13,7 +13,7 @@ or script supplied by a caller is accepted here.
 from __future__ import annotations
 
 import csv
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 import os
@@ -87,6 +87,164 @@ class CellRunResult:
     @property
     def seal_sha256(self) -> str:
         return self.manifest_sha256
+
+
+@dataclass(frozen=True)
+class _WidthContext:
+    batch: dict[str, object]
+    compilation: dict[str, object]
+    configuration: Configuration
+    route_metadata: dict[str, dict[str, object]]
+    executable_profiles: dict[tuple[str, str], str]
+
+
+class CellAuthorityResolver:
+    """Resolve queued cells through the same authorities as materialization.
+
+    A queue worker keeps one resolver for its lifetime.  Expensive toolchain
+    catalog verification and width compilation are therefore shared across
+    cells, while every cell is still compared field-for-field with the current
+    reviewed authority before any build or JVM work begins.
+    """
+
+    def __init__(self, project_root: str | Path):
+        self.project_root = Path(project_root).expanduser().resolve()
+        self._catalog: dict[str, object] | None = None
+        self._width_contexts: dict[str, _WidthContext] = {}
+        self._recipe_configurations: dict[str, Configuration] = {}
+
+    def _toolchain_catalog(self) -> dict[str, object]:
+        if self._catalog is None:
+            from .toolchain_packs import load_toolchain_pack_catalog
+
+            self._catalog = load_toolchain_pack_catalog(self.project_root)
+        return self._catalog
+
+    def _recipe_configuration(self, identity: str) -> Configuration:
+        configuration = self._recipe_configurations.get(identity)
+        if configuration is None:
+            configuration = load_configuration(
+                self.project_root / "worker.toml",
+                request_override=(identity,),
+                toolchain_catalog=self._toolchain_catalog(),
+            )
+            self._recipe_configurations[identity] = configuration
+        return configuration
+
+    def _width_batch_path(self, batch_id: str) -> Path:
+        matches = []
+        for path in sorted((self.project_root / "batches").glob("*.toml")):
+            document = tomllib.loads(path.read_text(encoding="utf-8"))
+            if (
+                document.get("schema_version") == "fidb-width-batch/v1"
+                and document.get("id") == batch_id
+            ):
+                matches.append(path)
+        if len(matches) != 1:
+            raise CellResolutionError(
+                f"width batch identity {batch_id!r} resolved to "
+                f"{len(matches)} reviewed documents"
+            )
+        return matches[0]
+
+    def _width_context(self, batch_id: str) -> _WidthContext:
+        context = self._width_contexts.get(batch_id)
+        if context is not None:
+            return context
+
+        from .c_width import compile_c_width, materialize_width_configuration
+        from .toolchain_packs import resolve_toolchain_profile
+        from .width_batch import load_width_batch
+
+        catalog = self._toolchain_catalog()
+        batch = load_width_batch(
+            self.project_root,
+            self._width_batch_path(batch_id),
+            _toolchain_catalog=catalog,
+        )
+        width_id = Path(str(batch["authorities"]["width"])).stem
+        compilation = compile_c_width(self.project_root, width_id, _catalog=catalog)
+        route_plan = resolve_toolchain_profile(
+            self.project_root,
+            str(compilation["toolchain_profile"]),
+            _catalog=catalog,
+        )
+        first_recipe = str(batch["libraries"][0]["recipe_id"])
+        configuration = materialize_width_configuration(
+            self.project_root,
+            first_recipe,
+            route_plan,
+            _catalog=catalog,
+        )
+        context = _WidthContext(
+            batch=batch,
+            compilation=compilation,
+            configuration=configuration,
+            route_metadata={str(row["id"]): dict(row) for row in compilation["routes"]},
+            executable_profiles={
+                (str(row["route_id"]), str(row["treatment_id"])): str(row["profile_id"])
+                for row in compilation["applicability"]
+                if row["state"] == "executable"
+            },
+        )
+        self._width_contexts[batch_id] = context
+        return context
+
+    def native_configuration(
+        self,
+        cell: dict[str, object],
+        identity: str,
+        route_id: str,
+        treatment_id: str,
+    ) -> tuple[Configuration, str | None, dict[str, object] | None]:
+        raw_width = cell.get("width")
+        if raw_width is None:
+            configuration = self._recipe_configuration(identity)
+            return (
+                select_configuration(
+                    configuration,
+                    route_ids=(route_id,),
+                    treatment_ids=(treatment_id,),
+                    profile="smoke",
+                ),
+                None,
+                None,
+            )
+
+        width = _mapping(raw_width, "cell.width")
+        batch_id = str(_required(width, "batch_id", "cell.width"))
+        context = self._width_context(batch_id)
+        route_metadata = context.route_metadata.get(route_id)
+        if route_metadata is None:
+            raise CellResolutionError(
+                f"width route {route_id!r} is absent from batch {batch_id!r}"
+            )
+        profile_id = context.executable_profiles.get((route_id, treatment_id))
+        if profile_id is None:
+            raise CellResolutionError(
+                f"width route/treatment is not executable: "
+                f"{route_id}:{treatment_id}"
+            )
+        reviewed_width = {
+            "batch_id": context.batch["id"],
+            "batch_digest": context.batch["batch_digest"],
+            "width_id": context.compilation["id"],
+            "compilation_digest": context.compilation["compilation_digest"],
+            "route_profile_digest": context.compilation["route_profile_digest"],
+            "profile_id": profile_id,
+        }
+        _expect(width, reviewed_width, "native width authority")
+        recipe_configuration = self._recipe_configuration(identity)
+        configuration = replace(
+            context.configuration, libraries=recipe_configuration.libraries
+        )
+        configuration = select_configuration(
+            configuration,
+            route_ids=(route_id,),
+            treatment_ids=(treatment_id,),
+            profile="smoke",
+        )
+        return configuration, str(route_metadata["compiler_id"]), reviewed_width
 
 
 def _plain(value: object, context: str = "resolved cell") -> object:
@@ -331,7 +489,9 @@ def _validate_native_treatment_variants(
 
 
 def _resolve_native(
-    cell: dict[str, object], project_root: Path
+    cell: dict[str, object],
+    project_root: Path,
+    authority_resolver: CellAuthorityResolver | None = None,
 ) -> tuple[Configuration, dict[str, object]]:
     recipe = _mapping(_required(cell, "recipe", "native cell"), "cell.recipe")
     target = _mapping(_required(cell, "target", "native cell"), "cell.target")
@@ -352,14 +512,16 @@ def _resolve_native(
             f"{len(recipe_documents)} reviewed documents"
         )
     _reject_raw_commands(recipe_documents[0][1], f"recipe {recipe_documents[0][0]}")
-    configuration = load_configuration(
-        project_root / "worker.toml", request_override=(identity,)
-    )
-    configuration = select_configuration(
-        configuration,
-        route_ids=(str(_required(toolchain, "route", "cell.toolchain")),),
-        treatment_ids=(str(_required(build, "treatment", "cell.build")),),
-        profile="smoke",
+    resolver = authority_resolver or CellAuthorityResolver(project_root)
+    if resolver.project_root != project_root.resolve():
+        raise CellResolutionError("cell authority resolver uses a different project")
+    route_id = str(_required(toolchain, "route", "cell.toolchain"))
+    treatment_id = str(_required(build, "treatment", "cell.build"))
+    configuration, compiler_id, reviewed_width = resolver.native_configuration(
+        cell,
+        identity,
+        route_id,
+        treatment_id,
     )
     library = configuration.libraries[0]
     route = configuration.routes[0]
@@ -383,6 +545,8 @@ def _resolve_native(
         "ranlib": list(route.ranlib),
         "identity": route.toolchain_identity,
     }
+    if compiler_id is not None:
+        reviewed_toolchain["compiler_id"] = compiler_id
     reviewed_build = {
         "adapter": library.preferred_build_system,
         "treatment": treatment.id,
@@ -408,6 +572,8 @@ def _resolve_native(
     _expect(toolchain, reviewed_toolchain, "native toolchain route")
     _expect(build, reviewed_build, "native build adapter and flags")
     _expect(analysis, reviewed_analysis, "native analysis route")
+    if reviewed_width is not None:
+        _expect(cell.get("width"), reviewed_width, "native width authority")
     worker_pool = "macos-native" if route.target_os == "macos" else "library-local"
     _expect(
         routing,
@@ -420,6 +586,64 @@ def _resolve_native(
         "build": reviewed_build,
         "target": reviewed_target,
         "analysis": reviewed_analysis,
+    }
+
+
+def preflight_cell_authority(
+    resolved_cell: Mapping[str, object],
+    factor_variants: Sequence[str],
+    project_root: str | Path,
+    *,
+    authority_resolver: CellAuthorityResolver | None = None,
+) -> dict[str, object]:
+    """Resolve one exact queued cell without building, starting Java, or writing.
+
+    This is the execution boundary used by queue-wide preflight.  It deliberately
+    performs the same strict field comparisons as :func:`run_cell`.
+    """
+
+    project = Path(project_root).expanduser().resolve()
+    plain = _plain(resolved_cell)
+    if not isinstance(plain, dict):
+        raise CellResolutionError("resolved cell must be a table")
+    _reject_raw_commands(plain)
+    cell_id, kind = _validate_cell_state(plain)
+    variants, variants_digest = _resolve_factor_variants(project, factor_variants)
+
+    if kind == "native":
+        configuration, pins = _resolve_native(
+            plain, project, authority_resolver=authority_resolver
+        )
+        _validate_native_treatment_variants(configuration, variants)
+        route = configuration.routes[0]
+        treatment = configuration.treatments[0]
+        executor = "native-local"
+        route_id: str | None = route.id
+        treatment_id: str | None = treatment.id
+        toolchain_identity: str | None = route.toolchain_identity
+    elif kind == "archive-library":
+        _generated, pins = _resolve_archive(plain, project)
+        executor = "archive-local"
+        route_id = None
+        treatment_id = None
+        toolchain_identity = None
+    else:
+        generated, pins = _resolve_source(plain, project, kind)
+        executor = str(generated["executor"])
+        route_id = None
+        treatment_id = None
+        toolchain_identity = None
+
+    return {
+        "cell_id": cell_id,
+        "kind": kind,
+        "executor": executor,
+        "route_id": route_id,
+        "treatment_id": treatment_id,
+        "toolchain_identity": toolchain_identity,
+        "factor_variants_catalog_sha256": variants_digest,
+        "factor_variant_count": len(variants),
+        "pins_sha256": hashlib.sha256(_canonical(pins)).hexdigest(),
     }
 
 
@@ -1062,6 +1286,7 @@ def run_cell(
     progress: ProgressCallback | None = None,
     verbose: bool = False,
     build_jobs_per_cell: int = 4,
+    authority_resolver: CellAuthorityResolver | None = None,
 ) -> CellRunResult:
     """Run one already-resolved cell and atomically seal its provenance.
 
@@ -1097,7 +1322,9 @@ def run_cell(
         {"cell_id": cell_id, "kind": kind},
     ) as resolution_metrics:
         if kind == "native":
-            configuration, pins = _resolve_native(plain, project)
+            configuration, pins = _resolve_native(
+                plain, project, authority_resolver=authority_resolver
+            )
             _validate_native_treatment_variants(configuration, variants)
             generated = None
             executor = "native-local"

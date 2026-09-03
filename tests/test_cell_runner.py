@@ -12,11 +12,13 @@ from unittest.mock import patch
 
 from fidb_poc import libc_catalog
 from fidb_poc.cell_runner import (
+    CellAuthorityResolver,
     CellResolutionError,
     CellRunnerError,
     CellStage,
     GhidraRuntime,
     _write_seal,
+    preflight_cell_authority,
     run_cell,
 )
 from fidb_poc.elf import ghidra_language
@@ -297,6 +299,43 @@ class CellRunnerTests(unittest.TestCase):
             )
             self.assertEqual(seal["artifacts"]["fidb"]["bytes"], 11)
             self.assertEqual(seal["artifacts"]["fidbf"]["bytes"], 9)
+
+    def test_width_runtime_resolves_versioned_and_base_toolchain_shapes(self):
+        plan = resolve_plan(
+            self.project_root
+            / "plans/materialized/c-top10-nonapple-width-v2/block-01.toml",
+            self.project_root,
+        )
+        selected = {
+            cell["toolchain"]["route"]: cell
+            for cell in plan["cells"]
+            if cell["recipe"]["name"] == "sqlite"
+            and cell["build"]["treatment"] == "baseline_o2"
+            and cell["toolchain"]["route"]
+            in {"linux-x86-64-gcc-12", "linux-x86-64-gcc"}
+        }
+        resolver = CellAuthorityResolver(self.project_root)
+        self.assertEqual(set(selected), {"linux-x86-64-gcc-12", "linux-x86-64-gcc"})
+        for route_id, cell in selected.items():
+            with self.subTest(route=route_id):
+                result = preflight_cell_authority(
+                    cell,
+                    [],
+                    self.project_root,
+                    authority_resolver=resolver,
+                )
+                self.assertEqual(result["route_id"], route_id)
+                self.assertTrue(result["toolchain_identity"].startswith("qualified:"))
+
+        changed = copy.deepcopy(selected["linux-x86-64-gcc"])
+        changed["toolchain"]["compiler_id"] = "gcc-incorrect"
+        with self.assertRaisesRegex(CellResolutionError, "toolchain route"):
+            preflight_cell_authority(
+                changed,
+                [],
+                self.project_root,
+                authority_resolver=resolver,
+            )
 
     def test_raw_commands_and_unsupported_kinds_fail_before_dispatch(self):
         raw = copy.deepcopy(self.native_cell)
