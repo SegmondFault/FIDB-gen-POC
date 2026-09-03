@@ -77,6 +77,66 @@ def _plan_time_blocks_main(argv: list[str]) -> int:
         return 1
 
 
+def _materialize_batches_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc materialize-batches",
+        description=(
+            "Freeze the reviewed time-block projection into disarmed queue plans."
+        ),
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument(
+        "--model", type=Path, default=Path("performance/batch-planning.toml")
+    )
+    result.add_argument(
+        "--output-root", type=Path, default=Path("plans/materialized")
+    )
+    mode = result.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--write",
+        action="store_true",
+        help="atomically write the plans and manifest; never arms the queue",
+    )
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if checked-in materialization differs from current authority",
+    )
+    arguments = result.parse_args(argv)
+    try:
+        from .batch_materializer import (
+            check_materialization,
+            compile_materialization,
+            write_materialization,
+        )
+
+        document = compile_materialization(
+            arguments.project_root, arguments.model, arguments.output_root
+        )
+        rendered = document.pop("rendered_plans")
+        if arguments.write:
+            document["rendered_plans"] = rendered
+            write_materialization(document, arguments.project_root)
+            document.pop("rendered_plans")
+            document["check"] = {
+                "state": "written-disarmed",
+                "checked_files": len(rendered) + 1,
+                "mismatches": [],
+            }
+        elif arguments.check:
+            document["rendered_plans"] = rendered
+            check = check_materialization(document, arguments.project_root)
+            document.pop("rendered_plans")
+            document["check"] = check
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0 if check["state"] == "current" else 1
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _selected_performance(
     arguments: argparse.Namespace,
     *,
@@ -657,6 +717,8 @@ def main(argv: list[str] | None = None) -> int:
         return _performance_main(tokens[1:])
     if tokens and tokens[0] == "plan-time-blocks":
         return _plan_time_blocks_main(tokens[1:])
+    if tokens and tokens[0] == "materialize-batches":
+        return _materialize_batches_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":
