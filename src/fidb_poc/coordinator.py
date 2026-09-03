@@ -3151,18 +3151,22 @@ class Coordinator:
         *,
         include_inactive: bool = False,
         include_events: bool = True,
+        attempt_limit: int | None = None,
         stage_attempt_limit: int | None = None,
     ) -> dict[str, object]:
         """Return an inspectable snapshot of queue, jobs, attempts and events."""
 
-        if stage_attempt_limit is not None:
-            if (
-                not isinstance(stage_attempt_limit, int)
-                or isinstance(stage_attempt_limit, bool)
-                or stage_attempt_limit < 1
-                or stage_attempt_limit > MAX_TIMING_LIMIT
+        for limit_name, limit in (
+            ("attempt_limit", attempt_limit),
+            ("stage_attempt_limit", stage_attempt_limit),
+        ):
+            if limit is not None and (
+                not isinstance(limit, int)
+                or isinstance(limit, bool)
+                or limit < 1
+                or limit > MAX_TIMING_LIMIT
             ):
-                raise ValueError(f"stage_attempt_limit must be 1-{MAX_TIMING_LIMIT}")
+                raise ValueError(f"{limit_name} must be 1-{MAX_TIMING_LIMIT}")
 
         status = self.status()
         active_clause = "" if include_inactive else "WHERE active = 1"
@@ -3179,8 +3183,17 @@ class Coordinator:
             {job_active_clause}
             ORDER BY batches.active DESC, batches.position, jobs.position, jobs.job_id
             """).fetchall()
-        attempts = self._connection.execute(
-            """
+        attempt_count = int(
+            self._connection.execute(
+                """
+                SELECT COUNT(*) FROM attempts
+                JOIN jobs ON jobs.job_id = attempts.job_id
+                WHERE ? OR jobs.active = 1
+                """,
+                (int(include_inactive),),
+            ).fetchone()[0]
+        )
+        attempt_sql = """
             SELECT attempts.*, jobs.created_at AS job_created_at,
                    (
                        SELECT previous.ended_at FROM attempts AS previous
@@ -3190,10 +3203,19 @@ class Coordinator:
             FROM attempts
             JOIN jobs ON jobs.job_id = attempts.job_id
             WHERE ? OR jobs.active = 1
-            ORDER BY attempts.attempt_id
-            """,
-            (int(include_inactive),),
-        ).fetchall()
+            ORDER BY attempts.attempt_id DESC
+        """
+        attempt_parameters: tuple[object, ...] = (int(include_inactive),)
+        if attempt_limit is not None:
+            attempt_sql += " LIMIT ?"
+            attempt_parameters += (attempt_limit,)
+        attempts = list(
+            reversed(
+                self._connection.execute(
+                    attempt_sql, attempt_parameters
+                ).fetchall()
+            )
+        )
         workers = self._connection.execute(
             "SELECT * FROM workers ORDER BY worker_id"
         ).fetchall()
@@ -3243,6 +3265,8 @@ class Coordinator:
                 for row in jobs
             ],
             "attempts": [self._attempt_payload(row) for row in attempts],
+            "attempts_total": attempt_count,
+            "attempts_truncated": attempt_count > len(attempts),
             "workers": [self._worker_payload(row) for row in workers],
             "stage_attempts": [
                 self._stage_attempt_payload(row) for row in stage_attempts

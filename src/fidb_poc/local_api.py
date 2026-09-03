@@ -43,6 +43,7 @@ MAX_REQUEST_BODY_BYTES = 16 * 1024
 MAX_RESPONSE_BODY_BYTES = 8 * 1024 * 1024
 DEFAULT_EVENT_LIMIT = 100
 MAX_EVENT_LIMIT = 500
+CONTROL_PANEL_HISTORY_LIMIT = 200
 
 _GET_PATHS = {
     "/api/v1/health",
@@ -216,17 +217,63 @@ def _public_snapshot(
     coordinator: Coordinator,
     include_inactive: bool,
     stage_attempt_limit: int = MAX_TIMING_LIMIT,
+    *,
+    detail: str = "full",
 ) -> dict[str, object]:
+    if detail not in {"full", "control-panel"}:
+        raise ValueError("snapshot detail must be full or control-panel")
+    history_limit = (
+        CONTROL_PANEL_HISTORY_LIMIT if detail == "control-panel" else None
+    )
     result = coordinator.snapshot(
         include_inactive=include_inactive,
         include_events=False,
-        stage_attempt_limit=stage_attempt_limit,
+        attempt_limit=history_limit,
+        stage_attempt_limit=(
+            min(stage_attempt_limit, CONTROL_PANEL_HISTORY_LIMIT)
+            if detail == "control-panel"
+            else stage_attempt_limit
+        ),
     )
     # Lease tokens are worker fencing credentials and never belong in the
     # analyst/control-plane response, even on a loopback API.
     for job in result.get("jobs", []):
         if isinstance(job, dict):
             job.pop("lease_token", None)
+    if detail == "control-panel":
+        compact_jobs = []
+        public_job_fields = (
+            "job_id",
+            "batch_id",
+            "base_cell",
+            "position",
+            "state",
+            "current_stage",
+            "leased_by",
+            "attempt_count",
+            "eligible_at",
+            "blockers",
+            "error",
+            "batch_position",
+        )
+        public_result_fields = ("executor", "fidb", "fidbf", "seal")
+        for job in result.get("jobs", []):
+            if not isinstance(job, dict):
+                continue
+            compact = {field: job.get(field) for field in public_job_fields}
+            job_result = job.get("result")
+            compact["result"] = (
+                {
+                    field: job_result[field]
+                    for field in public_result_fields
+                    if field in job_result
+                }
+                if isinstance(job_result, dict)
+                else None
+            )
+            compact_jobs.append(compact)
+        result["jobs"] = compact_jobs
+        result["snapshot_detail"] = detail
     return result
 
 
@@ -601,7 +648,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     )
                 result = coordinator.status()
             elif path == "/api/v1/snapshot":
-                unknown = set(query) - {"include_inactive"}
+                unknown = set(query) - {"include_inactive", "detail"}
                 if unknown or any(len(values) != 1 for values in query.values()):
                     raise ApiError(
                         HTTPStatus.BAD_REQUEST,
@@ -615,10 +662,18 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         "invalid-query",
                         "include_inactive must be true or false",
                     )
+                detail = query.get("detail", ["full"])[0]
+                if detail not in {"full", "control-panel"}:
+                    raise ApiError(
+                        HTTPStatus.BAD_REQUEST,
+                        "invalid-query",
+                        "snapshot detail must be full or control-panel",
+                    )
                 result = _public_snapshot(
                     coordinator,
                     raw == "true",
                     self.api_server.config.max_timing_limit,
+                    detail=detail,
                 )
             elif path == "/api/v1/timings":
                 unknown = set(query) - {"limit"}

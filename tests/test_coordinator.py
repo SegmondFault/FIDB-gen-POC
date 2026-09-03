@@ -559,6 +559,12 @@ matrices = ["tier0-uclibc-powerpc"]
             attempts = coordinator.snapshot()["attempts"]
             self.assertEqual([row["state"] for row in attempts], ["expired", "expired"])
 
+            bounded = coordinator.snapshot(attempt_limit=1)
+            self.assertEqual(len(bounded["attempts"]), 1)
+            self.assertEqual(bounded["attempts_total"], 2)
+            self.assertTrue(bounded["attempts_truncated"])
+            self.assertEqual(bounded["attempts"][0]["attempt_number"], 2)
+
     def test_retry_backoff_is_durable_exponential_and_capped(self):
         path = self.write_queue(
             batches=(("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),),

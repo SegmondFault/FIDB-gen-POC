@@ -62,6 +62,8 @@ function validatedQuery(endpoint: string, requestUrl: URL) {
     ? new Set(['after', 'limit'])
     : endpoint === 'timings'
       ? new Set(['limit'])
+      : endpoint === 'snapshot'
+        ? new Set(['detail', 'include_inactive'])
       : new Set<string>();
   for (const key of requestUrl.searchParams.keys()) {
     if (!allowed.has(key)) return null;

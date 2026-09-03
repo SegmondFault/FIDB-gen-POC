@@ -126,8 +126,11 @@ export type CoordinatorSnapshot = {
   attempts?: CoordinatorAttempt[];
   workers?: CoordinatorWorker[];
   stage_attempts?: StageSpan[];
+  attempts_total?: number;
+  attempts_truncated?: boolean;
   stage_attempts_total?: number;
   stage_attempts_truncated?: boolean;
+  snapshot_detail?: 'full' | 'control-panel';
 };
 
 export type OperationsPreflight = {
@@ -1508,7 +1511,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
-          json<CoordinatorSnapshot>('snapshot'),
+          json<CoordinatorSnapshot>('snapshot?detail=control-panel'),
           json<TimingSnapshot>('timings?limit=200')
             .then(value => ({ value, error: null }))
             .catch(caught => ({

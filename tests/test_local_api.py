@@ -281,6 +281,40 @@ class LocalApiTests(unittest.TestCase):
         )
         self.assertTrue(all("lease_token" not in row for row in snapshot["attempts"]))
 
+    def test_control_panel_snapshot_bounds_history_and_compacts_job_results(self):
+        lease = self.claim_synced_job()
+        with Coordinator(self.state, self.root) as coordinator:
+            coordinator.complete(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                result={
+                    "executor": "test-executor",
+                    "fidb": {"path": "artifact.fidb", "sha256": "a" * 64},
+                    "timing": {"large": ["internal"] * 100},
+                },
+                now=23,
+            )
+
+        status, snapshot, _ = self.request(
+            "GET", "/api/v1/snapshot?detail=control-panel"
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(snapshot["snapshot_detail"], "control-panel")
+        self.assertEqual(snapshot["attempts_total"], 1)
+        self.assertFalse(snapshot["attempts_truncated"])
+        job = next(row for row in snapshot["jobs"] if row["job_id"] == lease["job_id"])
+        self.assertEqual(job["result"]["executor"], "test-executor")
+        self.assertEqual(job["result"]["fidb"]["path"], "artifact.fidb")
+        self.assertNotIn("timing", job["result"])
+        self.assertNotIn("queue_row", job)
+        self.assertNotIn("factor_variants", job)
+
+        status, error, _ = self.request("GET", "/api/v1/snapshot?detail=large")
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "invalid-query")
+
     def test_only_typed_sync_pause_and_resume_controls_exist(self):
         self.sync()
         status, paused, _ = self.request(
