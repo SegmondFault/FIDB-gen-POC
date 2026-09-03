@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import io
 import tarfile
 import tempfile
@@ -15,6 +16,7 @@ from fidb_poc.pipeline import (
     _missing_file_markers,
     _validate_population_report,
     compiler_identity,
+    download_library,
     find_pyghidra,
     ghidra_environment,
     _safe_member_path,
@@ -34,6 +36,34 @@ from fidb_poc.config import Library, load_configuration, select_configuration
 
 
 class PipelineTests(unittest.TestCase):
+    def test_native_library_can_reuse_content_addressed_source_cache(self):
+        payload = b"cached source archive"
+        digest = hashlib.sha256(payload).hexdigest()
+        library = Library(
+            name="example",
+            version="1.0",
+            url="https://example.invalid/example.tar.gz",
+            sha256=digest,
+            source_directory="example-1.0",
+            project_markers=("configure",),
+            allowed_build_systems=("autoconf",),
+            preferred_build_system="autoconf",
+            static_archives=("libexample.a",),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            downloads = Path(temporary) / "downloads"
+            downloads.mkdir()
+            cached = downloads / digest
+            cached.write_bytes(payload)
+
+            with patch("fidb_poc.pipeline.acquire_pinned") as acquire:
+                selected = download_library(
+                    library, downloads, content_addressed=True
+                )
+
+        self.assertEqual(selected, cached)
+        acquire.assert_not_called()
+
     def test_file_marker_validation_accepts_reviewed_i386_alias(self):
         description = "ELF 32-bit LSB relocatable, Intel i386, version 1 (SYSV)"
 

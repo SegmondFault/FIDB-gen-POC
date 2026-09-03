@@ -31,6 +31,7 @@ from .adapters import (
     linked_output_command,
 )
 from .config import Configuration, Library, Route, Treatment
+from .toolchain_cache import acquire_pinned, inspect_cached
 from .timing import utc_now
 
 TimingFactory = Callable[
@@ -381,10 +382,52 @@ def download_library(
     library: Library,
     downloads: Path,
     *,
+    content_addressed: bool = False,
     timing: TimingFactory | None = None,
     skipped: SkipCallback | None = None,
 ) -> Path:
     downloads.mkdir(parents=True, exist_ok=True)
+    if content_addressed:
+        inspection = inspect_cached(downloads, library.sha256)
+        if inspection.state == "verified-cached":
+            archive = inspection.path
+            _skip(
+                skipped,
+                "source-acquire",
+                "using shared cached pinned native-library source archive",
+                {
+                    "library": library.identifier,
+                    "input_kind": "source",
+                    "cache_hit": True,
+                    "bytes": archive.stat().st_size,
+                    "sha256": library.sha256,
+                },
+            )
+        else:
+            with _timed(
+                timing,
+                "source-acquire",
+                "acquiring pinned native-library source archive into shared cache",
+                {
+                    "library": library.identifier,
+                    "input_kind": "source",
+                    "cache_hit": False,
+                    "url": library.url,
+                    "sha256": library.sha256,
+                },
+            ) as metrics:
+                acquired = acquire_pinned(library.url, library.sha256, downloads)
+                archive = acquired.path
+                metrics.update(
+                    {
+                        "cache_hit": acquired.cache_hit,
+                        "download_attempts": acquired.attempts,
+                        "bytes": acquired.bytes,
+                    }
+                )
+        _verify_library_archive(library, archive, timing, fail_mismatch=True)
+        return archive
+
     archive = downloads / f"{library.identifier}.tar.gz"
     if archive.exists():
         if archive.is_file() and _verify_library_archive(
@@ -1516,6 +1559,7 @@ def execute(
     verbose: bool = False,
     *,
     build_jobs_per_cell: int = 4,
+    source_downloads: Path | None = None,
     timing: TimingFactory | None = None,
     skipped: SkipCallback | None = None,
 ) -> Path:
@@ -1534,7 +1578,11 @@ def execute(
         "installed native toolchain requires no extraction",
         {"extraction_required": False, "route_count": len(configuration.routes)},
     )
-    downloads = project_root / "work/downloads"
+    downloads = (
+        source_downloads.resolve()
+        if source_downloads is not None
+        else project_root / "work/downloads"
+    )
     sources = project_root / "work/sources"
     work = project_root / "work"
     logs = work / "logs"
@@ -1543,7 +1591,6 @@ def execute(
     validate_generated_root(project_root, work, "work")
     validate_generated_root(project_root, output, "artifacts/libs")
     generated_children = (
-        (work, downloads, "downloads"),
         (work, sources, "sources"),
         (work, work / "builds", "builds"),
         (work, logs, "logs"),
@@ -1552,6 +1599,8 @@ def execute(
         (output, output / "fid-signatures", "fid-signatures"),
         (output, manifest, "fidb_manifest.csv"),
     )
+    if source_downloads is None:
+        generated_children = ((work, downloads, "downloads"), *generated_children)
     for generated_root, path, relative_name in generated_children:
         validate_generated_child(generated_root, path, relative_name)
     if downloads.exists() and not downloads.is_dir():
@@ -1575,7 +1624,13 @@ def execute(
         announce(
             f"[source {index}/{len(configuration.libraries)}] " f"{library.identifier}"
         )
-        archive = download_library(library, downloads, timing=timing, skipped=skipped)
+        archive = download_library(
+            library,
+            downloads,
+            content_addressed=source_downloads is not None,
+            timing=timing,
+            skipped=skipped,
+        )
         source_root = extract_source(
             library, archive, sources, timing=timing, verified=True
         )

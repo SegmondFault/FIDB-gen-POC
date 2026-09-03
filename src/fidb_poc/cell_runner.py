@@ -30,6 +30,7 @@ from .hunt import _select_objects
 from .recipe_generator import generate_cells, load_recipes
 from .toolchain_registry import load_toolchains
 from .toolchain_cache import MANAGED_DOWNLOADS
+from .source_packs import MANAGED_SOURCE_DOWNLOADS
 from .timing import (
     CellStage,
     ProgressCallback,
@@ -994,6 +995,7 @@ def _export_fidbf(fidb: Path, attempt_root: Path) -> Path:
 
 def _native_outputs(
     configuration: Configuration,
+    project_root: Path,
     attempt_root: Path,
     timing: TimingRecorder,
     verbose: bool,
@@ -1005,6 +1007,7 @@ def _native_outputs(
         progress=None,
         verbose=verbose,
         build_jobs_per_cell=build_jobs_per_cell,
+        source_downloads=project_root / MANAGED_SOURCE_DOWNLOADS,
         timing=timing.span,
         skipped=timing.skip,
     )
@@ -1346,7 +1349,7 @@ def run_cell(
     if kind == "native":
         assert configuration is not None
         fidb, counts, runtime, evidence = _native_outputs(
-            configuration, attempt, timing, verbose, build_jobs_per_cell
+            configuration, project, attempt, timing, verbose, build_jobs_per_cell
         )
     else:
         assert generated is not None
