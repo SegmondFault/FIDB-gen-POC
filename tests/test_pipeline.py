@@ -12,6 +12,7 @@ from fidb_poc.pipeline import (
     BuildRecord,
     PipelineError,
     _populate_group,
+    _missing_file_markers,
     _validate_population_report,
     compiler_identity,
     find_pyghidra,
@@ -33,6 +34,20 @@ from fidb_poc.config import Library, load_configuration, select_configuration
 
 
 class PipelineTests(unittest.TestCase):
+    def test_file_marker_validation_accepts_reviewed_i386_alias(self):
+        description = "ELF 32-bit LSB relocatable, Intel i386, version 1 (SYSV)"
+
+        self.assertEqual(
+            _missing_file_markers(
+                description, ("ELF 32-bit LSB", "relocatable", "Intel 80386")
+            ),
+            [],
+        )
+        self.assertEqual(
+            _missing_file_markers(description, ("ELF 64-bit LSB",)),
+            ["ELF 64-bit LSB"],
+        )
+
     def test_xcrun_route_hashes_the_resolved_sdk_tool(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -69,6 +69,14 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(configuration.profiles["smoke"], ("baseline_o2",))
         self.assertEqual(len(configuration.profiles["c-route-toolchain-canary-v1"]), 6)
 
+        android_x86 = [
+            route for route in configuration.routes if route.id.startswith("android-x86")
+        ]
+        self.assertEqual(len(android_x86), 4)
+        self.assertTrue(
+            all(route.ghidra_compiler_spec == "gcc" for route in android_x86)
+        )
+
         managed = next(
             row for row in configuration.routes if row.id == "linux-aarch64-gcc"
         )

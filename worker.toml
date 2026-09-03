@@ -202,7 +202,7 @@ object_file_markers = ["ELF 64-bit LSB", "relocatable", "x86-64"]
 linked_suffix = ".so"
 linked_file_markers = ["ELF 64-bit LSB", "x86-64", "shared object"]
 ghidra_language = "x86:LE:64:default"
-ghidra_compiler_spec = "default"
+ghidra_compiler_spec = "gcc"
 compiler_version_markers = ["clang version 18.0.4", "r522817d"]
 
 [[routes]]
@@ -217,7 +217,7 @@ object_file_markers = ["ELF 32-bit LSB", "relocatable", "Intel 80386"]
 linked_suffix = ".so"
 linked_file_markers = ["ELF 32-bit LSB", "Intel 80386", "shared object"]
 ghidra_language = "x86:LE:32:default"
-ghidra_compiler_spec = "default"
+ghidra_compiler_spec = "gcc"
 compiler_version_markers = ["clang version 18.0.4", "r522817d"]
 
 [[routes]]
@@ -262,7 +262,7 @@ object_file_markers = ["ELF 64-bit LSB", "relocatable", "x86-64"]
 linked_suffix = ".so"
 linked_file_markers = ["ELF 64-bit LSB", "x86-64", "shared object"]
 ghidra_language = "x86:LE:64:default"
-ghidra_compiler_spec = "default"
+ghidra_compiler_spec = "gcc"
 compiler_version_markers = ["clang version 21.0.0", "r563880c"]
 
 [[routes]]
@@ -277,7 +277,7 @@ object_file_markers = ["ELF 32-bit LSB", "relocatable", "Intel 80386"]
 linked_suffix = ".so"
 linked_file_markers = ["ELF 32-bit LSB", "Intel 80386", "shared object"]
 ghidra_language = "x86:LE:32:default"
-ghidra_compiler_spec = "default"
+ghidra_compiler_spec = "gcc"
 compiler_version_markers = ["clang version 21.0.0", "r563880c"]
 
 [[routes]]

@@ -675,11 +675,7 @@ def _validate_objects(
             capture_output=True,
             check=True,
         )
-        missing = [
-            marker
-            for marker in route.object_file_markers
-            if marker not in result.stdout
-        ]
+        missing = _missing_file_markers(result.stdout, route.object_file_markers)
         if missing:
             raise PipelineError(
                 f"{object_path.name} does not match route {route.id}: "
@@ -697,14 +693,30 @@ def _validate_linked_output(
         capture_output=True,
         check=True,
     )
-    missing = [
-        marker for marker in route.linked_file_markers if marker not in result.stdout
-    ]
+    missing = _missing_file_markers(result.stdout, route.linked_file_markers)
     if missing:
         raise PipelineError(
             f"{output.name} does not match linked route {route.id}: "
             f"{result.stdout.strip()} (missing {missing})"
         )
+
+
+_FILE_MARKER_EQUIVALENTS = {
+    "Intel 80386": ("Intel 80386", "Intel i386"),
+}
+
+
+def _missing_file_markers(description: str, markers: tuple[str, ...]) -> list[str]:
+    """Return unmatched ABI markers, accepting only reviewed `file` aliases."""
+
+    return [
+        marker
+        for marker in markers
+        if not any(
+            candidate in description
+            for candidate in _FILE_MARKER_EQUIVALENTS.get(marker, (marker,))
+        )
+    ]
 
 
 def build_library(
