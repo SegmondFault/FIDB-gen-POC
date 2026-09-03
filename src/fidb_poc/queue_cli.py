@@ -1197,9 +1197,21 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                             return 1
                         continue
                     if finish_started:
-                        coordinator.finish_active_block_if_drained(
+                        drained = coordinator.finish_active_block_if_drained(
                             actor=arguments.worker_id
                         )
+                        if drained:
+                            try:
+                                from .machine_validation import (
+                                    reconcile_all_machine_validations,
+                                )
+
+                                reconcile_all_machine_validations(root)
+                            except (OSError, ValueError) as error:
+                                print(
+                                    f"warning: machine-validation reconcile failed: {error}",
+                                    file=sys.stderr,
+                                )
                     if arguments.once:
                         return 0 if succeeded else 1
                     continue

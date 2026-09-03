@@ -223,6 +223,70 @@ def _auto_batches_main(argv: list[str]) -> int:
         return 1
 
 
+def _machine_validation_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc machine-validation",
+        description=(
+            "Inspect or reconcile the fail-closed ten-library validation scheduler."
+        ),
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    for command in ("status", "reconcile", "materialize"):
+        child = commands.add_parser(command)
+        child.add_argument("--project-root", type=Path, default=Path.cwd())
+        child.add_argument(
+            "--authority",
+            type=Path,
+            default=Path("validation/machine-validation.toml"),
+        )
+        if command == "materialize":
+            mode = child.add_mutually_exclusive_group()
+            mode.add_argument("--write", action="store_true")
+            mode.add_argument("--check", action="store_true")
+    arguments = parser.parse_args(argv)
+    try:
+        from .machine_validation import (
+            check_validation_batch,
+            compile_machine_validation,
+            compile_validation_batch,
+            reconcile_machine_validation,
+            write_validation_batch,
+        )
+
+        if arguments.command == "status":
+            document = compile_machine_validation(
+                arguments.project_root, arguments.authority
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
+        if arguments.command == "reconcile":
+            document = reconcile_machine_validation(
+                arguments.project_root, arguments.authority
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
+
+        document = compile_validation_batch(arguments.project_root, arguments.authority)
+        if arguments.write:
+            write_validation_batch(document, arguments.project_root)
+            check = {
+                "state": "written-scheduled-claim-blocked",
+                "mismatches": [],
+            }
+        elif arguments.check:
+            check = check_validation_batch(document, arguments.project_root)
+        else:
+            check = {"state": "preview", "mismatches": []}
+        document.pop("rendered_manifest")
+        document.pop("rendered_schedule")
+        document["check"] = check
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0 if check["state"] != "drifted" else 1
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _selected_performance(
     arguments: argparse.Namespace,
     *,
@@ -822,6 +886,8 @@ def main(argv: list[str] | None = None) -> int:
         return _materialize_batches_main(tokens[1:])
     if tokens and tokens[0] == "auto-batches":
         return _auto_batches_main(tokens[1:])
+    if tokens and tokens[0] == "machine-validation":
+        return _machine_validation_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":

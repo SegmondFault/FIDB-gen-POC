@@ -12,7 +12,18 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v13")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v14")
+        self.assertEqual(len(document["machine_validations"]), 1)
+        validation = document["machine_validations"][0]
+        self.assertEqual(validation["batch_kind"], "validation-run")
+        self.assertEqual(validation["summary"]["exact_identities"], 222)
+        self.assertEqual(validation["summary"]["composite_programs"], 444)
+        self.assertEqual(validation["summary"]["query_projections"], 1_332)
+        self.assertFalse(validation["readiness"]["eligible"])
+        self.assertEqual(validation["results"]["state"], "not-run")
+        self.assertEqual(
+            len(document["source_digests"]["machine_validations_sha256"]), 64
+        )
         self.assertEqual(len(document["auto_batch_campaigns"]), 1)
         candidate = document["auto_batch_campaigns"][0]
         self.assertEqual(candidate["summary"]["chunks"], 23)

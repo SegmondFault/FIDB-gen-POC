@@ -13,6 +13,7 @@ from .config import load_configuration
 from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
 from .lane_registry import load_lane_registry
+from .machine_validation import compile_machine_validation
 from .plan_request import (
     REQUEST_SCHEMA,
     _factor_variants,
@@ -28,7 +29,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v13"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v14"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -651,6 +652,20 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         )
         for width_id in sorted(width_ids)
     ]
+    width_compilations_by_id = {
+        str(compilation["id"]): compilation for compilation in width_compilations
+    }
+    machine_validations = []
+    for path in sorted((root / "validation").glob("*.toml")):
+        authority = tomllib.loads(path.read_text(encoding="utf-8"))
+        width_id = Path(str(authority["width_authority"])).stem
+        machine_validations.append(
+            compile_machine_validation(
+                root,
+                path.relative_to(root),
+                _width_compilation=width_compilations_by_id.get(width_id),
+            )
+        )
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]
     width_compilation_paths = [
@@ -664,6 +679,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "time_block_plan": time_block_plan,
         "materialized_campaigns": materialized_campaigns,
         "auto_batch_campaigns": auto_batch_campaigns,
+        "machine_validations": machine_validations,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -691,6 +707,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "time_block_plan": "performance/batch-planning.toml",
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
             "auto_batch_campaigns": "plans/auto-materialized/*/manifest.toml",
+            "machine_validations": "validation/*.toml + plans/validation-schedule.toml",
             "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -725,6 +742,13 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                     (root / str(row["authority_path"])).read_bytes()
                     for row in auto_batch_campaigns
                 )
+            ).hexdigest(),
+            "machine_validations_sha256": hashlib.sha256(
+                b"".join(
+                    (root / str(row["authority_path"])).read_bytes()
+                    for row in machine_validations
+                )
+                + (root / "plans/validation-schedule.toml").read_bytes()
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()
