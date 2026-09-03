@@ -3,17 +3,16 @@ name = "library-priority"
 
 [queue]
 # Intent and priority live here.  The first native commissioning run completed
-# and was drained on 2026-08-30.  A future run must be deliberately re-armed,
-# synchronized and inspected before any worker is started.
+# and was drained on 2026-08-30; its batches are retired from this active queue
+# while their plan files, artifacts, and durable ledger history remain intact.
+# A future run must be deliberately re-armed, synchronized and inspected before
+# any worker is started.
 armed = false
 # Bind queue concurrency to the measured 94 GiB policy used by the campaign
 # time model. Queue loading fails closed if this cap drifts from the profile.
 performance_profile = "reference-host-94g-balanced"
 max_workers = 20
 batch_order = [
-  "batch-000",
-  "batch-005",
-  "batch-010-macos-canary",
   "c-top10-nonapple-width-v2-block-01",
   "c-top10-nonapple-width-v2-block-02",
   "c-top10-nonapple-width-v2-block-03",
@@ -62,25 +61,6 @@ outbox = "var/fidb-notifications/events.jsonl"
 webhook_url_env = "FIDB_NOTIFICATION_WEBHOOK_URL"
 webhook_bearer_env = "FIDB_NOTIFICATION_BEARER_TOKEN"
 timeout_seconds = 10
-
-[[batch]]
-id = "batch-000"
-name = "tier-0-runtime-foundations"
-plan = "plans/tier0-runtime-foundations.toml"
-# First overnight commissioning is native-only.  The reviewed PowerPC source
-# matrix remains in the plan but is not materialized by this queue until its
-# pinned acquisition/local cross-build path has a separate foreground canary.
-matrices = ["tier0-zlib-native"]
-
-[[batch]]
-id = "batch-005"
-name = "bzip2-native-baseline"
-plan = "plans/bzip2-native.toml"
-
-[[batch]]
-id = "batch-010-macos-canary"
-name = "macos-arm64-native-canary"
-plan = "plans/macos-arm64-canary.toml"
 
 # These five blocks are materialized and ordered, but the queue remains
 # disarmed above. File hashes protect the generated TOML and queue digests
