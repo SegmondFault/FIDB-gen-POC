@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 import tempfile
@@ -178,6 +179,29 @@ matrices = ["tier0-uclibc-powerpc"]
                 reopened.connection.execute(
                     "UPDATE events SET actor = 'changed' WHERE event_id = 1"
                 )
+
+    def test_queue_rejects_materialized_plan_file_drift(self):
+        path = self.write_queue(batch_extra='plan_sha256 = "' + "0" * 64 + '"')
+
+        with self.assertRaisesRegex(ValueError, "plan_sha256 mismatch"):
+            self.config(path)
+
+    def test_sync_rejects_materialized_queue_identity_drift(self):
+        plan = self.project_root / "plans/coverage-baseline.toml"
+        digest = hashlib.sha256(plan.read_bytes()).hexdigest()
+        path = self.write_queue(
+            batch_extra="\n".join(
+                (
+                    f'plan_sha256 = "{digest}"',
+                    'queue_digest = "' + "0" * 64 + '"',
+                    "executions = 6",
+                )
+            )
+        )
+
+        with Coordinator(self.database) as coordinator:
+            with self.assertRaisesRegex(ValueError, "queue_digest mismatch"):
+                coordinator.sync(self.config(path), now=10)
 
     def test_claim_follows_batch_then_job_order_and_skips_blocked_rows(self):
         with Coordinator(self.database) as coordinator:

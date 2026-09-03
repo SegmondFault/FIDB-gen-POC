@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Callable, Iterator, Mapping
 
 from .operations_policy import OperationsPolicy, load_operations_policy
-from .plan_request import RESOLVED_SCHEMA, resolve_plan
+from .plan_request import RESOLVED_SCHEMA, queue_identity_digest, resolve_plan
 
 QUEUE_SCHEMA = "fidb-queue/v1"
 SNAPSHOT_SCHEMA = "fidb-coordinator-snapshot/v1"
@@ -65,6 +65,9 @@ class BatchConfig:
     plan: Path
     plan_path: str
     matrices: tuple[str, ...] | None = None
+    plan_sha256: str | None = None
+    queue_digest: str | None = None
+    executions: int | None = None
 
 
 @dataclass(frozen=True)
@@ -170,7 +173,19 @@ class QueueConfig:
         for position, row in enumerate(raw_batches, start=1):
             if not isinstance(row, dict):
                 raise ValueError(f"batch {position} must be a table")
-            _only_keys(row, {"id", "name", "plan", "matrices"}, f"batch {position}")
+            _only_keys(
+                row,
+                {
+                    "id",
+                    "name",
+                    "plan",
+                    "matrices",
+                    "plan_sha256",
+                    "queue_digest",
+                    "executions",
+                },
+                f"batch {position}",
+            )
             batch_id = _identifier(row.get("id"), f"batch {position} id")
             if batch_id in seen_batch_ids:
                 raise ValueError(f"duplicate batch id: {batch_id}")
@@ -194,6 +209,27 @@ class QueueConfig:
             matrices = None
             if "matrices" in row:
                 matrices = _identifiers(row["matrices"], f"batch {batch_id} matrices")
+            plan_sha256 = None
+            if "plan_sha256" in row:
+                plan_sha256 = _sha256_text(
+                    row["plan_sha256"], f"batch {batch_id} plan_sha256"
+                )
+                actual_plan_sha256 = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+                if actual_plan_sha256 != plan_sha256:
+                    raise ValueError(
+                        f"batch {batch_id} plan_sha256 mismatch: expected "
+                        f"{plan_sha256}, got {actual_plan_sha256}"
+                    )
+            queue_digest = None
+            if "queue_digest" in row:
+                queue_digest = _sha256_text(
+                    row["queue_digest"], f"batch {batch_id} queue_digest"
+                )
+            executions = None
+            if "executions" in row:
+                executions = _positive_integer(
+                    row["executions"], f"batch {batch_id} executions"
+                )
             batches.append(
                 BatchConfig(
                     id=batch_id,
@@ -201,6 +237,9 @@ class QueueConfig:
                     plan=plan_path,
                     plan_path=normalized_plan,
                     matrices=matrices,
+                    plan_sha256=plan_sha256,
+                    queue_digest=queue_digest,
+                    executions=executions,
                 )
             )
 
@@ -266,6 +305,15 @@ def _identifiers(value: object, context: str) -> tuple[str, ...]:
     result = tuple(_identifier(item, context) for item in value)
     if len(set(result)) != len(result):
         raise ValueError(f"{context} contains duplicates")
+    return result
+
+
+def _sha256_text(value: object, context: str) -> str:
+    result = _text(value, context)
+    if len(result) != 64 or any(
+        character not in "0123456789abcdef" for character in result
+    ):
+        raise ValueError(f"{context} must be a lowercase SHA-256")
     return result
 
 
@@ -918,6 +966,18 @@ class Coordinator:
                         f"batch {batch.id} has unsupported queue row state: "
                         f"{row.get('state')!r}"
                     )
+            if batch.executions is not None and len(selected_rows) != batch.executions:
+                raise ValueError(
+                    f"batch {batch.id} resolved {len(selected_rows)} queue rows; "
+                    f"expected {batch.executions}"
+                )
+            if batch.queue_digest is not None:
+                actual_queue_digest = queue_identity_digest(selected_rows)
+                if actual_queue_digest != batch.queue_digest:
+                    raise ValueError(
+                        f"batch {batch.id} queue_digest mismatch: expected "
+                        f"{batch.queue_digest}, got {actual_queue_digest}"
+                    )
             resolved_batches.append((batch, plan, selected_cells, selected_rows))
 
         submitted = 0
@@ -1180,13 +1240,11 @@ class Coordinator:
                     (active_batch,),
                 ).fetchone()
                 if still_active is None:
-                    self._connection.execute(
-                        """
+                    self._connection.execute("""
                         UPDATE coordinator_state
                         SET active_batch_id = NULL, active_admission_id = NULL
                         WHERE singleton = 1
-                        """
-                    )
+                        """)
 
             self._event_locked(
                 "queue.synced",
@@ -1233,9 +1291,7 @@ class Coordinator:
                 "active": False,
                 "batch_id": None,
                 "admission_id": None,
-                "last_schedule_admission_id": state[
-                    "last_schedule_admission_id"
-                ],
+                "last_schedule_admission_id": state["last_schedule_admission_id"],
             }
         rows = self._connection.execute(
             """
@@ -1277,8 +1333,7 @@ class Coordinator:
                 return self.execution_block()
             if scheduled and state["last_schedule_admission_id"] == admission:
                 return None
-            batch = self._connection.execute(
-                """
+            batch = self._connection.execute("""
                 SELECT batches.* FROM batches
                 WHERE batches.active = 1 AND EXISTS (
                     SELECT 1 FROM jobs
@@ -1286,8 +1341,7 @@ class Coordinator:
                       AND jobs.state IN ('queued', 'leased', 'running')
                 )
                 ORDER BY batches.position, batches.batch_id LIMIT 1
-                """
-            ).fetchone()
+                """).fetchone()
             if batch is None:
                 return None
             self._connection.execute(
@@ -1339,13 +1393,11 @@ class Coordinator:
             batch = self._connection.execute(
                 "SELECT plan_digest FROM batches WHERE batch_id = ?", (batch_id,)
             ).fetchone()
-            self._connection.execute(
-                """
+            self._connection.execute("""
                 UPDATE coordinator_state
                 SET active_batch_id = NULL, active_admission_id = NULL
                 WHERE singleton = 1
-                """
-            )
+                """)
             self._event_locked(
                 "batch.drained",
                 now=timestamp,

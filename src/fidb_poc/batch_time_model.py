@@ -113,11 +113,11 @@ def compile_time_block_plan(
 
     root = Path(project_root).expanduser().resolve()
     schedule_path = root / "plans/priority-queue.toml"
+    schedule_document = tomllib.loads(schedule_path.read_text(encoding="utf-8"))
+    schedule_table = schedule_document.get("schedule", {})
+    if not isinstance(schedule_table, dict):
+        raise ValueError("queue schedule must be a table")
     if schedule_start is None:
-        schedule_document = tomllib.loads(schedule_path.read_text(encoding="utf-8"))
-        schedule_table = schedule_document.get("schedule", {})
-        if not isinstance(schedule_table, dict):
-            raise ValueError("queue schedule must be a table")
         schedule_start = _text(schedule_table.get("start"), "schedule.start")
     if re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", schedule_start) is None:
         raise ValueError("batch time model schedule start must use HH:MM")
@@ -325,7 +325,14 @@ def compile_time_block_plan(
         "width_batches_sha256": hashlib.sha256(
             b"".join((root / relative).read_bytes() for relative, _ in compiled_batches)
         ).hexdigest(),
-        "schedule_sha256": hashlib.sha256(schedule_path.read_bytes()).hexdigest(),
+        "schedule_sha256": hashlib.sha256(
+            json.dumps(
+                schedule_table,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest(),
     }
     body = {
         "schema_version": TIME_BLOCK_PLAN_SCHEMA,

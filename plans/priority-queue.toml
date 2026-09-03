@@ -13,6 +13,11 @@ batch_order = [
   "batch-000",
   "batch-005",
   "batch-010-macos-canary",
+  "c-top10-nonapple-width-v2-block-01",
+  "c-top10-nonapple-width-v2-block-02",
+  "c-top10-nonapple-width-v2-block-03",
+  "c-top10-nonapple-width-v2-block-04",
+  "c-top10-nonapple-width-v2-block-05",
 ]
 poll_seconds = 5
 lease_seconds = 3600
@@ -75,3 +80,47 @@ plan = "plans/bzip2-native.toml"
 id = "batch-010-macos-canary"
 name = "macos-arm64-native-canary"
 plan = "plans/macos-arm64-canary.toml"
+
+# These five blocks are materialized and ordered, but the queue remains
+# disarmed above. File hashes protect the generated TOML and queue digests
+# protect the exact ordered cell identities after host-local route resolution.
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-01"
+name = "C top ten width v2 · SQLite + Readline"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-01.toml"
+plan_sha256 = "c248b9d2ce3b52b3409a66396ad51514b11ef342a91f9af6af5d77995c27ddff"
+queue_digest = "cdf9d8a5edae9dea41f62957f6c32a0beb78d0eb09b1cd60eb9ff25081180800"
+executions = 444
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-02"
+name = "C top ten width v2 · gettext + LZ4"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-02.toml"
+plan_sha256 = "04ddf4a59759ce9435bc1ef29514cb61db95c8543047967bec48063c0efdde1d"
+queue_digest = "c10291a55691f1ab8a0871cead767f6f819059c2ecc94034367b85819f006931"
+executions = 444
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-03"
+name = "C top ten width v2 · nghttp2 + OpenSSL Android gap"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-03.toml"
+plan_sha256 = "9bb1fc477636e0843edb05159d611bf2cd62ec1ef0bffd29a62b7aa317201cc6"
+queue_digest = "c5d3d8390073765d8fc4a8ad8cb04f1de9829c66675055838491b3d50cb87047"
+executions = 270
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-04"
+name = "C top ten width v2 · GMP + XZ"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-04.toml"
+plan_sha256 = "54210da93f8b6ae1944c7b53360c21f32871edda42f60376412a1f8f08153e70"
+queue_digest = "76c019b111f7d92a3edce86ca576a2a4499cfa220f5bc3f38422e2b35958bc5f"
+executions = 444
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-05"
+name = "C top ten width v2 · PCRE2 + Zstandard"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-05.toml"
+plan_sha256 = "4a6b25db2ea75fcbae271ba71b1cebebb398ceb932146b62a84d77a90c9d1024"
+queue_digest = "ae546876285dc7ed41deea4ffe825eacc7470b3d12e729fc6961b9d9086040ff"
+executions = 444
