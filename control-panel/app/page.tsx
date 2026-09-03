@@ -26,17 +26,16 @@ import {
 const navItems = [
   ['01', 'Overview'],
   ['02', 'Matrix'],
-  ['03', 'Performance'],
-  ['04', 'Timing'],
-  ['05', 'Batches'],
-  ['06', 'Targets & toolchains'],
-  ['07', 'Evidence'],
+  ['03', 'Timing'],
+  ['04', 'Batches'],
+  ['05', 'Targets & toolchains'],
+  ['06', 'Evidence'],
 ];
 
 const validationNavItems = [
-  ['08', 'Machine validation'],
-  ['09', 'Ecological validation'],
-  ['10', 'Noisy hashes'],
+  ['07', 'Machine validation'],
+  ['08', 'Ecological validation'],
+  ['09', 'Noisy hashes'],
 ];
 
 type BatchRow = {
@@ -473,6 +472,10 @@ export default function Home() {
             </button>
           ))}
           <p className="nav-label secondary-label">Operations</p>
+          <button className={activeView === 'Performance' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Performance')}>
+            <span>10</span>
+            Performance
+          </button>
           <button className={activeView === 'Automation' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Automation')}>
             <span>11</span>
             Automation
