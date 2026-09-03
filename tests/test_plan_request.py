@@ -67,6 +67,36 @@ class PlanRequestTests(unittest.TestCase):
         self.assertEqual(macos["routing"]["worker_pool"], "macos-native")
         self.assertEqual(macos["target"]["binary_format"], "Mach-O")
 
+    def test_width_native_routes_preserve_compiler_generation_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "width-native.toml"
+            path.write_text(
+                """schema_version = "fidb-plan/v1"
+name = "width-native"
+[policy]
+max_cells = 1
+[[matrix]]
+id = "sqlite-gcc12"
+kind = "width-native"
+width_batch = "batches/c-next-nine-mega-width.toml"
+recipes = ["sqlite@3.53.4"]
+routes = ["linux-x86-64-gcc-12"]
+treatments = ["baseline_o2"]
+""",
+                encoding="utf-8",
+            )
+
+            plan = resolve_plan(path, self.root)
+
+        self.assertEqual(plan["summary"]["planned_cells"], 1)
+        cell = plan["cells"][0]
+        self.assertEqual(cell["kind"], "native")
+        self.assertEqual(cell["toolchain"]["route"], "linux-x86-64-gcc-12")
+        self.assertEqual(cell["toolchain"]["compiler_id"], "gcc-12.3.0")
+        self.assertEqual(cell["width"]["batch_id"], "batch-020")
+        self.assertEqual(cell["width"]["profile_id"], "gcc-current-o2")
+        self.assertEqual(cell["sensitivity"]["compiler-version"]["value"], "gcc-12.3.0")
+
     def test_request_cannot_supply_a_raw_command(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "bad.toml"

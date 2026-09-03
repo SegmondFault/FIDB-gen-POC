@@ -11,9 +11,10 @@ import hashlib
 import itertools
 import json
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
-from .config import load_configuration, select_configuration
+from .config import Configuration, load_configuration, select_configuration
 from .elf import ghidra_language
 from .ghidra_fid import compiler_spec_for_language
 from .recipe_generator import (
@@ -28,7 +29,13 @@ REQUEST_SCHEMA = "fidb-plan/v1"
 RESOLVED_SCHEMA = "fidb-resolved-plan/v1"
 SENSITIVITY_SCHEMA = "fidb-sensitivity/v1"
 VARIANTS_SCHEMA = "fidb-factor-variants/v1"
-MATRIX_KINDS = {"native", "source-library", "archive-library", "malware"}
+MATRIX_KINDS = {
+    "native",
+    "width-native",
+    "source-library",
+    "archive-library",
+    "malware",
+}
 PRIORITIES = {"background", "normal", "high"}
 QUEUE_STRATEGIES = {"recipe-then-variant", "variant-then-recipe"}
 
@@ -127,6 +134,7 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
                 "toolchains",
                 "executor",
                 "factor_variants",
+                "width_batch",
             },
             f"matrix {index}",
         )
@@ -155,7 +163,7 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
                     f"matrix {matrix_id} factor_variants contains duplicates"
                 )
             row["factor_variants"] = normalized_matrix_variants
-        if kind == "native":
+        if kind in {"native", "width-native"}:
             row["routes"] = _tokens(matrix.get("routes"), f"matrix {matrix_id} routes")
             row["treatments"] = _tokens(
                 matrix.get("treatments"), f"matrix {matrix_id} treatments"
@@ -165,11 +173,19 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
                 raise ValueError(
                     f"native matrix {matrix_id} cannot set: {sorted(forbidden)}"
                 )
+            if kind == "width-native":
+                row["width_batch"] = _token(
+                    matrix.get("width_batch"), f"matrix {matrix_id} width_batch"
+                )
+            elif "width_batch" in matrix:
+                raise ValueError(f"native matrix {matrix_id} cannot set width_batch")
         elif kind == "archive-library":
             row["toolchains"] = _tokens(
                 matrix.get("toolchains"), f"matrix {matrix_id} toolchains"
             )
-            forbidden = {"routes", "treatments", "executor"} & set(matrix)
+            forbidden = {"routes", "treatments", "executor", "width_batch"} & set(
+                matrix
+            )
             if forbidden:
                 raise ValueError(
                     f"archive-library matrix {matrix_id} cannot set: {sorted(forbidden)}"
@@ -184,7 +200,7 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
                     f"matrix {matrix_id} has unsupported executor: {executor!r}"
                 )
             row["executor"] = executor
-            forbidden = {"routes", "treatments"} & set(matrix)
+            forbidden = {"routes", "treatments", "width_batch"} & set(matrix)
             if forbidden:
                 raise ValueError(
                     f"{kind} matrix {matrix_id} cannot set: {sorted(forbidden)}"
@@ -619,6 +635,12 @@ def _native_cells(
         treatment_ids=tuple(matrix["treatments"]),
         profile="smoke",
     )
+    return _native_cells_from_configuration(matrix, configuration)
+
+
+def _native_cells_from_configuration(
+    matrix: dict[str, object], configuration: Configuration
+) -> list[dict[str, object]]:
     cells = []
     for library in configuration.libraries:
         for route in configuration.routes:
@@ -779,6 +801,114 @@ def _native_cells(
     return cells
 
 
+def _width_native_cells(
+    matrix: dict[str, object], project_root: Path
+) -> list[dict[str, object]]:
+    """Resolve compiler-generation routes through their pinned width batch."""
+
+    from .c_width import compile_c_width, materialize_width_configuration
+    from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_profile
+    from .width_batch import load_width_batch
+
+    relative = Path(str(matrix["width_batch"]))
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(
+            "width-native matrix width_batch must stay inside project root"
+        )
+    batch_path = (project_root / relative).resolve()
+    try:
+        batch_path.relative_to(project_root)
+    except ValueError as error:
+        raise ValueError(
+            "width-native matrix width_batch must stay inside project root"
+        ) from error
+
+    catalog = load_toolchain_pack_catalog(project_root)
+    batch = load_width_batch(project_root, batch_path, _toolchain_catalog=catalog)
+    batch_recipes = {
+        str(row["recipe_id"]): row for row in batch["libraries"]  # type: ignore[index]
+    }
+    requested_recipes = tuple(str(value) for value in matrix["recipes"])
+    missing_recipes = set(requested_recipes) - set(batch_recipes)
+    if missing_recipes:
+        raise ValueError(
+            f"width-native matrix selects recipes outside its batch: {sorted(missing_recipes)}"
+        )
+
+    width_id = Path(str(batch["authorities"]["width"])).stem  # type: ignore[index]
+    compilation = compile_c_width(project_root, width_id, _catalog=catalog)
+    route_plan = resolve_toolchain_profile(
+        project_root, str(compilation["toolchain_profile"]), _catalog=catalog
+    )
+    configuration = materialize_width_configuration(
+        project_root, requested_recipes[0], route_plan, _catalog=catalog
+    )
+    recipe_configuration = load_configuration(
+        project_root / "worker.toml",
+        requested_recipes,
+        toolchain_catalog=catalog,
+    )
+    configuration = replace(configuration, libraries=recipe_configuration.libraries)
+    configuration = select_configuration(
+        configuration,
+        route_ids=tuple(matrix["routes"]),
+        treatment_ids=tuple(matrix["treatments"]),
+        profile="smoke",
+    )
+
+    executable = {
+        (str(row["route_id"]), str(row["treatment_id"])): str(row["profile_id"])
+        for row in compilation["applicability"]  # type: ignore[index]
+        if row["state"] == "executable"
+    }
+    selected_pairs = {
+        (route.id, treatment.id)
+        for route in configuration.routes
+        for treatment in configuration.treatments
+    }
+    outside = selected_pairs - executable.keys()
+    if outside:
+        raise ValueError(
+            "width-native matrix selects non-executable route/treatment pairs: "
+            f"{sorted(outside)}"
+        )
+    expected_per_library = int(
+        batch["summary"]["executions_per_library"]  # type: ignore[index]
+    )
+    if expected_per_library != len(executable):
+        raise ValueError(
+            "width-native plans cannot yet express downstream artifact, analysis, "
+            "or replay multipliers"
+        )
+
+    route_metadata = {
+        str(row["id"]): row for row in compilation["routes"]  # type: ignore[index]
+    }
+    cells = _native_cells_from_configuration(matrix, configuration)
+    for cell in cells:
+        route_id = str(cell["toolchain"]["route"])
+        treatment_id = str(cell["build"]["treatment"])
+        metadata = route_metadata[route_id]
+        cell["toolchain"]["compiler_id"] = metadata["compiler_id"]
+        cell["sensitivity"]["compiler-family"] = {
+            "state": "controlled",
+            "value": metadata["compiler_family"],
+        }
+        cell["sensitivity"]["compiler-version"] = {
+            "state": "controlled",
+            "value": metadata["compiler_id"],
+        }
+        cell["width"] = {
+            "batch_id": batch["id"],
+            "batch_digest": batch["batch_digest"],
+            "width_id": compilation["id"],
+            "compilation_digest": compilation["compilation_digest"],
+            "route_profile_digest": compilation["route_profile_digest"],
+            "profile_id": executable[(route_id, treatment_id)],
+        }
+    return cells
+
+
 def _complete_sensitivity(
     cells: list[dict[str, object]], factors: list[dict[str, object]]
 ) -> int:
@@ -871,6 +1001,24 @@ def _queue_preview(
             }
         )
     return result
+
+
+def queue_identity_digest(rows: list[dict[str, object]]) -> str:
+    """Digest the portable, ordered identity and admission state of queue rows."""
+
+    identity = [
+        {
+            "position": int(row["position"]),
+            "base_cell": str(row["base_cell"]),
+            "factor_variants": list(row["factor_variants"]),
+            "state": str(row["state"]),
+        }
+        for row in rows
+    ]
+    canonical = json.dumps(
+        identity, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _artifact_inventory(
@@ -1019,6 +1167,9 @@ def resolve_plan(
     for matrix in request["matrices"]:
         if matrix["kind"] == "native":
             cells.extend(_native_cells(matrix, root))
+            continue
+        if matrix["kind"] == "width-native":
+            cells.extend(_width_native_cells(matrix, root))
             continue
         if matrix["kind"] == "archive-library":
             missing = set(matrix["toolchains"]) - set(toolchains_by_identity)
