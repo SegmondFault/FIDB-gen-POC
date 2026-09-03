@@ -51,17 +51,18 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(batch["summary"]["total_executions"], 48)
         self.assertEqual(batch["summary"]["locally_executable_per_library"], 48)
 
-    def test_recipe_gates_keep_unimplemented_libraries_out_of_queue(self):
+    def test_recipe_gates_expose_reviewed_libraries_without_arming_queue(self):
         catalog = authority_catalog(self.root)
         batch = project_width_batch_readiness(
             load_width_batch(self.root, self.path), catalog["recipes"]
         )
 
         self.assertEqual(batch["readiness"]["source_pins"], 9)
-        self.assertEqual(batch["readiness"]["recipe_ready_libraries"], 0)
-        self.assertEqual(batch["readiness"]["blocked_executions"], 1_998)
+        self.assertEqual(batch["readiness"]["recipe_ready_libraries"], 9)
+        self.assertEqual(batch["readiness"]["blocked_executions"], 0)
+        self.assertEqual(batch["readiness"]["materializable_executions"], 1_998)
         self.assertEqual(batch["readiness"]["queue_state"], "not-materialized-disarmed")
-        self.assertEqual(len(batch["readiness"]["blockers"]), 9)
+        self.assertEqual(batch["readiness"]["blockers"], [])
 
     def test_changed_dependency_digest_is_rejected(self):
         text = self.path.read_text(encoding="utf-8").replace(

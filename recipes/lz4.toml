@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "lz4"
+version = "1.10.0"
+url = "https://github.com/lz4/lz4/releases/download/v1.10.0/lz4-1.10.0.tar.gz"
+sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b"
+source_directory = "lz4-1.10.0"
+project_markers = ["Makefile", "lib/lz4.h"]
+allowed_build_systems = ["lz4-make", "make"]
+preferred_build_system = "lz4-make"
+static_archives = ["liblz4.a"]

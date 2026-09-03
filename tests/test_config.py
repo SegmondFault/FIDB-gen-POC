@@ -141,6 +141,22 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(recipe.preferred_build_system, "openssl-configure")
         self.assertEqual(recipe.static_archives, ("libcrypto.a", "libssl.a"))
 
+    def test_top_ten_recipe_pins_match_the_source_pack(self):
+        root = Path(__file__).resolve().parents[1]
+        source_pack = tomllib.loads(
+            (root / "sources/c-top10-v1.toml").read_text(encoding="utf-8")
+        )
+
+        for source in source_pack["source"]:
+            configuration = load_configuration(
+                root / "worker.toml",
+                request_override=(f'{source["id"]}@{source["version"]}',),
+            )
+            recipe = configuration.libraries[0]
+            self.assertEqual(recipe.url, source["url"])
+            self.assertEqual(recipe.sha256, source["sha256"])
+            self.assertEqual(recipe.source_directory, source["source_directory"])
+
     def test_unknown_library_request_fails_closed(self):
         root = Path(__file__).resolve().parents[1]
         with self.assertRaisesRegex(ValueError, "no approved recipe"):

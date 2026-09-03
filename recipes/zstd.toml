@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "zstd"
+version = "1.5.7"
+url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+sha256 = "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"
+source_directory = "zstd-1.5.7"
+project_markers = ["Makefile", "lib/zstd.h"]
+allowed_build_systems = ["zstd-make", "make"]
+preferred_build_system = "zstd-make"
+static_archives = ["libzstd.a"]

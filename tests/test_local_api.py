@@ -414,7 +414,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(document["schema_version"], "fidb-authority-catalog/v11")
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
-        self.assertEqual(len(document["recipes"]), 5)
+        self.assertEqual(len(document["recipes"]), 14)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)

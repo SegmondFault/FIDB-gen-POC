@@ -18,7 +18,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             len(document["source_digests"]["performance_profiles_sha256"]), 64
         )
-        self.assertEqual(len(document["recipes"]), 5)
+        self.assertEqual(len(document["recipes"]), 14)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(
@@ -105,7 +105,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(len(document["width_studies"]), 1)
         width_study = document["width_studies"][0]
         self.assertEqual(width_study["id"], "batch-010")
-        self.assertEqual(width_study["readiness"]["reviewed_recipe_families"], 1)
+        self.assertEqual(width_study["readiness"]["reviewed_recipe_families"], 10)
         self.assertEqual(width_study["readiness"]["source_evidence_families"], 10)
         self.assertEqual(width_study["readiness"]["queue_state"], "not-materialized")
         self.assertTrue(width_study["readiness"]["blockers"])
@@ -131,8 +131,9 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(width_batch["id"], "batch-020")
         self.assertEqual(width_batch["summary"]["total_executions"], 1_998)
         self.assertEqual(width_batch["readiness"]["source_pins"], 9)
-        self.assertEqual(width_batch["readiness"]["recipe_ready_libraries"], 0)
-        self.assertEqual(width_batch["readiness"]["blocked_executions"], 1_998)
+        self.assertEqual(width_batch["readiness"]["recipe_ready_libraries"], 9)
+        self.assertEqual(width_batch["readiness"]["blocked_executions"], 0)
+        self.assertEqual(width_batch["readiness"]["materializable_executions"], 1_998)
         android_gap = document["width_batches"][1]
         self.assertEqual(android_gap["id"], "batch-020-android-gap")
         self.assertEqual(android_gap["summary"]["total_executions"], 48)

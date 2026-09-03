@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "readline"
+version = "8.3"
+url = "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz"
+sha256 = "fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc"
+source_directory = "readline-8.3"
+project_markers = ["configure", "readline.h"]
+allowed_build_systems = ["readline-autoconf", "autoconf"]
+preferred_build_system = "readline-autoconf"
+static_archives = ["libreadline.a", "libhistory.a"]
