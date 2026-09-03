@@ -1,0 +1,171 @@
+schema_version = "fidb-performance-profiles/v1"
+default_profile = "auto"
+
+# Profiles are explicit resource policies, not automatic hardware detection.
+# `ghidra_heap_mib` is a maximum (-Xmx), not memory preallocated by each JVM.
+
+[[profiles]]
+id = "auto"
+label = "Portable automatic (current default)"
+description = "Preserves the existing memory/CPU-aware worker calculation and its twenty-worker ceiling."
+qualification = "current-default"
+guidance = "Use when no host-specific profile has been selected."
+
+[profiles.host]
+system = "any"
+architecture = "any"
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "automatic"
+build_jobs_per_cell = 4
+ghidra_heap_mib = 4096
+
+[[profiles]]
+id = "laptop-4c-8g"
+label = "4-core laptop / 8 GiB"
+description = "Single-cell low-memory starting point for a four-core, eight-thread laptop."
+qualification = "portable-starting-point"
+guidance = "Start here, watch peak RSS, and validate the largest intended library before raising concurrency."
+
+[profiles.host]
+system = "any"
+architecture = "any"
+physical_cores = 4
+logical_cpus = 8
+memory_mib = 8192
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 1
+build_jobs_per_cell = 2
+ghidra_heap_mib = 2048
+
+[[profiles]]
+id = "laptop-4c-16g"
+label = "4-core laptop / 16 GiB"
+description = "Conservative two-cell starting point for a four-core, eight-thread laptop."
+qualification = "portable-starting-point"
+guidance = "Leaves capacity for the OS and build subprocesses while two embedded Ghidra JVMs are live."
+
+[profiles.host]
+system = "any"
+architecture = "any"
+physical_cores = 4
+logical_cpus = 8
+memory_mib = 16384
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 2
+build_jobs_per_cell = 2
+ghidra_heap_mib = 3072
+
+[[profiles]]
+id = "laptop-8c-16g"
+label = "8-core laptop / 16 GiB"
+description = "CPU-capable but memory-bounded starting point for an eight-core, sixteen-thread laptop."
+qualification = "portable-starting-point"
+guidance = "Memory, rather than logical CPU count, deliberately limits the Ghidra worker pool."
+
+[profiles.host]
+system = "any"
+architecture = "any"
+physical_cores = 8
+logical_cpus = 16
+memory_mib = 16384
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 3
+build_jobs_per_cell = 2
+ghidra_heap_mib = 3072
+
+[[profiles]]
+id = "laptop-8c-32g"
+label = "8-core laptop / 32 GiB"
+description = "Balanced starting point for an eight-core, sixteen-thread workstation-class laptop."
+qualification = "portable-starting-point"
+guidance = "Six cell workers expose useful concurrency without treating the 4 GiB heap ceiling as expected RSS."
+
+[profiles.host]
+system = "any"
+architecture = "any"
+physical_cores = 8
+logical_cpus = 16
+memory_mib = 32768
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 6
+build_jobs_per_cell = 2
+ghidra_heap_mib = 4096
+
+[[profiles]]
+id = "reference-host-94g-balanced"
+label = "reference-host / 94 GiB balanced"
+description = "The conservative cross-library policy currently used on the 16-core, 32-thread Linux workstation."
+qualification = "measured-openssl"
+guidance = "This is the stable twenty-worker setting; retain it until several large libraries establish their heap envelope."
+evidence_path = "benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml"
+
+[profiles.host]
+system = "linux"
+architecture = "x86_64"
+physical_cores = 16
+logical_cpus = 32
+memory_mib = 96184
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 20
+build_jobs_per_cell = 4
+ghidra_heap_mib = 4096
+
+[[profiles]]
+id = "reference-host-112g-throughput"
+label = "reference-host / 112 GiB throughput"
+description = "Higher-concurrency policy for the same 16-core, 32-thread host after assigning about 112 GiB to system memory."
+qualification = "derived-from-measured-openssl"
+guidance = "Twenty-nine workers were measured at 94 GiB on OpenSSL; requalify this profile on other large libraries before making it the default."
+evidence_path = "benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml"
+
+[profiles.host]
+system = "linux"
+architecture = "x86_64"
+physical_cores = 16
+logical_cpus = 32
+memory_mib = 114688
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 29
+build_jobs_per_cell = 4
+ghidra_heap_mib = 4096
+
+[[profiles]]
+id = "m1-max-64g-balanced"
+label = "M1 Max / 64 GiB unified memory"
+description = "Conservative starting point for the external Apple Silicon worker and its shared CPU/GPU memory pool."
+qualification = "portable-starting-point"
+guidance = "Treat this as unqualified until a representative macOS-native canary has measured wall time, pressure and peak RSS."
+
+[profiles.host]
+system = "darwin"
+architecture = "arm64"
+physical_cores = 10
+logical_cpus = 10
+memory_mib = 65536
+memory_model = "unified"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 8
+build_jobs_per_cell = 2
+ghidra_heap_mib = 4096
