@@ -49,6 +49,33 @@ class OperationsPolicyTests(unittest.TestCase):
         self.assertEqual(closed.reason, "outside-schedule-window")
         self.assertEqual(closed.next_window_at, "2026-09-07T22:00:00+02:00")
 
+    def test_finish_started_batch_uses_admission_window_without_a_cutoff(self):
+        policy = load_operations_policy(
+            {
+                "schedule": {
+                    "enabled": True,
+                    "timezone": "Europe/Luxembourg",
+                    "days": ["wed"],
+                    "start": "01:00",
+                    "stop_claiming": "05:30",
+                    "finish_started_batch": True,
+                }
+            },
+            self.root,
+        ).schedule
+        zone = ZoneInfo("Europe/Luxembourg")
+
+        open_state = policy.evaluate(datetime(2026, 9, 2, 4, 0, tzinfo=zone))
+        closed = policy.evaluate(datetime(2026, 9, 2, 5, 30, tzinfo=zone))
+
+        self.assertTrue(open_state.claims_allowed)
+        self.assertIsNone(open_state.hard_cutoff_at)
+        self.assertFalse(closed.claims_allowed)
+        self.assertTrue(policy.finish_started_batch)
+        self.assertEqual(policy.document()["start"], "01:00")
+        self.assertEqual(policy.document()["stop_claiming"], "05:30")
+        self.assertIsNone(policy.document()["hard_cutoff"])
+
     def test_schedule_and_policy_validation_fail_closed(self):
         cases = (
             (

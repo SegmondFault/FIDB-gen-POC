@@ -133,6 +133,15 @@ def parser() -> argparse.ArgumentParser:
         help="evaluate schedule and host resource gates without claiming work",
     )
 
+    commands.add_parser(
+        "start-block",
+        parents=[_common_parser(queue=True)],
+        help=(
+            "manually admit the next batch outside the schedule window; "
+            "workers still enforce queue arming and resource gates"
+        ),
+    )
+
     worker = commands.add_parser(
         "run",
         parents=[_common_parser(queue=True)],
@@ -877,6 +886,22 @@ def _preflight(arguments: argparse.Namespace) -> int:
     return 0 if document["ready"] else 1
 
 
+def _start_block(arguments: argparse.Namespace) -> int:
+    root, state, queue_path = _paths(arguments, require_queue=True)
+    assert queue_path is not None
+    config = QueueConfig.load(queue_path, root)
+    if not config.armed:
+        raise QueueCliError(f"queue is disarmed in {queue_path}; no block was admitted")
+    with Coordinator(state, root) as coordinator:
+        coordinator.sync_queue(config, actor="operator")
+        admission_id = f"manual:{datetime.now().astimezone().isoformat()}"
+        block = coordinator.start_next_block(
+            admission_id, scheduled=False, actor="operator"
+        )
+        _print_json(block or coordinator.status())
+    return 0 if block is not None else 1
+
+
 def _run_worker(arguments: argparse.Namespace) -> int:
     root, state, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
@@ -900,7 +925,30 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                 schedule = operations["schedule"]
                 resources = operations["resources"]
                 assert isinstance(schedule, dict) and isinstance(resources, dict)
-                if not bool(schedule["claims_allowed"]):
+                finish_started = config.operations.schedule.finish_started_batch
+                block = coordinator.execution_block() if finish_started else None
+                if (
+                    finish_started
+                    and not bool(block["active"])
+                    and bool(schedule["claims_allowed"])
+                    and bool(resources["passed"])
+                ):
+                    window_id = schedule.get("window_started_at")
+                    if not isinstance(window_id, str):
+                        raise QueueCliError(
+                            "open schedule did not provide a durable window identity"
+                        )
+                    block = coordinator.start_next_block(
+                        window_id,
+                        scheduled=True,
+                        actor=arguments.worker_id,
+                    )
+                claims_authorized = (
+                    bool(block and block["active"])
+                    if finish_started
+                    else bool(schedule["claims_allowed"])
+                )
+                if not claims_authorized:
                     if arguments.once:
                         _print_json(operations)
                         return 0
@@ -925,12 +973,24 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     time.sleep(config.poll_seconds)
                     continue
                 last_resource_block = None
-                lease = coordinator.claim(arguments.worker_id, pool=arguments.pool)
+                lease = coordinator.claim(
+                    arguments.worker_id,
+                    pool=arguments.pool,
+                    batch_id=(
+                        str(block["batch_id"])
+                        if finish_started and block is not None
+                        else None
+                    ),
+                )
                 if lease is not None:
                     drained_notified = False
                     cutoff_triggered = threading.Event()
                     timer = None
-                    cutoff_value = schedule.get("hard_cutoff_at")
+                    cutoff_value = (
+                        None
+                        if finish_started
+                        else schedule.get("hard_cutoff_at")
+                    )
                     if isinstance(cutoff_value, str):
                         cutoff = datetime.fromisoformat(cutoff_value)
                         delay = max(0.0, cutoff.timestamp() - time.time())
@@ -975,10 +1035,18 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                         if arguments.once:
                             return 1
                         continue
+                    if finish_started:
+                        coordinator.finish_active_block_if_drained(
+                            actor=arguments.worker_id
+                        )
                     if arguments.once:
                         return 0 if succeeded else 1
                     continue
 
+                if finish_started:
+                    coordinator.finish_active_block_if_drained(
+                        actor=arguments.worker_id
+                    )
                 if arguments.once:
                     _print_json(coordinator.status())
                     return 0
@@ -1011,6 +1079,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pause": _pause,
         "resume": _resume,
         "preflight": _preflight,
+        "start-block": _start_block,
         "run": _run_worker,
     }
     try:

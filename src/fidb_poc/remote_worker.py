@@ -406,7 +406,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             while True:
                 operations = evaluate_operations(queue.operations, root)
-                if not operations["ready"]:
+                resources = operations["resources"]
+                schedule = operations["schedule"]
+                if not isinstance(resources, dict) or not isinstance(schedule, dict):
+                    raise RemoteWorkerError("operations preflight is malformed")
+                schedule_blocks_request = (
+                    not bool(schedule["claims_allowed"])
+                    and not queue.operations.schedule.finish_started_batch
+                )
+                if not bool(resources["passed"]) or schedule_blocks_request:
                     if arguments.once:
                         print(json.dumps(operations, indent=2, sort_keys=True))
                         return 0
@@ -437,7 +445,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 cutoff_event = threading.Event()
                 timer = None
-                cutoff_value = operations["schedule"].get("hard_cutoff_at")
+                cutoff_value = (
+                    None
+                    if queue.operations.schedule.finish_started_batch
+                    else schedule.get("hard_cutoff_at")
+                )
                 if isinstance(cutoff_value, str):
                     cutoff_at = datetime.fromisoformat(cutoff_value)
                     delay = max(0.0, cutoff_at.timestamp() - time.time())

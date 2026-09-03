@@ -188,6 +188,66 @@ matrices = ["native-libraries"]
         self.assertIn("queue is disarmed", errors.getvalue())
         self.assertIn("no build was started", errors.getvalue())
 
+    def test_start_block_manually_admits_one_batch_without_execution(self) -> None:
+        output = io.StringIO()
+        arguments = self._arguments("start-block", self._queue(armed=True))
+        with (
+            patch("fidb_poc.queue_cli.run_cell") as run_cell,
+            contextlib.redirect_stdout(output),
+        ):
+            status = main(arguments)
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertTrue(document["active"])
+        self.assertEqual(document["batch_id"], "batch-mirai")
+        self.assertTrue(document["admission_id"].startswith("manual:"))
+        run_cell.assert_not_called()
+        with Coordinator(self.database, self.project_root) as coordinator:
+            self.assertEqual(
+                coordinator.status()["execution_block"]["batch_id"],
+                "batch-mirai",
+            )
+
+    def test_started_block_claims_after_window_without_cutoff_timer(self) -> None:
+        queue = self._queue(armed=True)
+        queue.write_text(
+            queue.read_text(encoding="utf-8")
+            + """
+[schedule]
+enabled = true
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "01:00"
+stop_claiming = "05:30"
+finish_started_batch = true
+""",
+            encoding="utf-8",
+        )
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync_queue(queue, now=10)
+            coordinator.start_next_block("manual:test", scheduled=False, now=11)
+        operations = {
+            "schedule": {
+                "claims_allowed": False,
+                "window_started_at": None,
+                "hard_cutoff_at": None,
+            },
+            "resources": {"passed": True, "reasons": [], "metrics": {}},
+        }
+        arguments = self._arguments("run", queue)
+        arguments.extend(("--worker-id", "draining-worker", "--once"))
+        with (
+            patch("fidb_poc.queue_cli.evaluate_operations", return_value=operations),
+            patch("fidb_poc.queue_cli._execute_claim", return_value=True) as execute,
+            patch("fidb_poc.queue_cli.threading.Timer") as timer,
+        ):
+            status = main(arguments)
+
+        self.assertEqual(status, 0)
+        execute.assert_called_once()
+        timer.assert_not_called()
+
     def test_preflight_reports_schedule_and_resources_without_state_mutation(
         self,
     ) -> None:

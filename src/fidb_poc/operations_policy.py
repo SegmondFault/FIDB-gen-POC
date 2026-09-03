@@ -84,7 +84,8 @@ class SchedulePolicy:
     days: tuple[str, ...] = DAY_NAMES
     start: time = time(0, 0)
     stop_claiming: time = time(23, 58)
-    hard_cutoff: time = time(23, 59)
+    hard_cutoff: time | None = time(23, 59)
+    finish_started_batch: bool = False
 
     @property
     def zone(self) -> ZoneInfo:
@@ -97,7 +98,10 @@ class SchedulePolicy:
             "days": list(self.days),
             "start": self.start.strftime("%H:%M"),
             "stop_claiming": self.stop_claiming.strftime("%H:%M"),
-            "hard_cutoff": self.hard_cutoff.strftime("%H:%M"),
+            "hard_cutoff": (
+                self.hard_cutoff.strftime("%H:%M") if self.hard_cutoff else None
+            ),
+            "finish_started_batch": self.finish_started_batch,
         }
 
     def _boundary(self, start_date: date, clock: time) -> datetime:
@@ -106,11 +110,17 @@ class SchedulePolicy:
             day += timedelta(days=1)
         return datetime.combine(day, clock, self.zone)
 
-    def _window(self, start_date: date) -> tuple[datetime, datetime, datetime]:
+    def _window(
+        self, start_date: date
+    ) -> tuple[datetime, datetime, datetime | None]:
         started = datetime.combine(start_date, self.start, self.zone)
         stop = self._boundary(start_date, self.stop_claiming)
-        cutoff = self._boundary(start_date, self.hard_cutoff)
-        if stop > cutoff:
+        cutoff = (
+            self._boundary(start_date, self.hard_cutoff)
+            if self.hard_cutoff is not None
+            else None
+        )
+        if cutoff is not None and stop > cutoff:
             raise ValueError("schedule stop_claiming must not be after hard_cutoff")
         return started, stop, cutoff
 
@@ -127,7 +137,8 @@ class SchedulePolicy:
             candidate_date -= timedelta(days=1)
         started, stop, cutoff = self._window(candidate_date)
         day_enabled = DAY_NAMES[candidate_date.weekday()] in self.days
-        inside = day_enabled and started <= local < cutoff
+        window_end = cutoff or stop
+        inside = day_enabled and started <= local < window_end
         claims_allowed = inside and local < stop
 
         next_window = None
@@ -151,7 +162,7 @@ class SchedulePolicy:
             reason,
             started.isoformat() if inside else None,
             stop.isoformat() if inside else None,
-            cutoff.isoformat() if inside else None,
+            cutoff.isoformat() if inside and cutoff is not None else None,
             next_window.isoformat() if next_window else None,
         )
 
@@ -333,7 +344,15 @@ def load_operations_policy(
     schedule_row = _table(document, "schedule")
     _only_keys(
         schedule_row,
-        {"enabled", "timezone", "days", "start", "stop_claiming", "hard_cutoff"},
+        {
+            "enabled",
+            "timezone",
+            "days",
+            "start",
+            "stop_claiming",
+            "hard_cutoff",
+            "finish_started_batch",
+        },
         "schedule table",
     )
     enabled = schedule_row.get("enabled", False)
@@ -354,6 +373,12 @@ def load_operations_policy(
         or len(set(raw_days)) != len(raw_days)
     ):
         raise ValueError(f"schedule days must be unique values from {list(DAY_NAMES)}")
+    finish_started_batch = schedule_row.get("finish_started_batch", False)
+    if not isinstance(finish_started_batch, bool):
+        raise ValueError("schedule finish_started_batch must be a boolean")
+    hard_cutoff_value = schedule_row.get(
+        "hard_cutoff", None if finish_started_batch else "23:59"
+    )
     schedule = SchedulePolicy(
         enabled=enabled,
         timezone_name=timezone_name,
@@ -363,9 +388,12 @@ def load_operations_policy(
             schedule_row.get("stop_claiming", "23:58"),
             "schedule stop_claiming",
         ),
-        hard_cutoff=_clock(
-            schedule_row.get("hard_cutoff", "23:59"), "schedule hard_cutoff"
+        hard_cutoff=(
+            _clock(hard_cutoff_value, "schedule hard_cutoff")
+            if hard_cutoff_value is not None
+            else None
         ),
+        finish_started_batch=finish_started_batch,
     )
     schedule._window(date(2026, 1, 1))
 

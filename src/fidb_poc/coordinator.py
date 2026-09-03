@@ -495,6 +495,9 @@ class Coordinator:
                 retry_backoff_max_seconds INTEGER NOT NULL DEFAULT 0
                     CHECK (retry_backoff_max_seconds >= retry_backoff_seconds),
                 operations_json TEXT NOT NULL DEFAULT '{}',
+                active_batch_id TEXT,
+                active_admission_id TEXT,
+                last_schedule_admission_id TEXT,
                 sync_generation INTEGER NOT NULL CHECK (sync_generation >= 0),
                 synced_at TEXT
             );
@@ -725,6 +728,18 @@ class Coordinator:
                 "ALTER TABLE coordinator_state ADD COLUMN operations_json "
                 "TEXT NOT NULL DEFAULT '{}'"
             )
+        if "active_batch_id" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN active_batch_id TEXT"
+            )
+        if "active_admission_id" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN active_admission_id TEXT"
+            )
+        if "last_schedule_admission_id" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN last_schedule_admission_id TEXT"
+            )
         job_columns = {
             str(row["name"])
             for row in self._connection.execute("PRAGMA table_info(jobs)").fetchall()
@@ -757,9 +772,13 @@ class Coordinator:
                 singleton, config_name, config_path, armed, paused,
                 max_workers, poll_seconds, lease_seconds, max_attempts,
                 retry_backoff_seconds, retry_backoff_max_seconds,
-                operations_json,
+                operations_json, active_batch_id, active_admission_id,
+                last_schedule_admission_id,
                 sync_generation, synced_at
-            ) VALUES (1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, 0, '{}', 0, NULL)
+            ) VALUES (
+                1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, 0, '{}',
+                NULL, NULL, NULL, 0, NULL
+            )
             """)
         # Keep the query planner's statistics current after migrations add the
         # timing-history indexes above.  This is safe on both new and old ledgers.
@@ -1154,6 +1173,21 @@ class Coordinator:
                     else:
                         submitted += 1
 
+            active_batch = self._state_locked()["active_batch_id"]
+            if active_batch is not None:
+                still_active = self._connection.execute(
+                    "SELECT 1 FROM batches WHERE batch_id = ? AND active = 1",
+                    (active_batch,),
+                ).fetchone()
+                if still_active is None:
+                    self._connection.execute(
+                        """
+                        UPDATE coordinator_state
+                        SET active_batch_id = NULL, active_admission_id = NULL
+                        WHERE singleton = 1
+                        """
+                    )
+
             self._event_locked(
                 "queue.synced",
                 now=timestamp,
@@ -1188,6 +1222,139 @@ class Coordinator:
         if state is None:  # pragma: no cover - protected by schema initialization
             raise CoordinatorError("coordinator state is missing")
         return state
+
+    def execution_block(self) -> dict[str, object]:
+        """Return the durable batch admission which workers may drain."""
+
+        state = self._state_locked()
+        batch_id = state["active_batch_id"]
+        if batch_id is None:
+            return {
+                "active": False,
+                "batch_id": None,
+                "admission_id": None,
+                "last_schedule_admission_id": state[
+                    "last_schedule_admission_id"
+                ],
+            }
+        rows = self._connection.execute(
+            """
+            SELECT jobs.state, COUNT(*) AS count
+            FROM jobs JOIN batches ON batches.batch_id = jobs.batch_id
+            WHERE jobs.batch_id = ? AND jobs.active = 1 AND batches.active = 1
+            GROUP BY jobs.state
+            """,
+            (batch_id,),
+        ).fetchall()
+        counts = {job_state: 0 for job_state in sorted(_JOB_STATES)}
+        counts.update({str(row["state"]): int(row["count"]) for row in rows})
+        return {
+            "active": True,
+            "batch_id": str(batch_id),
+            "admission_id": str(state["active_admission_id"]),
+            "last_schedule_admission_id": state["last_schedule_admission_id"],
+            "counts": counts,
+            "remaining": counts["queued"] + counts["leased"] + counts["running"],
+        }
+
+    def start_next_block(
+        self,
+        admission_id: str,
+        *,
+        scheduled: bool,
+        now: float | datetime | None = None,
+        actor: str = "operator",
+    ) -> dict[str, object] | None:
+        """Admit one ordered queue batch, without claiming or executing a cell."""
+
+        admission = _text(admission_id, "block admission id")
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            if not bool(state["armed"]) or bool(state["paused"]):
+                return None
+            if state["active_batch_id"] is not None:
+                return self.execution_block()
+            if scheduled and state["last_schedule_admission_id"] == admission:
+                return None
+            batch = self._connection.execute(
+                """
+                SELECT batches.* FROM batches
+                WHERE batches.active = 1 AND EXISTS (
+                    SELECT 1 FROM jobs
+                    WHERE jobs.batch_id = batches.batch_id AND jobs.active = 1
+                      AND jobs.state IN ('queued', 'leased', 'running')
+                )
+                ORDER BY batches.position, batches.batch_id LIMIT 1
+                """
+            ).fetchone()
+            if batch is None:
+                return None
+            self._connection.execute(
+                """
+                UPDATE coordinator_state
+                SET active_batch_id = ?, active_admission_id = ?,
+                    last_schedule_admission_id = CASE WHEN ? THEN ?
+                        ELSE last_schedule_admission_id END
+                WHERE singleton = 1
+                """,
+                (batch["batch_id"], admission, int(scheduled), admission),
+            )
+            self._event_locked(
+                "batch.admitted",
+                now=timestamp,
+                actor=actor,
+                batch_id=str(batch["batch_id"]),
+                plan_digest=str(batch["plan_digest"]),
+                payload={"admission_id": admission, "scheduled": scheduled},
+            )
+            return self.execution_block()
+
+    def finish_active_block_if_drained(
+        self,
+        *,
+        now: float | datetime | None = None,
+        actor: str = "coordinator",
+    ) -> bool:
+        """Close an active admission only after queued and live jobs drain."""
+
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            batch_id = state["active_batch_id"]
+            if batch_id is None:
+                return False
+            remaining = self._connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM jobs
+                JOIN batches ON batches.batch_id = jobs.batch_id
+                WHERE jobs.batch_id = ? AND jobs.active = 1 AND batches.active = 1
+                  AND jobs.state IN ('queued', 'leased', 'running')
+                """,
+                (batch_id,),
+            ).fetchone()
+            if int(remaining["count"]):
+                return False
+            admission_id = str(state["active_admission_id"])
+            batch = self._connection.execute(
+                "SELECT plan_digest FROM batches WHERE batch_id = ?", (batch_id,)
+            ).fetchone()
+            self._connection.execute(
+                """
+                UPDATE coordinator_state
+                SET active_batch_id = NULL, active_admission_id = NULL
+                WHERE singleton = 1
+                """
+            )
+            self._event_locked(
+                "batch.drained",
+                now=timestamp,
+                actor=actor,
+                batch_id=str(batch_id),
+                plan_digest=str(batch["plan_digest"]) if batch is not None else None,
+                payload={"admission_id": admission_id},
+            )
+            return True
 
     def _close_open_stage_attempts_locked(
         self,
@@ -1369,12 +1536,16 @@ class Coordinator:
         *,
         now: float | datetime | None = None,
         pool: str | None = None,
+        batch_id: str | None = None,
     ) -> dict[str, object] | None:
         """Atomically claim the first eligible job in batch and job order."""
 
         worker = _text(worker_id, "worker id")
         if pool is not None and pool not in WORKER_POOLS:
             raise ValueError(f"unsupported worker pool: {pool}")
+        selected_batch = (
+            _identifier(batch_id, "claim batch id") if batch_id is not None else None
+        )
         timestamp = self._now(now)
         with self._transaction():
             self._recover_expired_locked(timestamp)
@@ -1401,13 +1572,17 @@ class Coordinator:
                   AND jobs.state = 'queued'
                   AND jobs.eligible_at <= ?
                   AND jobs.attempt_count < ?
-                ORDER BY batches.position, jobs.position, jobs.job_id
                 """
+            parameters: list[object] = [timestamp, int(state["max_attempts"])]
+            if selected_batch is not None:
+                claim_query += " AND jobs.batch_id = ?"
+                parameters.append(selected_batch)
+            claim_query += " ORDER BY batches.position, jobs.position, jobs.job_id"
             if pool is None:
                 claim_query += " LIMIT 1"
             candidates = self._connection.execute(
                 claim_query,
-                (timestamp, int(state["max_attempts"])),
+                parameters,
             ).fetchall()
             row = next(
                 (
@@ -2413,6 +2588,7 @@ class Coordinator:
             "retry_backoff_seconds": int(state["retry_backoff_seconds"]),
             "retry_backoff_max_seconds": int(state["retry_backoff_max_seconds"]),
             "operations": json.loads(state["operations_json"]),
+            "execution_block": self.execution_block(),
             "sync_generation": int(state["sync_generation"]),
             "synced_at": state["synced_at"],
             "counts": counts,

@@ -196,6 +196,58 @@ matrices = ["tier0-uclibc-powerpc"]
             self.assertEqual([job["position"] for job in blocked], [4, 6])
             self.assertTrue(all(job["attempt_count"] == 0 for job in blocked))
 
+    def test_durable_block_admission_drains_one_batch_per_schedule_window(self):
+        path = self.write_queue(
+            batches=(
+                ("batch-mirai", "mirai", "plans/mirai-baseline.toml"),
+                ("batch-bzip2", "bzip2", "plans/bzip2-native.toml"),
+            )
+        )
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(path), now=10)
+            block = coordinator.start_next_block(
+                "2026-09-04T01:00:00+02:00", scheduled=True, now=20
+            )
+            self.assertEqual(block["batch_id"], "batch-mirai")
+            self.assertEqual(
+                coordinator.start_next_block(
+                    "2026-09-04T01:00:00+02:00", scheduled=True, now=21
+                )["batch_id"],
+                "batch-mirai",
+            )
+
+            lease = coordinator.claim(
+                "worker", batch_id=block["batch_id"], now=22
+            )
+            self.assertEqual(lease["batch_id"], "batch-mirai")
+            coordinator.complete(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                now=23,
+            )
+            self.assertTrue(coordinator.finish_active_block_if_drained(now=24))
+            self.assertFalse(coordinator.execution_block()["active"])
+            self.assertIsNone(
+                coordinator.start_next_block(
+                    "2026-09-04T01:00:00+02:00", scheduled=True, now=25
+                )
+            )
+
+            manual = coordinator.start_next_block(
+                "manual-2026-09-04T12:00:00+02:00", scheduled=False, now=26
+            )
+            self.assertEqual(manual["batch_id"], "batch-bzip2")
+            events = coordinator.events()
+            self.assertEqual(
+                [
+                    event["event_type"]
+                    for event in events
+                    if event["event_type"].startswith("batch.")
+                ],
+                ["batch.admitted", "batch.drained", "batch.admitted"],
+            )
+
     def test_max_workers_caps_concurrent_leases(self):
         path = self.write_queue(max_workers=2)
         with Coordinator(self.database) as coordinator:

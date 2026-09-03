@@ -26,9 +26,13 @@ retry_backoff_max_seconds = 900
 enabled = true
 timezone = "Europe/Luxembourg"
 days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-start = "22:00"
-stop_claiming = "05:45"
-hard_cutoff = "06:15"
+start = "01:00"
+stop_claiming = "05:30"
+# Admit at most one ordered batch in a schedule window. Once admitted, every
+# worker may continue claiming that batch until it drains; no later batch is
+# admitted during the same window. Omit hard_cutoff so work is never killed at
+# 05:30. The resource gates below remain active while a batch drains.
+finish_started_batch = true
 
 [resources]
 # Admission is checked immediately before every claim. Values describe the

@@ -771,7 +771,7 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                 )
             queue = QueueConfig.load(config.queue_path, config.project_root)
             schedule = queue.operations.schedule.evaluate()
-            if not queue.armed or not schedule.claims_allowed:
+            if not queue.armed:
                 with Coordinator(config.state_path, config.project_root) as coordinator:
                     pool_status = coordinator.pool_status(pool)
                 return {
@@ -784,7 +784,55 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                     "pool": pool_status,
                 }
             with Coordinator(config.state_path, config.project_root) as coordinator:
-                lease = coordinator.claim(credential.worker_id, pool=pool)
+                block = (
+                    coordinator.execution_block()
+                    if queue.operations.schedule.finish_started_batch
+                    else None
+                )
+                if (
+                    block is not None
+                    and not bool(block["active"])
+                    and schedule.claims_allowed
+                ):
+                    if schedule.window_started_at is None:
+                        raise ValueError(
+                            "open schedule did not provide a durable window identity"
+                        )
+                    block = coordinator.start_next_block(
+                        schedule.window_started_at,
+                        scheduled=True,
+                        actor=credential.worker_id,
+                    )
+                claims_allowed = (
+                    bool(block and block["active"])
+                    if queue.operations.schedule.finish_started_batch
+                    else schedule.claims_allowed
+                )
+                if not claims_allowed:
+                    pool_status = coordinator.pool_status(pool)
+                    return {
+                        "schema_version": REMOTE_API_SCHEMA,
+                        "lease": None,
+                        "gate": {
+                            "queue_armed": queue.armed,
+                            "schedule": schedule.document(),
+                            "execution_block": block,
+                        },
+                        "pool": pool_status,
+                    }
+                lease = coordinator.claim(
+                    credential.worker_id,
+                    pool=pool,
+                    batch_id=(
+                        str(block["batch_id"])
+                        if block is not None and bool(block["active"])
+                        else None
+                    ),
+                )
+                if block is not None and lease is None:
+                    coordinator.finish_active_block_if_drained(
+                        actor=credential.worker_id
+                    )
                 pool_status = coordinator.pool_status(pool)
             if lease is None:
                 return {
