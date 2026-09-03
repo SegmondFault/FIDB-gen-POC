@@ -6,6 +6,7 @@ artifacts/malware/
 artifacts/runs/
 artifacts/width-runs/
 artifacts/benchmarks/
+artifacts/canaries/
 var/
 dist/
 build/

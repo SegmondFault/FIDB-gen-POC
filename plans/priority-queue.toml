@@ -5,9 +5,9 @@ name = "library-priority"
 # Intent and priority live here.  The first native commissioning run completed
 # and was drained on 2026-08-30; its batches are retired from this active queue
 # while their plan files, artifacts, and durable ledger history remain intact.
-# A future run must be deliberately re-armed, synchronized and inspected before
-# any worker is started.
-armed = false
+# Block 01 was requeued through the evidence-preserving recovery transition
+# after exact resolution preflight and four real SQLite/Readline canaries.
+armed = true
 # Bind queue concurrency to the measured 94 GiB policy used by the campaign
 # time model. Queue loading fails closed if this cap drifts from the profile.
 performance_profile = "reference-host-94g-balanced"

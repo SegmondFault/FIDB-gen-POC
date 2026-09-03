@@ -112,8 +112,9 @@ The five plans are registered in `plans/priority-queue.toml` with a plan-file
 SHA-256, exact execution count, and portable ordered-cell digest. File drift is
 rejected while loading the queue; route, treatment, recipe, cardinality or
 blocked-cell drift is rejected before coordinator synchronization mutates its
-ledger. The queue remains `armed = false`, so materialization and synchronization
-still cannot start an expensive run.
+ledger. Materialized authorities remain disarmed and the operator queue is
+normally `armed = false`, so materialization alone cannot start an expensive
+run. The operator may arm the queue separately after review.
 
 To reverse the experiment, leave the queue disarmed, remove the five block IDs
 and `[[batch]]` rows from `plans/priority-queue.toml`, and remove the generated

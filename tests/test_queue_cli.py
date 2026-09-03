@@ -251,9 +251,7 @@ finish_started_batch = true
         self,
     ) -> None:
         output = io.StringIO()
-        arguments = self._arguments(
-            "preflight", self.project_root / "plans/priority-queue.toml"
-        )
+        arguments = self._arguments("preflight", self._queue(armed=False))
         with contextlib.redirect_stdout(output):
             status = main(arguments)
 

@@ -184,9 +184,10 @@ The GUI can synchronize, inspect, pause, and resume the coordinator through
 that proxy. It can also resolve a generated plan against the authoritative
 catalogs and save it under `plans/drafts` with conflict detection. Saving a
 draft does not enqueue or execute it. The GUI cannot arm the queue or broaden
-it to QEMU or malware. Leave `armed = false` in
-`plans/priority-queue.toml` until the resolved library-only queue and worker
-prerequisites have been reviewed.
+it to QEMU or malware. Keep `armed = false` in `plans/priority-queue.toml`
+between campaigns. The current queue was deliberately armed on 2026-09-03 only
+after all 2,046 cells passed resolution preflight and four SQLite/Readline
+canaries passed end to end.
 
 Operational notifications are always appended to the ignored local outbox
 configured in the queue TOML. To add external delivery, set the named

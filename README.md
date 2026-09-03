@@ -199,8 +199,9 @@ Both segments are source-, recipe-, and toolchain-ready. The reviewed
 materializer has frozen them into five plans under
 [`plans/materialized/c-top10-nonapple-width-v2/`](plans/materialized/c-top10-nonapple-width-v2/)
 and registered the exact 2,046-cell order in `plans/priority-queue.toml`. The
-queue remains explicitly disarmed. Preview or verify that materialization
-without synchronizing a ledger or starting work:
+generated plans remain disarmed authorities. The live priority queue was
+explicitly armed on 2026-09-03 after recovery preflight and canaries. Preview
+or verify materialization without synchronizing a ledger or starting work:
 
 ```sh
 uv run fidb-poc materialize-batches --project-root .
@@ -371,12 +372,12 @@ identity.
 [`plans/priority-queue.toml`](plans/priority-queue.toml) is the ordered automation
 authority. Its `batch_order` is the priority list: workers claim the first
 runnable cell in the first batch, skip blocked coverage, and continue down the
-list. Each batch points to a reviewed `fidb-plan/v1` document. The queue ships
-with `armed = false`, so inspection and synchronization cannot start a build.
-The next five entries are the materialized top-ten width blocks. Each pins both
-the generated plan bytes and a portable digest of its ordered resolved cell
-identities; queue synchronization fails before its transaction if either has
-drifted.
+list. Each batch points to a reviewed `fidb-plan/v1` document. The queue is
+normally disarmed between campaigns; this recovery run was deliberately armed
+on 2026-09-03. The next five entries are the materialized top-ten width blocks.
+Each pins both the generated plan bytes and a portable digest of its ordered
+resolved cell identities; queue synchronization fails before its transaction if
+either has drifted.
 
 Synchronize and inspect its durable state without executing anything:
 
