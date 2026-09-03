@@ -99,6 +99,7 @@ def width_benchmark_preview(
     core_limit: int | None,
     build_jobs_per_cell: int = 4,
     performance_profile_id: str | None = None,
+    performance_resolution: dict[str, object] | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     if workers < 1 or workers > 32:
@@ -121,6 +122,7 @@ def width_benchmark_preview(
         "parallel_workers": workers,
         "build_jobs_per_cell": build_jobs_per_cell,
         "performance_profile": performance_profile_id or "manual",
+        "performance_resolution": performance_resolution,
         "ghidra_heap_mib": heap_mib,
         "ghidra_core_limit": core_limit,
         "java_tool_options": java_options,
@@ -239,6 +241,7 @@ def execute_width_benchmark(
     core_limit: int | None,
     build_jobs_per_cell: int = 4,
     performance_profile_id: str | None = None,
+    performance_resolution: dict[str, object] | None = None,
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
 ) -> tuple[dict[str, object], Path]:
@@ -255,6 +258,7 @@ def execute_width_benchmark(
         core_limit=core_limit,
         build_jobs_per_cell=build_jobs_per_cell,
         performance_profile_id=performance_profile_id,
+        performance_resolution=performance_resolution,
     )
     compilation, groups = _selected_groups(root, routes, treatments, authority_id)
     run_root = _benchmark_root(root, label, preview)

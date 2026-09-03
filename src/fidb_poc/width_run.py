@@ -325,6 +325,7 @@ def width_run_preview(
     core_limit: int | None = None,
     build_jobs_per_cell: int = 4,
     performance_profile_id: str | None = None,
+    performance_resolution: dict[str, object] | None = None,
 ) -> dict[str, object]:
     parallel_workers = (
         default_width_workers(heap_mib=heap_mib) if workers is None else workers
@@ -365,6 +366,7 @@ def width_run_preview(
             and build_jobs_per_cell == 4
             else "manual"
         ),
+        "performance_resolution": performance_resolution,
         "ghidra_heap_mib": heap_mib,
         "ghidra_core_limit": core_limit,
         "java_tool_options": configured_java_options,
@@ -804,6 +806,7 @@ def execute_width_run(
     core_limit: int | None = None,
     build_jobs_per_cell: int = 4,
     performance_profile_id: str | None = None,
+    performance_resolution: dict[str, object] | None = None,
 ) -> tuple[dict[str, object], Path]:
     root = Path(project_root).expanduser().resolve()
     plan = compile_width_run_plan(root, canary=canary, authority_id=authority_id)
@@ -821,6 +824,7 @@ def execute_width_run(
         core_limit=core_limit,
         build_jobs_per_cell=build_jobs_per_cell,
         performance_profile_id=performance_profile_id,
+        performance_resolution=performance_resolution,
     )
     effective_java_options = java_options(heap_mib, core_limit)
     _atomic_json(run_root / "width-run-plan.json", preview)
@@ -1003,6 +1007,7 @@ def execute_width_run(
         "parallel_workers": parallel_workers,
         "build_jobs_per_cell": build_jobs_per_cell,
         "performance_profile": preview["performance_profile"],
+        "performance_resolution": performance_resolution,
         "ghidra_heap_mib": heap_mib,
         "ghidra_core_limit": core_limit,
         "java_tool_options": effective_java_options,

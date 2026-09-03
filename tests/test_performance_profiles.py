@@ -34,7 +34,9 @@ class PerformanceProfilesTests(unittest.TestCase):
         self.assertEqual(profiles["laptop-8c-32g"].settings.workers, 6)
         self.assertEqual(profiles["reference-host-94g-balanced"].settings.workers, 20)
         self.assertEqual(profiles["reference-host-112g-throughput"].settings.workers, 29)
-        self.assertEqual(profiles["m1-max-64g-balanced"].host["memory_model"], "unified")
+        self.assertEqual(
+            profiles["m1-max-64g-balanced"].host["memory_model"], "unified"
+        )
 
     def test_unknown_profile_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "unknown performance profile"):
@@ -57,11 +59,32 @@ class PerformanceProfilesTests(unittest.TestCase):
         self.assertEqual(document["profile"]["host"]["memory_model"], "unified")
         self.assertEqual(document["profile"]["settings"]["workers"], 8)
 
+    def test_cli_resolves_auto_against_detected_host_without_running_work(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(
+                [
+                    "performance",
+                    "auto",
+                    "--resolve-auto",
+                    "--project-root",
+                    str(self.root),
+                ]
+            )
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        resolution = document["automatic_resolution"]
+        self.assertEqual(resolution["profile_id"], "auto")
+        self.assertGreaterEqual(resolution["host"]["physical_cores"], 1)
+        self.assertGreaterEqual(resolution["host"]["logical_cpus"], 1)
+        self.assertGreaterEqual(resolution["effective_settings"]["workers"], 1)
+
     def test_invalid_profile_cannot_escape_resource_bounds(self):
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
             path = Path(temporary) / "bad.toml"
             path.write_text(
-                '''schema_version = "fidb-performance-profiles/v1"
+                """schema_version = "fidb-performance-profiles/v1"
 default_profile = "bad"
 [[profiles]]
 id = "bad"
@@ -78,7 +101,7 @@ worker_mode = "fixed"
 workers = 33
 build_jobs_per_cell = 1
 ghidra_heap_mib = 4096
-''',
+""",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "must not exceed 32"):

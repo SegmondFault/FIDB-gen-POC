@@ -22,6 +22,7 @@ from typing import Mapping
 
 from .config import load_configuration
 from .coordinator import worker_pool_accepts_cell
+from .host_capacity import detect_host_capacity, resolve_automatic_performance
 from .toolchain_registry import load_toolchains
 from .toolchain_cache import MANAGED_DOWNLOADS, inspect_cached
 from .toolchain_packs import resolve_toolchain_profiles
@@ -478,15 +479,24 @@ def detect_capabilities(
     qemu_ready = bool(
         tools["qemu-img"]["available"] and tools["qemu-system-x86_64"]["available"]
     )
+    host_capacity = detect_host_capacity()
+    automatic_performance = resolve_automatic_performance(host_capacity)
     return {
         "schema_version": CAPABILITIES_SCHEMA,
         "detection_mode": "read-only",
         "host": {
             "system": platform.system(),
             "machine": platform.machine(),
-            "logical_cpus": os.cpu_count(),
-            "memory_bytes": _host_memory_bytes(),
+            "physical_cores": host_capacity.physical_cores,
+            "logical_cpus": host_capacity.logical_cpus,
+            "smt_siblings": host_capacity.smt_siblings,
+            "threads_per_core": host_capacity.threads_per_core,
+            "memory_bytes": host_capacity.total_memory_bytes,
+            "available_memory_bytes": host_capacity.available_memory_bytes,
+            "memory_model": host_capacity.memory_model,
+            "capacity": host_capacity.document(),
         },
+        "automatic_performance": automatic_performance.document(),
         "tools": tools,
         "analysis": {
             "ready": analysis_ready,

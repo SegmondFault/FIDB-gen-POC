@@ -147,15 +147,18 @@ independent embedded Ghidra JVMs concurrently. Width runs now add a measured
 4 GiB maximum heap to each JVM unless an equivalent inherited `-Xmx` already
 exists. A conflicting inherited maximum fails closed. The old ergonomic route
 is preserved for controlled comparison with `--unbounded-ghidra-heap`; it is
-not the safe default. The automatic worker count uses five workers per eight
-logical CPUs, reserves 6 GiB for the host, budgets at least the configured heap
-per worker, and caps at twenty. An unbounded JVM is conservatively budgeted at
-8 GiB. Override it explicitly with `--workers N` only after checking a measured
-peak. On `reference-host`, 32 logical CPUs and about 94 GiB visible memory therefore
-select twenty workers with the default 4 GiB heap.
+not the safe default. The automatic worker count gives full weight to physical
+cores and one-quarter weight to additional SMT siblings, then applies an
+independent RAM bound and a 32-worker safety ceiling. JVM heap and nested build
+parallelism scale in bounded tiers. Override it explicitly with `--workers N`
+only after checking a measured peak. On `reference-host`, 16 physical cores, 32
+logical CPUs and about 94 GiB visible memory select twenty workers with a 4 GiB
+heap and four build jobs per cell.
 
-The same settings are now named in `performance/profiles.toml`. `auto` preserves
-the behaviour above; fixed profiles cover ordinary laptop envelopes,
+The same settings are now named in `performance/profiles.toml`. `auto` detects
+physical cores, SMT siblings, affinity/cgroup restrictions and OS-visible RAM,
+then records its exact policy in run evidence. Fixed profiles cover ordinary
+laptop envelopes,
 `reference-host` with either about 94 or 112 GiB visible memory, and a 64 GiB M1 Max.
 They control width cell workers, nested build jobs, the Ghidra JVM `-Xmx`
 ceiling and an optional per-JVM core limit. Inspect and select them without
@@ -163,6 +166,7 @@ starting a run:
 
 ```sh
 fidb-poc performance --project-root .
+fidb-poc performance auto --resolve-auto --project-root .
 fidb-poc run-width --project-root . --canary \
   --performance-profile reference-host-94g-balanced
 ```

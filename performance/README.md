@@ -7,10 +7,20 @@ routes. A queue may bind one fixed profile by ID; loading then requires its
 cell and validates the inherited JVM heap limit. Selecting or binding a profile
 does not arm a queue or start a run.
 
+The `auto` selector detects CPUs visible through process affinity, counts
+physical cores separately from SMT siblings, honours cgroup CPU and memory
+ceilings, and uses RAM visible to the operating system. On an integrated-GPU
+host it does not guess nominal DIMM capacity or reclaim firmware VRAM: the
+current Linux-visible allocation is the usable input. Physical cores receive
+full scheduling weight and SMT siblings receive one-quarter weight; a separate
+conservative RAM bound can lower the result. Automatic run evidence records the
+host facts, selector version, CPU/RAM bounds and exact effective settings.
+
 Inspect all profiles or one profile without executing work:
 
 ```sh
 fidb-poc performance --project-root .
+fidb-poc performance auto --resolve-auto --project-root .
 fidb-poc performance reference-host-94g-balanced --project-root .
 ```
 
@@ -47,7 +57,7 @@ project rather than a memory tweak.
 
 | Profile | Cell workers | Build jobs/cell | JVM max heap | Evidence class |
 | --- | ---: | ---: | ---: | --- |
-| `auto` | automatic, capped at 20 | 4 | 4 GiB | current default |
+| `auto` | host-resolved, capped at 32 | 1/2/4 | 2/3/4 GiB | current default |
 | `laptop-4c-8g` | 1 | 2 | 2 GiB | portable starting point |
 | `laptop-4c-16g` | 2 | 2 | 3 GiB | portable starting point |
 | `laptop-8c-16g` | 3 | 2 | 3 GiB | portable starting point |
@@ -81,7 +91,8 @@ single Ghidra analysis faster. At 20 workers the measured run averaged roughly
 15 CPU cores of work; at 29 workers it averaged roughly 20.6, so scheduling and
 serial/tail effects remain relevant after memory pressure is relieved.
 
-The 94 GiB balanced profile remains the cross-library default. Promote the
+The 94 GiB balanced profile remains the fixed cross-library campaign policy.
+Portable width runs default to host-resolved `auto`. Promote the
 112 GiB throughput profile only after representative large-library canaries
 show that its failure rate and hashes/hour remain favourable.
 

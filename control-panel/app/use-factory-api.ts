@@ -493,8 +493,30 @@ export type FactoryCapabilities = {
   host: {
     system: string;
     machine: string;
+    physical_cores: number;
     logical_cpus: number | null;
+    smt_siblings: number;
+    threads_per_core: number;
     memory_bytes: number | null;
+    available_memory_bytes: number;
+    memory_model: 'dedicated-system-memory' | 'unified';
+  };
+  automatic_performance: {
+    selector_version: string;
+    effective_settings: {
+      worker_mode: 'fixed';
+      workers: number;
+      build_jobs_per_cell: number;
+      ghidra_heap_mib: number;
+      ghidra_core_limit: number;
+    };
+    bounds: {
+      cpu_workers: number;
+      memory_workers: number;
+      memory_reserve_mib: number;
+      per_worker_budget_mib: number;
+      maximum_workers: number;
+    };
   };
   analysis: {
     ready: boolean;

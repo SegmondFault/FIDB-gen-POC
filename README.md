@@ -217,13 +217,15 @@ for the drift guards, review process, and rollback boundary.
 
 [`performance/profiles.toml`](performance/profiles.toml) keeps cell concurrency,
 nested compiler jobs and embedded-Ghidra JVM bounds in one reviewed authority.
-The existing memory/CPU-aware policy remains the `auto` default. Explicit
+The `auto` default detects physical cores and SMT siblings separately, honours
+affinity/cgroup ceilings, and bounds the result independently by OS-visible RAM. Explicit
 profiles cover 8/16/32 GiB laptops, the current 94 GiB `reference-host` allocation,
 a 112 GiB throughput allocation, and the 64 GiB M1 Max external host. Inspect
 them without running work:
 
 ```sh
 uv run fidb-poc performance --project-root .
+uv run fidb-poc performance auto --resolve-auto --project-root .
 uv run fidb-poc run-width --project-root . --canary \
   --performance-profile laptop-4c-8g
 ```

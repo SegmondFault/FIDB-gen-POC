@@ -33,6 +33,11 @@ def _performance_main(argv: list[str]) -> int:
     )
     result.add_argument("profile", nargs="?")
     result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument(
+        "--resolve-auto",
+        action="store_true",
+        help="detect this host and show the exact effective automatic settings",
+    )
     arguments = result.parse_args(argv)
     try:
         from .performance_profiles import load_performance_profiles
@@ -46,6 +51,15 @@ def _performance_main(argv: list[str]) -> int:
                 "default_profile": document["default_profile"],
                 "profile": catalog.select(arguments.profile).document(),
             }
+        if arguments.resolve_auto:
+            from .host_capacity import (
+                detect_host_capacity,
+                resolve_automatic_performance,
+            )
+
+            document["automatic_resolution"] = resolve_automatic_performance(
+                detect_host_capacity()
+            ).document()
         print(json.dumps(document, indent=2, sort_keys=True))
         return 0
     except (OSError, ValueError) as error:
@@ -153,7 +167,7 @@ def _selected_performance(
     )
     explicit = [name for name in explicit_names if hasattr(arguments, name)]
     profile_id = getattr(arguments, "performance_profile", None)
-    if profile_id:
+    if profile_id or (not explicit and not require_manual_workers):
         if explicit:
             flags = ", ".join(name.replace("_", "-") for name in explicit)
             raise ValueError(
@@ -163,12 +177,23 @@ def _selected_performance(
 
         profile = load_performance_profiles(arguments.project_root).select(profile_id)
         settings = profile.settings
+        resolution = None
+        if settings.worker_mode == "automatic":
+            from .host_capacity import (
+                detect_host_capacity,
+                resolve_automatic_performance,
+            )
+
+            automatic = resolve_automatic_performance(detect_host_capacity())
+            settings = automatic.settings
+            resolution = automatic.document()
         return {
             "workers": settings.workers,
             "heap_mib": settings.ghidra_heap_mib,
             "core_limit": settings.ghidra_core_limit,
             "build_jobs_per_cell": settings.build_jobs_per_cell,
             "performance_profile_id": profile.id,
+            "performance_resolution": resolution,
         }
     workers = getattr(arguments, "workers", None)
     if require_manual_workers and workers is None:
@@ -179,6 +204,7 @@ def _selected_performance(
         "core_limit": getattr(arguments, "ghidra_core_limit", None),
         "build_jobs_per_cell": getattr(arguments, "build_jobs_per_cell", 4),
         "performance_profile_id": "manual" if explicit else "auto",
+        "performance_resolution": None,
     }
 
 
