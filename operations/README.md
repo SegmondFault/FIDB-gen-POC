@@ -217,6 +217,13 @@ checks available memory, disk, load and temperature before each new claim.
 Twenty-nine workers remain an explicit burst experiment, not the default for
 previously unmeasured libraries.
 
+`[schedule].chain_batches = true` is an opt-in for short, pre-materialized
+chunks and requires `finish_started_batch = true`. After one chunk drains, a
+worker may admit the next only if the claim window is still open. At 05:30 no
+new chunk starts, while the current chunk continues until it drains. The active
+five-block queue deliberately omits this option; the separate auto-generated
+candidate demonstrates it without altering the running ledger.
+
 Use the control panel's **Timing** workspace or inspect
 `http://127.0.0.1:8765/api/v1/timings` on `reference-host`.  Require multiple
 completed worker-monotonic samples for compile and Ghidra/FID stages, and review

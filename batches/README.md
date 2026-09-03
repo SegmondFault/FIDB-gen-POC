@@ -129,3 +129,39 @@ separately, so a clean clone can inspect the batch before installing packs. If
 the source pack, width authority, compiler set, treatment set, or study changes,
 review the new projection and update the pins and expected counts together in one
 commit.
+
+## Automatic short-chunk materialization
+
+`fidb-poc auto-batches` takes the same reviewed time model and splits it at the
+smallest currently safe comparison boundary: one library, one compiler route,
+and all six treatments. Treatments are never separated across chunks. The
+default 60-minute target and 85-minute central ceiling produce 23 chunks for
+the current 2,046-cell campaign; 22 estimate at 60–63 minutes and the final
+tail at 34 minutes. Their +40% planning bounds remain below 89 minutes.
+
+```sh
+# Read-only compilation and exact aggregate authority resolution
+uv run fidb-poc auto-batches --project-root .
+
+# Freeze a separate candidate queue; still armed = false
+uv run fidb-poc auto-batches --project-root . --write
+
+# Recompute and compare every generated file
+uv run fidb-poc auto-batches --project-root . --check
+```
+
+The generated TOML lives under
+`plans/auto-materialized/c-top10-nonapple-width-v2-auto-60m-85m/`. Its
+`queue.toml` copies the reviewed 01:00–05:30 operational gates, enables
+`chain_batches`, and remains disarmed. A manual admission outside that window
+starts one short chunk; during the overnight window, each durably drained chunk
+allows the next to be admitted. The stop time prevents a new admission but
+never interrupts a chunk that already started.
+
+This is a candidate for a future queue transition, not an overlay for the live
+five-block ledger. Do not synchronize it into a ledger containing the current
+campaign: batch IDs intentionally change, and preserving completed/attempt
+evidence requires an explicit migration decision. Rollback is simply to leave
+the candidate disarmed and remove its generated directory in a later reviewed
+commit; the active queue, ledger, artifacts, sources, and toolchains do not
+refer to it.

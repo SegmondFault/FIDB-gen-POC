@@ -1,0 +1,131 @@
+import tempfile
+import tomllib
+import unittest
+from pathlib import Path
+
+from fidb_poc.auto_batch_builder import (
+    _pack_route_bundles,
+    _render_plan,
+    _render_queue,
+    check_auto_batches,
+    write_auto_batches,
+)
+from fidb_poc.operations_policy import load_operations_policy
+from fidb_poc.plan_request import resolve_plan
+
+
+class AutoBatchBuilderTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(__file__).resolve().parents[1]
+
+    def test_packing_preserves_stable_route_units_and_duration_ceiling(self):
+        bundles = [
+            {
+                "source_id": "a",
+                "route_id": f"route-{index}",
+                "estimated_hours": hours,
+            }
+            for index, hours in enumerate((0.4, 0.4, 0.3, 0.5, 0.2), start=1)
+        ]
+
+        chunks = _pack_route_bundles(
+            bundles,
+            target_hours=0.75,
+            max_hours=1.0,
+        )
+
+        self.assertEqual(
+            [row["route_id"] for chunk in chunks for row in chunk],
+            [row["route_id"] for row in bundles],
+        )
+        self.assertTrue(
+            all(
+                sum(float(row["estimated_hours"]) for row in chunk) <= 1.0
+                for chunk in chunks
+            )
+        )
+
+    def test_one_route_plan_keeps_all_treatments_and_resolves(self):
+        chunk = {
+            "id": "auto-test-chunk-001",
+            "executions": 6,
+            "groups": [
+                {
+                    "batch_authority": "batches/c-next-nine-mega-width.toml",
+                    "recipe_id": "sqlite@3.53.4",
+                    "route_ids": ["linux-x86-64-gcc-12"],
+                    "treatment_ids": [
+                        "baseline_o2",
+                        "optimization_o0",
+                        "optimization_o3",
+                        "optimization_os",
+                        "frame_pointer_omitted",
+                        "stack_protector_strong",
+                    ],
+                }
+            ],
+        }
+        payload = _render_plan(chunk)
+        with tempfile.TemporaryDirectory(dir=self.root) as temporary:
+            path = Path(temporary) / "chunk.toml"
+            path.write_text(payload, encoding="utf-8")
+            resolved = resolve_plan(path, self.root)
+
+        self.assertEqual(resolved["summary"]["planned_cells"], 6)
+        self.assertEqual(
+            {row["base_cell"].split(":")[-1] for row in resolved["queue_preview"]},
+            set(chunk["groups"][0]["treatment_ids"]),
+        )
+
+    def test_generated_queue_is_disarmed_and_chains_finished_chunks(self):
+        document = {
+            "id": "campaign",
+            "performance_profile": {
+                "id": "reference-host-94g-balanced",
+                "settings": {"workers": 20},
+            },
+            "chunks": [
+                {
+                    "id": "chunk-001",
+                    "name": "chunk one",
+                    "plan": "plans/chunk-001.toml",
+                    "plan_sha256": "a" * 64,
+                    "queue_digest": "b" * 64,
+                    "executions": 6,
+                }
+            ],
+        }
+        source = tomllib.loads(
+            (self.root / "plans/priority-queue.toml").read_text(encoding="utf-8")
+        )
+
+        payload = _render_queue(document, source)
+        queue = tomllib.loads(payload)
+        policy = load_operations_policy(queue, self.root)
+
+        self.assertFalse(queue["queue"]["armed"])
+        self.assertEqual(queue["queue"]["max_workers"], 20)
+        self.assertEqual(queue["schedule"]["start"], "01:00")
+        self.assertEqual(queue["schedule"]["stop_claiming"], "05:30")
+        self.assertTrue(policy.schedule.finish_started_batch)
+        self.assertTrue(policy.schedule.chain_batches)
+        self.assertNotIn("hard_cutoff", queue["schedule"])
+
+    def test_write_and_check_are_bounded_to_declared_generated_files(self):
+        with tempfile.TemporaryDirectory(dir=self.root) as temporary:
+            relative = Path(temporary).relative_to(self.root) / "generated.toml"
+            document = {"rendered_files": {str(relative): "value = 1\n"}}
+
+            write_auto_batches(document, self.root)
+            current = check_auto_batches(document, self.root)
+            (self.root / relative).write_text("value = 2\n", encoding="utf-8")
+            drifted = check_auto_batches(document, self.root)
+
+        self.assertEqual(current["state"], "current")
+        self.assertEqual(drifted["state"], "drifted")
+        self.assertEqual(drifted["mismatches"][0]["reason"], "content-drift")
+
+
+if __name__ == "__main__":
+    unittest.main()
