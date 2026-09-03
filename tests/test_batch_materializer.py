@@ -1,13 +1,19 @@
+import contextlib
+import copy
+import io
+import json
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fidb_poc.batch_materializer import (
     check_materialization,
     compile_materialization,
     write_materialization,
 )
+from fidb_poc.cli import main
 
 
 class BatchMaterializerTests(unittest.TestCase):
@@ -19,9 +25,7 @@ class BatchMaterializerTests(unittest.TestCase):
     def test_campaign_materializes_exact_disarmed_width(self):
         document = self.document
 
-        self.assertEqual(
-            document["schema_version"], "fidb-materialized-campaign/v1"
-        )
+        self.assertEqual(document["schema_version"], "fidb-materialized-campaign/v1")
         self.assertEqual(document["state"], "materialized-disarmed")
         self.assertEqual(document["summary"]["blocks"], 5)
         self.assertEqual(document["summary"]["libraries"], 10)
@@ -48,7 +52,9 @@ class BatchMaterializerTests(unittest.TestCase):
     def test_checked_in_materialization_matches_current_authorities(self):
         check = check_materialization(self.document, self.root)
 
-        self.assertEqual(check, {"state": "current", "checked_files": 6, "mismatches": []})
+        self.assertEqual(
+            check, {"state": "current", "checked_files": 6, "mismatches": []}
+        )
 
     def test_write_and_check_are_exact_and_do_not_arm_anything(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -64,6 +70,22 @@ class BatchMaterializerTests(unittest.TestCase):
             )
             self.assertEqual(manifest["state"], "materialized-disarmed")
             self.assertNotIn("armed", manifest)
+
+    def test_cli_preview_does_not_write_rendered_payloads(self):
+        output = io.StringIO()
+        with (
+            patch(
+                "fidb_poc.batch_materializer.compile_materialization",
+                return_value=copy.deepcopy(self.document),
+            ),
+            contextlib.redirect_stdout(output),
+        ):
+            status = main(["materialize-batches", "--project-root", str(self.root)])
+
+        result = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertEqual(result["state"], "materialized-disarmed")
+        self.assertNotIn("rendered_plans", result)
 
 
 if __name__ == "__main__":
