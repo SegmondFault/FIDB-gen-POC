@@ -326,10 +326,11 @@ def _materialized_campaign_authority(root: Path) -> list[dict[str, object]]:
                 }
             )
             blocks.append(row)
-        ready = all(
-            row["plan_integrity"] == "verified" and row["queue_registered"]
-            for row in blocks
+        plans_verified = all(
+            row["plan_integrity"] == "verified" for row in blocks
         )
+        ready = plans_verified and all(row["queue_registered"] for row in blocks)
+        registered_blocks = sum(bool(row["queue_registered"]) for row in blocks)
         campaigns.append(
             {
                 **manifest,
@@ -338,16 +339,22 @@ def _materialized_campaign_authority(root: Path) -> list[dict[str, object]]:
                 "state": (
                     "queued-armed"
                     if ready and armed
-                    else "queued-disarmed" if ready else "materialization-drifted"
+                    else (
+                        "queued-disarmed"
+                        if ready
+                        else (
+                            "materialized-unregistered"
+                            if plans_verified and registered_blocks == 0
+                            else "materialization-drifted"
+                        )
+                    )
                 ),
                 "blocks": blocks,
                 "readiness": {
                     "verified_plans": sum(
                         row["plan_integrity"] == "verified" for row in blocks
                     ),
-                    "registered_blocks": sum(
-                        bool(row["queue_registered"]) for row in blocks
-                    ),
+                    "registered_blocks": registered_blocks,
                     "queue_armed": armed,
                     "ready": ready,
                 },

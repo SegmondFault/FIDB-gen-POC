@@ -187,12 +187,12 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         materialized = document["materialized_campaigns"][0]
         self.assertEqual(materialized["id"], "c-top10-nonapple-width-v2")
-        self.assertEqual(materialized["state"], "queued-armed")
+        self.assertEqual(materialized["state"], "materialized-unregistered")
         self.assertEqual(materialized["summary"]["executions"], 2_046)
         self.assertEqual(materialized["readiness"]["verified_plans"], 5)
-        self.assertEqual(materialized["readiness"]["registered_blocks"], 5)
+        self.assertEqual(materialized["readiness"]["registered_blocks"], 0)
         self.assertTrue(materialized["readiness"]["queue_armed"])
-        self.assertTrue(materialized["readiness"]["ready"])
+        self.assertFalse(materialized["readiness"]["ready"])
         self.assertTrue(
             all(
                 block["plan_integrity"] == "verified"
