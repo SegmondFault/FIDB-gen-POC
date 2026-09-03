@@ -16,4 +16,5 @@ __pycache__/
 .idea/
 .pytest_cache/
 .coverage
+experiments/rust-staged/target/
 .claude/
