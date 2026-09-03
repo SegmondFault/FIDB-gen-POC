@@ -128,3 +128,14 @@ authority and GUI are readiness projections only. They must not invent scores
 or enable filtering. The full measurement, generation, treatment-ablation and
 rollback contract is documented in
 [`../HASH_DISCRIMINATION.md`](../HASH_DISCRIMINATION.md).
+
+Inspect the current formula, component weights, source readiness and immutable
+generation plan without changing any evidence:
+
+```sh
+uv run fidb-poc hash-discrimination status --project-root .
+```
+
+The same authority is projected on the **Hash discrimination** control-panel
+page. Its formula and reproducibility panels are generated from TOML rather
+than duplicated as frontend constants.

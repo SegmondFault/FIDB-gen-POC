@@ -812,13 +812,13 @@ function WidthStudyPanel({ study, compilation, capabilities }: { study: WidthStu
   </section>;
 }
 
-function ViewIntro({ kicker, title, copy, action }: { kicker: string; title: string; copy: string; action?: React.ReactNode }) {
+function ViewIntro({ kicker, title, copy, action }: { kicker: string; title: string; copy?: string; action?: React.ReactNode }) {
   return (
     <section className="view-intro">
       <div>
         <p className="panel-kicker">{kicker}</p>
         <h2>{title}</h2>
-        <p>{copy}</p>
+        {copy && <p>{copy}</p>}
       </div>
       {action}
     </section>
@@ -1641,7 +1641,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
   };
   return (
     <div className="view-stack">
-      <ViewIntro kicker="ANALYST MATRIX" title={`${selectedLanguage?.label ?? 'C'} coverage matrix — with reality overlaid`} copy="The census, hard-route, analysis, admission and provenance layers are shared. Compiler and treatment policy belong to the selected language, so one language can never silently inherit another language's cell count." action={<button className="secondary-action" onClick={() => setTomlOpen(!tomlOpen)} disabled={selectedLanguageId !== 'c'}>{selectedLanguageId === 'c' ? `${tomlOpen ? 'Hide' : 'Show'} TOML` : 'No executable draft'}</button>} />
+      <ViewIntro kicker="ANALYST MATRIX" title={`${selectedLanguage?.label ?? 'C'} coverage matrix`} action={<button className="secondary-action" onClick={() => setTomlOpen(!tomlOpen)} disabled={selectedLanguageId !== 'c'}>{selectedLanguageId === 'c' ? `${tomlOpen ? 'Hide' : 'Show'} TOML` : 'No executable draft'}</button>} />
 
       <LanguageScopeSelector languages={coverageUniverse?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
@@ -1827,7 +1827,6 @@ function PerformanceView({ factory }: { factory: FactoryApiState }) {
     <ViewIntro
       kicker="HOST-AWARE EXECUTION POLICY"
       title="Detected capacity, selected mode and effective overrides"
-      copy="The control panel projects reviewed TOML authorities. Host facts are detected read-only; automatic recommendations and the active queue profile are compared explicitly before exact settings are frozen into run evidence."
       action={<button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Refresh host detection' : 'Retry connection'}</button>}
     />
     {factory.authority?.performance_profiles
@@ -1907,7 +1906,6 @@ function TimingView({ factory }: { factory: FactoryApiState }) {
     <ViewIntro
       kicker="MEASURED EXECUTION"
       title="Timing, throughput and ETA evidence"
-      copy="Every active and completed stage is tied to a fenced attempt. Percentiles use completed worker-monotonic spans only; interrupted or coordinator-derived durations remain visible for diagnosis but never enter stage p50/p90."
       action={<button className="secondary-action" disabled>{timingState}</button>}
     />
 
@@ -2131,7 +2129,7 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live, factor
     return next;
   });
   return <div className="view-stack">
-    <ViewIntro kicker="BATCH OPERATIONS" title="Priority queue and execution ledger" copy={live ? 'Live order and state come from the synchronized plans/priority-queue.toml ledger. Edit and review TOML to change priority; the viewer never silently mutates queue intent.' : 'Preview order only. The CLI authority is plans/priority-queue.toml; connect the local API to read the durable execution ledger.'} action={<button className="primary-action" onClick={onNewBatch}>Open matrix draft</button>} />
+    <ViewIntro kicker="BATCH OPERATIONS" title="Priority queue and execution ledger" action={<button className="primary-action" onClick={onNewBatch}>Open matrix draft</button>} />
     <TimeBlockPlanPanel factory={factory} />
     <section className="panel data-panel">
       <div className="filterbar"><button className="filter active">All <span>{batches.length}</span></button><button className="filter">Defined <span>{batchStatusCounts('Defined')}</span></button><button className="filter">Running <span>{batchStatusCounts('Running')}</span></button><button className="filter">Blocked <span>{batchStatusCounts('Blocked')}</span></button><button className="filter">Queued <span>{batchStatusCounts('Queued')}</span></button><button className="filter">Complete <span>{batchStatusCounts('Complete')}</span></button><div className="filter-search">⌕&nbsp; Filter batches</div></div>
@@ -2294,7 +2292,7 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
   const widthQualified = compilerWidthPlan?.summary.qualified_routes ?? 0;
   const widthRoutes = compilerWidthPlan?.summary.routes ?? 0;
   return <div className="view-stack">
-    <ViewIntro kicker={`${selectedLanguage?.label.toUpperCase() ?? selectedLanguageId.toUpperCase()} COVERAGE POSSIBILITY SPACE`} title={`${selectedLanguage?.label ?? selectedLanguageId} libraries, targets & toolchains`} copy="Each language owns its treatment profile while sharing the target, worker, provenance, and artifact lifecycle. Cross-build routes expose target breadth from this host; platform-native workers remain distinct evidence." action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
+    <ViewIntro kicker={`${selectedLanguage?.label.toUpperCase() ?? selectedLanguageId.toUpperCase()} COVERAGE POSSIBILITY SPACE`} title={`${selectedLanguage?.label ?? selectedLanguageId} libraries, targets & toolchains`} action={<button className="primary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Scan this host' : 'Retry connection'}</button>} />
     {factory.error && <div className="toast warning" role="status">! {factory.error}</div>}
 
     <LanguageScopeSelector languages={universe?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
@@ -2446,7 +2444,7 @@ function EvidenceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) {
     });
   });
   return <div className="view-stack">
-    <ViewIntro kicker="SEALED PROVENANCE" title="Evidence remains readable files" copy="Only artifacts attached to completed, fenced ledger jobs appear here. Paths and hashes come from the coordinator result; a batch label alone never implies that evidence exists." action={<button className="secondary-action" disabled>{snapshot ? `${artifacts.length} artifacts` : 'Coordinator offline'}</button>} />
+    <ViewIntro kicker="SEALED PROVENANCE" title="Evidence remains readable files" action={<button className="secondary-action" disabled>{snapshot ? `${artifacts.length} artifacts` : 'Coordinator offline'}</button>} />
     <div className="evidence-layout">
       <section className="panel artifact-list"><div className="panel-header"><div><p className="panel-kicker">LEDGER OUTPUT SET</p><h3>Sealed library artifacts</h3></div><span className="plan-state">LIVE</span></div>
         {artifacts.map(artifact => <button className="artifact-row" key={`${artifact.job.job_id}-${artifact.kind}`}><span className="file-glyph">{artifact.kind.toUpperCase()}</span><div><strong>{artifact.path.split('/').pop()}</strong><small>{artifact.job.base_cell}</small></div><span>{artifact.kind === 'fidbf' ? 'Raw FID export' : artifact.kind === 'fidb' ? 'FID database' : 'Provenance seal'}</span><code>{artifact.sha256.slice(0, 16)}…</code><b>→</b></button>)}

@@ -207,7 +207,8 @@ Mac browser over Tailscale
 ```
 
 The local API exposes health, status, snapshot, events, capabilities, the
-authoritative catalog and bounded timing history, plus typed
+authoritative catalog, Hash Discrimination readiness and bounded timing
+history, plus typed
 sync/pause/resume and validated plan-draft resolve/save operations. The Timing
 workspace shows active clocks, retries/failures, measured distributions and
 throughput; it displays no ETA until the API has a defensible sample-backed

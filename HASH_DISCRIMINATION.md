@@ -63,6 +63,57 @@ library-family or common-ancestry reuse, cross-language reuse, trivial/small
 function, empirically misleading attribution, unexplained ambiguity and
 insufficient evidence. Unknown is the safe default.
 
+## Provisional transparent calculation
+
+The checked-in C10 authority specifies an inspectable starting formula. Every
+component is normalised to `[0, 1]`; the weighted sum therefore produces a
+`[0, 100]` index:
+
+```text
+HDI = 35r + 25c + 20v + 10s + 10t
+noise risk = 35a + 35i + 20(1-r) + 10(1-t)
+```
+
+Where:
+
+- `r` is library-family rarity:
+  `ln((N + alpha) / (df + alpha)) / ln((N + alpha) / (1 + alpha))`;
+- `N` is the distinct compatible corpus library-family count and `df` is the
+  number of those families containing the signature;
+- `c` is one minus normalised owner entropy;
+- `v` is one minus the beta-smoothed ambiguous-or-incorrect validation rate;
+- `s` is supporting applicable build identities divided by all applicable
+  build identities for the candidate owner;
+- `t` is `clamp((median_code_units - 4) / (24 - 4), 0, 1)`;
+- `a` is the beta-smoothed ambiguous-attribution rate; and
+- `i` is the beta-smoothed incorrect-confident-attribution rate.
+
+The starting beta prior is `alpha = 1`, `beta = 1`. These weights and
+transforms are hypotheses to ablate, not established truth. They are visible in
+the GUI and remain inactive until the evidence contract is satisfied. A change
+to any component, weight, smoothing value or rounding rule requires a new model
+version and a replay against the same unweighted baseline.
+
+## Reproducibility
+
+Score compilation is deterministic. Rows are ordered by compatible sublane,
+complete signature and candidate owner; the initial model uses no random input,
+IEEE-754 binary64 arithmetic and six-decimal rounding. Every immutable model
+generation must retain:
+
+- the algorithm and model version;
+- the TOML authority digest and source-code Git revision;
+- lane corpus generation IDs and content digests;
+- machine/ecological report and manual-decision digests;
+- component parameters, weights, smoothing and rounding rules;
+- the ordered input population and all component outputs; and
+- the generated-at timestamp and output digest.
+
+Generation publication is create-only. Re-running the same pinned inputs must
+produce the same score rows and digest; it must never overwrite an existing
+generation. This provides the audit and rollback boundary for every later
+matching-policy experiment.
+
 ## Attribution and treatments
 
 The detector ultimately aggregates a set of distinct signature contributions
