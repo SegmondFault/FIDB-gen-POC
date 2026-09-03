@@ -541,6 +541,37 @@ export type LaneWidthRun = {
   modified_at_utc: string;
 };
 
+export type PerformanceProfile = {
+  id: string;
+  label: string;
+  description: string;
+  qualification: 'current-default' | 'portable-starting-point' | 'measured-openssl' | 'derived-from-measured-openssl';
+  guidance: string;
+  evidence_path: string | null;
+  host: {
+    system: string;
+    architecture: string;
+    physical_cores: number | null;
+    logical_cpus: number | null;
+    memory_mib: number | null;
+    memory_model: 'dedicated-system-memory' | 'unified';
+  };
+  settings: {
+    worker_mode: 'automatic' | 'fixed';
+    workers: number | null;
+    build_jobs_per_cell: number;
+    ghidra_heap_mib: number | null;
+    ghidra_core_limit: number | null;
+  };
+};
+
+export type PerformanceProfiles = {
+  schema_version: 'fidb-performance-profiles/v1';
+  default_profile: string;
+  authority_path: string;
+  profiles: PerformanceProfile[];
+};
+
 export type LaneDatabaseGeneration = {
   kind: 'raw' | 'compact';
   path: string;
@@ -1081,7 +1112,7 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v9';
+  schema_version: 'fidb-authority-catalog/v10';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -1096,6 +1127,7 @@ export type FactoryAuthority = {
   };
   targets: AuthorityTarget[];
   lane_registry: AuthorityLaneRegistry;
+  performance_profiles: PerformanceProfiles;
   toolchains: AuthorityToolchain[];
   toolchain_pack_catalog: ToolchainPackCatalog;
   factors: AuthorityFactor[];

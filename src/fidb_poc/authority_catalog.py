@@ -18,6 +18,7 @@ from .plan_request import (
     load_plan_request,
     resolve_plan,
 )
+from .performance_profiles import load_performance_profiles
 from .recipe_generator import load_recipes as load_source_recipes
 from .target_registry import load_targets
 from .toolchain_registry import load_toolchains
@@ -25,7 +26,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v9"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v10"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -448,6 +449,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     factors, variants, sensitivity_digests = _sensitivity_authority(root)
     target_path = root / "targets/registry.toml"
     lane_path = root / "lanes/registry.toml"
+    performance_path = root / "performance/profiles.toml"
     coverage_path = root / "coverage/universe.toml"
     coverage_universe = load_coverage_universe(coverage_path)
     coverage_universe["authority_path"] = _relative(root, coverage_path)
@@ -455,6 +457,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     targets = _target_authority(root, native, toolchains, toolchain_pack_catalog)
     lane_registry = load_lane_registry(lane_path, target_path)
     lane_registry["authority_path"] = _relative(root, lane_path)
+    performance_profiles = load_performance_profiles(root).document()
     width_studies = _width_study_authority(
         root, recipes, native, targets, coverage_universe
     )
@@ -489,6 +492,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "native": native,
         "targets": targets,
         "lane_registry": lane_registry,
+        "performance_profiles": performance_profiles,
         "toolchains": toolchains,
         "toolchain_pack_catalog": toolchain_pack_catalog,
         "factors": factors,
@@ -499,6 +503,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "routes": "worker.toml",
             "targets": "targets/registry.toml",
             "lanes": "lanes/registry.toml",
+            "performance_profiles": "performance/profiles.toml",
             "toolchains": "toolchains/registry.toml",
             "toolchain_packs": "toolchains/packs.toml + compilers.toml + routes.toml + inputs.toml + qualifications.toml + profiles/",
             "factors": "sensitivity/factors.toml",
@@ -514,6 +519,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             **sensitivity_digests,
             "targets_sha256": hashlib.sha256(target_path.read_bytes()).hexdigest(),
             "lanes_sha256": hashlib.sha256(lane_path.read_bytes()).hexdigest(),
+            "performance_profiles_sha256": hashlib.sha256(
+                performance_path.read_bytes()
+            ).hexdigest(),
             "coverage_universe_sha256": hashlib.sha256(
                 coverage_path.read_bytes()
             ).hexdigest(),

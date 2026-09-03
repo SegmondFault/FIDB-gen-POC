@@ -12,7 +12,12 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v9")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v10")
+        self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
+        self.assertEqual(len(document["performance_profiles"]["profiles"]), 8)
+        self.assertEqual(
+            len(document["source_digests"]["performance_profiles_sha256"]), 64
+        )
         self.assertEqual(len(document["recipes"]), 5)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)

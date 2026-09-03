@@ -12,6 +12,7 @@ import {
   type StageSpan,
   type TimingEta,
   type PlanDraftResult,
+  type PerformanceProfiles,
   type CoverageLanguage,
   type FactoryCapabilities,
   type ToolchainProfilePlan,
@@ -1487,6 +1488,8 @@ function TimingView({ factory }: { factory: FactoryApiState }) {
       action={<button className="secondary-action" disabled>{timingState}</button>}
     />
 
+    {factory.authority?.performance_profiles && <PerformanceProfilesPanel catalog={factory.authority.performance_profiles} capabilities={factory.capabilities} />}
+
     <section className="timing-metrics" aria-label="Timing evidence summary">
       <article className="panel timing-metric"><span>ACTIVE STAGES</span><strong>{activeSpans.length}</strong><small>{activeSpans.length ? 'elapsed clocks updating live' : 'nothing executing'}</small></article>
       <article className="panel timing-metric"><span>COMPLETED STAGE SAMPLES</span><strong>{completedSamples}</strong><small>{workflowSamples} complete workflow {workflowSamples === 1 ? 'sample' : 'samples'}</small></article>
@@ -1569,6 +1572,36 @@ function TimingView({ factory }: { factory: FactoryApiState }) {
       </article>
     </section>
   </div>;
+}
+
+function PerformanceProfilesPanel({ catalog, capabilities }: { catalog: PerformanceProfiles; capabilities: FactoryCapabilities | null }) {
+  const [selectedId, setSelectedId] = useState(catalog.default_profile);
+  const [copied, setCopied] = useState(false);
+  const selected = catalog.profiles.find(profile => profile.id === selectedId) ?? catalog.profiles[0];
+  if (!selected) return null;
+  const host = capabilities?.host;
+  const hostMemoryMib = host?.memory_bytes ? Math.floor(host.memory_bytes / 1024 / 1024) : null;
+  const command = `fidb-poc run-width --project-root . --performance-profile ${selected.id}`;
+  const copyCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+  const qualificationTone = selected.qualification === 'measured-openssl'
+    ? 'ready'
+    : selected.qualification === 'derived-from-measured-openssl'
+      ? 'warning'
+      : 'cold';
+  return <section className="panel performance-profile-panel">
+    <div className="panel-header"><div><p className="panel-kicker">PERFORMANCE AUTHORITY</p><h3>Portable cell, compiler and JVM budgets</h3><small>{catalog.authority_path} · explicit selection only · default remains {catalog.default_profile}</small></div><span className="authority-badge">READ-ONLY TOML</span></div>
+    <div className="performance-host-strip"><article><span>DETECTED HOST</span><strong>{host ? `${host.system} / ${host.machine}` : 'Waiting for API'}</strong><small>{host?.logical_cpus ?? '—'} logical CPUs</small></article><article><span>VISIBLE MEMORY</span><strong>{host?.memory_bytes ? formatBytes(host.memory_bytes) : '—'}</strong><small>{hostMemoryMib ? `${hostMemoryMib.toLocaleString()} MiB available to the host profile` : 'capability probe pending'}</small></article><article><span>JVM MODEL</span><strong>Long-lived per cell worker</strong><small>-Xmx is a ceiling, not preallocated RSS</small></article></div>
+    <div className="performance-profile-tabs">{catalog.profiles.map(profile => <button key={profile.id} className={profile.id === selected.id ? 'active' : ''} onClick={() => setSelectedId(profile.id)}><strong>{profile.label}</strong><small>{profile.settings.worker_mode === 'automatic' ? 'auto workers' : `${profile.settings.workers} workers`} · {profile.host.memory_mib ? `${Math.round(profile.host.memory_mib / 1024)} GiB` : 'portable'}</small></button>)}</div>
+    <div className="performance-profile-detail"><header><div><span className={`evidence-badge ${qualificationTone}`}>{selected.qualification.replaceAll('-', ' ')}</span><h4>{selected.label}</h4><p>{selected.description}</p></div><button onClick={() => void copyCommand()}>{copied ? 'Copied' : 'Copy preview command'}</button></header><div><article><span>CELL WORKERS</span><strong>{selected.settings.worker_mode === 'automatic' ? 'AUTO ≤ 20' : selected.settings.workers}</strong><small>independent long-lived JVM processes</small></article><article><span>BUILD JOBS / CELL</span><strong>{selected.settings.build_jobs_per_cell}</strong><small>nested compiler parallelism</small></article><article><span>JVM HEAP CEILING</span><strong>{selected.settings.ghidra_heap_mib ? `${selected.settings.ghidra_heap_mib} MiB` : 'ERGONOMIC'}</strong><small>maximum, not reserved allocation</small></article><article><span>GHIDRA CORE LIMIT</span><strong>{selected.settings.ghidra_core_limit ?? 'HOST'}</strong><small>per embedded JVM</small></article></div><footer><p>{selected.guidance}</p><code>{command}</code>{selected.evidence_path && <small>{selected.evidence_path}</small>}</footer></div>
+  </section>;
 }
 
 function AttemptTimingRow({ attempt, now }: { attempt: CoordinatorAttempt; now: number }) {
