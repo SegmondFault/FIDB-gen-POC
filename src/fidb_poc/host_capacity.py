@@ -15,12 +15,12 @@ import platform
 import subprocess
 from typing import Iterable
 
-from .performance_profiles import PerformanceSettings
+from .performance_profiles import AutomaticPolicy, PerformanceSettings
 
 HOST_CAPACITY_SCHEMA = "fidb-host-capacity/v1"
 AUTO_PERFORMANCE_SCHEMA = "fidb-auto-performance/v1"
-AUTO_SELECTOR_VERSION = "physical-smt-memory-v1"
 GIB = 1024**3
+MIB = 1024**2
 
 
 @dataclass(frozen=True)
@@ -65,6 +65,7 @@ class HostCapacity:
 @dataclass(frozen=True)
 class AutomaticPerformance:
     host: HostCapacity
+    policy: AutomaticPolicy
     settings: PerformanceSettings
     cpu_worker_bound: int
     memory_worker_bound: int
@@ -74,7 +75,7 @@ class AutomaticPerformance:
     def document(self) -> dict[str, object]:
         return {
             "schema_version": AUTO_PERFORMANCE_SCHEMA,
-            "selector_version": AUTO_SELECTOR_VERSION,
+            "selector_version": self.policy.selector_version,
             "profile_id": "auto",
             "host": self.host.document(),
             "effective_settings": self.settings.document(),
@@ -83,14 +84,9 @@ class AutomaticPerformance:
                 "memory_workers": self.memory_worker_bound,
                 "memory_reserve_mib": self.memory_reserve_bytes // 1024**2,
                 "per_worker_budget_mib": self.per_worker_budget_bytes // 1024**2,
-                "maximum_workers": 32,
+                "maximum_workers": self.policy.maximum_workers,
             },
-            "policy": {
-                "physical_core_weight": 1.0,
-                "smt_sibling_weight": 0.25,
-                "memory_basis": "effective-total",
-                "live_pressure": "enforced-separately-by-resource-gates",
-            },
+            "policy": self.policy.document(),
         }
 
 
@@ -279,38 +275,56 @@ def detect_host_capacity(
     )
 
 
-def resolve_automatic_performance(host: HostCapacity) -> AutomaticPerformance:
+def resolve_automatic_performance(
+    host: HostCapacity, policy: AutomaticPolicy
+) -> AutomaticPerformance:
     """Derive a conservative cross-library policy from one host snapshot."""
 
-    total_gib = host.total_memory_bytes / GIB
-    if total_gib < 12:
-        heap_mib = 2048
-    elif total_gib < 24:
-        heap_mib = 3072
-    else:
-        heap_mib = 4096
-
-    build_jobs = (
-        4 if host.physical_cores >= 12 else 2 if host.physical_cores >= 4 else 1
+    total_memory_mib = host.total_memory_bytes // MIB
+    memory_tier = max(
+        (
+            tier
+            for tier in policy.memory_tiers
+            if tier.minimum_memory_mib <= total_memory_mib
+        ),
+        key=lambda tier: tier.minimum_memory_mib,
     )
-    core_limit = 4 if host.physical_cores >= 8 else 2 if host.physical_cores >= 4 else 1
+    cpu_tier = max(
+        (
+            tier
+            for tier in policy.cpu_tiers
+            if tier.minimum_physical_cores <= host.physical_cores
+        ),
+        key=lambda tier: tier.minimum_physical_cores,
+    )
+    heap_mib = memory_tier.ghidra_heap_mib
     cpu_bound = min(
         host.logical_cpus,
-        host.physical_cores + math.ceil(host.smt_siblings * 0.25),
+        max(
+            1,
+            math.ceil(
+                host.physical_cores * policy.physical_core_weight
+                + host.smt_siblings * policy.smt_sibling_weight
+            ),
+        ),
     )
-    reserve = max(4 * GIB, math.ceil(host.total_memory_bytes * 0.10))
-    per_worker = max(4 * GIB, heap_mib * 1024**2)
+    reserve = max(
+        policy.memory_reserve_min_mib * MIB,
+        math.ceil(host.total_memory_bytes * policy.memory_reserve_fraction),
+    )
+    per_worker = max(policy.per_worker_min_mib * MIB, heap_mib * MIB)
     memory_bound = max(1, (max(0, host.total_memory_bytes - reserve)) // per_worker)
-    workers = max(1, min(32, cpu_bound, memory_bound))
+    workers = max(1, min(policy.maximum_workers, cpu_bound, memory_bound))
     settings = PerformanceSettings(
         worker_mode="fixed",
         workers=workers,
-        build_jobs_per_cell=build_jobs,
+        build_jobs_per_cell=cpu_tier.build_jobs_per_cell,
         ghidra_heap_mib=heap_mib,
-        ghidra_core_limit=core_limit,
+        ghidra_core_limit=cpu_tier.ghidra_core_limit,
     )
     return AutomaticPerformance(
         host=host,
+        policy=policy,
         settings=settings,
         cpu_worker_bound=cpu_bound,
         memory_worker_bound=memory_bound,

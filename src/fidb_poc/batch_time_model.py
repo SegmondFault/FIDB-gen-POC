@@ -187,7 +187,9 @@ def compile_time_block_plan(
     if profile.settings.worker_mode == "automatic":
         from .host_capacity import detect_host_capacity, resolve_automatic_performance
 
-        automatic = resolve_automatic_performance(detect_host_capacity())
+        automatic = resolve_automatic_performance(
+            detect_host_capacity(), profiles.automatic_policy
+        )
         profile = replace(
             profile,
             settings=automatic.settings,

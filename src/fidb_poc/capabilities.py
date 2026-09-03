@@ -23,6 +23,7 @@ from typing import Mapping
 from .config import load_configuration
 from .coordinator import worker_pool_accepts_cell
 from .host_capacity import detect_host_capacity, resolve_automatic_performance
+from .performance_profiles import load_performance_profiles
 from .toolchain_registry import load_toolchains
 from .toolchain_cache import MANAGED_DOWNLOADS, inspect_cached
 from .toolchain_packs import resolve_toolchain_profiles
@@ -480,7 +481,10 @@ def detect_capabilities(
         tools["qemu-img"]["available"] and tools["qemu-system-x86_64"]["available"]
     )
     host_capacity = detect_host_capacity()
-    automatic_performance = resolve_automatic_performance(host_capacity)
+    automatic_policy = load_performance_profiles(root).automatic_policy
+    automatic_performance = resolve_automatic_performance(
+        host_capacity, automatic_policy
+    )
     return {
         "schema_version": CAPABILITIES_SCHEMA,
         "detection_mode": "read-only",

@@ -9,9 +9,16 @@ from fidb_poc.host_capacity import (
     detect_host_capacity,
     resolve_automatic_performance,
 )
+from fidb_poc.performance_profiles import load_performance_profiles
 
 
 class HostCapacityTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.policy = load_performance_profiles(
+            Path(__file__).resolve().parents[1]
+        ).automatic_policy
+
     def test_linux_detection_distinguishes_physical_cores_and_smt(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -101,7 +108,7 @@ class HostCapacityTests(unittest.TestCase):
             sources={},
         )
 
-        resolution = resolve_automatic_performance(host)
+        resolution = resolve_automatic_performance(host, self.policy)
 
         self.assertEqual(resolution.cpu_worker_bound, 20)
         self.assertGreaterEqual(resolution.memory_worker_bound, 20)
@@ -127,7 +134,7 @@ class HostCapacityTests(unittest.TestCase):
             sources={},
         )
 
-        resolution = resolve_automatic_performance(host)
+        resolution = resolve_automatic_performance(host, self.policy)
 
         self.assertEqual(resolution.settings.workers, 1)
         self.assertEqual(resolution.settings.ghidra_heap_mib, 2048)

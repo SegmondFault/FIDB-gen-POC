@@ -58,7 +58,7 @@ def _performance_main(argv: list[str]) -> int:
             )
 
             document["automatic_resolution"] = resolve_automatic_performance(
-                detect_host_capacity()
+                detect_host_capacity(), catalog.automatic_policy
             ).document()
         print(json.dumps(document, indent=2, sort_keys=True))
         return 0
@@ -175,7 +175,8 @@ def _selected_performance(
             )
         from .performance_profiles import load_performance_profiles
 
-        profile = load_performance_profiles(arguments.project_root).select(profile_id)
+        catalog = load_performance_profiles(arguments.project_root)
+        profile = catalog.select(profile_id)
         settings = profile.settings
         resolution = None
         if settings.worker_mode == "automatic":
@@ -184,7 +185,9 @@ def _selected_performance(
                 resolve_automatic_performance,
             )
 
-            automatic = resolve_automatic_performance(detect_host_capacity())
+            automatic = resolve_automatic_performance(
+                detect_host_capacity(), catalog.automatic_policy
+            )
             settings = automatic.settings
             resolution = automatic.document()
         return {

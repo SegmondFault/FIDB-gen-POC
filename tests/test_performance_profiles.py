@@ -21,6 +21,8 @@ class PerformanceProfilesTests(unittest.TestCase):
         self.assertEqual(catalog.default_profile, "auto")
         self.assertEqual(catalog.authority_path, "performance/profiles.toml")
         self.assertEqual(len(catalog.profiles), 8)
+        self.assertEqual(catalog.automatic_policy.maximum_workers, 32)
+        self.assertEqual(catalog.automatic_policy.smt_sibling_weight, 0.25)
         self.assertEqual(selected.settings.worker_mode, "automatic")
         self.assertIsNone(selected.settings.workers)
         self.assertEqual(selected.settings.build_jobs_per_cell, 4)
@@ -84,7 +86,7 @@ class PerformanceProfilesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
             path = Path(temporary) / "bad.toml"
             path.write_text(
-                """schema_version = "fidb-performance-profiles/v1"
+                """schema_version = "fidb-performance-profiles/v2"
 default_profile = "bad"
 [[profiles]]
 id = "bad"

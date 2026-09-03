@@ -22,6 +22,12 @@ class CapabilityDetectionTests(unittest.TestCase):
             )
             shutil.copytree(self.source_root / "targets", project_root / "targets")
             shutil.copytree(self.source_root / "coverage", project_root / "coverage")
+            shutil.copytree(
+                self.source_root / "performance", project_root / "performance"
+            )
+            shutil.copytree(
+                self.source_root / "benchmarks", project_root / "benchmarks"
+            )
             cache = project_root / capabilities.TOOLCHAIN_CACHE
 
             result = capabilities.detect_capabilities(

@@ -1,5 +1,50 @@
-schema_version = "fidb-performance-profiles/v1"
+schema_version = "fidb-performance-profiles/v2"
 default_profile = "auto"
+
+# Every automatic-selection knob is reviewed here rather than embedded in the
+# Python resolver. Safety ceilings remain validated by code.
+[automatic_policy]
+selector_version = "physical-smt-memory-v1"
+maximum_workers = 32
+physical_core_weight = 1.0
+smt_sibling_weight = 0.25
+memory_reserve_fraction = 0.10
+memory_reserve_min_mib = 4096
+per_worker_min_mib = 4096
+memory_basis = "effective-total"
+live_pressure = "enforced-separately-by-resource-gates"
+
+[[automatic_policy.memory_tiers]]
+minimum_memory_mib = 0
+ghidra_heap_mib = 2048
+
+[[automatic_policy.memory_tiers]]
+minimum_memory_mib = 12288
+ghidra_heap_mib = 3072
+
+[[automatic_policy.memory_tiers]]
+minimum_memory_mib = 24576
+ghidra_heap_mib = 4096
+
+[[automatic_policy.cpu_tiers]]
+minimum_physical_cores = 1
+build_jobs_per_cell = 1
+ghidra_core_limit = 1
+
+[[automatic_policy.cpu_tiers]]
+minimum_physical_cores = 4
+build_jobs_per_cell = 2
+ghidra_core_limit = 2
+
+[[automatic_policy.cpu_tiers]]
+minimum_physical_cores = 8
+build_jobs_per_cell = 2
+ghidra_core_limit = 4
+
+[[automatic_policy.cpu_tiers]]
+minimum_physical_cores = 12
+build_jobs_per_cell = 4
+ghidra_core_limit = 4
 
 # Fixed profiles are explicit resource policies. The `auto` profile detects
 # scheduler-visible host topology and freezes its effective settings per run.

@@ -161,14 +161,17 @@ class QueueConfig:
             profile_id = _identifier(
                 queue["performance_profile"], "queue performance_profile"
             )
-            performance_profile = load_performance_profiles(root).select(profile_id)
+            performance_profiles = load_performance_profiles(root)
+            performance_profile = performance_profiles.select(profile_id)
             if performance_profile.settings.worker_mode == "automatic":
                 from .host_capacity import (
                     detect_host_capacity,
                     resolve_automatic_performance,
                 )
 
-                automatic = resolve_automatic_performance(detect_host_capacity())
+                automatic = resolve_automatic_performance(
+                    detect_host_capacity(), performance_profiles.automatic_policy
+                )
                 performance_profile = replace(
                     performance_profile,
                     settings=automatic.settings,
