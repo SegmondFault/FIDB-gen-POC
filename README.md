@@ -165,9 +165,11 @@ schema; only the directory and `mode` differ. See **Hunting an unknown
 target** below for the other two.
 
 The earlier, source-only staging boundary is [`sources/c-top10-v1.toml`](sources/c-top10-v1.toml).
-It pins and checksum-identifies all ten study archives without claiming that
-the remaining nine already have executable recipes. Inspect or acquire the
-pack without extraction, compilation, or Ghidra work:
+It pins and checksum-identifies all ten study archives independently of build
+behavior. All ten pins now have matching command-free native recipes; see
+[`recipes/README.md`](recipes/README.md) for their fixed adapters and
+compilation-only qualification boundary. Inspect or acquire the pack without
+extraction, compilation, or Ghidra work:
 
 ```sh
 uv run fidb-poc source status c-top10-v1 --project-root .
@@ -186,18 +188,18 @@ Ranks 2–10 receive `c-width-v2`: 9 libraries × 37 qualified compiler routes �
 qualified Android routes × 6 treatments = 48 executions, without repeating its
 174 completed cells. The next campaign is therefore 2,046 new executions and
 the complete top-ten projection is 2,220. Inspect both pinned authorities and
-their current recipe blockers without starting work:
+their current readiness without starting work:
 
 ```sh
 uv run fidb-poc compile-width-batch batch-020 --project-root .
 uv run fidb-poc compile-width-batch batch-020-android-gap --project-root .
 ```
 
-Neither segment is in `plans/priority-queue.toml`. The next-nine segment cannot
-be materialized until its source pins have matching reviewed native recipes;
-the Android gap remains explicitly disarmed even though OpenSSL is ready. See
-[`batches/README.md`](batches/README.md) for the drift guards and activation
-boundary.
+Neither segment is in `plans/priority-queue.toml`. Both segments are now
+source-, recipe-, and toolchain-ready, but remain unmaterialized and explicitly
+disarmed. The next implementation boundary is the reviewed batch materializer,
+not permission to start work. See [`batches/README.md`](batches/README.md) for
+the drift guards and activation boundary.
 
 ### Portable performance profiles
 
@@ -709,7 +711,7 @@ FIDB_RUN_LIVE_SMOKE=1 \
 | `src/fidb_poc/adapters.py` | fixed Autoconf/Make command construction |
 | `src/fidb_poc/pipeline.py` | retrieval, build isolation, validation, Ghidra and manifest output |
 | `ghidra_scripts/populate_library_fid_databases.py` | FID database population adapter |
-| `recipes/*.toml` | reviewed name-to-source catalogue, one `fidb-recipe/v3` schema throughout |
+| `recipes/*.toml`, `recipes/README.md` | reviewed name-to-source catalogue, fixed-adapter map and qualification boundary |
 | `src/fidb_poc/hunt_cli.py` | hunt/malware subcommand boundary (`hunt`, `build-malware`, `doctor`, `investigate`, `inspect`), reached via `fidb-poc <subcommand>` or the `fidb-hunt` alias |
 | `src/fidb_poc/hunt.py` | investigate -> select -> prepare -> match -> export workflow |
 | `src/fidb_poc/toolchain_registry.py` | pinned cross-toolchain rows (`toolchains/registry.toml`) |

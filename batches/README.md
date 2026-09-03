@@ -76,21 +76,21 @@ uv run fidb-poc compile-width-batch batch-020 --project-root .
 uv run fidb-poc compile-width-batch batch-020-android-gap --project-root .
 ```
 
-The control panel reads both projections. Until recipes exist for all nine new
-libraries it shows `batch-020` as blocked and disarmed, including the exact
-number of blocked executions. The Android gap is recipe- and toolchain-ready,
-but remains separately disarmed by policy.
+The control panel reads both projections. All nine new libraries now have
+source-matching reviewed recipes, so `batch-020` reports 9/9 recipe-ready and
+1,998 materializable executions. The Android gap reports 48 more. Both remain
+unmaterialized and separately disarmed by policy.
 
 ## Making it runnable later
 
-For each selected source, add and test a command-free `fidb-recipe/v3` native
-recipe whose name, version, URL, and SHA-256 match the source pack.  Add or
-generalize fixed build adapters as required by the upstream project; do not put
-upstream commands in the batch TOML.  Re-run the preview after every recipe.
+The nine command-free `fidb-recipe/v3` recipes and their fixed adapters are now
+present and compilation-qualified at the target-family and oldest-generation
+edges described in `recipes/README.md`. Their name, version, URL, and SHA-256
+match the source pack; no upstream commands live in the batch TOML.
 
-When all nine libraries are recipe-ready, the next implementation step is a
-materializer that expands both segments into their 2,046 immutable new cells
-and binds each cell to the reviewed five-block projection.
+The next implementation step is a materializer that expands both segments into
+their 2,046 immutable new cells and binds each cell to the reviewed five-block
+projection.
 Only after a disarmed preview and operator review should the resolved campaign
 be added to `plans/priority-queue.toml` and armed. This separation ensures that
 defining or editing a batch can never start an expensive run.
