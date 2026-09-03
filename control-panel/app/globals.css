@@ -376,6 +376,82 @@ button { font: inherit; }
 .ecological-boundary small { color: var(--muted-2); font-size: 7px; }
 .ecological-boundary em { color: #9c90e6; font: normal 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 
+.operational-validation-stack .operational-validation-row { border-top: 1px solid var(--line-soft); }
+.ecological-corpus-panel > header, .ecological-import-panel > header, .ecological-case-panel > header, .noisy-summary-panel > header, .noisy-ledger-panel > header { min-height: 61px; padding: 11px 14px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--line-soft); }
+.ecological-corpus-panel > header h3, .ecological-import-panel > header h3, .ecological-case-panel > header h3, .noisy-summary-panel > header h3, .noisy-ledger-panel > header h3 { margin: 3px 0; font-size: 12px; }
+.ecological-corpus-panel > header small, .ecological-import-panel > header small, .ecological-case-panel > header small, .noisy-summary-panel > header small, .noisy-ledger-panel > header small { color: var(--muted-2); font-size: 7px; }
+.ecological-import-panel > header > span, .noisy-ledger-panel > header > span { color: var(--cyan); font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-corpus-metrics, .noisy-summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ecological-corpus-metrics article, .noisy-summary-grid article { min-height: 72px; padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; border-right: 1px solid var(--line-soft); }
+.ecological-corpus-metrics article:last-child, .noisy-summary-grid article:last-child { border-right: 0; }
+.ecological-corpus-metrics span, .noisy-summary-grid span { color: var(--muted-2); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-corpus-metrics strong, .noisy-summary-grid strong { color: #cbd4de; font: 700 17px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-corpus-metrics small, .noisy-summary-grid small { color: #667488; font-size: 6px; }
+.ecological-import-grid { padding: 13px 14px; display: grid; grid-template-columns: 1.2fr 1.2fr .6fr; gap: 10px; }
+.ecological-import-grid label, .noisy-decision-editor label { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.ecological-import-grid label > span, .noisy-decision-editor label > span { color: var(--muted-2); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-import-grid input, .ecological-import-grid select, .ecological-import-grid textarea, .noisy-decision-editor input, .noisy-decision-editor select { width: 100%; min-height: 32px; padding: 7px 9px; color: #c3ccd7; background: #0c131b; border: 1px solid #2a3746; border-radius: 5px; font: 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-import-grid textarea { min-height: 57px; resize: vertical; }
+.ecological-file-input { position: relative; grid-row: span 2; min-height: 99px; padding: 12px; justify-content: center; align-items: center; text-align: center; border: 1px dashed #345466; border-radius: 6px; background: #0d1820; }
+.ecological-file-input input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ecological-file-input strong { color: #8fbfc1; font-size: 8px; overflow-wrap: anywhere; }
+.ecological-truth-toggle { padding: 8px 10px; flex-direction: row !important; align-items: center; border: 1px solid #293747; border-radius: 5px; }
+.ecological-truth-toggle input { width: 16px; min-height: 16px; }
+.ecological-truth-toggle > span { display: flex; flex-direction: column; gap: 3px; }
+.ecological-truth-toggle strong { color: #aeb9c5; font-size: 7px; }
+.ecological-truth-toggle small { color: var(--muted-2); font-size: 6px; }
+.ecological-import-panel > footer { min-height: 52px; padding: 9px 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line-soft); }
+.ecological-import-panel > footer p { margin: 0; color: var(--muted); font-size: 7px; }
+.ecological-case-list > details, .noisy-hash-list > details { border-bottom: 1px solid var(--line-soft); }
+.ecological-case-list > details > summary, .noisy-hash-list > details > summary { min-height: 58px; padding: 8px 13px; display: grid; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.ecological-case-list > details > summary { grid-template-columns: 74px minmax(180px, 1fr) 58px 58px 45px; }
+.ecological-case-list summary::-webkit-details-marker, .noisy-hash-list summary::-webkit-details-marker { display: none; }
+.ecological-case-list summary p, .noisy-hash-list summary p { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.ecological-case-list summary p strong, .noisy-hash-list summary p strong { color: #bbc5d0; font-size: 9px; }
+.ecological-case-list summary p small, .noisy-hash-list summary p small { color: var(--muted-2); font-size: 6px; }
+.ecological-case-list summary > div { text-align: right; }
+.ecological-case-list summary > div b { display: block; color: #c3ccd7; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-case-list summary > div span, .ecological-case-list summary > em { color: var(--muted-2); font: normal 650 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.ecological-case-list > details > section, .noisy-hash-list > details > section { background: #0c1219; border-top: 1px solid var(--line-soft); }
+.ecological-case-truth { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ecological-case-truth p { min-height: 53px; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; border-right: 1px solid var(--line-soft); }
+.ecological-case-truth span { color: var(--muted-2); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-case-truth strong { color: #9fabb9; font-size: 7px; overflow-wrap: anywhere; }
+.ecological-case-actions { min-height: 49px; padding: 8px 13px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.ecological-case-actions span { color: #8795a6; font: 650 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-case-actions button, .noisy-decision-editor button { min-height: 29px; padding: 0 11px; color: var(--cyan); background: #102529; border: 1px solid #2a6466; border-radius: 4px; font: 650 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ecological-case-actions button:disabled, .noisy-decision-editor button:disabled { color: #596579; border-color: #293442; background: #121821; }
+.ecological-owner-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ecological-owner-list article { min-height: 49px; padding: 8px 11px; display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.ecological-owner-list article > span { padding: 3px 5px; border-radius: 3px; color: #94a2b3; background: #18202b; font: 650 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.ecological-owner-list article > span.present { color: var(--green); }
+.ecological-owner-list article > span.absent { color: var(--amber); }
+.ecological-owner-list p { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.ecological-owner-list strong { color: #aeb9c5; font-size: 7px; }
+.ecological-owner-list small { color: var(--muted-2); font-size: 6px; }
+.noisy-summary-panel > footer { min-height: 44px; padding: 9px 13px; display: flex; align-items: center; gap: 9px; color: var(--muted); border-top: 1px solid var(--line-soft); font-size: 7px; }
+.noisy-summary-panel > footer strong { color: var(--amber); }
+.noisy-hash-list > details > summary { grid-template-columns: 92px 230px minmax(190px, 1fr) 92px 45px; }
+.noisy-hash-list > details > summary > code { color: #8998aa; font-size: 7px; overflow: hidden; text-overflow: ellipsis; }
+.noisy-hash-list > details > summary > em { color: var(--muted-2); font: normal 650 5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.noisy-class, .noisy-disposition { width: fit-content; padding: 3px 5px; border: 1px solid #394657; border-radius: 3px; color: #8c9aab; font: 700 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.noisy-class.confirmed-noisy, .noisy-disposition.quarantine { color: var(--amber); border-color: rgba(240,182,87,.42); background: rgba(240,182,87,.07); }
+.noisy-disposition.reviewed-shared { color: #b2a6ef; border-color: rgba(178,166,239,.35); }
+.noisy-disposition.cleared { color: var(--green); border-color: rgba(101,214,139,.3); }
+.noisy-owner-strip { min-height: 43px; padding: 9px 13px; display: grid; grid-template-columns: 100px 1fr; gap: 10px; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.noisy-owner-strip span { color: var(--muted-2); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.noisy-owner-strip p { margin: 0; color: #919faf; font-size: 7px; }
+.noisy-decision-editor { padding: 10px 13px; display: grid; grid-template-columns: 150px minmax(240px, 1fr) auto; gap: 10px; align-items: end; border-bottom: 1px solid var(--line-soft); }
+.noisy-current-decision { min-height: 42px; padding: 8px 13px; display: grid; grid-template-columns: 100px 1fr auto; gap: 10px; align-items: center; color: #8492a4; border-bottom: 1px solid var(--line-soft); font-size: 7px; }
+.noisy-current-decision code { color: #647287; font-size: 6px; }
+.noisy-evidence-head, .noisy-evidence-list article { display: grid; grid-template-columns: .8fr 1fr 1.2fr 1.2fr; gap: 10px; align-items: center; }
+.noisy-evidence-head { min-height: 29px; padding: 0 13px; color: var(--muted-2); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; border-bottom: 1px solid var(--line-soft); }
+.noisy-evidence-list article { min-height: 48px; padding: 7px 13px; border-bottom: 1px solid var(--line-soft); }
+.noisy-evidence-list article > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.noisy-evidence-list strong { color: #aeb8c5; font-size: 7px; }
+.noisy-evidence-list small, .noisy-evidence-list code { color: var(--muted-2); font-size: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.noisy-hash-list > details > section > footer { padding: 8px 13px; color: var(--muted-2); font-size: 6px; }
+
 .matrix-workspace { display: flex; flex-direction: column; gap: 14px; }
 .crosspoint-matrix-panel { min-width: 0; overflow: visible; }
 .matrix-main-header { min-height: 83px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line-soft); }
@@ -1472,6 +1548,13 @@ button { font: inherit; }
 .terminal-events p { margin: 0; color: #778397; }
 
 @media (max-width: 1050px) {
+  .ecological-corpus-metrics, .noisy-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ecological-corpus-metrics article:nth-child(3), .noisy-summary-grid article:nth-child(3) { border-right: 0; }
+  .ecological-corpus-metrics article:nth-child(-n+3), .noisy-summary-grid article:nth-child(-n+3) { border-bottom: 1px solid var(--line-soft); }
+  .ecological-import-grid { grid-template-columns: 1fr 1fr; }
+  .ecological-file-input { grid-row: auto; grid-column: 1 / -1; min-height: 78px; }
+  .ecological-owner-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .noisy-hash-list > details > summary { grid-template-columns: 86px 180px minmax(160px, 1fr) 86px 40px; }
   .operational-matrix-index > header { align-items: flex-start; flex-direction: column; }
   .operational-matrix-counts { width: 100%; min-width: 0; }
   .operational-gap-grid { grid-template-columns: 1fr; }
@@ -1552,6 +1635,25 @@ button { font: inherit; }
   .validation-fold-panel > div > section { border-right: 0; border-bottom: 1px solid var(--line-soft); }
   .validation-failure-head, .validation-failure-ledger > article { min-width: 760px; }
   .validation-failure-ledger { overflow-x: auto; }
+  .ecological-corpus-panel > header, .ecological-import-panel > header, .ecological-case-panel > header, .noisy-summary-panel > header, .noisy-ledger-panel > header { align-items: flex-start; flex-direction: column; }
+  .ecological-corpus-metrics, .noisy-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ecological-corpus-metrics article:nth-child(3), .noisy-summary-grid article:nth-child(3) { border-right: 1px solid var(--line-soft); }
+  .ecological-corpus-metrics article:nth-child(2n), .noisy-summary-grid article:nth-child(2n) { border-right: 0; }
+  .ecological-corpus-metrics article:nth-child(-n+4), .noisy-summary-grid article:nth-child(-n+4) { border-bottom: 1px solid var(--line-soft); }
+  .ecological-import-grid { grid-template-columns: 1fr; }
+  .ecological-file-input { grid-column: auto; }
+  .ecological-import-panel > footer { align-items: flex-start; flex-direction: column; }
+  .ecological-import-panel > footer button { width: 100%; }
+  .ecological-case-list > details > summary { grid-template-columns: 72px minmax(150px, 1fr) 45px; }
+  .ecological-case-list > details > summary > div:nth-of-type(2), .ecological-case-list > details > summary > em { display: none; }
+  .ecological-case-truth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ecological-owner-list { grid-template-columns: 1fr; }
+  .noisy-hash-list { overflow-x: auto; }
+  .noisy-hash-list > details { min-width: 690px; }
+  .noisy-hash-list > details > summary { grid-template-columns: 86px 170px minmax(150px, 1fr) 82px 40px; }
+  .noisy-decision-editor { grid-template-columns: 140px minmax(220px, 1fr); }
+  .noisy-decision-editor button { grid-column: 1 / -1; }
+  .noisy-evidence-head, .noisy-evidence-list article { min-width: 680px; }
   .lane-workflow-track { grid-template-columns: 1fr; }
   .lane-workflow-track > i { display: none; }
   .latest-width-evidence { grid-template-columns: 1fr; }
@@ -1570,7 +1672,7 @@ button { font: inherit; }
   .nav-label, .nav-item > span, .nav-item em, .armed-dot { display: none; }
   .nav-item { display: block; width: auto; white-space: nowrap; padding: 8px 11px; }
   .nav-item.active::before { left: 10px; right: 10px; bottom: 0; top: auto; width: auto; height: 2px; }
-  .secondary-label ~ .nav-item { display: none; }
+  .operations-nav-item { display: none; }
   .workspace { height: auto; overflow: visible; }
   .topbar { padding: 18px; }
   .sync-state, .command-button { display: none; }

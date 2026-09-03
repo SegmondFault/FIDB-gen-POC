@@ -20,17 +20,23 @@ import {
   type WidthBatch,
   type WidthCompilation,
   type WidthStudy,
+  type NoisyHashRow,
 } from './use-factory-api';
 
 const navItems = [
   ['01', 'Overview'],
   ['02', 'Matrix'],
-  ['03', 'Machine validation'],
-  ['04', 'Performance'],
-  ['05', 'Timing'],
-  ['06', 'Batches'],
-  ['07', 'Targets & toolchains'],
-  ['08', 'Evidence'],
+  ['03', 'Performance'],
+  ['04', 'Timing'],
+  ['05', 'Batches'],
+  ['06', 'Targets & toolchains'],
+  ['07', 'Evidence'],
+];
+
+const validationNavItems = [
+  ['08', 'Machine validation'],
+  ['09', 'Ecological validation'],
+  ['10', 'Noisy hashes'],
 ];
 
 type BatchRow = {
@@ -454,13 +460,25 @@ export default function Home() {
               {label === 'Batches' && <em>{currentBatchRows.filter(batch => batch.status !== 'Complete').length}</em>}
             </button>
           ))}
+          <p className="nav-label secondary-label">Validation</p>
+          {validationNavItems.map(([number, label]) => (
+            <button
+              className={activeView === label ? 'nav-item active' : 'nav-item'}
+              key={label}
+              onClick={() => setActiveView(label)}
+            >
+              <span>{number}</span>
+              {label}
+              {label === 'Noisy hashes' && factory.noisyHashes && <em>{factory.noisyHashes.summary.confirmed_noisy}</em>}
+            </button>
+          ))}
           <p className="nav-label secondary-label">Operations</p>
-          <button className={activeView === 'Automation' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Automation')}>
-            <span>09</span>
+          <button className={activeView === 'Automation' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Automation')}>
+            <span>11</span>
             Automation
           </button>
-          <button className={activeView === 'Activity' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Activity')}>
-            <span>10</span>
+          <button className={activeView === 'Activity' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Activity')}>
+            <span>12</span>
             Activity
           </button>
         </nav>
@@ -672,6 +690,8 @@ type FactoryApiState = ReturnType<typeof useFactoryApi>;
 function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Machine validation') return <MachineValidationView factory={factory} />;
+  if (view === 'Ecological validation') return <EcologicalValidationView factory={factory} />;
+  if (view === 'Noisy hashes') return <NoisyHashesView factory={factory} />;
   if (view === 'Performance') return <PerformanceView factory={factory} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
@@ -838,6 +858,103 @@ function MachineValidationView({ factory }: { factory: FactoryApiState }) {
   </div>;
 }
 
+function splitOwnerLabels(value: string) {
+  return Array.from(new Set(value.split(/[\s,]+/).map(item => item.trim()).filter(Boolean)));
+}
+
+function EcologicalValidationView({ factory }: { factory: FactoryApiState }) {
+  const validation = factory.ecologicalValidation;
+  const [file, setFile] = useState<File | null>(null);
+  const [label, setLabel] = useState('');
+  const [platformHint, setPlatformHint] = useState('auto');
+  const [expectedPresent, setExpectedPresent] = useState('');
+  const [expectedAbsent, setExpectedAbsent] = useState('');
+  const [truthComplete, setTruthComplete] = useState(false);
+  const [message, setMessage] = useState('');
+  if (!validation) return <div className="view-stack"><ViewIntro kicker="ECOLOGICAL VALIDATION" title="Held-out real-binary validation" copy="The ecological-validation authority is unavailable." /><section className="panel"><div className="empty-state"><span>◇</span><strong>No ecological authority loaded</strong><p>Reconnect the local API or inspect validation/ecological-validation.toml.</p></div></section></div>;
+  const matrix = validation.aggregate.confusion_matrix;
+  const matrixCells = [
+    ['TP', 'True positives', matrix.true_positives, 'Expected corpus library detected'],
+    ['FP', 'False positives', matrix.false_positives, 'Unexpected owner detected · collision'],
+    ['TN', 'True negatives', matrix.true_negatives, 'Expected-absent owner rejected'],
+    ['FN', 'False negatives', matrix.false_negatives, 'Expected library not detected'],
+  ] as const;
+  const importing = factory.busyAction === 'ecological-import';
+  const importFile = async () => {
+    if (!file || !label.trim()) return;
+    setMessage('Importing and routing preserved bytes…');
+    try {
+      await factory.importEcological(file, {
+        label: label.trim(),
+        platformHint,
+        expectedPresent: splitOwnerLabels(expectedPresent),
+        expectedAbsent: splitOwnerLabels(expectedAbsent),
+        truthComplete,
+      });
+      setMessage('Imported. The corpus gate below determines whether it can run.');
+      setFile(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Import failed.');
+    }
+  };
+  return <div className="view-stack ecological-validation-view">
+    <ViewIntro kicker="HELD-OUT ECOLOGICAL VALIDATION" title="Import real binaries; query the entire compatible corpus" copy="Each file is preserved and hash-pinned, automatically routed to a query sublane, analysed but never executed, and compared with every library owner in the latest compatible lane generation. Incompatible lanes are excluded because they cannot produce meaningful negatives." action={<button className="secondary-action" onClick={() => void factory.refresh()}>Refresh corpus</button>} />
+
+    <section className="panel ecological-corpus-panel">
+      <header><div><p className="panel-kicker">CORPUS GATE</p><h3>{validation.corpus.materialized_generations ? 'Compatible lane databases can be selected per import' : 'Waiting for the first lane database generation'}</h3><small>{validation.policy.corpus_scope.replaceAll('-', ' ')} · {validation.policy.generation_policy.replaceAll('-', ' ')}</small></div><span className={`validation-state ${validation.corpus.materialized_generations ? 'ready' : 'waiting'}`}>{validation.corpus.materialized_generations ? 'CORPUS PRESENT' : 'NO CORPUS YET'}</span></header>
+      <div className="ecological-corpus-metrics"><article><span>GENERATIONS</span><strong>{validation.corpus.materialized_generations}</strong><small>{validation.corpus.active_packs} active packs</small></article><article><span>RAW OBSERVATIONS</span><strong>{validation.corpus.raw_observations.toLocaleString()}</strong><small>occurrence-preserving evidence</small></article><article><span>COMPACT SIGNATURES</span><strong>{validation.corpus.compact_unique_signatures.toLocaleString()}</strong><small>deduplicated compatible identities</small></article><article><span>STORAGE</span><strong>{formatBytes(validation.corpus.bytes)}</strong><small>{validation.corpus.issues} inventory issues</small></article><article><span>CASES</span><strong>{validation.summary.completed_cases} / {validation.summary.imported_cases}</strong><small>{validation.summary.running_cases} running · {validation.summary.ready_cases} ready</small></article></div>
+    </section>
+
+    <section className="panel ecological-import-panel">
+      <header><div><p className="panel-kicker">IMPORT HELD-OUT BINARY</p><h3>Preserve evidence and declare only the truth you know</h3><small>ELF · PE/COFF · thin Mach-O · maximum {formatBytes(validation.policy.max_file_bytes)} · the target is never executed</small></div><span>SHA-256 PINNED</span></header>
+      <div className="ecological-import-grid">
+        <label className="ecological-file-input"><span>BINARY FILE</span><input type="file" onChange={event => { const selected = event.target.files?.[0] ?? null; setFile(selected); if (selected && !label) setLabel(selected.name); }} /><strong>{file ? `${file.name} · ${formatBytes(file.size)}` : 'Choose one held-out binary'}</strong></label>
+        <label><span>CASE LABEL</span><input value={label} maxLength={128} onChange={event => setLabel(event.target.value)} placeholder="Known OpenSSL-positive utility" /></label>
+        <label><span>PLATFORM HINT</span><select value={platformHint} onChange={event => setPlatformHint(event.target.value)}><option value="auto">Auto</option><option value="linux">Linux</option><option value="android">Android</option><option value="windows">Windows</option><option value="macos">macOS</option><option value="ios">iOS</option></select></label>
+        <label><span>EXPECTED PRESENT</span><textarea value={expectedPresent} onChange={event => setExpectedPresent(event.target.value)} placeholder="openssl@3.5.8, zlib@1.3.1" /></label>
+        <label><span>EXPECTED ABSENT</span><textarea value={expectedAbsent} onChange={event => setExpectedAbsent(event.target.value)} placeholder="Explicit negatives only" /></label>
+        <label className="ecological-truth-toggle"><input type="checkbox" checked={truthComplete} onChange={event => setTruthComplete(event.target.checked)} /><span><strong>Ground truth is complete</strong><small>All unlisted corpus owners become expected negatives. Leave off for partial knowledge.</small></span></label>
+      </div>
+      <footer><p>{message || 'Unlabelled imports are permitted for exploration, but TP/FP/TN/FN remain blank.'}</p><button className="primary-action" onClick={() => void importFile()} disabled={!file || !label.trim() || importing}>{importing ? 'Importing…' : 'Import binary'}</button></footer>
+    </section>
+
+    <section className="panel validation-results-panel"><header><div><p className="panel-kicker">AGGREGATE ECOLOGICAL DECISIONS</p><h3>True/false positives and negatives across labelled held-out cases</h3><small>Unit: one imported binary × one compatible corpus library owner. Blank means unmeasured—not zero.</small></div><span className={`validation-state ${validation.aggregate.measured_cases ? 'ready' : 'waiting'}`}>{validation.aggregate.measured_cases} measured cases</span></header><div className="validation-confusion-grid">{matrixCells.map(([short, name, value, detail]) => <article className={short.toLowerCase()} key={short}><span>{short}</span><strong>{value === null ? '—' : value.toLocaleString()}</strong><p><b>{name}</b><small>{detail}</small></p></article>)}</div></section>
+
+    <section className="panel ecological-case-panel"><header><div><p className="panel-kicker">IMPORTED CASE LEDGER</p><h3>{validation.summary.imported_cases} preserved binaries</h3><small>Run buttons launch one isolated analysis subprocess; only one ecological case runs at a time.</small></div><code>{validation.status_digest.slice(0, 16)}…</code></header><div className="ecological-case-list">{validation.cases.map(item => {
+      const caseMatrix = item.results.confusion_matrix;
+      const running = item.state === 'queued' || item.state === 'running';
+      return <details key={item.case_id}><summary><span className={`operational-state ${item.results.state === 'measured-complete' ? 'built' : item.readiness.ready_to_run ? 'ready' : 'blocked'}`}>{item.results.state === 'measured-complete' ? 'MEASURED' : running ? item.state.toUpperCase() : item.readiness.ready_to_run ? 'READY' : 'BLOCKED'}</span><p><strong>{item.label}</strong><small>{item.binary.original_filename} · {formatBytes(item.binary.bytes)} · {item.probe.binary_format} {item.probe.architecture ?? ''} {item.probe.bits ?? ''}-bit · {item.probe.sublane_id ?? 'unrouted'}</small></p><div><b>{item.results.failure_summary.collisions}</b><span>collisions</span></div><div><b>{item.results.failure_summary.misses}</b><span>misses</span></div><em>EXPAND</em></summary><section><div className="ecological-case-truth"><p><span>EXPECTED PRESENT</span><strong>{item.truth.expected_present.join(', ') || 'unlabelled'}</strong></p><p><span>EXPECTED ABSENT</span><strong>{item.truth.complete ? 'all unlisted corpus owners' : item.truth.expected_absent.join(', ') || 'unlabelled'}</strong></p><p><span>ROUTING</span><strong>{item.probe.target_id ?? item.probe.blocker ?? 'unresolved'} → {item.probe.lane_id ?? 'no lane'}</strong></p><p><span>CORPUS</span><strong>{item.corpus.map(row => row.generation_id).join(', ') || 'not available'}</strong></p></div>{item.readiness.blockers.length > 0 && <div className="validation-blockers">{item.readiness.blockers.map(blocker => <span key={blocker}>! {blocker}</span>)}</div>}<div className="ecological-case-actions"><span>TP {caseMatrix.true_positives ?? '—'} · FP {caseMatrix.false_positives ?? '—'} · TN {caseMatrix.true_negatives ?? '—'} · FN {caseMatrix.false_negatives ?? '—'}</span><button onClick={() => void factory.runEcological(item.case_id)} disabled={!item.readiness.ready_to_run || running || factory.busyAction === `ecological-run:${item.case_id}`}>{running ? 'Running…' : item.results.state === 'measured-complete' ? 'Run again' : 'Check entire corpus'}</button></div>{item.run.error && <div className="inline-warning">{item.run.error}</div>}<div className="ecological-owner-list">{item.results.owner_matches.map(owner => <article key={owner.owner}><span className={owner.truth}>{owner.truth}</span><p><strong>{owner.owner}</strong><small>{owner.matched_functions} target functions · {owner.matched_occurrences} corpus occurrences</small></p></article>)}{item.results.state === 'measured-complete' && !item.results.owner_matches.length && <div className="operational-empty"><strong>No corpus owners matched</strong><small>Inspect miss rows and target hashability before interpreting this as a true negative.</small></div>}</div><details className="validation-failure-ledger"><summary><span><b>Specific collisions and misses</b><small>{item.results.failures.length} visible rows</small></span><em>EXPAND</em></summary><div className="validation-failure-head"><span>Type / owner / function</span><span>Exact build evidence</span><span>Signature</span><span>Evidence</span></div>{item.results.failures.map((failure, index) => <article key={`${failure.failure_type}-${index}`}><div><span className={failure.failure_type}>{failure.failure_type}</span><strong>{failure.owner}</strong><small>{failure.target_function || 'expected owner absent'}</small></div><div><strong>{failure.route_id}</strong><small>{failure.compiler_id} · {failure.treatment_id}</small></div><code>{failure.signature || '—'}</code><code>{failure.evidence_path}</code></article>)}</details></section></details>;
+    })}{!validation.cases.length && <div className="operational-empty"><strong>No held-out files imported</strong><small>Importing is safe before the corpus exists; checking remains fail-closed until a compatible lane generation is available.</small></div>}</div></section>
+  </div>;
+}
+
+function NoisyHashesView({ factory }: { factory: FactoryApiState }) {
+  const ledger = factory.noisyHashes;
+  const [draftStates, setDraftStates] = useState<Record<string, NoisyHashRow['disposition']>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState('');
+  if (!ledger) return <div className="view-stack"><ViewIntro kicker="NOISY HASHES" title="Cross-validation trust ledger" copy="The noisy-hash authority is unavailable." /><section className="panel"><div className="empty-state"><span>◇</span><strong>No trust ledger loaded</strong><p>Reconnect the local API or inspect validation/noisy-hashes.toml.</p></div></section></div>;
+  const applyDecision = async (row: NoisyHashRow) => {
+    const state = draftStates[row.signature_id] ?? row.disposition;
+    const reason = reasons[row.signature_id] ?? '';
+    if (!reason.trim()) return;
+    setMessage(`Recording ${state} for ${row.signature_id}…`);
+    try {
+      await factory.decideNoisyHash(row.signature_id, state, reason.trim());
+      setMessage(`Recorded ${state} as a reviewable TOML decision.`);
+      setReasons(current => ({ ...current, [row.signature_id]: '' }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Decision failed.');
+    }
+  };
+  return <div className="view-stack noisy-hash-view">
+    <ViewIntro kicker="VALIDATION TRUST CONTROL" title="Detect and manage continually noisy FID hashes" copy="Collision evidence from machine and ecological validation is grouped only inside a query-compatible sublane. A single collision is visible as a candidate; confirmed noisy requires repeated observations across independent runs. Nothing is automatically deleted." action={<button className="secondary-action" onClick={() => void factory.refresh()}>Refresh evidence</button>} />
+    <section className="panel noisy-summary-panel"><header><div><p className="panel-kicker">TRUST LEDGER</p><h3>{ledger.summary.observed_hashes} collision-bearing signatures across {ledger.summary.reports_scanned} reports</h3><small>{ledger.classification.grouping_key.replaceAll('-', ' ')}</small></div><code>{ledger.authority_path}</code></header><div className="noisy-summary-grid"><article><span>CANDIDATES</span><strong>{ledger.summary.candidate_noisy}</strong><small>at least one collision</small></article><article><span>CONFIRMED NOISY</span><strong>{ledger.summary.confirmed_noisy}</strong><small>≥{ledger.classification.confirmed_min_collisions} collisions in ≥{ledger.classification.confirmed_min_distinct_runs} runs</small></article><article><span>QUARANTINED</span><strong>{ledger.summary.quarantined}</strong><small>forward admission exclusion</small></article><article><span>REVIEWED SHARED</span><strong>{ledger.summary.reviewed_shared}</strong><small>useful but ambiguous</small></article><article><span>CLEARED</span><strong>{ledger.summary.cleared}</strong><small>reviewed false alarm</small></article></div><footer><strong>No silent blacklist.</strong><span>Recurrence classifies evidence; only an explicit, reasoned TOML decision changes disposition. Published evidence remains immutable.</span></footer></section>
+    {message && <div className="toast">{message}</div>}
+    <section className="panel noisy-ledger-panel"><header><div><p className="panel-kicker">SIGNATURE EVIDENCE</p><h3>Highest-risk and quarantined hashes first</h3><small>Owners, independent runs and exact collision evidence remain expandable.</small></div><span>{ledger.hashes.length} HASHES</span></header><div className="noisy-hash-list">{ledger.hashes.map(row => <details key={row.signature_id}><summary><span className={`noisy-class ${row.classification}`}>{row.classification.replaceAll('-', ' ')}</span><code>{row.signature}</code><p><strong>{row.scope}</strong><small>{row.distinct_runs} runs · {row.collisions} collisions · {row.distinct_owners} owners · {row.sources.join(' + ')}</small></p><span className={`noisy-disposition ${row.disposition}`}>{row.disposition.replaceAll('-', ' ')}</span><em>EXPAND</em></summary><section><div className="noisy-owner-strip"><span>AFFECTED OWNERS</span><p>{row.owners.join(' · ')}</p></div><div className="noisy-decision-editor"><label><span>DISPOSITION</span><select value={draftStates[row.signature_id] ?? row.disposition} onChange={event => setDraftStates(current => ({ ...current, [row.signature_id]: event.target.value as NoisyHashRow['disposition'] }))}>{ledger.management.allowed_states.map(state => <option key={state} value={state}>{state.replaceAll('-', ' ')}</option>)}</select></label><label><span>REVIEW REASON</span><input value={reasons[row.signature_id] ?? ''} onChange={event => setReasons(current => ({ ...current, [row.signature_id]: event.target.value }))} maxLength={500} placeholder="Evidence-based reason required" /></label><button onClick={() => void applyDecision(row)} disabled={!reasons[row.signature_id]?.trim() || factory.busyAction === `noisy-hash:${row.signature_id}`}>Record TOML decision</button></div>{row.decision && <div className="noisy-current-decision"><strong>Current decision</strong><span>{row.decision.state} · {row.decision.reason} · {row.decision.reviewed_by} · {row.decision.reviewed_at}</span><code>{row.decision.path}</code></div>}<div className="noisy-evidence-head"><span>Run / source</span><span>Owner / function</span><span>Route / compiler / treatment</span><span>Evidence</span></div><div className="noisy-evidence-list">{row.evidence.map((evidence, index) => <article key={`${evidence.run_id}-${index}`}><div><strong>{evidence.run_id}</strong><small>{evidence.source}</small></div><div><strong>{evidence.owner}</strong><small>{evidence.function_id || evidence.library_id}</small></div><div><strong>{evidence.route_id}</strong><small>{evidence.compiler_id} · {evidence.treatment_id}</small></div><code>{evidence.evidence_path}</code></article>)}</div>{row.evidence_rows_truncated > 0 && <footer>{row.evidence_rows_truncated} additional evidence rows remain in the source reports.</footer>}</section></details>)}{!ledger.hashes.length && <div className="operational-empty"><strong>No noisy hashes detected yet</strong><small>The ledger will populate automatically when machine or ecological reports contain collisions. Zero here means no collision reports exist, not that the corpus has been validated.</small></div>}</div></section>
+  </div>;
+}
+
 type RecipeMode = 'native' | 'source' | 'malware' | 'catalog';
 type RecipeReadiness = 'source' | 'archive' | 'unmet' | 'artifact';
 type RecipeOption = {
@@ -894,6 +1011,8 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
       - left.summary.feasible_full_path_executions
     ))[0];
   const machineValidation = authority?.machine_validations.find(validation => validation.language_id === selectedLanguageId);
+  const ecologicalValidation = factory.ecologicalValidation;
+  const noisyHashes = factory.noisyHashes;
   const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
   const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (
@@ -1517,8 +1636,12 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
         </section>
 
         {machineValidation && <section className="operational-matrix-band validation-band">
-          <div className="operational-band-title"><b>03</b><span><strong>Automatic machine validation</strong><small>After ten complete libraries: freeze the five/five cohort, materialise a separate validation-run, then schedule it behind a first-run canary gate.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} libraries · {machineValidation.summary.completed_exact_inputs.toLocaleString()}/{machineValidation.summary.required_exact_inputs.toLocaleString()} inputs</em></div>
-          <div className="operational-validation-row"><span className={`operational-state ${machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{machineValidation.readiness.eligible ? 'READY TO SCHEDULE' : 'WAITING'}</span><p><strong>{machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · {machineValidation.summary.composite_programs} composites · TP/FP/TN/FN report pending</small></p><div><b>{machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>libraries to gate</span></div><div><b>≈{machineValidation.planning.central_wall_hours.toFixed(0)}h</b><span>planning wall</span></div></div>
+          <div className="operational-band-title"><b>03</b><span><strong>Validation and trust</strong><small>Machine cohorts measure controlled width; held-out binaries test the compatible corpus; recurring collisions become managed noisy-hash evidence.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} cohort · {ecologicalValidation?.summary.completed_cases ?? 0} ecological · {noisyHashes?.summary.confirmed_noisy ?? 0} noisy</em></div>
+          <div className="operational-validation-stack">
+            <div className="operational-validation-row"><span className={`operational-state ${machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{machineValidation.readiness.eligible ? 'READY TO SCHEDULE' : 'WAITING'}</span><p><strong>Machine validation · {machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · fixed RNG seed · {machineValidation.summary.composite_programs} composites</small></p><div><b>{machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>libraries to gate</span></div><div><b>≈{machineValidation.planning.central_wall_hours.toFixed(0)}h</b><span>planning wall</span></div></div>
+            <div className="operational-validation-row"><span className={`operational-state ${ecologicalValidation?.corpus.materialized_generations ? 'ready' : 'blocked'}`}>{ecologicalValidation?.corpus.materialized_generations ? 'CORPUS READY' : 'NO CORPUS'}</span><p><strong>Ecological validation · held-out binaries</strong><small>{ecologicalValidation?.summary.imported_cases ?? 0} imports · {ecologicalValidation?.aggregate.measured_cases ?? 0} measured · entire compatible lane corpus · never execute imports</small></p><div><b>{ecologicalValidation?.aggregate.failure_summary.collisions ?? 0}</b><span>collisions</span></div><div><b>{ecologicalValidation?.aggregate.failure_summary.misses ?? 0}</b><span>misses</span></div></div>
+            <div className="operational-validation-row"><span className={`operational-state ${(noisyHashes?.summary.confirmed_noisy ?? 0) ? 'blocked' : 'ready'}`}>{(noisyHashes?.summary.confirmed_noisy ?? 0) ? 'REVIEW' : 'OBSERVING'}</span><p><strong>Noisy-hash trust ledger</strong><small>{noisyHashes?.summary.observed_hashes ?? 0} observed · recurrence across independent runs required · explicit TOML disposition · no automatic deletion</small></p><div><b>{noisyHashes?.summary.confirmed_noisy ?? 0}</b><span>confirmed noisy</span></div><div><b>{noisyHashes?.summary.quarantined ?? 0}</b><span>quarantined</span></div></div>
+          </div>
         </section>}
 
         <div className="operational-gap-grid">

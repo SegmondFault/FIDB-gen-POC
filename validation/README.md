@@ -82,3 +82,33 @@ signature, route, compiler, treatment and database evidence. Every expected
 library with no match produces a specific miss row. The first usable run stays
 blocked until a compatible lane database exists; importing a file cannot
 create, compact or admit a corpus generation.
+
+## Noisy-hash trust ledger
+
+`noisy-hashes.toml` turns collision reports from both validation processes into
+one reviewable trust ledger. Its identity is not a bare numeric hash: records
+are grouped by query-compatible sublane plus the complete FID signature tuple.
+This prevents equal values from incompatible targets being treated as the same
+failure mode.
+
+One collision creates a visible candidate. The checked-in starting threshold
+marks a signature confirmed noisy only after at least three collision rows in
+at least two independent reports. A signature affecting two or more owners is
+also marked high risk. These thresholds are classification aids, not automatic
+proof that the signature is unusable: common source, compiler boilerplate and
+genuinely shared functions can all be repeatedly ambiguous.
+
+Inspect the current ledger without changing evidence:
+
+```sh
+uv run fidb-poc noisy-hashes status --project-root .
+```
+
+Management decisions are individual TOML files under
+`validation/noisy-hash-decisions/`. The GUI and CLI permit `observe`,
+`quarantine`, `reviewed-shared` and `cleared`, require a written reason, and
+pin the source status digest. Quarantine is a contract for excluding the
+signature from a **future** admission generation; it never edits or deletes a
+published raw or compact database. That downstream admission filter must be
+implemented and verified before quarantine is treated as operationally
+enforced.

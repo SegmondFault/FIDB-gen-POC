@@ -1170,7 +1170,7 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v14';
+  schema_version: 'fidb-authority-catalog/v15';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -1179,6 +1179,8 @@ export type FactoryAuthority = {
   materialized_campaigns: MaterializedCampaign[];
   auto_batch_campaigns: AutoBatchCampaign[];
   machine_validations: MachineValidation[];
+  ecological_validation: EcologicalValidation;
+  noisy_hashes: NoisyHashStatus;
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
@@ -1312,6 +1314,203 @@ export type MachineValidation = {
     failure_summary: { collisions: number; misses: number };
     failures: MachineValidationFailure[];
   };
+};
+
+export type EcologicalFailure = {
+  failure_type: 'collision' | 'miss';
+  owner: string;
+  address: string;
+  target_function: string;
+  corpus_function: string;
+  signature: string;
+  route_id: string;
+  compiler_id: string;
+  treatment_id: string;
+  evidence_path: string;
+};
+
+export type EcologicalConfusion = {
+  unit: 'imported-binary-corpus-library-presence';
+  true_positives: number | null;
+  false_positives: number | null;
+  true_negatives: number | null;
+  false_negatives: number | null;
+};
+
+export type EcologicalCase = {
+  case_id: string;
+  label: string;
+  state: 'imported' | 'queued' | 'running' | 'complete' | 'failed';
+  created_at: string;
+  updated_at: string;
+  binary: {
+    original_filename: string;
+    stored_path: string;
+    bytes: number;
+    sha256: string;
+    never_execute: true;
+  };
+  platform_hint: string;
+  truth: {
+    expected_present: string[];
+    expected_absent: string[];
+    complete: boolean;
+  };
+  probe: {
+    state: string;
+    binary_format: string;
+    platform?: string;
+    architecture?: string;
+    bits?: number;
+    endianness?: string;
+    target_id: string | null;
+    lane_id: string | null;
+    sublane_id: string | null;
+    ghidra_language_id?: string | null;
+    ghidra_compiler_spec_id?: string | null;
+    blocker?: string | null;
+  };
+  run: {
+    started_at: string | null;
+    finished_at: string | null;
+    error: string | null;
+    pid: number | null;
+  };
+  readiness: {
+    ready_to_run: boolean;
+    blockers: string[];
+    corpus_generations: number;
+  };
+  corpus: Array<{
+    path: string;
+    generation_id: string;
+    lane_id: string;
+    kind: string;
+    state: string;
+    bytes: number;
+    raw_observations: number;
+    unique_signatures: number | null;
+  }>;
+  results: {
+    state: 'not-run' | 'invalid-report' | 'measured-complete';
+    confusion_matrix: EcologicalConfusion;
+    failure_summary: { collisions: number; misses: number };
+    failures: EcologicalFailure[];
+    owner_matches: Array<{
+      owner: string;
+      matched_functions: number;
+      matched_occurrences: number;
+      truth: 'present' | 'absent' | 'unlabelled';
+      evidence: EcologicalFailure[];
+    }>;
+    report_path: string | null;
+    metrics?: Record<string, number | string | null>;
+    failure_rows_truncated?: number;
+    owner_rows_truncated?: number;
+  };
+};
+
+export type EcologicalValidation = {
+  schema_version: 'fidb-ecological-validation-status/v1';
+  id: string;
+  label: string;
+  state: string;
+  authority_path: string;
+  authority_sha256: string;
+  status_digest: string;
+  policy: {
+    corpus_scope: string;
+    generation_policy: string;
+    analysis_engine: string;
+    decision_unit: string;
+    never_execute: true;
+    max_file_bytes: number;
+  };
+  corpus: {
+    materialized_generations: number;
+    active_packs: number;
+    bytes: number;
+    raw_observations: number;
+    compact_unique_signatures: number;
+    issues: number;
+  };
+  summary: {
+    imported_cases: number;
+    ready_cases: number;
+    running_cases: number;
+    completed_cases: number;
+    labelled_cases: number;
+  };
+  aggregate: {
+    measured_cases: number;
+    confusion_matrix: EcologicalConfusion;
+    failure_summary: { collisions: number; misses: number };
+    failures: EcologicalFailure[];
+  };
+  cases: EcologicalCase[];
+};
+
+export type NoisyHashEvidence = {
+  source: 'machine' | 'ecological';
+  run_id: string;
+  owner: string;
+  library_id: string;
+  function_id: string;
+  route_id: string;
+  compiler_id: string;
+  treatment_id: string;
+  evidence_path: string;
+};
+
+export type NoisyHashRow = {
+  signature_id: string;
+  scope: string;
+  signature: string;
+  classification: 'candidate-noisy' | 'confirmed-noisy';
+  risk: 'review' | 'high';
+  disposition: 'observe' | 'quarantine' | 'reviewed-shared' | 'cleared';
+  collisions: number;
+  distinct_runs: number;
+  distinct_owners: number;
+  owners: string[];
+  sources: string[];
+  decision: Record<string, string> | null;
+  evidence: NoisyHashEvidence[];
+  evidence_rows_truncated: number;
+};
+
+export type NoisyHashStatus = {
+  schema_version: 'fidb-noisy-hash-status/v1';
+  id: string;
+  label: string;
+  state: string;
+  authority_path: string;
+  authority_sha256: string;
+  status_digest: string;
+  classification: {
+    candidate_min_collisions: number;
+    confirmed_min_collisions: number;
+    confirmed_min_distinct_runs: number;
+    high_risk_min_distinct_owners: number;
+    grouping_key: string;
+  };
+  management: {
+    default_state: string;
+    allowed_states: Array<'observe' | 'quarantine' | 'reviewed-shared' | 'cleared'>;
+    quarantine_effect: string;
+    automatic_deletion: false;
+    require_reason: true;
+  };
+  summary: {
+    observed_hashes: number;
+    candidate_noisy: number;
+    confirmed_noisy: number;
+    quarantined: number;
+    reviewed_shared: number;
+    cleared: number;
+    reports_scanned: number;
+  };
+  hashes: NoisyHashRow[];
 };
 
 export type AutoBatchCampaignChunk = {
@@ -1541,6 +1740,8 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [capabilities, setCapabilities] = useState<FactoryCapabilities | null>(null);
   const [authority, setAuthority] = useState<FactoryAuthority | null>(null);
   const [laneInventory, setLaneInventory] = useState<LaneInventory | null>(null);
+  const [ecologicalValidation, setEcologicalValidation] = useState<EcologicalValidation | null>(null);
+  const [noisyHashes, setNoisyHashes] = useState<NoisyHashStatus | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
   const [preflight, setPreflight] = useState<OperationsPreflight | null>(null);
@@ -1625,6 +1826,15 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setCapabilities(capabilityResult);
         setAuthority(authorityResult);
         setLaneInventory(laneInventoryResult);
+        setEcologicalValidation(authorityResult.ecological_validation);
+        setNoisyHashes(authorityResult.noisy_hashes);
+      } else {
+        const [ecologicalResult, noisyResult] = await Promise.all([
+          json<EcologicalValidation>('ecological-validation'),
+          json<NoisyHashStatus>('noisy-hashes'),
+        ]);
+        setEcologicalValidation(ecologicalResult);
+        setNoisyHashes(noisyResult);
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
@@ -1719,12 +1929,105 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     [refresh],
   );
 
+  const refreshValidation = useCallback(async () => {
+    const [ecologicalResult, noisyResult] = await Promise.all([
+      json<EcologicalValidation>('ecological-validation'),
+      json<NoisyHashStatus>('noisy-hashes'),
+    ]);
+    setEcologicalValidation(ecologicalResult);
+    setNoisyHashes(noisyResult);
+    setError(null);
+  }, []);
+
+  const importEcological = useCallback(async (
+    file: File,
+    metadata: {
+      label: string;
+      platformHint: string;
+      expectedPresent: string[];
+      expectedAbsent: string[];
+      truthComplete: boolean;
+    },
+  ) => {
+    setBusyAction('ecological-import');
+    try {
+      const response = await fetch('/api/fidb/ecological-validation/import', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-FIDB-Filename': encodeURIComponent(file.name),
+          'X-FIDB-Label': encodeURIComponent(metadata.label),
+          'X-FIDB-Platform-Hint': metadata.platformHint,
+          'X-FIDB-Expected-Present': encodeURIComponent(metadata.expectedPresent.join(',')),
+          'X-FIDB-Expected-Absent': encodeURIComponent(metadata.expectedAbsent.join(',')),
+          'X-FIDB-Truth-Complete': String(metadata.truthComplete),
+        },
+        body: file,
+      });
+      const document = await response.json() as ApiErrorBody;
+      if (!response.ok) {
+        throw new Error(document.error?.message ?? `Ecological import failed (${response.status})`);
+      }
+      await refreshValidation();
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Ecological import failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [refreshValidation]);
+
+  const runEcological = useCallback(async (caseId: string) => {
+    setBusyAction(`ecological-run:${caseId}`);
+    try {
+      await json<EcologicalCase>('ecological-validation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ case_id: caseId }),
+      });
+      await refreshValidation();
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Ecological check failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [refreshValidation]);
+
+  const decideNoisyHash = useCallback(async (
+    signatureId: string,
+    state: NoisyHashRow['disposition'],
+    reason: string,
+  ) => {
+    setBusyAction(`noisy-hash:${signatureId}`);
+    try {
+      const result = await json<NoisyHashStatus>('noisy-hashes/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature_id: signatureId, state, reason }),
+      });
+      setNoisyHashes(result);
+      setError(null);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Noisy-hash decision failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
   return {
     connection,
     snapshot,
     capabilities,
     authority,
     laneInventory,
+    ecologicalValidation,
+    noisyHashes,
     events,
     timings,
     preflight,
@@ -1746,5 +2049,8 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         ...(expectedSha256 ? { expected_sha256: expectedSha256 } : {}),
       },
     ),
+    importEcological,
+    runEcological,
+    decideNoisyHash,
   };
 }
