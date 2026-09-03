@@ -9,6 +9,26 @@ silently changing a materialized campaign. The worker receives the resolved
 build-job and JVM settings. Selecting or binding a profile does not arm a queue
 or start a run.
 
+All FIDB performance and operations configuration remains TOML. The active
+queue selects a profile and fixes its lease cap in `plans/priority-queue.toml`;
+the profile values live here in `performance/profiles.toml`. The control panel
+does not retain browser-local performance configuration. Its JSON responses are
+read-only projections of detected facts, TOML choices and frozen ledger
+evidence, not a second configuration authority.
+
+The `[automatic_policy]` table contains the selector version, physical/SMT
+weights, maximum worker count, memory reserve and per-worker floors. Its
+ordered memory and CPU tier tables contain the heap, nested build-job and
+per-JVM core limits. These values are validated against hard safety ceilings;
+there are no parallel environment-variable or JSON overrides.
+
+The control panel's **Performance** workspace shows the detected physical and
+logical CPU split, SMT and cgroup/affinity limits, OS-visible total and available
+memory, the automatic CPU/RAM bounds, the active queue mode, and a setting-level
+comparison between the automatic baseline and the bound TOML profile. A named
+fixed profile is treated as the override boundary; values that differ from the
+automatic baseline are labelled explicitly.
+
 The `auto` selector detects CPUs visible through process affinity, counts
 physical cores separately from SMT siblings, honours cgroup CPU and memory
 ceilings, and uses RAM visible to the operating system. On an integrated-GPU
@@ -167,3 +187,12 @@ The reviewed projection is now frozen as
 retain the central 23.075-hour estimate and 13.845–32.305-hour planning range.
 `fidb-poc materialize-batches --check` recomputes the authorities and verifies
 the checked-in output; it performs no queue synchronization or execution.
+
+For flexible operator windows, `fidb-poc auto-batches` instead partitions the
+same exact work into route bundles while keeping every treatment for a route
+together. Its checked-in 60/85-minute candidate contains 23 disarmed chunks,
+preserves all 2,046 executions, and carries the same 23.075-hour central total.
+The generated queue can chain completed chunks only while the 01:00–05:30
+window remains open; once a chunk is admitted it finishes even after 05:30.
+See [`batches/README.md`](../batches/README.md#automatic-short-chunk-materialization)
+for commands, evidence boundaries, and rollback.

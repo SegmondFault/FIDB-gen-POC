@@ -28,7 +28,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v12"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v13"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -249,7 +249,11 @@ def _sensitivity_authority(
 def _plan_authority(root: Path) -> list[dict[str, object]]:
     plans = []
     for path in sorted((root / "plans").rglob("*.toml")):
-        if "materialized" in path.relative_to(root / "plans").parts:
+        relative_parts = path.relative_to(root / "plans").parts
+        if relative_parts and relative_parts[0] in {
+            "materialized",
+            "auto-materialized",
+        }:
             continue
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
         if raw.get("schema_version") != REQUEST_SCHEMA:
@@ -342,6 +346,94 @@ def _materialized_campaign_authority(root: Path) -> list[dict[str, object]]:
                     ),
                     "queue_armed": armed,
                     "ready": ready,
+                },
+            }
+        )
+    return campaigns
+
+
+def _auto_batch_campaign_authority(root: Path) -> list[dict[str, object]]:
+    """Project generated candidate queues without treating them as active."""
+
+    campaigns = []
+    base = root / "plans/auto-materialized"
+    if not base.is_dir():
+        return campaigns
+    for path in sorted(base.glob("*/manifest.toml")):
+        manifest = tomllib.loads(path.read_text(encoding="utf-8"))
+        if manifest.get("schema_version") != "fidb-auto-batch-campaign/v1":
+            continue
+        queue_path = root / str(manifest["queue"])
+        queue = (
+            tomllib.loads(queue_path.read_text(encoding="utf-8"))
+            if queue_path.is_file()
+            else {}
+        )
+        queue_table = queue.get("queue", {})
+        schedule = queue.get("schedule", {})
+        registered = {
+            str(row["id"]): row
+            for row in queue.get("batch", [])
+            if isinstance(row, dict) and "id" in row
+        }
+        order = list(queue_table.get("batch_order", []))
+        chunks = []
+        for raw in manifest.get("chunks", []):
+            chunk = dict(raw)
+            plan_path = root / str(chunk["plan"])
+            actual_sha256 = (
+                hashlib.sha256(plan_path.read_bytes()).hexdigest()
+                if plan_path.is_file()
+                else None
+            )
+            queued = registered.get(str(chunk["id"]))
+            queue_registered = (
+                queued is not None
+                and queued.get("plan") == chunk["plan"]
+                and queued.get("plan_sha256") == chunk["plan_sha256"]
+                and queued.get("queue_digest") == chunk["queue_digest"]
+                and queued.get("executions") == chunk["executions"]
+            )
+            chunk.update(
+                {
+                    "plan_integrity": (
+                        "verified"
+                        if actual_sha256 == chunk["plan_sha256"]
+                        else "drifted"
+                    ),
+                    "queue_registered": queue_registered,
+                    "queue_position": (
+                        order.index(chunk["id"]) + 1 if chunk["id"] in order else None
+                    ),
+                }
+            )
+            chunks.append(chunk)
+        queue_ready = (
+            queue_table.get("armed") is False
+            and schedule.get("finish_started_batch") is True
+            and schedule.get("chain_batches") is True
+            and all(
+                row["plan_integrity"] == "verified" and row["queue_registered"]
+                for row in chunks
+            )
+        )
+        campaigns.append(
+            {
+                **manifest,
+                "authority_path": _relative(root, path),
+                "authority_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "queue_integrity": "verified-disarmed" if queue_ready else "drifted",
+                "chunks": chunks,
+                "readiness": {
+                    "verified_plans": sum(
+                        row["plan_integrity"] == "verified" for row in chunks
+                    ),
+                    "registered_chunks": sum(
+                        bool(row["queue_registered"]) for row in chunks
+                    ),
+                    "queue_disarmed": queue_table.get("armed") is False,
+                    "scheduled_chaining": schedule.get("chain_batches") is True,
+                    "ready": queue_ready,
                 },
             }
         )
@@ -545,6 +637,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     )
     time_block_plan = compile_time_block_plan(root)
     materialized_campaigns = _materialized_campaign_authority(root)
+    auto_batch_campaigns = _auto_batch_campaign_authority(root)
     width_ids = {"c-width-v1"}
     width_ids.update(
         Path(str(row["authorities"]["width"])).stem for row in width_batches
@@ -570,6 +663,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "width_batches": width_batches,
         "time_block_plan": time_block_plan,
         "materialized_campaigns": materialized_campaigns,
+        "auto_batch_campaigns": auto_batch_campaigns,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -596,6 +690,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "width_batches": "batches/*.toml",
             "time_block_plan": "performance/batch-planning.toml",
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
+            "auto_batch_campaigns": "plans/auto-materialized/*/manifest.toml",
             "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -623,6 +718,12 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 b"".join(
                     (root / str(row["authority_path"])).read_bytes()
                     for row in materialized_campaigns
+                )
+            ).hexdigest(),
+            "auto_batch_campaigns_sha256": hashlib.sha256(
+                b"".join(
+                    (root / str(row["authority_path"])).read_bytes()
+                    for row in auto_batch_campaigns
                 )
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(

@@ -206,6 +206,7 @@ or verify materialization without synchronizing a ledger or starting work:
 ```sh
 uv run fidb-poc materialize-batches --project-root .
 uv run fidb-poc materialize-batches --project-root . --check
+uv run fidb-poc auto-batches --project-root . --check
 ```
 
 `--write` is the deliberate regeneration boundary after an authority change.
@@ -213,15 +214,29 @@ It atomically replaces the generated plans and manifest but still cannot arm,
 synchronize, claim, or execute work. See [`batches/README.md`](batches/README.md)
 for the drift guards, review process, and rollback boundary.
 
+The auto-batch candidate keeps each library/route's six treatments together
+but produces 23 roughly one-hour chunks. Its separate queue is disarmed,
+visible in the control panel, manually triggerable one chunk at a time outside
+the timer, and able to chain chunks during 01:00–05:30 without cutting off a
+started chunk. It is not synchronized into the currently running five-block
+ledger.
+
 ### Portable performance profiles
 
 [`performance/profiles.toml`](performance/profiles.toml) keeps cell concurrency,
 nested compiler jobs and embedded-Ghidra JVM bounds in one reviewed authority.
 The `auto` default detects physical cores and SMT siblings separately, honours
-affinity/cgroup ceilings, and bounds the result independently by OS-visible RAM. Explicit
+affinity/cgroup ceilings, and bounds the result independently by OS-visible
+RAM. Explicit
 profiles cover 8/16/32 GiB laptops, the current 94 GiB `reference-host` allocation,
 a 112 GiB throughput allocation, and the 64 GiB M1 Max external host. Inspect
 them without running work:
+
+FIDB runtime and operator configuration is stored as TOML. The GUI keeps no
+independent performance configuration: its **Performance** page projects host
+detection, the automatic recommendation, the active queue profile and any
+setting-level differences from `performance/profiles.toml` and the queue TOML.
+JSON is used only for API projections and evidence/output records.
 
 ```sh
 uv run fidb-poc performance --project-root .

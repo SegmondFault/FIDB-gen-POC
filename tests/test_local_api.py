@@ -414,7 +414,8 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v12")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v13")
+        self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["recipes"]), 14)
         self.assertEqual(len(document["targets"]), 24)

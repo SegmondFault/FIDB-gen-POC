@@ -500,6 +500,22 @@ export type FactoryCapabilities = {
     memory_bytes: number | null;
     available_memory_bytes: number;
     memory_model: 'dedicated-system-memory' | 'unified';
+    capacity: {
+      schema_version: 'fidb-host-capacity/v1';
+      system: string;
+      architecture: string;
+      physical_cores: number;
+      logical_cpus: number;
+      smt_siblings: number;
+      threads_per_core: number;
+      total_memory_mib: number;
+      available_memory_mib: number;
+      memory_model: 'dedicated-system-memory' | 'unified';
+      cpu_affinity_limited: boolean;
+      cgroup_cpu_quota: number | null;
+      cgroup_memory_limit_mib: number | null;
+      sources: Record<string, string>;
+    };
   };
   automatic_performance: {
     selector_version: string;
@@ -516,6 +532,12 @@ export type FactoryCapabilities = {
       memory_reserve_mib: number;
       per_worker_budget_mib: number;
       maximum_workers: number;
+    };
+    policy: {
+      physical_core_weight: number;
+      smt_sibling_weight: number;
+      memory_basis: string;
+      live_pressure: string;
     };
   };
   analysis: {
@@ -594,12 +616,14 @@ export type PerformanceProfile = {
     ghidra_heap_mib: number | null;
     ghidra_core_limit: number | null;
   };
+  resolution?: FactoryCapabilities['automatic_performance'] | null;
 };
 
 export type PerformanceProfiles = {
-  schema_version: 'fidb-performance-profiles/v1';
+  schema_version: 'fidb-performance-profiles/v2';
   default_profile: string;
   authority_path: string;
+  automatic_policy: FactoryCapabilities['automatic_performance']['policy'];
   profiles: PerformanceProfile[];
 };
 
@@ -1143,13 +1167,14 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v12';
+  schema_version: 'fidb-authority-catalog/v13';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
   width_batches: WidthBatch[];
   time_block_plan: TimeBlockPlan;
   materialized_campaigns: MaterializedCampaign[];
+  auto_batch_campaigns: AutoBatchCampaign[];
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
@@ -1167,6 +1192,66 @@ export type FactoryAuthority = {
   factor_variants: AuthorityFactorVariant[];
   plans: AuthorityPlan[];
   sources: Record<string, string>;
+};
+
+export type AutoBatchCampaignChunk = {
+  id: string;
+  position: number;
+  name: string;
+  plan: string;
+  plan_sha256: string;
+  queue_digest: string;
+  executions: number;
+  estimated_minutes: number;
+  planning_lower_minutes: number;
+  planning_upper_minutes: number;
+  source_ids: string[];
+  route_ids: string[];
+  plan_integrity: 'verified' | 'drifted';
+  queue_registered: boolean;
+  queue_position: number | null;
+};
+
+export type AutoBatchCampaign = {
+  schema_version: 'fidb-auto-batch-campaign/v1';
+  builder_version: string;
+  id: string;
+  state: 'generated-disarmed';
+  time_model: string;
+  time_plan_digest: string;
+  source_queue_sha256: string;
+  performance_profile: string;
+  queue: string;
+  campaign_digest: string;
+  authority_path: string;
+  authority_sha256: string;
+  queue_integrity: 'verified-disarmed' | 'drifted';
+  policy: {
+    target_minutes: number;
+    max_minutes: number;
+    uncertainty_fraction: number;
+    atomic_unit: string;
+    packing: string;
+    scheduled_chaining: boolean;
+    finish_started_chunk: boolean;
+  };
+  summary: {
+    chunks: number;
+    libraries: number;
+    route_bundles: number;
+    executions: number;
+    estimated_hours: number;
+    planning_lower_hours: number;
+    planning_upper_hours: number;
+  };
+  chunks: AutoBatchCampaignChunk[];
+  readiness: {
+    verified_plans: number;
+    registered_chunks: number;
+    queue_disarmed: boolean;
+    scheduled_chaining: boolean;
+    ready: boolean;
+  };
 };
 
 export type MaterializedCampaignBlock = {

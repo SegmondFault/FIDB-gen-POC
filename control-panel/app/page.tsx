@@ -25,10 +25,11 @@ import {
 const navItems = [
   ['01', 'Overview'],
   ['02', 'Matrix'],
-  ['03', 'Timing'],
-  ['04', 'Batches'],
-  ['05', 'Targets & toolchains'],
-  ['06', 'Evidence'],
+  ['03', 'Performance'],
+  ['04', 'Timing'],
+  ['05', 'Batches'],
+  ['06', 'Targets & toolchains'],
+  ['07', 'Evidence'],
 ];
 
 type BatchRow = {
@@ -442,11 +443,11 @@ export default function Home() {
           ))}
           <p className="nav-label secondary-label">Operations</p>
           <button className={activeView === 'Automation' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Automation')}>
-            <span>07</span>
+            <span>08</span>
             Automation
           </button>
           <button className={activeView === 'Activity' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Activity')}>
-            <span>08</span>
+            <span>09</span>
             Activity
           </button>
         </nav>
@@ -657,6 +658,7 @@ type FactoryApiState = ReturnType<typeof useFactoryApi>;
 
 function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
+  if (view === 'Performance') return <PerformanceView factory={factory} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
@@ -1436,6 +1438,20 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
   );
 }
 
+function PerformanceView({ factory }: { factory: FactoryApiState }) {
+  return <div className="view-stack performance-view">
+    <ViewIntro
+      kicker="HOST-AWARE EXECUTION POLICY"
+      title="Detected capacity, selected mode and effective overrides"
+      copy="The control panel projects reviewed TOML authorities. Host facts are detected read-only; automatic recommendations and the active queue profile are compared explicitly before exact settings are frozen into run evidence."
+      action={<button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Refresh host detection' : 'Retry connection'}</button>}
+    />
+    {factory.authority?.performance_profiles
+      ? <PerformanceProfilesPanel catalog={factory.authority.performance_profiles} capabilities={factory.capabilities} snapshot={factory.snapshot} />
+      : <section className="panel"><div className="empty-state"><span>◇</span><strong>Performance authority unavailable</strong><p>Reconnect the local API to load the reviewed TOML profiles.</p></div></section>}
+  </div>;
+}
+
 function TimingView({ factory }: { factory: FactoryApiState }) {
   const snapshot = factory.snapshot;
   const timing = factory.timings;
@@ -1510,8 +1526,6 @@ function TimingView({ factory }: { factory: FactoryApiState }) {
       copy="Every active and completed stage is tied to a fenced attempt. Percentiles use completed worker-monotonic spans only; interrupted or coordinator-derived durations remain visible for diagnosis but never enter stage p50/p90."
       action={<button className="secondary-action" disabled>{timingState}</button>}
     />
-
-    {factory.authority?.performance_profiles && <PerformanceProfilesPanel catalog={factory.authority.performance_profiles} capabilities={factory.capabilities} />}
 
     <section className="timing-metrics" aria-label="Timing evidence summary">
       <article className="panel timing-metric"><span>ACTIVE STAGES</span><strong>{activeSpans.length}</strong><small>{activeSpans.length ? 'elapsed clocks updating live' : 'nothing executing'}</small></article>
@@ -1597,8 +1611,9 @@ function TimingView({ factory }: { factory: FactoryApiState }) {
   </div>;
 }
 
-function PerformanceProfilesPanel({ catalog, capabilities }: { catalog: PerformanceProfiles; capabilities: FactoryCapabilities | null }) {
-  const [selectedId, setSelectedId] = useState(catalog.default_profile);
+function PerformanceProfilesPanel({ catalog, capabilities, snapshot }: { catalog: PerformanceProfiles; capabilities: FactoryCapabilities | null; snapshot: CoordinatorSnapshot | null }) {
+  const activeProfile = snapshot?.performance_profile ?? null;
+  const [selectedId, setSelectedId] = useState(activeProfile?.id ?? catalog.default_profile);
   const [copied, setCopied] = useState(false);
   const selected = catalog.profiles.find(profile => profile.id === selectedId) ?? catalog.profiles[0];
   if (!selected) return null;
@@ -1606,6 +1621,32 @@ function PerformanceProfilesPanel({ catalog, capabilities }: { catalog: Performa
   const automatic = capabilities?.automatic_performance;
   const effective = selected.id === 'auto' ? automatic?.effective_settings : selected.settings;
   const hostMemoryMib = host?.memory_bytes ? Math.floor(host.memory_bytes / 1024 / 1024) : null;
+  const activeMode = activeProfile
+    ? activeProfile.id === 'auto' || activeProfile.resolution
+      ? 'automatic · resolved and frozen'
+      : 'fixed TOML profile'
+    : 'no queue profile bound';
+  const displaySetting = (name: string, value: number | null | undefined) => {
+    if (value === null || value === undefined) return name === 'ghidra_core_limit' ? 'host default' : '—';
+    return name === 'ghidra_heap_mib' ? `${value.toLocaleString()} MiB` : value.toLocaleString();
+  };
+  const settingRows = automatic ? [
+    ['workers', 'Cell workers', automatic.effective_settings.workers, activeProfile?.settings.workers],
+    ['build_jobs_per_cell', 'Build jobs / cell', automatic.effective_settings.build_jobs_per_cell, activeProfile?.settings.build_jobs_per_cell],
+    ['ghidra_heap_mib', 'JVM heap ceiling', automatic.effective_settings.ghidra_heap_mib, activeProfile?.settings.ghidra_heap_mib],
+    ['ghidra_core_limit', 'Ghidra core limit', automatic.effective_settings.ghidra_core_limit, activeProfile?.settings.ghidra_core_limit],
+  ].map(([name, label, automaticValue, activeValue]) => {
+    const isAutomatic = activeProfile?.id === 'auto' || Boolean(activeProfile?.resolution);
+    const changed = activeValue !== automaticValue;
+    return {
+      name: String(name),
+      label: String(label),
+      automaticValue: automaticValue as number,
+      activeValue: activeValue as number | null | undefined,
+      state: !activeProfile ? 'unbound' : isAutomatic ? 'auto-resolved' : changed ? 'TOML override' : 'fixed · same as auto',
+      tone: !activeProfile ? 'cold' : changed && !isAutomatic ? 'warning' : 'ready',
+    };
+  }) : [];
   const command = `fidb-poc run-width --project-root . --performance-profile ${selected.id}`;
   const copyCommand = async () => {
     try {
@@ -1622,8 +1663,23 @@ function PerformanceProfilesPanel({ catalog, capabilities }: { catalog: Performa
       ? 'warning'
       : 'cold';
   return <section className="panel performance-profile-panel">
-    <div className="panel-header"><div><p className="panel-kicker">PERFORMANCE AUTHORITY</p><h3>Portable cell, compiler and JVM budgets</h3><small>{catalog.authority_path} · auto resolves host topology; fixed profiles remain reproducible</small></div><span className="authority-badge">READ-ONLY TOML</span></div>
-    <div className="performance-host-strip"><article><span>DETECTED CPU SPLIT</span><strong>{host ? `${host.physical_cores} physical / ${host.logical_cpus} logical` : 'Waiting for API'}</strong><small>{host ? `${host.smt_siblings} SMT siblings · ${host.system} / ${host.machine}` : 'capability probe pending'}</small></article><article><span>OS-VISIBLE MEMORY</span><strong>{host?.memory_bytes ? formatBytes(host.memory_bytes) : '—'}</strong><small>{hostMemoryMib ? `${hostMemoryMib.toLocaleString()} MiB after firmware/GPU allocation` : 'capability probe pending'}</small></article><article><span>AUTO RESOLUTION</span><strong>{automatic ? `${automatic.effective_settings.workers} workers · ${automatic.effective_settings.build_jobs_per_cell} build jobs` : 'Waiting for API'}</strong><small>{automatic ? `CPU bound ${automatic.bounds.cpu_workers} · RAM bound ${automatic.bounds.memory_workers} · selector ${automatic.selector_version}` : 'physical, SMT and RAM bounds are separate'}</small></article></div>
+    <div className="panel-header"><div><p className="panel-kicker">PERFORMANCE AUTHORITY</p><h3>Detected host → automatic baseline → active TOML policy</h3><small>{catalog.authority_path} · JSON is a read-only API projection, never configuration</small></div><span className="authority-badge">TOML SOURCE OF TRUTH</span></div>
+    <div className="performance-host-strip">
+      <article><span>DETECTED CPU SPLIT</span><strong>{host ? `${host.physical_cores} physical / ${host.logical_cpus} logical` : 'Waiting for API'}</strong><small>{host ? `${host.smt_siblings} SMT siblings · ${host.threads_per_core.toFixed(2)} threads/core · ${host.system} / ${host.machine}` : 'capability probe pending'}</small></article>
+      <article><span>OS-VISIBLE MEMORY</span><strong>{host?.memory_bytes ? formatBytes(host.memory_bytes) : '—'}</strong><small>{hostMemoryMib ? `${hostMemoryMib.toLocaleString()} MiB total · ${formatBytes(host?.available_memory_bytes ?? 0)} currently available` : 'capability probe pending'}</small></article>
+      <article><span>AUTO BASELINE</span><strong>{automatic ? `${automatic.effective_settings.workers} workers · ${automatic.effective_settings.build_jobs_per_cell} build jobs` : 'Waiting for API'}</strong><small>{automatic ? `CPU bound ${automatic.bounds.cpu_workers} · RAM bound ${automatic.bounds.memory_workers} · max ${automatic.bounds.maximum_workers}` : 'physical, SMT and RAM bounds are separate'}</small></article>
+      <article><span>ACTIVE QUEUE MODE</span><strong>{activeProfile?.id ?? 'unbound'}</strong><small>{activeMode} · lease cap {snapshot?.max_workers ?? '—'}</small></article>
+    </div>
+    <div className="performance-detection-detail">
+      <article><span>DETECTION SOURCES</span><strong>{host?.capacity ? Object.values(host.capacity.sources).join(' · ') : 'Waiting for capability scan'}</strong><small>affinity {host?.capacity.cpu_affinity_limited ? 'limited' : 'not limited'} · cgroup CPU {host?.capacity.cgroup_cpu_quota ?? 'unlimited'} · cgroup RAM {host?.capacity.cgroup_memory_limit_mib ? `${host.capacity.cgroup_memory_limit_mib.toLocaleString()} MiB` : 'unlimited'}</small></article>
+      <article><span>AUTO SELECTOR POLICY</span><strong>{automatic?.selector_version ?? '—'}</strong><small>{automatic ? `physical weight ${automatic.policy.physical_core_weight} · SMT weight ${automatic.policy.smt_sibling_weight} · reserve ${automatic.bounds.memory_reserve_mib.toLocaleString()} MiB · worker budget ${automatic.bounds.per_worker_budget_mib.toLocaleString()} MiB` : 'waiting for resolution'}</small></article>
+      <article><span>CONFIGURATION AUTHORITIES</span><strong>{catalog.authority_path}</strong><small>active binding and lease cap: plans/priority-queue.toml · runtime settings are frozen into ledger evidence</small></article>
+    </div>
+    <div className="performance-override-ledger">
+      <header><span>Setting</span><span>Detected auto</span><span>Active TOML</span><span>Resolution</span></header>
+      {settingRows.map(row => <article key={row.name}><div><strong>{row.label}</strong><small>{row.name}</small></div><code>{displaySetting(row.name, row.automaticValue)}</code><code>{displaySetting(row.name, row.activeValue)}</code><span className={`evidence-badge ${row.tone}`}>{row.state}</span></article>)}
+      {!settingRows.length && <div className="empty-state compact"><span>◇</span><strong>Waiting for automatic resolution</strong><p>The comparison appears after the read-only host scan completes.</p></div>}
+    </div>
     <div className="performance-profile-tabs">{catalog.profiles.map(profile => <button key={profile.id} className={profile.id === selected.id ? 'active' : ''} onClick={() => setSelectedId(profile.id)}><strong>{profile.label}</strong><small>{profile.settings.worker_mode === 'automatic' ? 'auto workers' : `${profile.settings.workers} workers`} · {profile.host.memory_mib ? `${Math.round(profile.host.memory_mib / 1024)} GiB` : 'portable'}</small></button>)}</div>
     <div className="performance-profile-detail"><header><div><span className={`evidence-badge ${qualificationTone}`}>{selected.qualification.replaceAll('-', ' ')}</span><h4>{selected.label}</h4><p>{selected.description}</p></div><button onClick={() => void copyCommand()}>{copied ? 'Copied' : 'Copy preview command'}</button></header><div><article><span>CELL WORKERS</span><strong>{effective?.workers ?? 'AUTO'}</strong><small>{selected.id === 'auto' ? 'resolved now; frozen into run evidence' : 'independent long-lived JVM processes'}</small></article><article><span>BUILD JOBS / CELL</span><strong>{effective?.build_jobs_per_cell ?? selected.settings.build_jobs_per_cell}</strong><small>nested compiler parallelism</small></article><article><span>JVM HEAP CEILING</span><strong>{effective?.ghidra_heap_mib ? `${effective.ghidra_heap_mib} MiB` : 'ERGONOMIC'}</strong><small>maximum, not reserved allocation</small></article><article><span>GHIDRA CORE LIMIT</span><strong>{effective?.ghidra_core_limit ?? 'HOST'}</strong><small>per embedded JVM</small></article></div><footer><p>{selected.guidance}</p><code>{command}</code>{selected.evidence_path && <small>{selected.evidence_path}</small>}</footer></div>
   </section>;
@@ -1642,8 +1698,10 @@ function TimeBlockPlanPanel({ factory }: { factory: FactoryApiState }) {
   const start = typeof schedule?.start === 'string' ? schedule.start : plan.blocks[0]?.expected_start_local ?? '01:00';
   const stop = typeof schedule?.stop_claiming === 'string' ? schedule.stop_claiming : '05:30';
   const finishStarted = schedule?.finish_started_batch === true;
+  const chainBatches = schedule?.chain_batches === true;
   const active = factory.snapshot?.execution_block;
   const materializedReady = materialized?.readiness.ready === true;
+  const candidate = factory.authority?.auto_batch_campaigns[0];
   return <section className="panel time-block-panel">
     <div className="panel-header"><div><p className="panel-kicker">TIME-AWARE WIDTH CAMPAIGN</p><h3>{plan.label}</h3><small>{materializedReady ? `${materialized?.authority_path} · frozen from ${plan.authority_path}` : `${plan.authority_path} · recomputed from pinned width, treatment and performance evidence`}</small></div><span className="authority-badge">{materializedReady ? materialized?.state.replaceAll('-', ' ').toUpperCase() : 'DRAFT · DISARMED'}</span></div>
     <div className="time-block-summary">
@@ -1652,7 +1710,19 @@ function TimeBlockPlanPanel({ factory }: { factory: FactoryApiState }) {
       <article><span>EXACT WIDTH</span><strong>{plan.summary.executions.toLocaleString()}</strong><small>{plan.summary.android_executions.toLocaleString()} Android executions included</small></article>
       <article><span>MEASURED BASIS</span><strong>{plan.reference.estimated_cells_per_wall_hour.toFixed(1)} cells/h</strong><small>{plan.performance_profile.label} · {plan.reference.case_id}</small></article>
     </div>
-    <div className="time-block-schedule"><div><span>AUTOMATIC ADMISSION</span><strong>{start}–{stop} · Europe/Luxembourg</strong><small>At most one ordered block starts per window. {finishStarted ? 'A started block drains completely after the window closes.' : 'Finish-started policy is not active.'}</small></div><div><span>CURRENT ADMISSION</span><strong>{active?.active ? active.batch_id : 'No block active'}</strong><small>{active?.active ? `${active.remaining ?? '—'} jobs remain · ${active.admission_id}` : 'Queue remains disarmed until explicit review'}</small></div><div><span>MANUAL TIMER BYPASS</span><code>fidb-poc queue start-block --project-root .</code><small>Requires an armed queue; admits one block but executes nothing itself.</small></div></div>
+    <div className="time-block-schedule"><div><span>AUTOMATIC ADMISSION</span><strong>{start}–{stop} · Europe/Luxembourg</strong><small>{chainBatches ? 'Drained chunks chain while the window remains open.' : 'At most one ordered block starts per window.'} {finishStarted ? 'A started block drains completely after the window closes.' : 'Finish-started policy is not active.'}</small></div><div><span>CURRENT ADMISSION</span><strong>{active?.active ? active.batch_id : 'No block active'}</strong><small>{active?.active ? `${active.remaining ?? '—'} jobs remain · ${active.admission_id}` : 'No block is currently admitted'}</small></div><div><span>MANUAL TIMER BYPASS</span><code>fidb-poc queue start-block --project-root .</code><small>Requires an armed queue; admits one block but executes nothing itself.</small></div></div>
+    {candidate && <>
+      <div className="time-block-summary">
+        <article><span>AUTO-BUILT CHUNKS</span><strong>{candidate.summary.chunks}</strong><small>{candidate.policy.target_minutes} min target · {candidate.policy.max_minutes} min central ceiling</small></article>
+        <article><span>EXACT PARTITION</span><strong>{candidate.summary.executions.toLocaleString()}</strong><small>{candidate.summary.route_bundles} library/route bundles · all treatments kept together</small></article>
+        <article><span>MANUAL FIT</span><strong>{Math.max(...candidate.chunks.map(chunk => chunk.planning_upper_minutes)).toFixed(0)} min</strong><small>worst +{Math.round(candidate.policy.uncertainty_fraction * 100)}% planning bound · final tail {candidate.chunks.at(-1)?.estimated_minutes.toFixed(0)} min</small></article>
+        <article><span>CANDIDATE QUEUE</span><strong>{candidate.queue_integrity.replaceAll('-', ' ')}</strong><small>{candidate.queue} · never substituted into the live ledger</small></article>
+      </div>
+      <div className="time-block-ledger">
+        <header><span>Candidate chunk</span><span>Libraries</span><span>Width</span><span>Estimate / range</span><span>State</span></header>
+        {candidate.chunks.map(chunk => <article key={chunk.id}><div><strong>#{String(chunk.position).padStart(3, '0')}</strong><small>{chunk.id}</small></div><div><strong>{chunk.source_ids.join(' + ')}</strong><small>{chunk.plan}</small></div><div><strong>{chunk.executions.toLocaleString()} executions</strong><small>{chunk.route_ids.length} route bundles · all treatments</small></div><div><strong>{chunk.estimated_minutes.toFixed(1)} min</strong><small>{chunk.planning_lower_minutes.toFixed(1)}–{chunk.planning_upper_minutes.toFixed(1)} min</small></div><span className={`evidence-badge ${chunk.plan_integrity === 'verified' && chunk.queue_registered ? 'ready' : 'cold'}`}>{chunk.plan_integrity} · {chunk.queue_registered ? 'registered' : 'drifted'}</span></article>)}
+      </div>
+    </>}
     <div className="time-block-ledger">
       <header><span>Block / nominal window</span><span>Libraries</span><span>Width</span><span>Estimate / range</span><span>State</span></header>
       {plan.blocks.map(block => {
