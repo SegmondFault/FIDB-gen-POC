@@ -26,7 +26,7 @@ class BatchTimeModelTests(unittest.TestCase):
             all(block["estimated_hours"] <= 5.0 for block in document["blocks"])
         )
         self.assertTrue(
-            all(block["expected_start_local"] == "01:00" for block in document["blocks"])
+            all(block["expected_start_local"] == "00:00" for block in document["blocks"])
         )
         self.assertEqual(
             {item["source_id"] for block in document["blocks"] for item in block["items"]},
