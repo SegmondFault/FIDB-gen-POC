@@ -78,7 +78,7 @@ the production `GHIDRA_HEADLESS` path and JVM limits from
 `~/.config/fidb-factory/library-local-worker.env`; a manually launched worker
 without that environment is not representative.
 
-`plans/c-android-x86-sqlite-readline-canary.toml` covers both affected libraries,
+`plans/materialized/canaries/c-android-x86-sqlite-readline.toml` covers both affected libraries,
 Android x86 32/64, and NDK r27d/r29 base/versioned identities. Its queue remains
 disarmed in Git. The repaired canary completed 8/8 cells on 2026-09-03 in the
 isolated ledger `var/fidb-canary/ledger-v2.sqlite3`.

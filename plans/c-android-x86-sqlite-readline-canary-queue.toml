@@ -35,5 +35,5 @@ timeout_seconds = 10
 [[batch]]
 id = "c-android-x86-sqlite-readline-canary"
 name = "Android x86 SQLite and Readline repair canary"
-plan = "plans/c-android-x86-sqlite-readline-canary.toml"
+plan = "plans/materialized/canaries/c-android-x86-sqlite-readline.toml"
 executions = 8
