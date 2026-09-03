@@ -240,9 +240,7 @@ matrices = ["tier0-uclibc-powerpc"]
                 "batch-mirai",
             )
 
-            lease = coordinator.claim(
-                "worker", batch_id=block["batch_id"], now=22
-            )
+            lease = coordinator.claim("worker", batch_id=block["batch_id"], now=22)
             self.assertEqual(lease["batch_id"], "batch-mirai")
             coordinator.complete(
                 lease["job_id"],

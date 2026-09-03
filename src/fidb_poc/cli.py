@@ -59,7 +59,9 @@ def _plan_time_blocks_main(argv: list[str]) -> int:
         description="Compile evidence-based, bounded width blocks without queuing work.",
     )
     result.add_argument("--project-root", type=Path, default=Path.cwd())
-    result.add_argument("--model", type=Path, default=Path("performance/batch-planning.toml"))
+    result.add_argument(
+        "--model", type=Path, default=Path("performance/batch-planning.toml")
+    )
     result.add_argument("--performance-profile")
     arguments = result.parse_args(argv)
     try:
@@ -88,9 +90,7 @@ def _materialize_batches_main(argv: list[str]) -> int:
     result.add_argument(
         "--model", type=Path, default=Path("performance/batch-planning.toml")
     )
-    result.add_argument(
-        "--output-root", type=Path, default=Path("plans/materialized")
-    )
+    result.add_argument("--output-root", type=Path, default=Path("plans/materialized"))
     mode = result.add_mutually_exclusive_group()
     mode.add_argument(
         "--write",

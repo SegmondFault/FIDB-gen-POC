@@ -80,7 +80,9 @@ def _pack_blocks(
 
     blocks: list[list[dict[str, object]]] = []
     totals: list[float] = []
-    for item in sorted(items, key=lambda row: (-float(row["estimated_hours"]), int(row["rank"]))):
+    for item in sorted(
+        items, key=lambda row: (-float(row["estimated_hours"]), int(row["rank"]))
+    ):
         hours = float(item["estimated_hours"])
         if hours > max_hours + 1e-9:
             raise ValueError(
@@ -182,9 +184,9 @@ def compile_time_block_plan(
     profiles = load_performance_profiles(root)
     profile = profiles.select(performance_profile or str(raw["performance_profile"]))
     effective_workers = profile.settings.workers or reference_workers
-    estimated_rate = reference_rate * (
-        effective_workers / reference_workers
-    ) ** scaling_exponent
+    estimated_rate = (
+        reference_rate * (effective_workers / reference_workers) ** scaling_exponent
+    )
 
     raw_libraries = raw["libraries"]
     if not isinstance(raw_libraries, list) or not raw_libraries:
@@ -203,7 +205,9 @@ def compile_time_block_plan(
             or isinstance(source_lines, bool)
             or source_lines < 1
         ):
-            raise ValueError("batch time model library rank/lines must be positive integers")
+            raise ValueError(
+                "batch time model library rank/lines must be positive integers"
+            )
         if source_id in libraries:
             raise ValueError("batch time model library ids must be unique")
         libraries[source_id] = {"rank": rank, "source_lines": source_lines}
@@ -232,7 +236,9 @@ def compile_time_block_plan(
     compiled_batches = []
     width_cache: dict[str, dict[str, object]] = {}
     for index, value in enumerate(raw_batch_paths):
-        relative, batch_path = _project_path(root, value, f"campaign_batch_paths[{index}]")
+        relative, batch_path = _project_path(
+            root, value, f"campaign_batch_paths[{index}]"
+        )
         batch = load_width_batch(root, batch_path)
         if batch["language_id"] != language_id:
             raise ValueError("batch time model campaign mixes languages")
@@ -249,7 +255,8 @@ def compile_time_block_plan(
             if row["state"] in {"executable", "unavailable"}
         ]
         missing_costs = sorted(
-            {str(row["treatment_id"]) for row in selected_pairs} - treatment_costs.keys()
+            {str(row["treatment_id"]) for row in selected_pairs}
+            - treatment_costs.keys()
         )
         if missing_costs:
             raise ValueError(
@@ -258,19 +265,24 @@ def compile_time_block_plan(
         base_pair_count = len(selected_pairs)
         execution_count = int(batch["summary"]["executions_per_library"])  # type: ignore[index]
         if base_pair_count == 0 or execution_count % base_pair_count:
-            raise ValueError("batch execution count cannot be attributed to treatment pairs")
+            raise ValueError(
+                "batch execution count cannot be attributed to treatment pairs"
+            )
         downstream_multiplier = execution_count // base_pair_count
         weighted_cells = downstream_multiplier * sum(
             treatment_costs[str(row["treatment_id"])] for row in selected_pairs
         )
-        android_pairs = sum(
-            str(row["route_id"]).startswith("android-") for row in selected_pairs
-        ) * downstream_multiplier
+        android_pairs = (
+            sum(str(row["route_id"]).startswith("android-") for row in selected_pairs)
+            * downstream_multiplier
+        )
         for library in batch["libraries"]:  # type: ignore[index]
             source_id = str(library["id"])
             source = libraries.get(source_id)
             if source is None:
-                raise ValueError(f"batch time model lacks source metrics for {source_id}")
+                raise ValueError(
+                    f"batch time model lacks source metrics for {source_id}"
+                )
             raw_complexity = (source["source_lines"] / reference_lines) ** exponent
             complexity = min(maximum, max(minimum, raw_complexity))
             hours = weighted_cells / estimated_rate * complexity

@@ -173,9 +173,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["policy"]["schedule"]["start"], "01:00")
         self.assertEqual(document["policy"]["schedule"]["stop_claiming"], "05:30")
         self.assertIsNone(document["policy"]["schedule"]["hard_cutoff"])
-        self.assertTrue(
-            document["policy"]["schedule"]["finish_started_batch"]
-        )
+        self.assertTrue(document["policy"]["schedule"]["finish_started_batch"])
         self.assertIn("available_memory_gib", document["resources"]["metrics"])
         self.assertIn("temperature_c", document["resources"]["metrics"])
 

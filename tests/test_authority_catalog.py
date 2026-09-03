@@ -157,7 +157,10 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertFalse(materialized["readiness"]["queue_armed"])
         self.assertTrue(materialized["readiness"]["ready"])
         self.assertTrue(
-            all(block["plan_integrity"] == "verified" for block in materialized["blocks"])
+            all(
+                block["plan_integrity"] == "verified"
+                for block in materialized["blocks"]
+            )
         )
 
         targets = {row["id"]: row for row in document["targets"]}
