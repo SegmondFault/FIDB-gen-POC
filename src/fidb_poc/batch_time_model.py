@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 import re
 import tomllib
@@ -183,6 +184,15 @@ def compile_time_block_plan(
 
     profiles = load_performance_profiles(root)
     profile = profiles.select(performance_profile or str(raw["performance_profile"]))
+    if profile.settings.worker_mode == "automatic":
+        from .host_capacity import detect_host_capacity, resolve_automatic_performance
+
+        automatic = resolve_automatic_performance(detect_host_capacity())
+        profile = replace(
+            profile,
+            settings=automatic.settings,
+            resolution=automatic.document(),
+        )
     effective_workers = profile.settings.workers or reference_workers
     estimated_rate = (
         reference_rate * (effective_workers / reference_workers) ** scaling_exponent

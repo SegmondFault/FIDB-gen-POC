@@ -2,10 +2,12 @@
 
 `profiles.toml` is the reviewed source of truth for width-executor resource
 policy. It is deliberately separate from `worker.toml`, which describes build
-routes. A queue may bind one fixed profile by ID; loading then requires its
-`max_workers` lease cap to equal the profile, passes its build-job count to each
-cell and validates the inherited JVM heap limit. Selecting or binding a profile
-does not arm a queue or start a run.
+routes. A queue may bind a fixed profile or `auto` by ID. Loading `auto` resolves
+and records the current host settings, then requires the queue's `max_workers`
+lease cap to match; a host-capacity change therefore fails closed rather than
+silently changing a materialized campaign. The worker receives the resolved
+build-job and JVM settings. Selecting or binding a profile does not arm a queue
+or start a run.
 
 The `auto` selector detects CPUs visible through process affinity, counts
 physical cores separately from SMT siblings, honours cgroup CPU and memory

@@ -52,9 +52,10 @@ class PerformanceProfile:
     evidence_path: str | None
     host: dict[str, object]
     settings: PerformanceSettings
+    resolution: dict[str, object] | None = None
 
     def document(self) -> dict[str, object]:
-        return {
+        document = {
             "id": self.id,
             "label": self.label,
             "description": self.description,
@@ -64,6 +65,9 @@ class PerformanceProfile:
             "host": self.host,
             "settings": self.settings.document(),
         }
+        if self.resolution is not None:
+            document["resolution"] = self.resolution
+        return document
 
 
 @dataclass(frozen=True)

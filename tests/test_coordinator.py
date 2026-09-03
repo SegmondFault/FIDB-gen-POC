@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fidb_poc.coordinator import (
     Coordinator,
@@ -13,6 +14,7 @@ from fidb_poc.coordinator import (
     load_queue_config,
     worker_pool_accepts_cell,
 )
+from fidb_poc.host_capacity import GIB, HostCapacity
 
 
 class CoordinatorTests(unittest.TestCase):
@@ -214,6 +216,38 @@ matrices = ["tier0-uclibc-powerpc"]
             ValueError, "max_workers does not match performance profile"
         ):
             self.config(path)
+
+    def test_queue_resolves_auto_profile_to_exact_host_settings(self):
+        path = self.write_queue(
+            max_workers=20,
+            queue_extra='performance_profile = "auto"',
+        )
+        host = HostCapacity(
+            system="linux",
+            architecture="x86_64",
+            physical_cores=16,
+            logical_cpus=32,
+            smt_siblings=16,
+            threads_per_core=2,
+            total_memory_bytes=94 * GIB,
+            available_memory_bytes=85 * GIB,
+            memory_model="dedicated-system-memory",
+            cpu_affinity_limited=False,
+            cgroup_cpu_quota=None,
+            cgroup_memory_limit_bytes=None,
+            sources={},
+        )
+        with mock.patch(
+            "fidb_poc.host_capacity.detect_host_capacity", return_value=host
+        ):
+            config = self.config(path)
+
+        self.assertEqual(config.performance_profile.id, "auto")
+        self.assertEqual(config.performance_profile.settings.workers, 20)
+        self.assertEqual(
+            config.performance_profile.resolution["selector_version"],
+            "physical-smt-memory-v1",
+        )
 
     def test_sync_rejects_materialized_queue_identity_drift(self):
         plan = self.project_root / "plans/coverage-baseline.toml"

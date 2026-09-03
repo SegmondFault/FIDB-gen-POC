@@ -16,7 +16,7 @@ import sqlite3
 import time
 import tomllib
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator, Mapping
@@ -162,6 +162,18 @@ class QueueConfig:
                 queue["performance_profile"], "queue performance_profile"
             )
             performance_profile = load_performance_profiles(root).select(profile_id)
+            if performance_profile.settings.worker_mode == "automatic":
+                from .host_capacity import (
+                    detect_host_capacity,
+                    resolve_automatic_performance,
+                )
+
+                automatic = resolve_automatic_performance(detect_host_capacity())
+                performance_profile = replace(
+                    performance_profile,
+                    settings=automatic.settings,
+                    resolution=automatic.document(),
+                )
             profile_workers = performance_profile.settings.workers
             if (
                 performance_profile.settings.worker_mode != "fixed"

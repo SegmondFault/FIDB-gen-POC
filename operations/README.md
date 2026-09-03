@@ -19,7 +19,10 @@ adapter may use four make jobs while every worker embeds one reusable Ghidra
 JVM. The queue binds `reference-host-94g-balanced`: twenty active leases, four build
 jobs per cell and a 4 GiB JVM heap ceiling. The twenty units named by
 `fidb-library-local-workers.target` supply exactly that measured concurrency;
-the queue rejects a `max_workers` value which drifts from the named profile.
+the queue rejects a `max_workers` value which drifts from the named profile. An
+`auto` profile is resolved from physical cores, SMT siblings and OS-visible RAM
+at queue load; its effective settings and host facts are retained in coordinator
+state, and a different resolved worker count also fails closed.
 Do not interpret 32 hardware threads as permission to exceed the qualified
 twenty-worker envelope.
 
