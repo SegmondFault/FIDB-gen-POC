@@ -130,6 +130,20 @@ def parser() -> argparse.ArgumentParser:
         help="resume claims when the TOML queue is armed",
     )
 
+    requeue = commands.add_parser(
+        "requeue-failed",
+        parents=[_common_parser(queue=False)],
+        help="requeue an exact failed batch while preserving attempts and events",
+    )
+    requeue.add_argument("--batch", required=True, help="exact active batch id")
+    requeue.add_argument(
+        "--expected-count",
+        required=True,
+        type=int,
+        help="fail closed unless exactly this many failed jobs are selected",
+    )
+    requeue.add_argument("--reason", required=True, help="durable operator rationale")
+
     commands.add_parser(
         "preflight",
         parents=[_common_parser(queue=True)],
@@ -904,6 +918,21 @@ def _resume(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _requeue_failed(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        result = coordinator.requeue_failed_batch(
+            arguments.batch,
+            arguments.expected_count,
+            arguments.reason,
+            actor="operator",
+        )
+        result["queue"] = coordinator.status()
+        _print_json(result)
+    return 0
+
+
 def _preflight(arguments: argparse.Namespace) -> int:
     root, _, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
@@ -1207,6 +1236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "events": _events,
         "pause": _pause,
         "resume": _resume,
+        "requeue-failed": _requeue_failed,
         "preflight": _preflight,
         "resolve-preflight": _resolution_preflight,
         "start-block": _start_block,

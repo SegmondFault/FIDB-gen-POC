@@ -2423,6 +2423,110 @@ class Coordinator:
             now=now,
         )
 
+    def requeue_failed_batch(
+        self,
+        batch_id: str,
+        expected_count: int,
+        reason: str,
+        *,
+        actor: str = "operator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Requeue an exact failed batch without erasing attempt evidence.
+
+        This is deliberately an operator recovery transition rather than a
+        ledger edit.  It is available only while the queue is both disarmed
+        and paused, with no admission or live leases.  The explicit expected
+        count prevents an operator from broadening a reviewed recovery set by
+        accident.
+        """
+
+        selected_batch = _identifier(batch_id, "requeue batch id")
+        count = _positive_integer(expected_count, "requeue expected count")
+        reason_text = _text(reason, "requeue reason")
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            if bool(state["armed"]):
+                raise CoordinatorError("failed-job recovery requires a disarmed queue")
+            if not bool(state["paused"]):
+                raise CoordinatorError("failed-job recovery requires a paused queue")
+            if state["active_batch_id"] is not None:
+                raise CoordinatorError(
+                    "failed-job recovery requires no active batch admission"
+                )
+            live = self._connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs "
+                "WHERE state IN ('leased', 'running')"
+            ).fetchone()
+            if int(live["count"]):
+                raise CoordinatorError(
+                    "failed-job recovery requires all leases to be terminal"
+                )
+            batch = self._connection.execute(
+                "SELECT * FROM batches WHERE batch_id = ? AND active = 1",
+                (selected_batch,),
+            ).fetchone()
+            if batch is None:
+                raise CoordinatorError(f"unknown active batch: {selected_batch}")
+            rows = self._connection.execute(
+                """
+                SELECT * FROM jobs
+                WHERE batch_id = ? AND active = 1 AND state = 'failed'
+                ORDER BY position, job_id
+                """,
+                (selected_batch,),
+            ).fetchall()
+            if len(rows) != count:
+                raise CoordinatorError(
+                    f"failed-job recovery count mismatch for {selected_batch}: "
+                    f"expected {count}, found {len(rows)}"
+                )
+            digest = hashlib.sha256()
+            for row in rows:
+                job_id = str(row["job_id"])
+                digest.update(job_id.encode("ascii"))
+                digest.update(b"\n")
+                self._connection.execute(
+                    """
+                    UPDATE jobs
+                    SET state = 'queued', eligible_at = 0,
+                        error = NULL, failure_class = NULL, updated_at = ?
+                    WHERE job_id = ? AND state = 'failed' AND active = 1
+                    """,
+                    (self._timestamp(timestamp), job_id),
+                )
+                self._event_locked(
+                    "job.operator-requeued",
+                    now=timestamp,
+                    actor=actor,
+                    batch_id=selected_batch,
+                    job_id=job_id,
+                    plan_digest=str(row["plan_digest"]),
+                    payload={
+                        "reason": reason_text,
+                        "attempt_count": int(row["attempt_count"]),
+                        "previous_error": row["error"],
+                        "previous_failure_class": row["failure_class"],
+                    },
+                )
+            summary = {
+                "batch_id": selected_batch,
+                "requeued": len(rows),
+                "job_ids_sha256": digest.hexdigest(),
+                "reason": reason_text,
+                "attempt_evidence_preserved": True,
+            }
+            self._event_locked(
+                "batch.failed-jobs-requeued",
+                now=timestamp,
+                actor=actor,
+                batch_id=selected_batch,
+                plan_digest=str(batch["plan_digest"]),
+                payload=summary,
+            )
+        return summary
+
     def pause(
         self,
         reason: str = "operator request",

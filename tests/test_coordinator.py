@@ -634,6 +634,80 @@ matrices = ["tier0-uclibc-powerpc"]
         with self.assertRaisesRegex(ValueError, "non-negative integer"):
             QueueConfig.load(path, self.project_root)
 
+    def test_operator_requeue_preserves_failed_attempt_evidence(self):
+        armed_path = self.write_queue(filename="armed.toml", armed=True)
+        disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            lease = coordinator.claim("worker-one", now=20)
+            coordinator.fail(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "deterministic authority failure",
+                retryable=False,
+                failure_class="authority-resolution:CellResolutionError",
+                now=21,
+            )
+            coordinator.sync(self.config(disarmed_path), now=22)
+            coordinator.pause("reviewed recovery", now=23)
+            before = coordinator.snapshot()
+
+            result = coordinator.requeue_failed_batch(
+                "batch-baseline",
+                1,
+                "canonical resolver regression repaired",
+                now=24,
+            )
+            after = coordinator.snapshot()
+
+        self.assertEqual(result["requeued"], 1)
+        self.assertTrue(result["attempt_evidence_preserved"])
+        recovered = next(
+            job for job in after["jobs"] if job["job_id"] == lease["job_id"]
+        )
+        self.assertEqual(recovered["state"], "queued")
+        self.assertEqual(recovered["attempt_count"], 1)
+        self.assertIsNone(recovered["error"])
+        self.assertIsNone(recovered["failure_class"])
+        self.assertEqual(after["attempts"], before["attempts"])
+        self.assertEqual(after["counts"]["failed"], before["counts"]["failed"] - 1)
+        self.assertEqual(after["counts"]["queued"], before["counts"]["queued"] + 1)
+        self.assertEqual(
+            [event["event_type"] for event in after["events"][-2:]],
+            ["job.operator-requeued", "batch.failed-jobs-requeued"],
+        )
+
+    def test_operator_requeue_fails_closed_on_state_or_count_drift(self):
+        armed_path = self.write_queue(filename="armed.toml", armed=True)
+        disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            lease = coordinator.claim("worker-one", now=20)
+            coordinator.fail(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "terminal failure",
+                retryable=False,
+                now=21,
+            )
+            with self.assertRaisesRegex(CoordinatorError, "disarmed"):
+                coordinator.requeue_failed_batch("batch-baseline", 1, "repair")
+
+            coordinator.sync(self.config(disarmed_path), now=22)
+            with self.assertRaisesRegex(CoordinatorError, "paused"):
+                coordinator.requeue_failed_batch("batch-baseline", 1, "repair")
+
+            coordinator.pause("review", now=23)
+            with self.assertRaisesRegex(CoordinatorError, "expected 2, found 1"):
+                coordinator.requeue_failed_batch("batch-baseline", 2, "repair")
+
+            failed = coordinator.get_job(lease["job_id"])
+
+        self.assertEqual(failed["state"], "failed")
+        self.assertEqual(failed["attempt_count"], 1)
+
     def test_stale_worker_is_fenced_after_requeue(self):
         path = self.write_queue(
             batches=(("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),),

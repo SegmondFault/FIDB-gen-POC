@@ -860,6 +860,44 @@ finish_started_batch = true
             "authority-resolution:CellResolutionError",
         )
 
+    def test_requeue_failed_command_requires_exact_reviewed_count(self) -> None:
+        queue = self._queue(armed=True)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync(queue, now=10)
+            lease = coordinator.claim("test-worker", now=20)
+            coordinator.fail(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "terminal canary failure",
+                retryable=False,
+                now=21,
+            )
+            queue = self._queue(armed=False)
+            coordinator.sync(queue, now=22)
+            coordinator.pause("reviewing evidence", now=23)
+
+        output = io.StringIO()
+        arguments = self._arguments("requeue-failed")
+        arguments.extend(
+            (
+                "--batch",
+                "batch-mirai",
+                "--expected-count",
+                "1",
+                "--reason",
+                "canary repair verified",
+            )
+        )
+        with contextlib.redirect_stdout(output):
+            status = main(arguments)
+
+        self.assertEqual(status, 0)
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["requeued"], 1)
+        self.assertEqual(document["queue"]["counts"]["failed"], 0)
+        self.assertEqual(document["queue"]["counts"]["queued"], 1)
+
     def test_library_local_pool_is_passed_to_atomic_claim(self) -> None:
         queue = self._mixed_pool_queue()
         arguments = self._arguments("run", queue)

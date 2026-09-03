@@ -391,6 +391,20 @@ jobs. It uses the worker's canonical runtime resolver, including versioned width
 routes and compiler identities, but performs no compilation and starts no JVM.
 Every active job must pass before the queue is armed.
 
+A reviewed recovery never edits or clears the ledger. While the queue is
+disarmed, paused, has no active admission and has no live leases, requeue an
+exact terminal failure set with an explicit cardinality guard:
+
+```sh
+uv run fidb-poc queue requeue-failed \
+  --batch BATCH_ID --expected-count COUNT --reason "reviewed repair"
+```
+
+The transition preserves every attempt and stage record, appends a per-job
+operator event plus a batch summary and leaves the attempt counter intact.
+Consequently the recovered claim becomes the next numbered attempt instead of
+rewriting history.
+
 After an operator deliberately changes `armed` to `true`, one or more workers
 can consume it continuously:
 

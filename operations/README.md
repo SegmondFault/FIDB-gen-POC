@@ -46,6 +46,22 @@ no compilation, starts no JVM, and writes no queue transition. Do not arm a
 campaign unless it reports every active job as passed; `--batch ID` may be
 repeated when checking a deliberately bounded subset.
 
+Do not recover a failed campaign with SQLite updates. Keep it disarmed and
+paused, verify that no batch is admitted and no lease is live, then use the
+guarded transition:
+
+```sh
+.venv/bin/fidb-poc queue requeue-failed \
+  --state var/fidb-coordinator/ledger.sqlite3 \
+  --batch BATCH_ID --expected-count COUNT \
+  --reason "canonical authority repair verified by canary"
+```
+
+The command aborts on any state or count drift. It retains attempts, stage
+spans and prior errors in their immutable historical records, clears only the
+current job's terminal error fields, and appends auditable job and batch
+events. Inspect the returned job-ID digest before rearming.
+
 Confirm that `/opt/ghidra/support/analyzeHeadless`, Java 21, the native route
 tools, required pinned source/toolchain archives or network access, and ample
 disk space are available. The example environment limits each JVM to a 4 GiB
