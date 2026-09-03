@@ -28,7 +28,7 @@ from .width_batch import load_width_batch
 AUTO_BATCH_SCHEMA = "fidb-auto-batch-campaign/v1"
 AUTO_BATCH_BUILDER_VERSION = "route-treatment-bundles-v1"
 DEFAULT_AUTO_OUTPUT_ROOT = Path("plans/auto-materialized")
-DEFAULT_QUEUE_PATH = Path("plans/priority-queue.toml")
+DEFAULT_QUEUE_PATH = Path("plans/c-top10-nonapple-width-v2-queue-policy.toml")
 DEFAULT_TARGET_MINUTES = 60
 DEFAULT_MAX_MINUTES = 85
 MANIFEST_NAME = "manifest.toml"

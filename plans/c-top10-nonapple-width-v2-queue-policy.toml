@@ -1,0 +1,109 @@
+schema_version = "fidb-queue/v1"
+name = "library-priority"
+
+[queue]
+# Intent and priority live here.  The first native commissioning run completed
+# and was drained on 2026-08-30; its batches are retired from this active queue
+# while their plan files, artifacts, and durable ledger history remain intact.
+# Block 01 was requeued through the evidence-preserving recovery transition
+# after exact resolution preflight and four real SQLite/Readline canaries.
+armed = false
+# Bind queue concurrency to the measured 94 GiB policy used by the campaign
+# time model. Queue loading fails closed if this cap drifts from the profile.
+performance_profile = "reference-host-94g-balanced"
+max_workers = 20
+batch_order = [
+  "c-top10-nonapple-width-v2-block-01",
+  "c-top10-nonapple-width-v2-block-02",
+  "c-top10-nonapple-width-v2-block-03",
+  "c-top10-nonapple-width-v2-block-04",
+  "c-top10-nonapple-width-v2-block-05",
+]
+poll_seconds = 5
+lease_seconds = 3600
+max_attempts = 3
+# Retryable failures wait before they may be leased again.  The delay doubles
+# per failed attempt and is capped, so a broken cell cannot spin overnight.
+retry_backoff_seconds = 30
+retry_backoff_max_seconds = 900
+# Pause new claims after five terminal failures in the same authority class.
+authority_failure_threshold = 5
+
+[schedule]
+enabled = true
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_claiming = "05:30"
+# Admit at most one ordered batch in a schedule window. Once admitted, every
+# worker may continue claiming that batch until it drains; no later batch is
+# admitted during the same window. Omit hard_cutoff so work is never killed at
+# 05:30. The resource gates below remain active while a batch drains.
+finish_started_batch = true
+
+[resources]
+# Admission is checked immediately before every claim. Values describe the
+# Linux resources visible to this worker pool, not nominal installed hardware.
+min_available_memory_gib = 12
+min_free_disk_gib = 200
+max_load_per_cpu = 1.0
+max_temperature_c = 90
+
+[notifications]
+events = [
+  "job-failed",
+  "job-requeued",
+  "queue-drained",
+  "resource-blocked",
+  "schedule-cutoff",
+]
+outbox = "var/fidb-notifications/events.jsonl"
+# Optional delivery is enabled only when this named variable contains an HTTPS
+# endpoint. The outbox remains the durable local notification record.
+webhook_url_env = "FIDB_NOTIFICATION_WEBHOOK_URL"
+webhook_bearer_env = "FIDB_NOTIFICATION_BEARER_TOKEN"
+timeout_seconds = 10
+
+# These five blocks are materialized and ordered, but the queue remains
+# disarmed above. File hashes protect the generated TOML and queue digests
+# protect the exact ordered cell identities after host-local route resolution.
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-01"
+name = "C top ten width v2 · SQLite + Readline"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-01.toml"
+plan_sha256 = "c248b9d2ce3b52b3409a66396ad51514b11ef342a91f9af6af5d77995c27ddff"
+queue_digest = "cdf9d8a5edae9dea41f62957f6c32a0beb78d0eb09b1cd60eb9ff25081180800"
+executions = 444
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-02"
+name = "C top ten width v2 · gettext + LZ4"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-02.toml"
+plan_sha256 = "04ddf4a59759ce9435bc1ef29514cb61db95c8543047967bec48063c0efdde1d"
+queue_digest = "c10291a55691f1ab8a0871cead767f6f819059c2ecc94034367b85819f006931"
+executions = 444
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-03"
+name = "C top ten width v2 · nghttp2 + OpenSSL Android gap"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-03.toml"
+plan_sha256 = "9bb1fc477636e0843edb05159d611bf2cd62ec1ef0bffd29a62b7aa317201cc6"
+queue_digest = "c5d3d8390073765d8fc4a8ad8cb04f1de9829c66675055838491b3d50cb87047"
+executions = 270
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-04"
+name = "C top ten width v2 · GMP + XZ"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-04.toml"
+plan_sha256 = "54210da93f8b6ae1944c7b53360c21f32871edda42f60376412a1f8f08153e70"
+queue_digest = "76c019b111f7d92a3edce86ca576a2a4499cfa220f5bc3f38422e2b35958bc5f"
+executions = 444
+
+[[batch]]
+id = "c-top10-nonapple-width-v2-block-05"
+name = "C top ten width v2 · PCRE2 + Zstandard"
+plan = "plans/materialized/c-top10-nonapple-width-v2/block-05.toml"
+plan_sha256 = "4a6b25db2ea75fcbae271ba71b1cebebb398ceb932146b62a84d77a90c9d1024"
+queue_digest = "ae546876285dc7ed41deea4ffe825eacc7470b3d12e729fc6961b9d9086040ff"
+executions = 444

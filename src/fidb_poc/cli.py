@@ -164,7 +164,9 @@ def _auto_batches_main(argv: list[str]) -> int:
         "--model", type=Path, default=Path("performance/batch-planning.toml")
     )
     result.add_argument(
-        "--source-queue", type=Path, default=Path("plans/priority-queue.toml")
+        "--source-queue",
+        type=Path,
+        default=Path("plans/c-top10-nonapple-width-v2-queue-policy.toml"),
     )
     result.add_argument(
         "--output-root", type=Path, default=Path("plans/auto-materialized")

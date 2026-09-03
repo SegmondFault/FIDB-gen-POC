@@ -97,7 +97,9 @@ class AutoBatchBuilderTests(unittest.TestCase):
             ],
         }
         source = tomllib.loads(
-            (self.root / "plans/priority-queue.toml").read_text(encoding="utf-8")
+            (
+                self.root / "plans/c-top10-nonapple-width-v2-queue-policy.toml"
+            ).read_text(encoding="utf-8")
         )
 
         payload = _render_queue(document, source)
@@ -106,7 +108,7 @@ class AutoBatchBuilderTests(unittest.TestCase):
 
         self.assertFalse(queue["queue"]["armed"])
         self.assertEqual(queue["queue"]["max_workers"], 20)
-        self.assertEqual(queue["schedule"]["start"], "01:00")
+        self.assertEqual(queue["schedule"]["start"], "00:00")
         self.assertEqual(queue["schedule"]["stop_claiming"], "05:30")
         self.assertTrue(policy.schedule.finish_started_batch)
         self.assertTrue(policy.schedule.chain_batches)
