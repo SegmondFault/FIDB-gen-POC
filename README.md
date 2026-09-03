@@ -262,12 +262,13 @@ It atomically replaces the generated plans and manifest but still cannot arm,
 synchronize, claim, or execute work. See [`batches/README.md`](batches/README.md)
 for the drift guards, review process, and rollback boundary.
 
-The auto-batch candidate keeps each library/route's six treatments together
-but produces 23 roughly one-hour chunks. Its separate queue is disarmed,
-visible in the control panel, manually triggerable one chunk at a time outside
-the timer, and able to chain chunks during 01:00–05:30 without cutting off a
-started chunk. It is not synchronized into the currently running five-block
-ledger.
+The active auto-batched campaign keeps each library/route's six treatments
+together and produces 23 roughly one-hour chunks. Its generated queue remains
+disarmed under `plans/auto-materialized/`; the reviewed active copy is
+`plans/priority-queue.toml`, while
+`plans/c-top10-nonapple-width-v2-queue-policy.toml` remains the stable generator
+input. Chunks are manually triggerable one at a time outside the timer and chain
+during 00:00–05:30 without cutting off a started chunk.
 
 ### Portable performance profiles
 
@@ -513,8 +514,8 @@ inspect the appended `queue.circuit-opened` event before resuming.
 
 The same queue document owns the unattended operating envelope. `[schedule]`
 defines an IANA-timezone admission window. The reviewed default is
-`01:00–05:30 Europe/Luxembourg`: at most one ordered batch is admitted in that
-window, and `finish_started_batch = true` lets its remaining cells drain after
+`00:00–05:30 Europe/Luxembourg`: ordered short chunks are admitted one at a time
+during the window, and `finish_started_batch = true` lets a chunk drain after
 05:30 without admitting the next batch. The durable admission survives worker
 restarts. `[resources]` gates every new lease on available Linux memory,
 project-filesystem space, load per logical CPU and the highest detected thermal

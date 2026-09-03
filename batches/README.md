@@ -143,7 +143,7 @@ tail at 34 minutes. Their +40% planning bounds remain below 89 minutes.
 # Read-only compilation and exact aggregate authority resolution
 uv run fidb-poc auto-batches --project-root .
 
-# Freeze a separate candidate queue; still armed = false
+# Regenerate the candidate queue; still armed = false
 uv run fidb-poc auto-batches --project-root . --write
 
 # Recompute and compare every generated file
@@ -152,16 +152,16 @@ uv run fidb-poc auto-batches --project-root . --check
 
 The generated TOML lives under
 `plans/auto-materialized/c-top10-nonapple-width-v2-auto-60m-85m/`. Its
-`queue.toml` copies the reviewed 01:00–05:30 operational gates, enables
+`queue.toml` copies the reviewed 00:00–05:30 operational gates, enables
 `chain_batches`, and remains disarmed. A manual admission outside that window
 starts one short chunk; during the overnight window, each durably drained chunk
 allows the next to be admitted. The stop time prevents a new admission but
 never interrupts a chunk that already started.
 
-This is a candidate for a future queue transition, not an overlay for the live
-five-block ledger. Do not synchronize it into a ledger containing the current
-campaign: batch IDs intentionally change, and preserving completed/attempt
-evidence requires an explicit migration decision. Rollback is simply to leave
-the candidate disarmed and remove its generated directory in a later reviewed
-commit; the active queue, ledger, artifacts, sources, and toolchains do not
-refer to it.
+The generated queue is the disarmed candidate. A reviewed copy may replace
+`plans/priority-queue.toml` only through an explicit generation transition:
+pause and disarm the ledger, synchronize the new identities, verify exact
+resolution, then arm separately. Batch IDs intentionally change; superseded
+jobs become inactive while completed attempts, failures, events, and artifacts
+remain historical evidence. See `futureagents.md` for the recovery and rollback
+sequence.

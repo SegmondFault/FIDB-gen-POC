@@ -1,0 +1,151 @@
+# Future-agent operating notes
+
+This repository controls expensive, evidence-producing work on the Linux host
+`reference-host`. Treat TOML as authority, SQLite as the durable coordinator ledger,
+and `artifacts/runs/` as immutable evidence. A green unit test or resolution
+preflight is necessary, but a real end-to-end canary is the execution boundary.
+
+## Authority chain
+
+The execution identity is assembled from separate reviewed layers:
+
+1. `sources/*.toml` pins the upstream release, URL, size, and SHA-256.
+2. `recipes/*.toml` binds that source identity to a fixed adapter and retained
+   archive names. Recipes are declarative and must never contain shell commands,
+   arbitrary flags, or free-form environment variables.
+3. `src/fidb_poc/adapters.py` contains the reviewed executable build behavior.
+   Add or change an adapter with focused tests and cross-target compilation
+   canaries.
+4. `toolchains/*.toml`, prepared pack state, and qualification records establish
+   compiler provenance. `worker.toml` maps stable route IDs to those qualified
+   packs and the correct Ghidra language/compiler pair.
+5. Width and treatment TOML select applicable combinations. Materialized plan
+   TOML freezes exact cells; queue TOML orders and admits them.
+
+Never repair a runtime mismatch by weakening identity comparison. Correct the
+authority that is wrong, regenerate the affected plans, and preserve the old
+generation in the ledger.
+
+## Sources and recipes
+
+Prepared campaigns use the content-addressed cache at
+`var/fidb-sources/downloads/`. Queue cells must pass this cache to the native
+pipeline. A per-attempt `work/downloads/` directory is scratch, not the source
+cache; allowing every cell to fetch upstream creates network dependence and was
+the cause of the Readline block-01 failures on 2026-09-03.
+
+Before materialization, require all of the following:
+
+- source status is cached and checksum-verified;
+- recipe name, version, URL, and SHA-256 match the source pin;
+- the fixed adapter produces every declared static archive;
+- target-family and oldest compiler-generation canaries pass; and
+- no command or unbounded caller input has entered recipe TOML.
+
+Project-specific accommodations belong in the fixed adapter and its tests. The
+current gettext, GMP, and Readline exceptions are documented in
+`recipes/README.md`.
+
+## Route resolution lessons
+
+- A Ghidra `LanguageID` ending in `:default` does not imply that
+  `CompilerSpecID=default` exists. Android x86 and x86-64 use compiler spec
+  `gcc` with the current Ghidra languages.
+- Tool output strings are not canonical identities. The reviewed equivalence
+  `Intel 80386` ↔ `Intel i386` is accepted only by the artifact validator;
+  do not introduce fuzzy substring matching.
+- Versioned routes and base routes must resolve through the same canonical
+  route loader. The queued toolchain material digest, qualification digest,
+  executable paths, target, and Ghidra pair must match runtime resolution.
+
+Run both checks after any source, recipe, toolchain, worker-route, width, or
+materialized-plan change:
+
+```sh
+uv run fidb-poc queue preflight --project-root . --queue plans/priority-queue.toml
+uv run fidb-poc queue resolve-preflight --project-root . \
+  --state var/fidb-coordinator/ledger.sqlite3
+```
+
+The second command must report every active job passed and zero failure classes.
+
+## Canary boundary
+
+A useful canary reaches source acquisition, extraction, compilation, archive and
+object validation, Ghidra import/analysis, FID population, packed FIDB and FIDBF
+export, final validation, provenance sealing, and atomic publication. It must use
+the production `GHIDRA_HEADLESS` path and JVM limits from
+`~/.config/fidb-factory/library-local-worker.env`; a manually launched worker
+without that environment is not representative.
+
+`plans/c-android-x86-sqlite-readline-canary.toml` covers both affected libraries,
+Android x86 32/64, and NDK r27d/r29 base/versioned identities. Its queue remains
+disarmed in Git. The repaired canary completed 8/8 cells on 2026-09-03 in the
+isolated ledger `var/fidb-canary/ledger-v2.sqlite3`.
+
+## Queue transitions and recovery
+
+Pause first, disarm second, then verify no leases or active workers before
+changing an active generation. Never clear the ledger to make a plan fit.
+Synchronizing a corrected generation deactivates superseded jobs but retains
+their attempts and events. Preserve all `artifacts/runs/` attempt directories.
+
+For unchanged identities, use the supported bounded transition:
+
+```sh
+uv run fidb-poc queue requeue-failed --project-root . \
+  --state var/fidb-coordinator/ledger.sqlite3 --batch BATCH_ID \
+  --expected-count N --reason "reviewed reason"
+```
+
+Do not requeue jobs after their route or plan identity changes. Synchronize the
+new generation instead and record why the inactive historical generation was
+superseded. The authority-failure circuit breaker pauses claims after five
+terminal failures in one authority class; investigate it rather than repeatedly
+resuming.
+
+## Time-aware campaign
+
+`plans/c-top10-nonapple-width-v2-queue-policy.toml` is the stable operational
+input to `fidb-poc auto-batches`. The generated candidate remains disarmed under
+`plans/auto-materialized/`; the reviewed active copy is
+`plans/priority-queue.toml`. The current policy creates 23 route/treatment-coherent
+chunks, targets about 60 minutes, caps the central estimate at 85 minutes, and
+keeps all six treatments for a library/route together.
+
+The window is `00:00–05:30 Europe/Luxembourg`. `chain_batches=true` admits the
+next ordered chunk only after the current one drains and only while the window
+is open. `finish_started_batch=true` lets a started chunk finish after 05:30.
+Manual `queue start-block` admits exactly one chunk outside the timer.
+
+Regenerate only after reviewing changed authorities:
+
+```sh
+uv run fidb-poc auto-batches --project-root . --check
+uv run fidb-poc auto-batches --project-root . --write
+```
+
+Generation cannot arm, synchronize, or execute work. Arming the active queue is
+a separate, small commit. Before leaving a scheduled run unattended, verify the
+queue is armed and unpaused, exact resolution passes, resource gates pass, and
+all 20 configured worker services are active.
+
+## Rollback
+
+Stop new claims with `queue pause`, commit `armed=false`, synchronize it, and let
+or deliberately stop any already leased cells according to the incident. Revert
+operator/configuration commits with new `git revert` commits; do not rewrite Git
+history or delete ledger rows. Resynchronizing the previous reviewed queue makes
+the replacement generation inactive while retaining both generations' evidence.
+
+## Verification discipline
+
+Use focused tests while iterating, then run the complete suite before handoff:
+
+```sh
+uv run python -m unittest discover -s tests
+```
+
+Report the commit IDs, exact queue counts, schedule and timezone, worker-service
+count, preflight totals, canary scope/result, and any retained failed generation.
+Do not describe a queue as ready merely because its TOML parses.

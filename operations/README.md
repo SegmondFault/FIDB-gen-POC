@@ -88,12 +88,13 @@ class and active batch pause the coordinator and append a
 but no further cells are claimed until an operator has inspected the evidence
 and explicitly resumes the queue.
 
-The reviewed schedule admits at most one ordered batch between 01:00 and 05:30
+The reviewed schedule admits ordered short chunks between 00:00 and 05:30
 Europe/Luxembourg. With `finish_started_batch = true`, 05:30 closes admission
 for the night but does not kill a cell or strand the rest of that batch:
 workers keep claiming from the durable active-batch identity until it drains.
-The next batch waits for a later schedule window. Worker services must already
-be running for automatic admission; their polling loops sleep harmlessly while
+While the window remains open, `chain_batches = true` admits the next ordered
+chunk; after 05:30 it waits for the next window. Worker services must already be
+running for automatic admission; their polling loops sleep harmlessly while
 there is no active or admissible block.
 
 Inspect that decision without mutating the ledger:
@@ -217,12 +218,12 @@ checks available memory, disk, load and temperature before each new claim.
 Twenty-nine workers remain an explicit burst experiment, not the default for
 previously unmeasured libraries.
 
-`[schedule].chain_batches = true` is an opt-in for short, pre-materialized
-chunks and requires `finish_started_batch = true`. After one chunk drains, a
-worker may admit the next only if the claim window is still open. At 05:30 no
-new chunk starts, while the current chunk continues until it drains. The active
-five-block queue deliberately omits this option; the separate auto-generated
-candidate demonstrates it without altering the running ledger.
+`[schedule].chain_batches = true` is enabled for the active short,
+pre-materialized chunks and requires `finish_started_batch = true`. After one
+chunk drains, a worker may admit the next only if the claim window is still
+open. At 05:30 no new chunk starts, while the current chunk continues until it
+drains. The generated queue remains disarmed; its reviewed active copy is
+`plans/priority-queue.toml`.
 
 Use the control panel's **Timing** workspace or inspect
 `http://127.0.0.1:8765/api/v1/timings` on `reference-host`.  Require multiple
