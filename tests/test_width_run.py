@@ -2,7 +2,11 @@ import contextlib
 import gzip
 import io
 import json
+import os
+import subprocess
+import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +16,7 @@ from fidb_poc.c_width import compile_c_width
 from fidb_poc.width_run import (
     _execute_cell,
     _groups,
+    _process_tree_pids,
     _read_csv_rows,
     _release_cell_scratch,
     _release_jvm_scratch,
@@ -170,6 +175,30 @@ class WidthRunTests(unittest.TestCase):
             ),
             1,
         )
+
+    def test_process_tree_finds_children_started_by_non_main_threads(self):
+        ready = threading.Event()
+        release = threading.Event()
+        child: dict[str, subprocess.Popen] = {}
+
+        def launch() -> None:
+            process = subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(30)"]
+            )
+            child["process"] = process
+            ready.set()
+            release.wait(timeout=10)
+            process.terminate()
+            process.wait(timeout=10)
+
+        thread = threading.Thread(target=launch)
+        thread.start()
+        try:
+            self.assertTrue(ready.wait(timeout=10))
+            self.assertIn(child["process"].pid, _process_tree_pids(os.getpid()))
+        finally:
+            release.set()
+            thread.join(timeout=15)
 
     def test_replay_comparison_separates_artifact_fidb_and_semantics(self):
         baseline = {

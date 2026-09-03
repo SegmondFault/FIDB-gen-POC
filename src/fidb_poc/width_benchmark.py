@@ -353,6 +353,8 @@ def execute_width_benchmark(
         "completed_cells": completed,
         "failed_cells": len(groups) - completed,
         "peak_process_rss_bytes": sampler.peak_rss_bytes,
+        "peak_process_pss_bytes": sampler.peak_pss_bytes,
+        "peak_process_uss_bytes": sampler.peak_uss_bytes,
         "peak_scratch_bytes": sampler.peak_scratch_bytes,
         "jvm_scratch_cleanup": jvm_scratch_cleanup,
         "retained_bytes": _directory_size(run_root),

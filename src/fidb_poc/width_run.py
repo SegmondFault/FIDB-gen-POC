@@ -92,18 +92,57 @@ def _process_tree_pids(root_pid: int) -> set[int]:
         if pid in observed:
             continue
         observed.add(pid)
+        task_root = Path(f"/proc/{pid}/task")
         try:
-            children = Path(f"/proc/{pid}/task/{pid}/children").read_text(
-                encoding="utf-8"
-            )
-            pending.extend(int(value) for value in children.split())
-        except (FileNotFoundError, OSError, ValueError):
+            child_files = tuple(task_root.glob("[0-9]*/children"))
+        except OSError:
             continue
+        for child_file in child_files:
+            try:
+                children = child_file.read_text(encoding="utf-8")
+                pending.extend(int(value) for value in children.split())
+            except (FileNotFoundError, OSError, ValueError):
+                continue
     return observed
 
 
 def _rss_bytes() -> int:
     return sum(_pid_rss_bytes(pid) for pid in _process_tree_pids(os.getpid()))
+
+
+def _pid_proportional_bytes(pid: int) -> tuple[int, int]:
+    """Return Linux PSS and USS for one process from ``smaps_rollup``.
+
+    RSS intentionally remains available for continuity with prior benchmark
+    evidence.  PSS apportions shared pages and USS counts private clean/dirty
+    pages, avoiding the misleading shared-page multiplication produced by
+    summing RSS across many JVMs.
+    """
+
+    pss_kib = 0
+    private_kib = 0
+    try:
+        for line in (
+            Path(f"/proc/{pid}/smaps_rollup").read_text(encoding="utf-8").splitlines()
+        ):
+            name, _separator, remainder = line.partition(":")
+            if name == "Pss":
+                pss_kib = int(remainder.split()[0])
+            elif name in {"Private_Clean", "Private_Dirty"}:
+                private_kib += int(remainder.split()[0])
+    except (FileNotFoundError, OSError, ValueError, IndexError):
+        return 0, 0
+    return pss_kib * 1024, private_kib * 1024
+
+
+def _proportional_bytes() -> tuple[int, int]:
+    pss = 0
+    uss = 0
+    for pid in _process_tree_pids(os.getpid()):
+        process_pss, process_uss = _pid_proportional_bytes(pid)
+        pss += process_pss
+        uss += process_uss
+    return pss, uss
 
 
 def _scratch_size(replay_root: Path) -> int:
@@ -128,6 +167,8 @@ class _ResourceSampler:
         self.filesystem_scratch = filesystem_scratch
         self.peak_scratch_bytes = 0
         self.peak_rss_bytes = 0
+        self.peak_pss_bytes = 0
+        self.peak_uss_bytes = 0
         self.samples = 0
         self._available_at_start = self._available_bytes()
         self._stop = threading.Event()
@@ -148,6 +189,9 @@ class _ResourceSampler:
             scratch = _scratch_size(self.run_root)
         self.peak_scratch_bytes = max(self.peak_scratch_bytes, scratch)
         self.peak_rss_bytes = max(self.peak_rss_bytes, _rss_bytes())
+        pss, uss = _proportional_bytes()
+        self.peak_pss_bytes = max(self.peak_pss_bytes, pss)
+        self.peak_uss_bytes = max(self.peak_uss_bytes, uss)
         self.samples += 1
 
     def _sample(self) -> None:
@@ -312,7 +356,8 @@ def width_run_preview(
         "groups_per_replay": len(_groups(plan)),
         "parallel_workers": parallel_workers,
         "build_jobs_per_cell": build_jobs_per_cell,
-        "performance_profile": performance_profile_id or (
+        "performance_profile": performance_profile_id
+        or (
             "auto"
             if workers is None
             and heap_mib == DEFAULT_WIDTH_GHIDRA_HEAP_MIB
@@ -718,6 +763,8 @@ def _execute_cell(
         "final_scratch_bytes": _directory_size(group_root / "work"),
         "retained_bytes": _directory_size(group_root / "artifacts/libs"),
         "peak_process_rss_bytes": sampler.peak_rss_bytes,
+        "peak_process_pss_bytes": sampler.peak_pss_bytes,
+        "peak_process_uss_bytes": sampler.peak_uss_bytes,
         "resource_samples": sampler.samples,
         "stage_timing": timing.document(),
         "manifest": str(manifest) if manifest is not None else "",
