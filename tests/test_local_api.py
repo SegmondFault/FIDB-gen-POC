@@ -74,6 +74,10 @@ class LocalApiTests(unittest.TestCase):
             "toolchains",
         ):
             shutil.copytree(self.source_root / name, self.root / name)
+        shutil.copy2(
+            self.source_root / "tests/fixtures/local-api-priority-queue.toml",
+            self.root / "plans/priority-queue.toml",
+        )
         self.state = self.root / "var/fidb-coordinator/ledger.sqlite3"
         self.queue = self.root / "plans/priority-queue.toml"
         self.queue_config = QueueConfig.load(self.queue, self.root)

@@ -1,0 +1,55 @@
+schema_version = "fidb-queue/v1"
+name = "local-api-test-priority"
+
+[queue]
+armed = false
+max_workers = 2
+batch_order = ["batch-000", "batch-005", "batch-010-macos-canary"]
+poll_seconds = 5
+lease_seconds = 3600
+max_attempts = 3
+retry_backoff_seconds = 30
+retry_backoff_max_seconds = 900
+
+[schedule]
+enabled = true
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "01:00"
+stop_claiming = "05:30"
+finish_started_batch = true
+
+[resources]
+min_available_memory_gib = 12
+min_free_disk_gib = 200
+max_load_per_cpu = 1.0
+max_temperature_c = 90
+
+[notifications]
+events = [
+  "job-failed",
+  "job-requeued",
+  "queue-drained",
+  "resource-blocked",
+  "schedule-cutoff",
+]
+outbox = "var/fidb-notifications/events.jsonl"
+webhook_url_env = "FIDB_NOTIFICATION_WEBHOOK_URL"
+webhook_bearer_env = "FIDB_NOTIFICATION_BEARER_TOKEN"
+timeout_seconds = 10
+
+[[batch]]
+id = "batch-000"
+name = "tier-0-runtime-foundations"
+plan = "plans/tier0-runtime-foundations.toml"
+matrices = ["tier0-zlib-native"]
+
+[[batch]]
+id = "batch-005"
+name = "bzip2-native-baseline"
+plan = "plans/bzip2-native.toml"
+
+[[batch]]
+id = "batch-010-macos-canary"
+name = "macos-arm64-native-canary"
+plan = "plans/macos-arm64-canary.toml"
