@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Callable, Iterator, Mapping
 
 from .operations_policy import OperationsPolicy, load_operations_policy
+from .performance_profiles import PerformanceProfile, load_performance_profiles
 from .plan_request import RESOLVED_SCHEMA, queue_identity_digest, resolve_plan
 
 QUEUE_SCHEMA = "fidb-queue/v1"
@@ -79,6 +80,7 @@ class QueueConfig:
     batch_order: tuple[str, ...]
     armed: bool
     max_workers: int
+    performance_profile: PerformanceProfile | None
     poll_seconds: int
     lease_seconds: int
     max_attempts: int
@@ -134,7 +136,11 @@ class QueueConfig:
         _only_keys(
             queue,
             required_queue_fields
-            | {"retry_backoff_seconds", "retry_backoff_max_seconds"},
+            | {
+                "performance_profile",
+                "retry_backoff_seconds",
+                "retry_backoff_max_seconds",
+            },
             "queue table",
         )
         missing_queue_fields = required_queue_fields - set(queue)
@@ -148,6 +154,25 @@ class QueueConfig:
         if not isinstance(armed, bool):
             raise ValueError("queue armed must be a boolean")
         max_workers = _positive_integer(queue["max_workers"], "queue max_workers")
+        performance_profile = None
+        if "performance_profile" in queue:
+            profile_id = _identifier(
+                queue["performance_profile"], "queue performance_profile"
+            )
+            performance_profile = load_performance_profiles(root).select(profile_id)
+            profile_workers = performance_profile.settings.workers
+            if (
+                performance_profile.settings.worker_mode != "fixed"
+                or profile_workers is None
+            ):
+                raise ValueError(
+                    "queue performance_profile must select a fixed worker count"
+                )
+            if max_workers != profile_workers:
+                raise ValueError(
+                    "queue max_workers does not match performance profile: "
+                    f"{max_workers} != {profile_workers} ({profile_id})"
+                )
         poll_seconds = _positive_integer(queue["poll_seconds"], "queue poll_seconds")
         lease_seconds = _positive_integer(queue["lease_seconds"], "queue lease_seconds")
         max_attempts = _positive_integer(queue["max_attempts"], "queue max_attempts")
@@ -258,6 +283,7 @@ class QueueConfig:
             batch_order=batch_order,
             armed=armed,
             max_workers=max_workers,
+            performance_profile=performance_profile,
             poll_seconds=poll_seconds,
             lease_seconds=lease_seconds,
             max_attempts=max_attempts,
@@ -535,6 +561,7 @@ class Coordinator:
                 armed INTEGER NOT NULL CHECK (armed IN (0, 1)),
                 paused INTEGER NOT NULL CHECK (paused IN (0, 1)),
                 max_workers INTEGER NOT NULL CHECK (max_workers > 0),
+                performance_json TEXT,
                 poll_seconds INTEGER NOT NULL CHECK (poll_seconds > 0),
                 lease_seconds INTEGER NOT NULL CHECK (lease_seconds > 0),
                 max_attempts INTEGER NOT NULL CHECK (max_attempts > 0),
@@ -761,6 +788,10 @@ class Coordinator:
                 "ADD COLUMN max_workers INTEGER NOT NULL DEFAULT 4 "
                 "CHECK (max_workers > 0)"
             )
+        if "performance_json" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN performance_json TEXT"
+            )
         if "retry_backoff_seconds" not in state_columns:
             self._connection.execute(
                 "ALTER TABLE coordinator_state ADD COLUMN retry_backoff_seconds "
@@ -818,13 +849,13 @@ class Coordinator:
         self._connection.execute("""
             INSERT OR IGNORE INTO coordinator_state (
                 singleton, config_name, config_path, armed, paused,
-                max_workers, poll_seconds, lease_seconds, max_attempts,
+                max_workers, performance_json, poll_seconds, lease_seconds, max_attempts,
                 retry_backoff_seconds, retry_backoff_max_seconds,
                 operations_json, active_batch_id, active_admission_id,
                 last_schedule_admission_id,
                 sync_generation, synced_at
             ) VALUES (
-                1, NULL, NULL, 0, 0, 4, 5, 3600, 3, 0, 0, '{}',
+                1, NULL, NULL, 0, 0, 4, NULL, 5, 3600, 3, 0, 0, '{}',
                 NULL, NULL, NULL, 0, NULL
             )
             """)
@@ -994,7 +1025,8 @@ class Coordinator:
                 """
                 UPDATE coordinator_state
                 SET config_name = ?, config_path = ?, armed = ?,
-                    max_workers = ?, poll_seconds = ?, lease_seconds = ?, max_attempts = ?,
+                    max_workers = ?, performance_json = ?, poll_seconds = ?,
+                    lease_seconds = ?, max_attempts = ?,
                     retry_backoff_seconds = ?, retry_backoff_max_seconds = ?,
                     operations_json = ?,
                     sync_generation = ?, synced_at = ?
@@ -1005,6 +1037,11 @@ class Coordinator:
                     str(queue_config.source_path),
                     int(queue_config.armed),
                     queue_config.max_workers,
+                    (
+                        _canonical_json(queue_config.performance_profile.document())
+                        if queue_config.performance_profile is not None
+                        else None
+                    ),
                     queue_config.poll_seconds,
                     queue_config.lease_seconds,
                     queue_config.max_attempts,
@@ -2632,6 +2669,11 @@ class Coordinator:
             "armed": armed,
             "paused": paused,
             "max_workers": max_workers,
+            "performance_profile": (
+                json.loads(state["performance_json"])
+                if state["performance_json"] is not None
+                else None
+            ),
             "active_workers": active_workers,
             "available_worker_slots": max(0, max_workers - active_workers),
             "poll_seconds": int(state["poll_seconds"]),

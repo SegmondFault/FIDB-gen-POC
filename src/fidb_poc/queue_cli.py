@@ -37,6 +37,7 @@ from .coordinator import (
     QueueConfig,
     WORKER_POOLS,
 )
+from .jvm_policy import java_options
 from .operations_policy import (
     NotificationPolicy,
     emit_notification,
@@ -710,6 +711,7 @@ def _execute_claim(
     lease_seconds: int,
     *,
     verbose: bool,
+    build_jobs_per_cell: int = 4,
     notifications: NotificationPolicy = NotificationPolicy(),
 ) -> bool:
     staging, final = _staging_root(root, lease)
@@ -754,6 +756,7 @@ def _execute_claim(
             staging,
             progress=progress,
             verbose=verbose,
+            build_jobs_per_cell=build_jobs_per_cell,
         )
         heartbeat.check()
         _validate_cell_timing(result.timing)
@@ -908,6 +911,20 @@ def _run_worker(arguments: argparse.Namespace) -> int:
     config = QueueConfig.load(queue_path, root)
     if not config.armed:
         raise QueueCliError(f"queue is disarmed in {queue_path}; no build was started")
+    build_jobs_per_cell = 4
+    if config.performance_profile is not None:
+        settings = config.performance_profile.settings
+        try:
+            os.environ["JAVA_TOOL_OPTIONS"] = java_options(
+                settings.ghidra_heap_mib,
+                settings.ghidra_core_limit,
+            )
+        except ValueError as error:
+            raise QueueCliError(
+                "queue worker JVM policy conflicts with performance profile "
+                f"{config.performance_profile.id}: {error}"
+            ) from error
+        build_jobs_per_cell = settings.build_jobs_per_cell
 
     previous_sigterm = signal.getsignal(signal.SIGTERM)
 
@@ -987,9 +1004,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     cutoff_triggered = threading.Event()
                     timer = None
                     cutoff_value = (
-                        None
-                        if finish_started
-                        else schedule.get("hard_cutoff_at")
+                        None if finish_started else schedule.get("hard_cutoff_at")
                     )
                     if isinstance(cutoff_value, str):
                         cutoff = datetime.fromisoformat(cutoff_value)
@@ -1011,6 +1026,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                             lease,
                             config.lease_seconds,
                             verbose=arguments.verbose,
+                            build_jobs_per_cell=build_jobs_per_cell,
                             notifications=config.operations.notifications,
                         )
                     except KeyboardInterrupt:

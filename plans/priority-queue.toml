@@ -6,9 +6,10 @@ name = "library-priority"
 # and was drained on 2026-08-30.  A future run must be deliberately re-armed,
 # synchronized and inspected before any worker is started.
 armed = false
-# Initial host-safe cap. Raise only after the ledger has real Ghidra RSS and
-# stage-duration evidence; worker service instances above this remain idle.
-max_workers = 2
+# Bind queue concurrency to the measured 94 GiB policy used by the campaign
+# time model. Queue loading fails closed if this cap drifts from the profile.
+performance_profile = "reference-host-94g-balanced"
+max_workers = 20
 batch_order = [
   "batch-000",
   "batch-005",

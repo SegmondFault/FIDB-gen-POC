@@ -212,8 +212,7 @@ matrices = ["native-libraries"]
     def test_started_block_claims_after_window_without_cutoff_timer(self) -> None:
         queue = self._queue(armed=True)
         queue.write_text(
-            queue.read_text(encoding="utf-8")
-            + """
+            queue.read_text(encoding="utf-8") + """
 [schedule]
 enabled = true
 timezone = "Europe/Luxembourg"
@@ -804,6 +803,35 @@ finish_started_batch = true
             status = main(arguments)
 
         self.assertEqual(status, 0)
+
+    def test_queue_performance_profile_reaches_worker_execution(self) -> None:
+        queue = self._mixed_pool_queue()
+        queue.write_text(
+            queue.read_text(encoding="utf-8").replace(
+                "max_workers = 4",
+                'max_workers = 20\nperformance_profile = "reference-host-94g-balanced"',
+            ),
+            encoding="utf-8",
+        )
+        arguments = self._arguments("run", queue)
+        arguments.extend(
+            ("--worker-id", "profile-worker", "--pool", "library-local", "--once")
+        )
+        operations = {
+            "schedule": {"claims_allowed": True, "hard_cutoff_at": None},
+            "resources": {"passed": True, "reasons": [], "metrics": {}},
+        }
+
+        with (
+            patch.dict(os.environ, {"JAVA_TOOL_OPTIONS": "-Xmx4g"}),
+            patch("fidb_poc.queue_cli.evaluate_operations", return_value=operations),
+            patch("fidb_poc.queue_cli._execute_claim", return_value=True) as execute,
+        ):
+            status = main(arguments)
+            self.assertEqual(os.environ["JAVA_TOOL_OPTIONS"], "-Xmx4g")
+
+        self.assertEqual(status, 0)
+        self.assertEqual(execute.call_args.kwargs["build_jobs_per_cell"], 4)
 
     def test_invalid_worker_pool_fails_cleanly(self) -> None:
         errors = io.StringIO()

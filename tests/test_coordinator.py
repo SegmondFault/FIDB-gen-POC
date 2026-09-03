@@ -186,6 +186,35 @@ matrices = ["tier0-uclibc-powerpc"]
         with self.assertRaisesRegex(ValueError, "plan_sha256 mismatch"):
             self.config(path)
 
+    def test_queue_binds_fixed_performance_profile_to_lease_cap(self):
+        path = self.write_queue(
+            max_workers=20,
+            queue_extra='performance_profile = "reference-host-94g-balanced"',
+        )
+
+        config = self.config(path)
+        self.assertIsNotNone(config.performance_profile)
+        assert config.performance_profile is not None
+        self.assertEqual(config.performance_profile.id, "reference-host-94g-balanced")
+        self.assertEqual(config.performance_profile.settings.workers, 20)
+        self.assertEqual(config.performance_profile.settings.build_jobs_per_cell, 4)
+        self.assertEqual(config.performance_profile.settings.ghidra_heap_mib, 4096)
+
+        with Coordinator(self.database) as coordinator:
+            status = coordinator.sync(config, now=10)
+        self.assertEqual(status["performance_profile"]["id"], "reference-host-94g-balanced")
+
+    def test_queue_rejects_performance_profile_worker_drift(self):
+        path = self.write_queue(
+            max_workers=2,
+            queue_extra='performance_profile = "reference-host-94g-balanced"',
+        )
+
+        with self.assertRaisesRegex(
+            ValueError, "max_workers does not match performance profile"
+        ):
+            self.config(path)
+
     def test_sync_rejects_materialized_queue_identity_drift(self):
         plan = self.project_root / "plans/coverage-baseline.toml"
         digest = hashlib.sha256(plan.read_bytes()).hexdigest()

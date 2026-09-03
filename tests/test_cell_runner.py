@@ -223,11 +223,13 @@ class CellRunnerTests(unittest.TestCase):
             progress,
             verbose=False,
             *,
+            build_jobs_per_cell=4,
             timing=None,
             skipped=None,
         ):
             self.assertEqual(configuration.libraries[0].name, "zlib")
             self.assertFalse(verbose)
+            self.assertEqual(build_jobs_per_cell, 3)
             if progress is not None:
                 progress("native fake")
             fidb = root / "artifacts/libs/fidb/native.fidb"
@@ -283,6 +285,7 @@ class CellRunnerTests(unittest.TestCase):
                     ["optimization:o2"],
                     self.project_root,
                     attempt,
+                    build_jobs_per_cell=3,
                 )
 
             self.assertEqual(execute.call_args.args[1], attempt.resolve())

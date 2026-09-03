@@ -2,8 +2,10 @@
 
 `profiles.toml` is the reviewed source of truth for width-executor resource
 policy. It is deliberately separate from `worker.toml`, which describes build
-routes, and from queue `max_workers`, which limits coordinator leases. Selecting
-a performance profile does not arm a queue or start a run.
+routes. A queue may bind one fixed profile by ID; loading then requires its
+`max_workers` lease cap to equal the profile, passes its build-job count to each
+cell and validates the inherited JVM heap limit. Selecting or binding a profile
+does not arm a queue or start a run.
 
 Inspect all profiles or one profile without executing work:
 

@@ -773,12 +773,14 @@ def _native_outputs(
     attempt_root: Path,
     timing: TimingRecorder,
     verbose: bool,
+    build_jobs_per_cell: int,
 ) -> tuple[Path, dict[str, int], dict[str, object], dict[str, object]]:
     manifest = pipeline.execute(
         configuration,
         attempt_root,
         progress=None,
         verbose=verbose,
+        build_jobs_per_cell=build_jobs_per_cell,
         timing=timing.span,
         skipped=timing.skip,
     )
@@ -1059,6 +1061,7 @@ def run_cell(
     *,
     progress: ProgressCallback | None = None,
     verbose: bool = False,
+    build_jobs_per_cell: int = 4,
 ) -> CellRunResult:
     """Run one already-resolved cell and atomically seal its provenance.
 
@@ -1116,7 +1119,7 @@ def run_cell(
     if kind == "native":
         assert configuration is not None
         fidb, counts, runtime, evidence = _native_outputs(
-            configuration, attempt, timing, verbose
+            configuration, attempt, timing, verbose, build_jobs_per_cell
         )
     else:
         assert generated is not None
