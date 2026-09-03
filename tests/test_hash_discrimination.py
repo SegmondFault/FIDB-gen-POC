@@ -63,6 +63,7 @@ class HashDiscriminationTests(unittest.TestCase):
         self.assertEqual(status["index"]["abbreviation"], "HDI")
         self.assertEqual(status["state"], "awaiting-c10-evidence")
         self.assertIsNone(status["summary"]["scored_signatures"])
+        self.assertEqual(status["scores"], [])
         self.assertFalse(status["readiness"]["ready_for_first_fit"])
         self.assertEqual(
             sum(row["weight_percent"] for row in status["hdi_components"]), 100

@@ -1170,7 +1170,7 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v15';
+  schema_version: 'fidb-authority-catalog/v16';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -1181,6 +1181,7 @@ export type FactoryAuthority = {
   machine_validations: MachineValidation[];
   ecological_validation: EcologicalValidation;
   noisy_hashes: NoisyHashStatus;
+  hash_discrimination: HashDiscriminationStatus;
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
@@ -1511,6 +1512,147 @@ export type NoisyHashStatus = {
     reports_scanned: number;
   };
   hashes: NoisyHashRow[];
+};
+
+export type HashDiscriminationComponent = {
+  id: string;
+  label: string;
+  weight_percent: number;
+  calculation: string;
+};
+
+export type HashDiscriminationScore = {
+  score_id: string;
+  scope: string;
+  signature: string;
+  candidate_owner: string;
+  generation_id: string;
+  hdi: number;
+  noise_risk: number;
+  confidence: number;
+  evidence_sufficiency: string;
+  reason_category: string;
+  reason_confidence: number | null;
+  components: Record<string, number>;
+};
+
+export type HashDiscriminationStatus = {
+  schema_version: 'fidb-hash-discrimination-status/v1';
+  id: string;
+  label: string;
+  state: 'awaiting-c10-evidence' | 'ready-for-first-fit';
+  authority_path: string;
+  authority_sha256: string;
+  status_digest: string;
+  identity: {
+    analyst_term: string;
+    grouping_key: string;
+    score_scope: string;
+    pool_incompatible_sublanes: false;
+  };
+  index: {
+    name: 'Hash Discrimination Index';
+    abbreviation: 'HDI';
+    minimum: 0;
+    maximum: 100;
+    higher_means: string;
+    is_probability: false;
+  };
+  noise_risk: {
+    name: string;
+    minimum: 0;
+    maximum: 100;
+    higher_means: string;
+    independent_from_hdi: true;
+  };
+  model: {
+    kind: string;
+    state: string;
+    complex_learning_allowed_at_c10: false;
+    forward_evaluation: true;
+    hdi_formula: string;
+    noise_risk_formula: string;
+    component_value_minimum: number;
+    component_value_maximum: number;
+    smoothing_alpha: number;
+    smoothing_beta: number;
+  };
+  reproducibility: {
+    algorithm_id: string;
+    deterministic_order: string;
+    randomness: string;
+    floating_point: string;
+    rounding_decimal_places: number;
+    source_digest_policy: string;
+    code_revision_required: true;
+    generation_write_policy: string;
+  };
+  safety: {
+    automatic_filtering: false;
+    automatic_admission_mutation: false;
+    missing_measurements: string;
+    immutable_generations: true;
+    preserve_unweighted_baseline: true;
+    require_heldout_ecological_gate: true;
+    preserve_raw_observations: true;
+  };
+  reason_categories: string[];
+  readiness: {
+    ready_for_first_fit: boolean;
+    required_library_families: number;
+    complete_library_families: number;
+    materialized_lane_generations: number;
+    raw_observations: number;
+    compact_unique_signatures: number;
+    machine_validation_state: string;
+    ecological_measured_cases: number;
+    blockers: string[];
+  };
+  signals: Array<{
+    id: string;
+    label: string;
+    requirement: string;
+    required: boolean;
+    state: string;
+    measurement: number | null;
+  }>;
+  hdi_components: HashDiscriminationComponent[];
+  noise_components: HashDiscriminationComponent[];
+  treatments: Array<{
+    id: string;
+    label: string;
+    mode: string;
+    required: true;
+    state: string;
+    precision: number | null;
+    recall: number | null;
+    false_positive_rate: number | null;
+    abstention_rate: number | null;
+    incorrect_confident_attributions: number | null;
+  }>;
+  generations: Array<{
+    id: string;
+    cohort_library_families: number;
+    role: string;
+    state: string;
+    scored_signatures: number | null;
+    published_at: string | null;
+  }>;
+  summary: {
+    scored_signatures: number | null;
+    high_discrimination: number | null;
+    context_only: number | null;
+    ambiguous_or_shared: number | null;
+    demonstrated_harmful: number | null;
+    unclassified: number | null;
+    observed_collision_signatures: number;
+  };
+  scores: HashDiscriminationScore[];
+  noisy_hashes: {
+    state: string;
+    status_digest: string;
+    summary: NoisyHashStatus['summary'];
+  };
 };
 
 export type AutoBatchCampaignChunk = {

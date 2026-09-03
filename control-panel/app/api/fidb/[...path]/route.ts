@@ -12,6 +12,7 @@ const readRoutes = new Set([
   'authority',
   'lane-inventory',
   'ecological-validation',
+  'hash-discrimination',
   'noisy-hashes',
   'preflight',
 ]);

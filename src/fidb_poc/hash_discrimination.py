@@ -446,6 +446,7 @@ def compile_hash_discrimination(
         "treatments": treatments,
         "generations": generations,
         "summary": summary,
+        "scores": [],
         "noisy_hashes": {
             "state": noisy["state"],
             "status_digest": noisy["status_digest"],
