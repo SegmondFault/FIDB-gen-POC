@@ -1,0 +1,26 @@
+schema_version = "fidb-plan/v1"
+name = "c-android-x86-sqlite-readline-canary"
+
+[policy]
+max_cells = 8
+priority = "high"
+
+[coverage]
+factor_variants = []
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["sqlite@3.53.4", "readline@8.3"]
+
+[[matrix]]
+id = "c-android-x86-sqlite-readline-canary"
+kind = "width-native"
+width_batch = "batches/c-next-nine-mega-width.toml"
+recipes = ["sqlite@3.53.4", "readline@8.3"]
+routes = [
+  "android-x86-64-ndk-r27d-clang-api21",
+  "android-x86-32-ndk-r27d-clang-api21",
+  "android-x86-64-ndk-r29-clang-api21",
+  "android-x86-32-ndk-r29-clang-api21",
+]
+treatments = ["baseline_o2"]
