@@ -201,6 +201,20 @@ contain ten libraries; a final 2--9-library remainder requires an explicit,
 justified TOML override. See [`validation/README.md`](validation/README.md) for
 the split, TP/FP/TN/FN report and collision/miss evidence contract.
 
+The split RNG is not process-random. Its checked-in `randomization.seed` is a
+32-byte hexadecimal authority and `sha256-ranked-v1` deterministically ranks
+the canonical pinned library IDs. Loading fails if the recorded folds differ
+from that seed, so rerolling requires an explicit TOML and Git change.
+
+Held-out real binaries use the separate
+[`validation/ecological-validation.toml`](validation/ecological-validation.toml)
+authority and **Ecological validation** control-panel page. Imports are
+SHA-256 pinned and never executed, automatically routed to a compatible lane,
+and checked against every library owner in its latest compatible corpus
+generation. Labelled cases report TP/FP/TN/FN at binary/library-presence level
+with function-level collision and miss evidence; unlabelled exploratory cases
+do not manufacture confusion counts.
+
 The disarmed next-run campaign is split between
 [`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml) and
 [`batches/c-openssl-android-gap.toml`](batches/c-openssl-android-gap.toml).

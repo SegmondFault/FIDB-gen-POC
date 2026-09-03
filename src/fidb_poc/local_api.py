@@ -18,7 +18,7 @@ import socket
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Mapping, Sequence
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .authority_catalog import authority_catalog
 from .capabilities import detect_capabilities
@@ -30,6 +30,12 @@ from .coordinator import (
     QueueConfig,
 )
 from .lane_inventory import detect_lane_inventory
+from .ecological_validation import (
+    compile_ecological_validation,
+    import_ecological_binary,
+    start_ecological_case,
+)
+from .noisy_hashes import compile_noisy_hashes, save_noisy_hash_decision
 from .operations_policy import evaluate_operations
 from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
 
@@ -55,6 +61,8 @@ _GET_PATHS = {
     "/api/v1/lane-inventory",
     "/api/v1/timings",
     "/api/v1/preflight",
+    "/api/v1/ecological-validation",
+    "/api/v1/noisy-hashes",
 }
 _POST_PATHS = {
     "/api/v1/sync",
@@ -62,6 +70,9 @@ _POST_PATHS = {
     "/api/v1/resume",
     "/api/v1/plan-drafts/resolve",
     "/api/v1/plan-drafts/save",
+    "/api/v1/ecological-validation/import",
+    "/api/v1/ecological-validation/run",
+    "/api/v1/noisy-hashes/decision",
 }
 
 log = logging.getLogger(__name__)
@@ -515,6 +526,73 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
         return document
 
+    def _binary_body_length(self, maximum: int) -> int:
+        if self.headers.get("Transfer-Encoding") is not None:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "unsupported-transfer-encoding",
+                "chunked import bodies are not accepted",
+            )
+        lengths = self.headers.get_all("Content-Length", failobj=[])
+        if len(lengths) != 1:
+            raise ApiError(
+                HTTPStatus.LENGTH_REQUIRED,
+                "content-length-required",
+                "exactly one Content-Length header is required",
+            )
+        try:
+            length = int(lengths[0])
+        except (TypeError, ValueError) as error:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "invalid-content-length",
+                "Content-Length must be a positive integer",
+            ) from error
+        if length < 1 or length > maximum:
+            raise ApiError(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                "import-too-large",
+                f"ecological import must be 1-{maximum} bytes",
+            )
+        if self.headers.get_content_type() != "application/octet-stream":
+            raise ApiError(
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                "binary-required",
+                "ecological imports require application/octet-stream",
+            )
+        return length
+
+    def _ecological_import_metadata(self) -> dict[str, object]:
+        def required(name: str) -> str:
+            values = self.headers.get_all(name, failobj=[])
+            if len(values) != 1:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-import-metadata",
+                    f"exactly one {name} header is required",
+                )
+            return unquote(values[0])
+
+        def owners(name: str) -> list[str]:
+            value = required(name)
+            return [item for item in value.split(",") if item]
+
+        truth_complete = required("X-FIDB-Truth-Complete")
+        if truth_complete not in {"true", "false"}:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "invalid-import-metadata",
+                "X-FIDB-Truth-Complete must be true or false",
+            )
+        return {
+            "filename": required("X-FIDB-Filename"),
+            "label": required("X-FIDB-Label"),
+            "platform_hint": required("X-FIDB-Platform-Hint"),
+            "expected_present": owners("X-FIDB-Expected-Present"),
+            "expected_absent": owners("X-FIDB-Expected-Absent"),
+            "truth_complete": truth_complete == "true",
+        }
+
     @staticmethod
     def _only_fields(document: Mapping[str, object], allowed: set[str]) -> None:
         unknown = set(document) - allowed
@@ -619,6 +697,34 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self._json_response(
                 HTTPStatus.OK,
                 detect_lane_inventory(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
+        if path == "/api/v1/ecological-validation":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "ecological validation takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                compile_ecological_validation(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
+        if path == "/api/v1/noisy-hashes":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "noisy hashes takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                compile_noisy_hashes(self.api_server.config.project_root),
                 origin=origin,
             )
             return
@@ -749,6 +855,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "this endpoint is read-only",
                 )
             raise ApiError(HTTPStatus.NOT_FOUND, "not-found", "endpoint not found")
+        if path == "/api/v1/ecological-validation/import":
+            config = compile_ecological_validation(
+                self.api_server.config.project_root
+            )
+            length = self._binary_body_length(int(config["policy"]["max_file_bytes"]))
+            result = import_ecological_binary(
+                self.api_server.config.project_root,
+                self.rfile,
+                length,
+                self._ecological_import_metadata(),
+            )
+            self._json_response(HTTPStatus.CREATED, result, origin=origin)
+            return
+
         document = self._read_body()
         if path == "/api/v1/plan-drafts/resolve":
             self._only_fields(document, {"toml"})
@@ -784,6 +904,39 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "invalid-plan-draft",
                     str(error),
                 ) from error
+        elif path == "/api/v1/ecological-validation/run":
+            self._only_fields(document, {"case_id"})
+            case_id = document.get("case_id")
+            if not isinstance(case_id, str):
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-case-id",
+                    "case_id must be a string",
+                )
+            result = start_ecological_case(
+                self.api_server.config.project_root, case_id
+            )
+            self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
+            return
+        elif path == "/api/v1/noisy-hashes/decision":
+            self._only_fields(document, {"signature_id", "state", "reason"})
+            signature_id = document.get("signature_id")
+            state = document.get("state")
+            reason = document.get("reason")
+            if not all(isinstance(value, str) for value in (signature_id, state, reason)):
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-noisy-hash-decision",
+                    "signature_id, state and reason must be strings",
+                )
+            result = save_noisy_hash_decision(
+                self.api_server.config.project_root,
+                signature_id,
+                state,
+                reason,
+            )
+            self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
         elif path == "/api/v1/sync":
             self._only_fields(document, set())
             with Coordinator(

@@ -1,0 +1,29 @@
+schema_version = "fidb-noisy-hashes/v1"
+id = "fidb-noisy-hash-ledger-v1"
+label = "Cross-validation noisy hash trust ledger"
+state = "active-observation"
+
+[sources]
+machine_report_glob = "artifacts/validation-runs/*/*/report.json"
+ecological_report_glob = "var/fidb-ecological-validation/cases/eco-*/report.json"
+route_registry = "toolchains/routes.toml"
+lane_registry = "lanes/registry.toml"
+decision_glob = "validation/noisy-hash-decisions/*.toml"
+
+[classification]
+candidate_min_collisions = 1
+confirmed_min_collisions = 3
+confirmed_min_distinct_runs = 2
+high_risk_min_distinct_owners = 2
+grouping_key = "query-sublane-plus-complete-fid-signature"
+
+[management]
+default_state = "observe"
+allowed_states = ["observe", "quarantine", "reviewed-shared", "cleared"]
+quarantine_effect = "exclude-from-future-admission-until-reviewed"
+automatic_deletion = false
+require_reason = true
+
+[display]
+max_evidence_rows_per_hash = 100
+show_single_observation_candidates = true

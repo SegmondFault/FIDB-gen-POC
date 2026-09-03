@@ -53,3 +53,32 @@ An exact-inclusion canary verifies the pipeline separately.
 Formal ecological validation comes later, after the intended dataset and lane
 generation are frozen. It uses held-out real binaries in tag-only/shadow mode
 and is the release gate for operational boilerplate ablation.
+
+## Ecological validation
+
+`ecological-validation.toml` is the separate held-out real-binary authority.
+The control panel and CLI can import ELF, PE/COFF and thin Mach-O files into a
+bounded project-local case store. Imported bytes are preserved, SHA-256 pinned
+and never executed. Format, target, lane, Ghidra language and compiler-spec
+routing are derived before a check is admitted. Ambiguous ELF platform cases
+can be given an explicit Linux or Android hint; universal Mach-O files must be
+split into thin slices so each analysis has one unambiguous sublane.
+
+Each check queries the latest compatible lane generation across its complete
+library-owner population. Incompatible architecture/OS lanes are deliberately
+excluded: they are not query-compatible and cannot contribute a meaningful
+negative. The matching engine compares the full FID identity tuple, preserves
+all owner occurrences and records the exact corpus generation digest.
+
+Ecological TP/FP/TN/FN uses an **imported binary × corpus library presence**
+decision. Supply expected-present and expected-absent `family@version` labels.
+If the ground-truth-complete flag is set, every unlisted corpus owner is an
+expected negative. If labels are incomplete, unknown owners remain unlabelled
+rather than being silently counted as false positives. Unlabelled files can be
+run as exploratory checks, but their confusion counts remain blank.
+
+Every unexpected match retains target address/function, corpus function,
+signature, route, compiler, treatment and database evidence. Every expected
+library with no match produces a specific miss row. The first usable run stays
+blocked until a compatible lane database exists; importing a file cannot
+create, compact or admit a corpus generation.

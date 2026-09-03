@@ -27,6 +27,8 @@ MACHINES = {
     42: "SH",
     62: "x86-64",
     183: "AArch64",
+    243: "RISC-V",
+    258: "LoongArch",
 }
 
 
@@ -60,6 +62,8 @@ def ghidra_language(machine: str, endianness: str, bits: int) -> str | None:
         return f"SuperH4:{endian}:32:default"
     if machine == "AArch64" and bits == 64:
         return "AARCH64:LE:64:v8A"
+    if machine == "RISC-V" and bits == 64:
+        return "RISCV:LE:64:RV64G"
     return None
 
 

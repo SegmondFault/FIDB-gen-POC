@@ -11,6 +11,8 @@ const readRoutes = new Set([
   'capabilities',
   'authority',
   'lane-inventory',
+  'ecological-validation',
+  'noisy-hashes',
   'preflight',
 ]);
 const writeRoutes = new Set([
@@ -19,8 +21,12 @@ const writeRoutes = new Set([
   'resume',
   'plan-drafts/resolve',
   'plan-drafts/save',
+  'ecological-validation/import',
+  'ecological-validation/run',
+  'noisy-hashes/decision',
 ]);
 const maxRequestBytes = 64 * 1024;
+const maxImportBytes = 512 * 1024 * 1024;
 const maxResponseBytes = 2 * 1024 * 1024;
 
 type RouteContext = {
@@ -95,11 +101,25 @@ async function proxy(
     return jsonError(400, 'invalid_query', 'Unsupported query parameter');
   }
 
-  let body: ArrayBuffer | undefined;
+  const isImport = endpoint === 'ecological-validation/import';
+  let body: BodyInit | null | undefined;
   if (method === 'POST') {
-    body = await request.arrayBuffer();
-    if (body.byteLength > maxRequestBytes) {
-      return jsonError(413, 'request_too_large', 'Coordinator request is too large');
+    if (isImport) {
+      const rawLength = request.headers.get('content-length');
+      const length = rawLength === null ? NaN : Number(rawLength);
+      if (!Number.isSafeInteger(length) || length < 1) {
+        return jsonError(411, 'content_length_required', 'Import requires a positive Content-Length');
+      }
+      if (length > maxImportBytes) {
+        return jsonError(413, 'request_too_large', 'Ecological import exceeds 512 MiB');
+      }
+      body = request.body;
+    } else {
+      const buffered = await request.arrayBuffer();
+      if (buffered.byteLength > maxRequestBytes) {
+        return jsonError(413, 'request_too_large', 'Coordinator request is too large');
+      }
+      body = buffered;
     }
   }
 
@@ -108,14 +128,33 @@ async function proxy(
     const origin = apiOrigin();
     const target = new URL(`/api/v1/${endpoint}${query}`, origin);
     const headers = new Headers({ Accept: 'application/json' });
-    if (method === 'POST') headers.set('Content-Type', 'application/json');
-    upstream = await fetch(target, {
+    if (method === 'POST') {
+      headers.set('Content-Type', isImport ? 'application/octet-stream' : 'application/json');
+    }
+    if (isImport) {
+      for (const name of [
+        'x-fidb-filename',
+        'x-fidb-label',
+        'x-fidb-platform-hint',
+        'x-fidb-expected-present',
+        'x-fidb-expected-absent',
+        'x-fidb-truth-complete',
+      ]) {
+        const value = request.headers.get(name);
+        if (value !== null) headers.set(name, value);
+      }
+      const length = request.headers.get('content-length');
+      if (length !== null) headers.set('content-length', length);
+    }
+    const init: RequestInit & { duplex?: 'half' } = {
       method,
       headers,
       body,
       cache: 'no-store',
       redirect: 'manual',
-    });
+    };
+    if (isImport) init.duplex = 'half';
+    upstream = await fetch(target, init);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Coordinator API unavailable';
     return jsonError(502, 'coordinator_unavailable', message);

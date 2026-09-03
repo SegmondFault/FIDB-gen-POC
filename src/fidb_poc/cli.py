@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -283,6 +284,115 @@ def _machine_validation_main(argv: list[str]) -> int:
         print(json.dumps(document, indent=2, sort_keys=True))
         return 0 if check["state"] != "drifted" else 1
     except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
+def _ecological_validation_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc ecological-validation",
+        description="Import hostile binaries without execution and check a compatible lane corpus.",
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    status = commands.add_parser("status")
+    imported = commands.add_parser("import")
+    run = commands.add_parser("run")
+    for child in (status, imported, run):
+        child.add_argument("--project-root", type=Path, default=Path.cwd())
+        child.add_argument(
+            "--authority",
+            type=Path,
+            default=Path("validation/ecological-validation.toml"),
+        )
+    imported.add_argument("path", type=Path)
+    imported.add_argument("--label", required=True)
+    imported.add_argument(
+        "--platform-hint",
+        choices=("auto", "linux", "android", "windows", "macos", "ios"),
+        default="auto",
+    )
+    imported.add_argument("--expected-present", action="append", default=[])
+    imported.add_argument("--expected-absent", action="append", default=[])
+    imported.add_argument("--truth-complete", action="store_true")
+    run.add_argument("--case", required=True)
+    arguments = parser.parse_args(argv)
+    try:
+        from .ecological_validation import (
+            compile_ecological_validation,
+            import_ecological_binary,
+            run_ecological_case,
+        )
+
+        if arguments.command == "status":
+            document = compile_ecological_validation(
+                arguments.project_root, arguments.authority
+            )
+        elif arguments.command == "import":
+            source = arguments.path.expanduser().resolve()
+            with source.open("rb") as stream:
+                document = import_ecological_binary(
+                    arguments.project_root,
+                    stream,
+                    source.stat().st_size,
+                    {
+                        "filename": source.name,
+                        "label": arguments.label,
+                        "platform_hint": arguments.platform_hint,
+                        "expected_present": arguments.expected_present,
+                        "expected_absent": arguments.expected_absent,
+                        "truth_complete": arguments.truth_complete,
+                    },
+                    arguments.authority,
+                )
+        else:
+            document = run_ecological_case(
+                arguments.project_root, arguments.case, arguments.authority
+            )
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError, sqlite3.Error, PipelineError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
+def _noisy_hashes_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc noisy-hashes",
+        description="Inspect or adjudicate recurring validation collisions.",
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    status = commands.add_parser("status")
+    decide = commands.add_parser("decide")
+    for child in (status, decide):
+        child.add_argument("--project-root", type=Path, default=Path.cwd())
+        child.add_argument(
+            "--authority",
+            type=Path,
+            default=Path("validation/noisy-hashes.toml"),
+        )
+    decide.add_argument("signature_id")
+    decide.add_argument(
+        "state", choices=("observe", "quarantine", "reviewed-shared", "cleared")
+    )
+    decide.add_argument("--reason", required=True)
+    arguments = parser.parse_args(argv)
+    try:
+        from .noisy_hashes import compile_noisy_hashes, save_noisy_hash_decision
+
+        document = (
+            compile_noisy_hashes(arguments.project_root, arguments.authority)
+            if arguments.command == "status"
+            else save_noisy_hash_decision(
+                arguments.project_root,
+                arguments.signature_id,
+                arguments.state,
+                arguments.reason,
+                authority=arguments.authority,
+            )
+        )
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError, sqlite3.Error) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
@@ -888,6 +998,10 @@ def main(argv: list[str] | None = None) -> int:
         return _auto_batches_main(tokens[1:])
     if tokens and tokens[0] == "machine-validation":
         return _machine_validation_main(tokens[1:])
+    if tokens and tokens[0] == "ecological-validation":
+        return _ecological_validation_main(tokens[1:])
+    if tokens and tokens[0] == "noisy-hashes":
+        return _noisy_hashes_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":

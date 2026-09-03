@@ -1,0 +1,37 @@
+schema_version = "fidb-ecological-validation/v1"
+id = "c-ecological-validation-v1"
+label = "Held-out real-binary corpus validation"
+state = "experimental-held-out"
+lane_registry = "lanes/registry.toml"
+
+[imports]
+case_root = "var/fidb-ecological-validation/cases"
+max_file_bytes = 536870912
+allowed_formats = ["ELF", "PE/COFF", "Mach-O"]
+never_execute = true
+preserve_original = true
+
+[corpus]
+database_root = "var/fidb-lanes"
+scope = "entire-compatible-lane-corpus"
+generation_policy = "latest-compatible-generation"
+include_states = ["experimental", "active", "experimental-unvalidated"]
+database_kinds = ["compact", "raw"]
+prefer_kind = "compact"
+
+[analysis]
+engine = "ghidra-fid-exact-signature-v1"
+run_mode = "isolated-subprocess"
+max_concurrent_runs = 1
+project_root = "work/ecological-validation"
+max_failure_rows = 10000
+execute_target_binaries = false
+
+[truth]
+decision_unit = "imported-binary-corpus-library-presence"
+unlisted_library_policy = "absent-only-when-truth-complete"
+allow_observational_without_truth = true
+
+[report]
+retain_all_owner_summaries = true
+retain_function_evidence = true

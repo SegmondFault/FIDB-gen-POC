@@ -14,6 +14,8 @@ from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
 from .lane_registry import load_lane_registry
 from .machine_validation import compile_machine_validation
+from .ecological_validation import compile_ecological_validation
+from .noisy_hashes import compile_noisy_hashes
 from .plan_request import (
     REQUEST_SCHEMA,
     _factor_variants,
@@ -29,7 +31,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v14"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v15"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -658,6 +660,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     machine_validations = []
     for path in sorted((root / "validation").glob("*.toml")):
         authority = tomllib.loads(path.read_text(encoding="utf-8"))
+        if authority.get("schema_version") != "fidb-machine-validation/v1":
+            continue
         width_id = Path(str(authority["width_authority"])).stem
         machine_validations.append(
             compile_machine_validation(
@@ -666,6 +670,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 _width_compilation=width_compilations_by_id.get(width_id),
             )
         )
+    ecological_validation = compile_ecological_validation(root)
+    noisy_hashes = compile_noisy_hashes(root)
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]
     width_compilation_paths = [
@@ -680,6 +686,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "materialized_campaigns": materialized_campaigns,
         "auto_batch_campaigns": auto_batch_campaigns,
         "machine_validations": machine_validations,
+        "ecological_validation": ecological_validation,
+        "noisy_hashes": noisy_hashes,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -708,6 +716,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
             "auto_batch_campaigns": "plans/auto-materialized/*/manifest.toml",
             "machine_validations": "validation/*.toml + plans/validation-schedule.toml",
+            "ecological_validation": "validation/ecological-validation.toml + var/fidb-ecological-validation/cases/",
+            "noisy_hashes": "validation/noisy-hashes.toml + validation/noisy-hash-decisions/*.toml",
             "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -749,6 +759,16 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                     for row in machine_validations
                 )
                 + (root / "plans/validation-schedule.toml").read_bytes()
+            ).hexdigest(),
+            "ecological_validation_sha256": hashlib.sha256(
+                (root / "validation/ecological-validation.toml").read_bytes()
+            ).hexdigest(),
+            "noisy_hashes_sha256": hashlib.sha256(
+                (root / "validation/noisy-hashes.toml").read_bytes()
+                + b"".join(
+                    path.read_bytes()
+                    for path in sorted((root / "validation/noisy-hash-decisions").glob("*.toml"))
+                )
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()

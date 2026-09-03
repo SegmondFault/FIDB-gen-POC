@@ -12,7 +12,7 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v14")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v15")
         self.assertEqual(len(document["machine_validations"]), 1)
         validation = document["machine_validations"][0]
         self.assertEqual(validation["batch_kind"], "validation-run")
@@ -23,6 +23,14 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(validation["results"]["state"], "not-run")
         self.assertEqual(
             len(document["source_digests"]["machine_validations_sha256"]), 64
+        )
+        self.assertEqual(
+            document["ecological_validation"]["schema_version"],
+            "fidb-ecological-validation-status/v1",
+        )
+        self.assertEqual(
+            document["noisy_hashes"]["schema_version"],
+            "fidb-noisy-hash-status/v1",
         )
         self.assertEqual(len(document["auto_batch_campaigns"]), 1)
         candidate = document["auto_batch_campaigns"][0]

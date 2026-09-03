@@ -286,7 +286,11 @@ def compiler_spec_for_language(language: str) -> str:
 
 
 def analyze_target(
-    target: Path, project_parent: Path, project_name: str, language: str
+    target: Path,
+    project_parent: Path,
+    project_name: str,
+    language: str,
+    compiler_spec: str | None = None,
 ) -> tuple[Path, str]:
     """Import and analyze an unknown target once, then reuse its project."""
     project_parent.mkdir(parents=True, exist_ok=True)
@@ -302,13 +306,87 @@ def analyze_target(
                 pyghidra.program_loader().project(project).source(str(target.resolve()))
             )
             loader = loader.language(language).compiler(
-                compiler_spec_for_language(language)
+                compiler_spec or compiler_spec_for_language(language)
             )
             with loader.load() as loaded:
                 for item in loaded:
                     item.apply(lambda program: pyghidra.analyze(program, monitor))
                 loaded.save(monitor)
     return project_parent, program_path
+
+
+def export_program_signatures(
+    project_dir: Path,
+    project_name: str,
+    program_path: str,
+    output: Path,
+) -> dict[str, object]:
+    """Export exact FID hash tuples from an already analysed target program.
+
+    This is the target-side counterpart to :func:`export_fid_signatures`.
+    It deliberately emits observations rather than deciding ownership; the
+    ecological validator compares these tuples with the immutable lane corpus
+    and keeps that comparison independently inspectable.
+    """
+
+    from ghidra.feature.fid.service import FidService
+
+    rows: list[dict[str, object]] = []
+    with pyghidra.open_project(project_dir, project_name) as project:
+        with pyghidra.program_context(project, program_path) as program:
+            language = str(program.getLanguageID())
+            compiler_spec = str(program.getCompilerSpec().getCompilerSpecID())
+            functions = program.getFunctionManager().getFunctionsNoStubs(True)
+            service = FidService()
+            monitor = pyghidra.task_monitor()
+            for function in functions:
+                monitor.checkCancelled()
+                hashes = service.hashFunction(function)
+                if hashes is None:
+                    continue
+                rows.append(
+                    {
+                        "address": str(function.getEntryPoint()),
+                        "function_name": str(function.getName()),
+                        "ghidra_language_id": language,
+                        "ghidra_compiler_spec_id": compiler_spec,
+                        "full_hash": format(
+                            int(hashes.getFullHash()) & ((1 << 64) - 1), "016x"
+                        ),
+                        "specific_hash": format(
+                            int(hashes.getSpecificHash()) & ((1 << 64) - 1),
+                            "016x",
+                        ),
+                        "specific_hash_additional_size": int(
+                            hashes.getSpecificHashAdditionalSize()
+                        ),
+                        "code_unit_size": int(hashes.getCodeUnitSize()),
+                    }
+                )
+
+    rows.sort(
+        key=lambda row: (
+            str(row["address"]),
+            str(row["full_hash"]),
+            str(row["specific_hash"]),
+        )
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(f".{output.name}.part")
+    temporary.unlink(missing_ok=True)
+    try:
+        with temporary.open("x", encoding="utf-8") as stream:
+            for row in rows:
+                stream.write(json.dumps(row, sort_keys=True, separators=(",", ":")))
+                stream.write("\n")
+        temporary.replace(output)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {
+        "functions_hashed": len(rows),
+        "language_id": rows[0]["ghidra_language_id"] if rows else None,
+        "compiler_spec_id": rows[0]["ghidra_compiler_spec_id"] if rows else None,
+    }
 
 
 def assess_fidb(

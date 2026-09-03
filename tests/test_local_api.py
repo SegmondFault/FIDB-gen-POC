@@ -449,7 +449,7 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v14")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v15")
         self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["recipes"]), 14)
@@ -475,6 +475,47 @@ class LocalApiTests(unittest.TestCase):
             "not-materialized-disarmed",
         )
         self.assertTrue(document["plans"])
+
+    def test_ecological_status_and_binary_import_are_bounded(self):
+        status, document, _ = self.request("GET", "/api/v1/ecological-validation")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            document["schema_version"], "fidb-ecological-validation-status/v1"
+        )
+        self.assertEqual(document["summary"]["imported_cases"], 0)
+
+        identity = b"\x7fELF" + bytes((2, 1, 1, 0)) + bytes(8)
+        header = __import__("struct").pack(
+            "<HHIQQQIHHHHHH", 2, 62, 1, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0
+        )
+        payload = identity + header
+        request = (
+            "POST /api/v1/ecological-validation/import HTTP/1.1\r\n"
+            "Host: api.local\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            f"Content-Length: {len(payload)}\r\n"
+            "X-FIDB-Filename: held-out.bin\r\n"
+            "X-FIDB-Label: Held%20out%20binary\r\n"
+            "X-FIDB-Platform-Hint: linux\r\n"
+            "X-FIDB-Expected-Present: openssl%403.5.8\r\n"
+            "X-FIDB-Expected-Absent: \r\n"
+            "X-FIDB-Truth-Complete: true\r\n\r\n"
+        ).encode("ascii") + payload
+        imported_status, imported, _ = _handle(self.config, request)
+        self.assertEqual(imported_status, 201)
+        self.assertEqual(imported["probe"]["sublane_id"], "linux-x86-elf64")
+        self.assertEqual(imported["truth"]["expected_present"], ["openssl@3.5.8"])
+        self.assertFalse(imported["binary"]["never_execute"] is False)
+
+        status, document, _ = self.request("GET", "/api/v1/ecological-validation")
+        self.assertEqual(status, 200)
+        self.assertEqual(document["summary"]["imported_cases"], 1)
+
+    def test_noisy_hash_status_endpoint_is_read_only(self):
+        status, document, _ = self.request("GET", "/api/v1/noisy-hashes")
+        self.assertEqual(status, 200)
+        self.assertEqual(document["schema_version"], "fidb-noisy-hash-status/v1")
+        self.assertEqual(document["summary"]["observed_hashes"], 0)
 
     def test_lane_inventory_endpoint_is_read_only_and_rejects_query(self):
         status, document, _ = self.request("GET", "/api/v1/lane-inventory")
