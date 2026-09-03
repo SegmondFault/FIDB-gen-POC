@@ -1170,7 +1170,7 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v13';
+  schema_version: 'fidb-authority-catalog/v14';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -1178,6 +1178,7 @@ export type FactoryAuthority = {
   time_block_plan: TimeBlockPlan;
   materialized_campaigns: MaterializedCampaign[];
   auto_batch_campaigns: AutoBatchCampaign[];
+  machine_validations: MachineValidation[];
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
@@ -1195,6 +1196,122 @@ export type FactoryAuthority = {
   factor_variants: AuthorityFactorVariant[];
   plans: AuthorityPlan[];
   sources: Record<string, string>;
+};
+
+export type MachineValidationFailure = {
+  failure_type: 'collision' | 'miss';
+  library_id: string;
+  function_id: string;
+  route_id: string;
+  compiler_id: string;
+  treatment_id: string;
+  signature: string;
+  candidate_owner: string;
+  evidence_path: string;
+};
+
+export type MachineValidation = {
+  schema_version: 'fidb-machine-validation-status/v1';
+  id: string;
+  label: string;
+  state: 'waiting-for-cohort' | 'eligible-disarmed';
+  language_id: string;
+  batch_kind: 'validation-run';
+  authority_path: string;
+  status_digest: string;
+  randomization: {
+    method: string;
+    algorithm: string;
+    seed: string;
+    canonical_ids: string[];
+    fold_a: string[];
+    fold_b: string[];
+  };
+  cohort_policy: {
+    nominal_size: number;
+    minimum_final_partial_size: number;
+    final_partial_override: boolean;
+    final_partial_justification: string;
+    split_policy: string;
+  };
+  batch: {
+    automatic_materialization: boolean;
+    automatic_scheduling: boolean;
+    scheduler_registry: string;
+    production_queue_mutation: boolean;
+    first_run_requires_canary: boolean;
+    input_strategy: string;
+    harness_mode: string;
+    execute_target_binaries: boolean;
+    truth_copy: string;
+    query_copy: string;
+    exact_inclusion_sanity: string;
+    trigger: string;
+    output_root: string;
+  };
+  queries: { primary_projections: string[] };
+  metrics: { required: string[] };
+  planning: {
+    estimate_class: string;
+    central_wall_hours: number;
+    lower_wall_hours: number;
+    upper_wall_hours: number;
+    safe_ram_gib_lower: number;
+    safe_ram_gib_upper: number;
+    scratch_headroom_gib_lower: number;
+    scratch_headroom_gib_upper: number;
+    raw_retained_gib_lower: number;
+    raw_retained_gib_upper: number;
+    compact_output_gib_upper: number;
+  };
+  ecological_validation: {
+    state: 'final-dataset-only';
+    included_in_validation_batch: false;
+    gate: string;
+    mode: string;
+  };
+  summary: {
+    cohort_libraries: number;
+    complete_libraries: number;
+    exact_identities: number;
+    baseline_exact_identities: number;
+    width_delta_from_baseline: number;
+    completed_exact_inputs: number;
+    required_exact_inputs: number;
+    work_units: number;
+    composite_programs: number;
+    query_projections: number;
+  };
+  readiness: {
+    eligible: boolean;
+    materializable: boolean;
+    queue_state: string;
+    execution_state: string;
+    blockers: string[];
+  };
+  libraries: Array<{
+    id: string;
+    fold: 'A' | 'B';
+    state: 'complete' | 'building' | 'not-started';
+    completed_exact_identities: number;
+    required_exact_identities: number;
+    missing_exact_identities: number;
+  }>;
+  stages: Array<{ id: string; label: string; state: string; detail: string }>;
+  results: {
+    state: 'not-run' | 'invalid-report' | 'measured-complete';
+    report_path: string | null;
+    detail?: string;
+    confusion_matrix: {
+      unit: 'owner-labelled-candidate-decision';
+      true_positives: number | null;
+      false_positives: number | null;
+      true_negatives: number | null;
+      false_negatives: number | null;
+    };
+    failure_summary: { collisions: number; misses: number };
+    failures: MachineValidationFailure[];
+  };
 };
 
 export type AutoBatchCampaignChunk = {

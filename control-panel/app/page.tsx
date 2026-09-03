@@ -25,11 +25,12 @@ import {
 const navItems = [
   ['01', 'Overview'],
   ['02', 'Matrix'],
-  ['03', 'Performance'],
-  ['04', 'Timing'],
-  ['05', 'Batches'],
-  ['06', 'Targets & toolchains'],
-  ['07', 'Evidence'],
+  ['03', 'Machine validation'],
+  ['04', 'Performance'],
+  ['05', 'Timing'],
+  ['06', 'Batches'],
+  ['07', 'Targets & toolchains'],
+  ['08', 'Evidence'],
 ];
 
 type BatchRow = {
@@ -333,7 +334,19 @@ export default function Home() {
       tier: 'W2',
       note: `${block.plan} · ${block.plan_integrity} · queue #${block.queue_position ?? '—'}`,
     })));
-  const staticWidthRows = [...materializedBatchRows, ...widthStudyBatchRows, ...widthBatchRows];
+  const validationBatchRows: BatchRow[] = (factory.authority?.machine_validations ?? []).map(validation => ({
+    id: `validation:${validation.id}`,
+    name: validation.label,
+    status: validation.readiness.eligible ? 'Defined' : 'Blocked',
+    progress: `${validation.summary.complete_libraries} / ${validation.summary.cohort_libraries} libraries complete`,
+    percent: Math.round((validation.summary.completed_exact_inputs / validation.summary.required_exact_inputs) * 100),
+    worker: 'validation',
+    route: `${validation.batch_kind} · ${validation.summary.exact_identities} identities`,
+    eta: `≈${validation.planning.central_wall_hours.toFixed(0)}h`,
+    tier: 'V',
+    note: `${validation.batch.scheduler_registry} · automatic after cohort · first run canary-gated`,
+  }));
+  const staticWidthRows = [...materializedBatchRows, ...validationBatchRows, ...widthStudyBatchRows, ...widthBatchRows];
   const authorityBatchRows = [...planBatchRows, ...staticWidthRows];
   const currentBatchRows = factory.snapshot
     ? [
@@ -443,11 +456,11 @@ export default function Home() {
           ))}
           <p className="nav-label secondary-label">Operations</p>
           <button className={activeView === 'Automation' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Automation')}>
-            <span>08</span>
+            <span>09</span>
             Automation
           </button>
           <button className={activeView === 'Activity' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Activity')}>
-            <span>09</span>
+            <span>10</span>
             Activity
           </button>
         </nav>
@@ -658,6 +671,7 @@ type FactoryApiState = ReturnType<typeof useFactoryApi>;
 
 function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
+  if (view === 'Machine validation') return <MachineValidationView factory={factory} />;
   if (view === 'Performance') return <PerformanceView factory={factory} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
@@ -787,6 +801,43 @@ function ViewIntro({ kicker, title, copy, action }: { kicker: string; title: str
   );
 }
 
+function MachineValidationView({ factory }: { factory: FactoryApiState }) {
+  const validation = factory.authority?.machine_validations[0];
+  if (!validation) return <div className="view-stack"><ViewIntro kicker="MACHINE VALIDATION" title="Continuous cohort validation" copy="The machine-validation TOML authority is unavailable." /><section className="panel"><div className="empty-state"><span>◇</span><strong>No validation authority loaded</strong><p>Reconnect the local API or add validation/machine-validation.toml.</p></div></section></div>;
+  const matrix = validation.results.confusion_matrix;
+  const matrixCells = [
+    ['TP', 'True positives', matrix.true_positives, 'Correct library owner accepted'],
+    ['FP', 'False positives', matrix.false_positives, 'Wrong owner accepted · collision ledger'],
+    ['TN', 'True negatives', matrix.true_negatives, 'Eligible wrong-owner decisions rejected'],
+    ['FN', 'False negatives', matrix.false_negatives, 'Expected owned function missed'],
+  ] as const;
+  const percent = Math.round((validation.summary.completed_exact_inputs / validation.summary.required_exact_inputs) * 100);
+  const folds = [
+    ['A', validation.randomization.fold_a],
+    ['B', validation.randomization.fold_b],
+  ] as const;
+  return <div className="view-stack machine-validation-view">
+    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Frozen five/five cohort validation" copy="A separate validation-run is generated and scheduled automatically only when ten libraries cover every currently executable width identity. The first run remains canary-gated; formal ecological validation stays a final-dataset release gate." action={<button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh evidence</button>} />
+    <section className="panel validation-status-panel">
+      <header><div><p className="panel-kicker">{validation.id} · {validation.batch_kind}</p><h3>{validation.label}</h3><small>{validation.authority_path} → {validation.batch.scheduler_registry}</small></div><span className={`validation-state ${validation.readiness.eligible ? 'ready' : 'waiting'}`}>{validation.state.replaceAll('-', ' ')}</span></header>
+      <div className="validation-headline-metrics"><article><span>COMPLETE LIBRARIES</span><strong>{validation.summary.complete_libraries} / {validation.summary.cohort_libraries}</strong><small>full-width gate · partial starts do not count</small></article><article><span>EXACT INPUTS</span><strong>{validation.summary.completed_exact_inputs.toLocaleString()} / {validation.summary.required_exact_inputs.toLocaleString()}</strong><small>{percent}% · partial cells count, admission is per complete library</small></article><article><span>LIVE WIDTH</span><strong>{validation.summary.exact_identities}</strong><small>baseline {validation.summary.baseline_exact_identities} · delta {validation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{validation.summary.width_delta_from_baseline}</small></article><article><span>AUTO-SCHEDULE</span><strong>{validation.batch.automatic_scheduling ? 'ENABLED' : 'OFF'}</strong><small>after cohort · first claim needs canary</small></article><article><span>FINAL PARTIAL</span><strong>{validation.cohort_policy.final_partial_override ? 'OVERRIDE' : 'OFF'}</strong><small>{validation.cohort_policy.final_partial_override ? validation.cohort_policy.final_partial_justification : 'explicit TOML exception available for final 2–9'}</small></article><article><span>PLANNING WALL</span><strong>≈{validation.planning.central_wall_hours.toFixed(0)} h</strong><small>{validation.planning.lower_wall_hours}–{validation.planning.upper_wall_hours} h until measured</small></article></div>
+      <div className="validation-progress"><span style={{ width: `${percent}%` }} /><b>{percent}% of exact cohort evidence</b></div>
+      {validation.readiness.blockers.length > 0 && <div className="validation-blockers">{validation.readiness.blockers.map(blocker => <span key={blocker}>! {blocker}</span>)}</div>}
+    </section>
+
+    <section className="panel validation-flow-panel"><header><div><p className="panel-kicker">AUTOMATIC PROCESS</p><h3>Evidence gate → scheduled validation → measured report</h3></div><code>{validation.status_digest.slice(0, 16)}…</code></header><div>{validation.stages.map((stage, index) => <article className={stage.state} key={stage.id}><b>{String(index + 1).padStart(2, '0')}</b><p><strong>{stage.label}</strong><small>{stage.detail}</small></p><span>{stage.state.replaceAll('-', ' ')}</span></article>)}</div></section>
+
+    <div className="validation-two-column">
+      <section className="panel validation-fold-panel"><header><div><p className="panel-kicker">FROZEN RANDOM ASSIGNMENT</p><h3>One committed split; no result-driven reroll</h3></div><code>{validation.randomization.algorithm}</code></header><div>{folds.map(([fold, libraries]) => <section key={fold}><span>FOLD {fold}</span>{libraries.map(identity => { const library = validation.libraries.find(row => row.id === identity); return <article key={identity}><p><strong>{identity}</strong><small>{library?.completed_exact_identities ?? 0} / {library?.required_exact_identities ?? validation.summary.exact_identities} identities</small></p><em className={library?.state}>{library?.state.replaceAll('-', ' ')}</em></article>; })}</section>)}</div><footer>Seed <code>{validation.randomization.seed}</code></footer></section>
+      <section className="panel validation-contract-panel"><header><div><p className="panel-kicker">QUERY CONTRACT</p><h3>{validation.summary.composite_programs} composites · {validation.summary.query_projections.toLocaleString()} primary projections</h3></div><span>NO TARGET EXECUTION</span></header><div>{validation.queries.primary_projections.map((projection, index) => <article key={projection}><b>{index + 1}</b><p><strong>{projection.replaceAll('-', ' ')}</strong><small>{index === 0 ? 'Positive recovery with the exact build identity withheld' : index === 1 ? 'Negative attribution and shared-signature pressure' : 'Owner competition against every indexed candidate library'}</small></p></article>)}</div><dl><div><dt>Input strategy</dt><dd>{validation.batch.input_strategy}</dd></div><div><dt>Truth / query</dt><dd>{validation.batch.truth_copy} / {validation.batch.query_copy}</dd></div><div><dt>RAM budget</dt><dd>{validation.planning.safe_ram_gib_lower}–{validation.planning.safe_ram_gib_upper} GiB</dd></div><div><dt>Scratch headroom</dt><dd>{validation.planning.scratch_headroom_gib_lower}–{validation.planning.scratch_headroom_gib_upper} GiB</dd></div></dl></section>
+    </div>
+
+    <section className="panel validation-results-panel"><header><div><p className="panel-kicker">MEASURED DECISION MATRIX</p><h3>True/false positive and negative outcomes</h3><small>Unit: owner-labelled candidate decision. Blank values mean not measured—not zero.</small></div><span className={`validation-state ${validation.results.state === 'measured-complete' ? 'ready' : 'waiting'}`}>{validation.results.state.replaceAll('-', ' ')}</span></header><div className="validation-confusion-grid">{matrixCells.map(([short, label, value, detail]) => <article className={short.toLowerCase()} key={short}><span>{short}</span><strong>{value === null ? '—' : value.toLocaleString()}</strong><p><b>{label}</b><small>{detail}</small></p></article>)}</div><details className="validation-failure-ledger"><summary><span><b>Failures requiring investigation</b><small>Collisions {validation.results.failure_summary.collisions} · misses {validation.results.failure_summary.misses}</small></span><em>{validation.results.failures.length} ROWS · EXPAND</em></summary><div className="validation-failure-head"><span>Type / library / function</span><span>Exact build identity</span><span>Signature / competing owner</span><span>Evidence</span></div>{validation.results.failures.map((failure, index) => <article key={`${failure.failure_type}-${failure.function_id}-${index}`}><div><span className={failure.failure_type}>{failure.failure_type}</span><strong>{failure.library_id}</strong><small>{failure.function_id}</small></div><div><strong>{failure.route_id}</strong><small>{failure.compiler_id} · {failure.treatment_id}</small></div><div><code>{failure.signature}</code><small>candidate: {failure.candidate_owner || 'none'}</small></div><code>{failure.evidence_path}</code></article>)}{!validation.results.failures.length && <div className="operational-empty"><strong>{validation.results.state === 'not-run' ? 'No report yet' : 'No collisions or misses reported'}</strong><small>Specific failure rows will appear here after the first eligible, canary-approved validation run.</small></div>}</details></section>
+
+    <section className="panel ecological-boundary"><span>FINAL DATASET GATE</span><p><strong>Ecological validation is deliberately separate.</strong><small>{validation.ecological_validation.mode.replaceAll('-', ' ')} only after {validation.ecological_validation.gate.replaceAll('-', ' ')}. Machine validation cannot authorize automatic boilerplate ablation.</small></p><em>{validation.ecological_validation.state.replaceAll('-', ' ')}</em></section>
+  </div>;
+}
+
 type RecipeMode = 'native' | 'source' | 'malware' | 'catalog';
 type RecipeReadiness = 'source' | 'archive' | 'unmet' | 'artifact';
 type RecipeOption = {
@@ -842,6 +893,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
       right.summary.feasible_full_path_executions
       - left.summary.feasible_full_path_executions
     ))[0];
+  const machineValidation = authority?.machine_validations.find(validation => validation.language_id === selectedLanguageId);
   const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
   const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (
@@ -1236,7 +1288,9 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
     };
   }).filter(row => row.cells > 0)
     .sort((left, right) => right.cells - left.cells || left.recipe.name.localeCompare(right.recipe.name));
-  const scheduledBatchRows = batchOrder.map((batchId, index) => {
+  const scheduledBatchRows = batchOrder.filter(batchId => (
+    factory.snapshot?.batches.some(batch => batch.id === batchId)
+  )).map((batchId, index) => {
     const batch = factory.snapshot?.batches.find(row => row.id === batchId);
     const batchJobs = (factory.snapshot?.jobs ?? []).filter(job => job.batch_id === batchId);
     const recipeNamesFromJobs = recipeOptions
@@ -1462,9 +1516,14 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </ol>
         </section>
 
+        {machineValidation && <section className="operational-matrix-band validation-band">
+          <div className="operational-band-title"><b>03</b><span><strong>Automatic machine validation</strong><small>After ten complete libraries: freeze the five/five cohort, materialise a separate validation-run, then schedule it behind a first-run canary gate.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} libraries · {machineValidation.summary.completed_exact_inputs.toLocaleString()}/{machineValidation.summary.required_exact_inputs.toLocaleString()} inputs</em></div>
+          <div className="operational-validation-row"><span className={`operational-state ${machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{machineValidation.readiness.eligible ? 'READY TO SCHEDULE' : 'WAITING'}</span><p><strong>{machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · {machineValidation.summary.composite_programs} composites · TP/FP/TN/FN report pending</small></p><div><b>{machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>libraries to gate</span></div><div><b>≈{machineValidation.planning.central_wall_hours.toFixed(0)}h</b><span>planning wall</span></div></div>
+        </section>}
+
         <div className="operational-gap-grid">
           <section className="operational-matrix-band unscheduled-band">
-            <div className="operational-band-title"><b>03</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
+            <div className="operational-band-title"><b>04</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
             <div className="operational-compact-list">
               {unscheduledRecipes.map(recipe => <article key={recipe.id}><span className="operational-state ready">READY</span><p><strong>{recipe.name} {recipe.version}</strong><small>{recipe.adapter} · {recipe.coverage}</small></p></article>)}
               {!unscheduledRecipes.length && <div className="operational-empty"><strong>No reviewed recipe is stranded</strong><small>Every currently buildable top-ten subject is represented in the active queue.</small></div>}
@@ -1472,7 +1531,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </section>
 
           <section className="operational-matrix-band recipe-gap-band">
-            <div className="operational-band-title"><b>04</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
+            <div className="operational-band-title"><b>05</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
             <div className="operational-compact-list">
               {missingRecipeFamilies.map(family => <article key={family.id}><span className="operational-state gap">RECIPE GAP</span><p><strong>#{family.rank} {family.label}</strong><small>{family.source_state} · {family.selection_evidence}</small></p></article>)}
               {!missingRecipeFamilies.length && <div className="operational-empty"><strong>Top-ten recipe set complete</strong><small>The broader C-family census is not promoted into this executable matrix until its family rows and source evidence are registered.</small></div>}
@@ -1480,7 +1539,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </section>
 
           <section className="operational-matrix-band toolchain-gap-band">
-            <div className="operational-band-title"><b>05</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
+            <div className="operational-band-title"><b>06</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
             <div className="operational-compact-list">
               {missingToolchainRequirements.map(requirement => <article key={requirement.id}><span className="operational-state gap">{requirement.route_state.replaceAll('-', ' ')}</span><p><strong>{requirement.target_label} · {requirement.compiler_label}</strong><small>#{requirement.order} · {requirement.acquisition} · {requirement.worker_class}</small></p></article>)}
               {!missingToolchainRequirements.length && <div className="operational-empty"><strong>No toolchain gaps in the selected width</strong><small>Every demanded target/compiler pair has an executable route authority.</small></div>}
