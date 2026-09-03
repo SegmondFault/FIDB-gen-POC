@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -87,9 +88,7 @@ def _selected_performance(
         }
     workers = getattr(arguments, "workers", None)
     if require_manual_workers and workers is None:
-        raise ValueError(
-            "benchmark-width requires --workers or --performance-profile"
-        )
+        raise ValueError("benchmark-width requires --workers or --performance-profile")
     return {
         "workers": workers,
         "heap_mib": getattr(arguments, "ghidra_heap_mib", default_heap_mib),
@@ -239,6 +238,7 @@ def _run_width_main(argv: list[str]) -> int:
             execute_width_run,
             width_run_preview,
         )
+
         performance = _selected_performance(
             arguments,
             default_heap_mib=4096,
@@ -294,15 +294,9 @@ def _benchmark_width_main(argv: list[str]) -> int:
         "--treatment", action="append", required=True, dest="treatments"
     )
     result.add_argument("--workers", type=int, default=argparse.SUPPRESS)
-    result.add_argument(
-        "--ghidra-heap-mib", type=int, default=argparse.SUPPRESS
-    )
-    result.add_argument(
-        "--ghidra-core-limit", type=int, default=argparse.SUPPRESS
-    )
-    result.add_argument(
-        "--build-jobs-per-cell", type=int, default=argparse.SUPPRESS
-    )
+    result.add_argument("--ghidra-heap-mib", type=int, default=argparse.SUPPRESS)
+    result.add_argument("--ghidra-core-limit", type=int, default=argparse.SUPPRESS)
+    result.add_argument("--build-jobs-per-cell", type=int, default=argparse.SUPPRESS)
     result.add_argument(
         "--execute",
         action="store_true",
@@ -315,6 +309,7 @@ def _benchmark_width_main(argv: list[str]) -> int:
             execute_width_benchmark,
             width_benchmark_preview,
         )
+
         performance = _selected_performance(
             arguments,
             default_heap_mib=None,
@@ -342,6 +337,79 @@ def _benchmark_width_main(argv: list[str]) -> int:
         print(f"Benchmark result: {path}")
         return 0 if outcome["state"] == "measured-complete" else 1
     except (OSError, ValueError, PipelineError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
+def _benchmark_backend_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc benchmark-backend",
+        description=("Preview or execute an isolated staged-backend qualification."),
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--width", default="c-width-v1")
+    result.add_argument("--label", default="staged-backend")
+    result.add_argument(
+        "--backend",
+        choices=("python-staged-v1", "rust-staged-v1"),
+        required=True,
+    )
+    result.add_argument("--route", action="append", required=True, dest="routes")
+    result.add_argument(
+        "--treatment", action="append", required=True, dest="treatments"
+    )
+    result.add_argument("--build-workers", type=int, required=True)
+    result.add_argument("--analysis-workers", type=int, required=True)
+    result.add_argument("--build-jobs-per-cell", type=int, default=4)
+    result.add_argument("--ghidra-heap-mib", type=int, default=4096)
+    result.add_argument("--ghidra-core-limit", type=int)
+    result.add_argument("--rust-binary", type=Path)
+    result.add_argument("--reference", type=Path)
+    result.add_argument("--timeout-seconds", type=int, default=14_400)
+    result.add_argument(
+        "--execute",
+        action="store_true",
+        help="run the experiment; preview is otherwise the default",
+    )
+    result.add_argument("--verbose", "-v", action="store_true")
+    arguments = result.parse_args(argv)
+    try:
+        from .backend_benchmark import (
+            backend_benchmark_preview,
+            execute_backend_benchmark,
+        )
+
+        options = {
+            "project_root": arguments.project_root,
+            "authority_id": arguments.width,
+            "backend": arguments.backend,
+            "route_ids": arguments.routes,
+            "treatment_ids": arguments.treatments,
+            "build_workers": arguments.build_workers,
+            "analysis_workers": arguments.analysis_workers,
+            "build_jobs_per_cell": arguments.build_jobs_per_cell,
+            "heap_mib": arguments.ghidra_heap_mib,
+            "core_limit": arguments.ghidra_core_limit,
+        }
+        if not arguments.execute:
+            print(
+                json.dumps(
+                    backend_benchmark_preview(**options), indent=2, sort_keys=True
+                )
+            )
+            return 0
+        outcome, path = execute_backend_benchmark(
+            **options,
+            label=arguments.label,
+            rust_binary=arguments.rust_binary,
+            reference_path=arguments.reference,
+            timeout_seconds=arguments.timeout_seconds,
+            progress=print,
+            verbose=arguments.verbose,
+        )
+        print(f"Backend benchmark result: {path}")
+        return 0 if outcome["state"] == "measured-complete" else 1
+    except (OSError, ValueError, PipelineError, subprocess.SubprocessError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
@@ -567,6 +635,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":
         return _benchmark_width_main(tokens[1:])
+    if tokens and tokens[0] == "benchmark-backend":
+        return _benchmark_backend_main(tokens[1:])
     if tokens and tokens[0] == "lane":
         return _lane_main(tokens[1:])
     if tokens and tokens[0] == "queue":
