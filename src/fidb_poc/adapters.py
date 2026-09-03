@@ -21,6 +21,18 @@ class Detection:
 
 BUILD_MARKERS = {
     "openssl-configure": ("Configure",),
+    "sqlite-autoconf": ("configure", "sqlite3.c", "sqlite3.h"),
+    "xz-autoconf": ("configure", "src/liblzma/api/lzma.h"),
+    "pcre2-autoconf": ("configure", "src/pcre2.h.in"),
+    "gettext-autoconf": ("configure", "gettext-runtime/intl/libgnuintl.in.h"),
+    "nghttp2-autoconf": (
+        "configure",
+        "lib/includes/nghttp2/nghttp2.h",
+    ),
+    "readline-autoconf": ("configure", "readline.h"),
+    "gmp-autoconf": ("configure", "gmp-h.in"),
+    "zstd-make": ("Makefile", "lib/zstd.h"),
+    "lz4-make": ("Makefile", "lib/lz4.h"),
     "autoconf": ("configure",),
     "cmake": ("CMakeLists.txt",),
     "meson": ("meson.build",),
@@ -63,7 +75,7 @@ def detect_project(library: Library, source_root: Path) -> Detection:
     evidence = []
     for build_system, markers in BUILD_MARKERS.items():
         present = [marker for marker in markers if _exact_exists(source_root, marker)]
-        if present:
+        if len(present) == len(markers):
             detected.append(build_system)
             evidence.extend(present)
     disallowed = set(detected) - set(library.allowed_build_systems)
@@ -110,6 +122,105 @@ def _android_ndk_root(route: Route) -> Path:
     raise AdapterError(
         f"Android route {route.id} compiler is not inside a Linux NDK toolchain"
     )
+
+
+def _configure_host(route: Route) -> str:
+    """Return the reviewed GNU host tuple for a non-Apple C route."""
+
+    hosts = {
+        ("linux", "x86_64"): "x86_64-linux-gnu",
+        ("linux", "arm"): "arm-linux-gnueabihf",
+        ("linux", "aarch64"): "aarch64-linux-gnu",
+        ("linux", "mips"): "mips-linux-gnu",
+        ("linux", "mipsel"): "mipsel-linux-gnu",
+        ("linux", "powerpc"): "powerpc-linux-gnu",
+        ("linux", "sh4"): "sh4-linux-gnu",
+        ("linux", "m68k"): "m68k-linux-gnu",
+        ("windows", "x86_64"): "x86_64-w64-mingw32",
+        ("android", "aarch64"): "aarch64-linux-android",
+        ("android", "arm"): "arm-linux-androideabi",
+        ("android", "x86_64"): "x86_64-linux-android",
+        ("android", "i686"): "i686-linux-android",
+    }
+    host = hosts.get((route.target_os, route.architecture))
+    if host is None:
+        raise AdapterError(
+            f"no reviewed configure host for {route.target_os}/{route.architecture}"
+        )
+    return host
+
+
+def _cxx_compiler(route: Route) -> str:
+    """Derive the adjacent C++ driver used only by configure-time probes."""
+
+    command = list(route.compiler)
+    executable = Path(command[0])
+    if executable.name.endswith("gcc"):
+        executable = executable.with_name(f"{executable.name[:-3]}g++")
+    elif executable.name.endswith("clang"):
+        executable = executable.with_name(f"{executable.name}++")
+    else:
+        raise AdapterError(
+            f"cannot derive configure-time C++ driver for route {route.id}"
+        )
+    command[0] = str(executable)
+    return tool_text(tuple(command))
+
+
+AUTOCONF_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "sqlite-autoconf": (
+        ("--disable-shared", "--enable-static"),
+        ("libsqlite3.a",),
+    ),
+    "xz-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-xz",
+            "--disable-doc",
+            "--disable-nls",
+        ),
+        ("-C", "src/liblzma", "liblzma.la"),
+    ),
+    "pcre2-autoconf": (
+        ("--disable-shared", "--enable-static"),
+        ("libpcre2-8.la",),
+    ),
+    "gettext-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-java",
+            "--disable-csharp",
+            "--with-included-libintl",
+        ),
+        # The directory's recursive `all` target builds its private gnulib
+        # archive before libintl; the leaf libintl target alone omits that
+        # dependency traversal in gettext 1.0.
+        ("-C", "gettext-runtime/intl", "all"),
+    ),
+    "nghttp2-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-app",
+            "--disable-examples",
+            "--disable-hpack-tools",
+            "--disable-failmalloc",
+        ),
+        ("-C", "lib", "libnghttp2.la"),
+    ),
+    "readline-autoconf": (
+        ("--disable-shared", "--enable-static"),
+        ("libreadline.a", "libhistory.a"),
+    ),
+    "gmp-autoconf": (
+        ("--disable-shared", "--enable-static"),
+        # GMP's top-level `all` target first builds host-side generators for
+        # tables and headers which are prerequisites of the target library.
+        ("all",),
+    ),
+}
 
 
 def build_commands(
@@ -189,6 +300,65 @@ def build_commands(
                 f"RANLIB={ranlib}",
             ),
         )
+    if build_system in AUTOCONF_ADAPTERS:
+        configure_options, make_targets = AUTOCONF_ADAPTERS[build_system]
+        commands = [
+            (
+                "sh",
+                "configure",
+                f"--host={_configure_host(route)}",
+                *configure_options,
+            ),
+        ]
+        if build_system == "readline-autoconf" and route.target_os == "windows":
+            # Readline 8.3 declares an otherwise-unused POSIX winsize tag in
+            # two MinGW objects without defining it. Map that opaque tag to a
+            # real Windows console struct for only those objects; their Win32
+            # branches do not dereference it.
+            commands.append(
+                (
+                    "make",
+                    "terminal.o",
+                    "rltty.o",
+                    (
+                        f"CFLAGS={flags} -include windows.h "
+                        "-Dwinsize=_CONSOLE_SCREEN_BUFFER_INFO"
+                    ),
+                )
+            )
+        commands.append(("make", f"-j{jobs}", *make_targets))
+        return tuple(commands)
+    if build_system == "lz4-make":
+        platform = ("TARGET_OS=Windows_NT",) if route.target_os == "windows" else ()
+        return (
+            (
+                "make",
+                f"-j{jobs}",
+                "liblz4.a",
+                f"CC={compiler}",
+                f"CFLAGS={flags}",
+                f"AR={archiver}",
+                *platform,
+            ),
+        )
+    if build_system == "zstd-make":
+        platform = (
+            ("TARGET_SYSTEM=Windows_NT",) if route.target_os == "windows" else ()
+        )
+        return (
+            (
+                "make",
+                f"-j{jobs}",
+                "-C",
+                "lib",
+                "BUILD_DIR=obj/fidb",
+                "obj/fidb/static/libzstd.a",
+                f"CC={compiler}",
+                f"CFLAGS={flags}",
+                f"AR={archiver}",
+                *platform,
+            ),
+        )
     raise AdapterError(
         f"detected build system {build_system!r} has no implemented adapter"
     )
@@ -200,7 +370,10 @@ def build_environment(
     route: Route,
     compiler_flags: tuple[str, ...],
 ) -> dict[str, str]:
-    if build_system not in {"autoconf", "openssl-configure"}:
+    if build_system not in {
+        "autoconf",
+        "openssl-configure",
+    } and not build_system.endswith("-autoconf"):
         return {}
     environment = {
         "CC": tool_text(route.compiler),
@@ -208,11 +381,19 @@ def build_environment(
         "RANLIB": tool_text(route.ranlib),
         "CFLAGS": " ".join(compiler_flags),
     }
+    if build_system == "gettext-autoconf":
+        environment["CXX"] = _cxx_compiler(route)
     if route.target_os == "android":
         ndk_root = _android_ndk_root(route)
         ndk_bin = ndk_root / "toolchains/llvm/prebuilt/linux-x86_64/bin"
         environment["ANDROID_NDK_ROOT"] = str(ndk_root)
         environment["PATH"] = f"{ndk_bin}:/usr/bin:/bin"
+    elif route.target_os == "windows":
+        toolchain_bin = Path(route.compiler[0]).parent
+        environment["PATH"] = f"{toolchain_bin}:/usr/bin:/bin"
+        environment["WINDRES"] = str(
+            toolchain_bin / "x86_64-w64-mingw32-windres"
+        )
     return environment
 
 

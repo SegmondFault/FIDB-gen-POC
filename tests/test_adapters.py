@@ -65,6 +65,23 @@ class AdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(AdapterError, "source identity check failed"):
                 detect_project(library(), root)
 
+    def test_specialized_detection_requires_every_adapter_marker(self):
+        specialized = replace(
+            library(),
+            project_markers=("configure", "sqlite3.c", "sqlite3.h"),
+            allowed_build_systems=("autoconf", "sqlite-autoconf"),
+            preferred_build_system="sqlite-autoconf",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("configure", "sqlite3.c", "sqlite3.h"):
+                (root / name).write_text("", encoding="utf-8")
+
+            detected = detect_project(specialized, root)
+
+        self.assertEqual(detected.build_system, "sqlite-autoconf")
+        self.assertIn("sqlite3.c", detected.evidence)
+
     def test_adapter_emits_fixed_command_shape(self):
         commands = build_commands(
             "autoconf", route=route(), compiler_flags=("-O0",), jobs=4
@@ -155,6 +172,95 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(environment["ANDROID_NDK_ROOT"], str(ndk_root))
         self.assertTrue(
             environment["PATH"].startswith(f"{compiler[0].rsplit('/', 1)[0]}:")
+        )
+
+    def test_specialized_autoconf_adapter_pins_host_options_and_target(self):
+        commands = build_commands(
+            "nghttp2-autoconf", route=route(), compiler_flags=("-O2",), jobs=7
+        )
+
+        self.assertEqual(
+            commands[0],
+            (
+                "sh",
+                "configure",
+                "--host=x86_64-linux-gnu",
+                "--disable-shared",
+                "--enable-static",
+                "--disable-app",
+                "--disable-examples",
+                "--disable-hpack-tools",
+                "--disable-failmalloc",
+            ),
+        )
+        self.assertEqual(
+            commands[1], ("make", "-j7", "-C", "lib", "libnghttp2.la")
+        )
+
+    def test_gettext_uses_adjacent_cxx_driver_for_configure_probes(self):
+        environment = build_environment(
+            "gettext-autoconf", route=route(), compiler_flags=("-O2",)
+        )
+
+        self.assertEqual(environment["CXX"], "/usr/bin/g++")
+
+    def test_specialized_autoconf_adapter_maps_android_host(self):
+        ndk_root = Path("/reviewed/android-ndk-r29")
+        android = replace(
+            route(),
+            target_os="android",
+            architecture="arm",
+            compiler=(
+                str(
+                    ndk_root
+                    / "toolchains/llvm/prebuilt/linux-x86_64/bin"
+                    / "armv7a-linux-androideabi21-clang"
+                ),
+            ),
+        )
+
+        commands = build_commands(
+            "sqlite-autoconf", route=android, compiler_flags=("-O2",), jobs=2
+        )
+        environment = build_environment(
+            "sqlite-autoconf", route=android, compiler_flags=("-O2",)
+        )
+
+        self.assertIn("--host=arm-linux-androideabi", commands[0])
+        self.assertEqual(environment["ANDROID_NDK_ROOT"], str(ndk_root))
+
+    def test_fixed_make_adapters_keep_treatment_flags_and_platform(self):
+        windows = replace(route(), target_os="windows")
+
+        lz4 = build_commands(
+            "lz4-make", route=windows, compiler_flags=("-O0", "-fPIC"), jobs=4
+        )
+        zstd = build_commands(
+            "zstd-make", route=windows, compiler_flags=("-Os",), jobs=3
+        )
+
+        self.assertIn("CFLAGS=-O0 -fPIC", lz4[0])
+        self.assertIn("TARGET_OS=Windows_NT", lz4[0])
+        self.assertIn("BUILD_DIR=obj/fidb", zstd[0])
+        self.assertIn("obj/fidb/static/libzstd.a", zstd[0])
+        self.assertIn("TARGET_SYSTEM=Windows_NT", zstd[0])
+
+    def test_readline_windows_workaround_is_narrow_and_fixed(self):
+        windows = replace(route(), target_os="windows")
+
+        commands = build_commands(
+            "readline-autoconf",
+            route=windows,
+            compiler_flags=("-O2", "-fno-lto"),
+            jobs=4,
+        )
+
+        self.assertEqual(len(commands), 3)
+        self.assertEqual(commands[1][0:3], ("make", "terminal.o", "rltty.o"))
+        self.assertIn("-include windows.h", commands[1][3])
+        self.assertIn("-Dwinsize=_CONSOLE_SCREEN_BUFFER_INFO", commands[1][3])
+        self.assertEqual(
+            commands[2], ("make", "-j4", "libreadline.a", "libhistory.a")
         )
 
     def test_link_adapter_materialises_archive_without_raw_recipe_commands(self):
