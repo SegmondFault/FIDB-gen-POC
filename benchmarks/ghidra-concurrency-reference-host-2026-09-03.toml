@@ -7,8 +7,8 @@ java_major = 21
 logical_cpus = 32
 visible_memory_gib = 93.93
 ghidra_heap_mib = 4096
-decision = "Use 20 as the automatic worker ceiling on this 32-thread, 94 GiB host. Keep 29 as explicit burst mode: it increased records/hour by 20.94% over the 20-worker case for 29.41% more peak RSS. Retain at least 6 GiB host headroom and scale down automatically for larger heaps or smaller hosts."
-caveat = "The 10, 20 and 29 cases contain progressively broader route sets, so route-dependent record counts confound direct hashes/hour comparison. They establish safe pressure bounds and a throughput knee, not a universal scaling curve; a fixed-cell sweep remains a follow-up experiment."
+decision = "Retain 20 as the automatic cross-library worker ceiling on this 32-thread, 94 GiB host, and use 29 as an explicit OpenSSL burst mode. On the same 29 cells, 29 workers completed 18.21% sooner and raised cells/hour by 22.26% for 22.65% more peak RSS. The automatic policy remains conservative until peak heap demand is measured beyond OpenSSL."
+caveat = "The original 10, 20 and 29 cases contain progressively broader route sets. The later fixed-29-cell comparison removes that throughput confound, but exact whole-run semantic equality is blocked by independently reproduced SH4 analysis nondeterminism. Twenty-six of 29 routes retained identical FID semantics; the three SH4 routes are documented separately."
 
 [[case]]
 id = "heap4096-ten-workers"
@@ -56,6 +56,25 @@ unique_signature_sum_per_wall_hour = 756023.7154636437
 raw_result = "artifacts/benchmarks/width-pipeline/heap4096-twenty-nine-workers-20260902T220059Z-572b463f23a9/benchmark-result.json"
 raw_result_sha256 = "31d1070092aef7338b7e1b0ecd8aaf848d1733a564faa240c91fddc0aae97789"
 
+[[case]]
+id = "heap4096-twenty-workers-fixed-twenty-nine-routes"
+route_count = 29
+workers = 20
+wall_time_ns = 1641394267156
+peak_process_rss_bytes = 50515660800
+peak_scratch_bytes = 2779873280
+retained_bytes = 241729802
+jvm_user_bytes = 481737359
+jvm_archived_log_bytes = 10000434
+jvm_reclaimed_bytes = 471736925
+signature_records = 408330
+unique_signature_sum = 281934
+signature_records_per_wall_hour = 895572.7636035972
+unique_signature_sum_per_wall_hour = 618353.8107261689
+cells_per_wall_hour = 63.60446243113246
+raw_result = "artifacts/benchmarks/width-pipeline/fixed29-twenty-workers-20260902T231301Z-b7e17409b283/benchmark-result.json"
+raw_result_sha256 = "038bd15037206eb9fe5be2a512cd8abb15718fbb215d01dfe5003a77b1a2bd5a"
+
 [comparison.twenty_to_ten]
 cells_per_hour_increase_percent = 45.266082556075474
 signature_records_per_hour_increase_percent = 59.38413950773806
@@ -65,3 +84,15 @@ peak_rss_increase_percent = 94.5201827482193
 cells_per_hour_increase_percent = 25.385160575155965
 signature_records_per_hour_increase_percent = 20.93583841324054
 peak_rss_increase_percent = 29.405370556268572
+
+[comparison.fixed_twenty_nine_to_twenty]
+route_count = 29
+wall_time_reduction_percent = 18.21031383488998
+cells_per_hour_increase_percent = 22.264804633347723
+peak_rss_increase_percent = 22.64881202147908
+peak_scratch_increase_percent = 75.54797548181764
+fid_semantic_matching_routes = 26
+fid_semantic_mismatching_routes = ["linux-sh32-gcc-12", "linux-sh32-gcc-13", "linux-sh32-gcc"]
+analysis_artifact_matching_routes = 28
+analysis_artifact_mismatching_routes = ["windows-x86-64-llvm-mingw"]
+decision = "The fixed workload validates 29 workers as a useful explicit OpenSSL burst setting. Keep the safer 20-worker automatic cross-library policy until other libraries establish their per-worker heap envelope."

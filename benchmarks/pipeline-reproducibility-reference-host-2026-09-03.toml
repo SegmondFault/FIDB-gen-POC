@@ -1,0 +1,80 @@
+schema_version = "fidb-reproducibility-evidence/v1"
+id = "pipeline-reproducibility-reference-host-2026-09-03"
+host = "reference-host"
+subject = "openssl-3.5.8"
+ghidra_version = "12.1.2"
+java_major = 21
+
+[sh4_gcc_13]
+route_id = "linux-sh32-gcc-13"
+treatment_id = "baseline_o2"
+analysis_object_count = 1107
+analysis_artifact_list_sha256 = "3585ad62a03ef55e494e311451ff04409f5c0f2d111b530116c26784ee8b28a0"
+observations = 5
+distinct_signature_ledgers = 5
+common_signature_records = 15574
+common_unique_signatures = 9529
+minimum_signature_records = 15572
+minimum_unique_signatures = 9527
+unstable_named_functions = [
+  "DES_ede3_cfb_encrypt",
+  "DES_ofb_encrypt",
+  "SSL_CIPHER_description",
+  "caseD_0",
+  "caseD_3",
+]
+decision = "Treat this as route-specific Ghidra analysis nondeterminism. Worker count is not causal: distinct ledgers occurred at 1, 10, 20 and 29 workers with identical object bytes. Replay validation must compare the signature-ledger digest, not population counts alone. Do not collapse the variants or alter admission until the SH4 analyzer/core-limit behavior is isolated."
+
+[[sh4_gcc_13.observation]]
+id = "full-width-workers-10"
+workers = 10
+signature_records = 15574
+unique_signatures = 9529
+fid_signatures_sha256 = "1576c0b09b28df60551cb1559c597d7519f904ad7bde63008ce490c9bfef5ce7"
+evidence = "artifacts/width-runs/c-width-v1/full-20260902T120606Z-0da1396951e5/replay-01/group-115/artifacts/libs/fid-signatures/openssl-3.5.8-linux-sh32-gcc-13-baseline_o2.fid-signatures.jsonl"
+
+[[sh4_gcc_13.observation]]
+id = "benchmark-workers-20-a"
+workers = 20
+signature_records = 15574
+unique_signatures = 9529
+fid_signatures_sha256 = "6295adb04cd88a452b6bf8eb4e23fc84725c6d68c517cd127226ff6806ba6756"
+evidence = "artifacts/benchmarks/width-pipeline/heap4096-twenty-workers-20260902T214036Z-553ef1d7fcf8/group-020/artifacts/libs/fid-signatures/openssl-3.5.8-linux-sh32-gcc-13-baseline_o2.fid-signatures.jsonl"
+
+[[sh4_gcc_13.observation]]
+id = "benchmark-workers-29"
+workers = 29
+signature_records = 15572
+unique_signatures = 9527
+fid_signatures_sha256 = "2633023784a9fd33524c681b6b5d04c77ecdcdf5a75f1de4f8ca8ea1c7c17ac7"
+evidence = "artifacts/benchmarks/width-pipeline/heap4096-twenty-nine-workers-20260902T220059Z-572b463f23a9/group-020/artifacts/libs/fid-signatures/openssl-3.5.8-linux-sh32-gcc-13-baseline_o2.fid-signatures.jsonl"
+
+[[sh4_gcc_13.observation]]
+id = "benchmark-workers-20-b"
+workers = 20
+signature_records = 15574
+unique_signatures = 9529
+fid_signatures_sha256 = "1674ee2ca0f328e08f8484e3719f0a72487f0d2e2af560ab229c4773a1c3017b"
+evidence = "artifacts/benchmarks/width-pipeline/fixed29-twenty-workers-20260902T231301Z-b7e17409b283/group-020/artifacts/libs/fid-signatures/openssl-3.5.8-linux-sh32-gcc-13-baseline_o2.fid-signatures.jsonl"
+
+[[sh4_gcc_13.observation]]
+id = "isolated-worker-1"
+workers = 1
+wall_time_ns = 636958474459
+peak_process_rss_bytes = 3039223808
+signature_records = 15574
+unique_signatures = 9529
+fid_signatures_sha256 = "6cfaf014846767e11874b1c6dcaefa6dcb061da5080ae7bf7d871b233ec1926b"
+raw_result = "artifacts/benchmarks/width-pipeline/sh13-repro-one-20260902T234256Z-5019588f20bd/benchmark-result.json"
+raw_result_sha256 = "42528f96405f0615aff62aa81133d61443ccb0745c3d66714141d0965e2ebbde"
+
+[windows_llvm_mingw_current]
+route_id = "windows-x86-64-llvm-mingw"
+treatment_id = "baseline_o2"
+observations = 3
+analysis_object_count = 1139
+changed_object_hashes_between_observations = 1100
+signature_records = 10920
+unique_signatures = 7556
+fid_signatures_sha256 = "d023696bc952a73da2eb6a38c36365d3d7f67f2be3783e437d7299de9dac629e"
+decision = "The current Windows build route is not byte-reproducible across rebuilds, but all three observed builds produce the same deterministic FID-signature ledger. Preserve both artifact and semantic identities so this distinction remains visible."

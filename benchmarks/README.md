@@ -46,3 +46,25 @@ four jobs per cell to three. The candidate's wall time was 0.82% lower, but
 aggregate compilation was 0.61% slower and peak RSS was 2.40% higher. Outputs
 were identical. This is noise rather than a scheduling win, so the four-job
 reference behavior remains in place.
+
+The fixed 29-route concurrency comparison found a real burst-mode gain: 29
+workers completed 18.21% sooner than 20 and raised cells/hour by 22.26% for
+22.65% more peak RSS. Twenty remains the automatic cross-library policy until
+other libraries establish their heap envelope; 29 is qualified as an explicit
+OpenSSL burst setting on `reference-host`.
+
+That comparison also exposed route-specific reproducibility evidence. Five
+SH4/GCC-13 observations—including an isolated one-worker run—produced five
+different ledgers from identical object bytes, confined to five named
+functions. A current LLVM-MinGW route changed most object hashes across builds
+while retaining an identical ledger. These distinctions are recorded in
+`pipeline-reproducibility-reference-host-2026-09-03.toml`; neither is silently
+treated as deduplication.
+
+The measured upper bound for merely bypassing PyGhidra is small. Across the
+ten-worker control, Ghidra startup consumed 31.77 aggregate seconds while
+import/analysis consumed 6,867.06 seconds. A direct-Java experiment remains
+valid, but it must beat the reference semantic digest and target analysis or
+scheduling costs; replacing the coarse JPype calls alone cannot explain the
+dominant wall time. A Rust implementation is therefore best scoped first as an
+optional scheduler/ledger supervisor, with the Python/PyGhidra route retained.
