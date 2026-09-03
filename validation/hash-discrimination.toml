@@ -1,0 +1,219 @@
+schema_version = "fidb-hash-discrimination/v1"
+id = "fidb-hash-discrimination-v1"
+label = "Learned FID hash discrimination"
+state = "design-awaiting-c10"
+reason_categories = [
+  "compiler-runtime-boilerplate",
+  "widespread-cross-library-reuse",
+  "library-family-common-ancestry-reuse",
+  "cross-language-reuse",
+  "trivial-or-small-function",
+  "empirically-misleading-attribution",
+  "unexplained-ambiguity",
+  "insufficient-evidence",
+  "unknown",
+]
+
+[sources]
+machine_validation_authority = "validation/machine-validation.toml"
+ecological_validation_authority = "validation/ecological-validation.toml"
+noisy_hash_authority = "validation/noisy-hashes.toml"
+lane_registry = "lanes/registry.toml"
+lane_database_root = "var/fidb-lanes"
+generation_root = "artifacts/hash-discrimination"
+
+[identity]
+analyst_term = "hash"
+grouping_key = "query-sublane-plus-complete-fid-signature"
+score_scope = "signature-candidate-owner-compatible-sublane-corpus-generation"
+pool_incompatible_sublanes = false
+
+[index]
+name = "Hash Discrimination Index"
+abbreviation = "HDI"
+minimum = 0
+maximum = 100
+higher_means = "more-discriminative-library-provenance-evidence"
+is_probability = false
+
+[noise_risk]
+name = "Noise risk"
+minimum = 0
+maximum = 100
+higher_means = "greater-ambiguity-or-demonstrated-attribution-harm"
+independent_from_hdi = true
+
+[evidence]
+minimum_library_families = 10
+count_library_families_before_build_variants = true
+require_all_signature_denominator = true
+require_candidate_contribution_evidence = true
+retain_component_measurements = true
+retain_sample_counts = true
+retain_uncertainty = true
+
+[model]
+kind = "transparent-smoothed-components-v0"
+state = "specified-not-fit"
+complex_learning_allowed_at_c10 = false
+forward_evaluation = true
+hdi_formula = "sum(component_value * weight_percent)"
+noise_risk_formula = "sum(component_value * weight_percent)"
+component_value_minimum = 0.0
+component_value_maximum = 1.0
+smoothing_alpha = 1.0
+smoothing_beta = 1.0
+
+[reproducibility]
+algorithm_id = "fidb-hdi-transparent-v0"
+deterministic_order = "query-sublane-signature-candidate-owner"
+randomness = "none"
+floating_point = "ieee-754-binary64"
+rounding_decimal_places = 6
+source_digest_policy = "sha256-authority-corpus-reports-decisions"
+code_revision_required = true
+generation_write_policy = "immutable-create-only"
+
+[safety]
+automatic_filtering = false
+automatic_admission_mutation = false
+missing_measurements = "unavailable-not-zero"
+immutable_generations = true
+preserve_unweighted_baseline = true
+require_heldout_ecological_gate = true
+preserve_raw_observations = true
+
+[[hdi_component]]
+id = "library-family-rarity"
+label = "Library-family rarity"
+weight_percent = 35
+calculation = "ln((N+alpha)/(df+alpha)) / ln((N+alpha)/(1+alpha))"
+
+[[hdi_component]]
+id = "owner-concentration"
+label = "Owner concentration"
+weight_percent = 25
+calculation = "1 - normalized_owner_entropy"
+
+[[hdi_component]]
+id = "validation-reliability"
+label = "Validation reliability"
+weight_percent = 20
+calculation = "1 - beta_smoothed_ambiguous_or_incorrect_rate"
+
+[[hdi_component]]
+id = "build-width-stability"
+label = "Build-width stability"
+weight_percent = 10
+calculation = "supporting_build_identities / applicable_build_identities"
+
+[[hdi_component]]
+id = "function-nontriviality"
+label = "Function non-triviality"
+weight_percent = 10
+calculation = "clamp((median_code_units-4)/(24-4),0,1)"
+
+[[noise_component]]
+id = "ambiguous-attribution"
+label = "Ambiguous attribution"
+weight_percent = 35
+calculation = "beta_smoothed_ambiguous_rate"
+
+[[noise_component]]
+id = "incorrect-attribution"
+label = "Incorrect confident attribution"
+weight_percent = 35
+calculation = "beta_smoothed_incorrect_confident_rate"
+
+[[noise_component]]
+id = "cross-library-reuse"
+label = "Cross-library reuse"
+weight_percent = 20
+calculation = "1 - library_family_rarity"
+
+[[noise_component]]
+id = "function-triviality"
+label = "Function triviality"
+weight_percent = 10
+calculation = "1 - function_nontriviality"
+
+[[signal]]
+id = "library-family-prevalence"
+label = "Distinct library-family prevalence"
+requirement = "all-signature-corpus-denominator"
+required = true
+
+[[signal]]
+id = "owner-concentration"
+label = "Owner concentration and entropy"
+requirement = "owner-labelled-signature-occurrences"
+required = true
+
+[[signal]]
+id = "build-width-stability"
+label = "Lane, target, compiler and treatment stability"
+requirement = "complete-width-provenance"
+required = true
+
+[[signal]]
+id = "validation-harm"
+label = "Ambiguous and incorrect attribution participation"
+requirement = "candidate-level-validation-contributions"
+required = true
+
+[[signal]]
+id = "function-triviality"
+label = "Function size and triviality"
+requirement = "function-measurements"
+required = true
+
+[[signal]]
+id = "relational-corroboration"
+label = "Parent and child relationship corroboration"
+requirement = "relationship-complete-fid-evidence"
+required = false
+
+[[signal]]
+id = "generation-drift"
+label = "Discriminative-value stability as the corpus grows"
+requirement = "two-or-more-frozen-model-generations"
+required = false
+
+[[treatment]]
+id = "unweighted-baseline"
+label = "Unweighted FID baseline"
+mode = "retain-unweighted"
+required = true
+
+[[treatment]]
+id = "exclusion"
+label = "Narrow harmful-signature exclusion"
+mode = "exclude-by-reviewed-threshold"
+required = true
+
+[[treatment]]
+id = "down-weighting"
+label = "HDI-based down-weighting"
+mode = "weighted-library-attribution"
+required = true
+
+[[treatment]]
+id = "context-required"
+label = "Context-required retention"
+mode = "require-independent-corroboration"
+required = true
+
+[[generation]]
+id = "hash-discrimination-c10-v1"
+cohort_library_families = 10
+role = "transparent-first-estimate"
+
+[[generation]]
+id = "hash-discrimination-c20-v1"
+cohort_library_families = 20
+role = "first-forward-refinement"
+
+[[generation]]
+id = "hash-discrimination-c30-v1"
+cohort_library_families = 30
+role = "second-forward-refinement"

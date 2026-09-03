@@ -449,7 +449,7 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v15")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v16")
         self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["recipes"]), 14)
@@ -516,6 +516,21 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(document["schema_version"], "fidb-noisy-hash-status/v1")
         self.assertEqual(document["summary"]["observed_hashes"], 0)
+
+    def test_hash_discrimination_status_endpoint_is_read_only(self):
+        status, document, _ = self.request("GET", "/api/v1/hash-discrimination")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            document["schema_version"], "fidb-hash-discrimination-status/v1"
+        )
+        self.assertEqual(document["index"]["name"], "Hash Discrimination Index")
+        self.assertIsNone(document["summary"]["scored_signatures"])
+
+        status, document, _ = self.request(
+            "GET", "/api/v1/hash-discrimination?generation=latest"
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(document["error"]["code"], "invalid-query")
 
     def test_lane_inventory_endpoint_is_read_only_and_rejects_query(self):
         status, document, _ = self.request("GET", "/api/v1/lane-inventory")

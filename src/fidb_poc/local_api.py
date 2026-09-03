@@ -35,6 +35,7 @@ from .ecological_validation import (
     import_ecological_binary,
     start_ecological_case,
 )
+from .hash_discrimination import compile_hash_discrimination
 from .noisy_hashes import compile_noisy_hashes, save_noisy_hash_decision
 from .operations_policy import evaluate_operations
 from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
@@ -62,6 +63,7 @@ _GET_PATHS = {
     "/api/v1/timings",
     "/api/v1/preflight",
     "/api/v1/ecological-validation",
+    "/api/v1/hash-discrimination",
     "/api/v1/noisy-hashes",
 }
 _POST_PATHS = {
@@ -725,6 +727,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self._json_response(
                 HTTPStatus.OK,
                 compile_noisy_hashes(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
+        if path == "/api/v1/hash-discrimination":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "hash discrimination takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                compile_hash_discrimination(self.api_server.config.project_root),
                 origin=origin,
             )
             return

@@ -397,6 +397,33 @@ def _noisy_hashes_main(argv: list[str]) -> int:
         return 1
 
 
+def _hash_discrimination_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc hash-discrimination",
+        description="Inspect the fail-closed Hash Discrimination Index authority.",
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    status = commands.add_parser("status")
+    status.add_argument("--project-root", type=Path, default=Path.cwd())
+    status.add_argument(
+        "--authority",
+        type=Path,
+        default=Path("validation/hash-discrimination.toml"),
+    )
+    arguments = parser.parse_args(argv)
+    try:
+        from .hash_discrimination import compile_hash_discrimination
+
+        document = compile_hash_discrimination(
+            arguments.project_root, arguments.authority
+        )
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError, sqlite3.Error) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _selected_performance(
     arguments: argparse.Namespace,
     *,
@@ -1002,6 +1029,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ecological_validation_main(tokens[1:])
     if tokens and tokens[0] == "noisy-hashes":
         return _noisy_hashes_main(tokens[1:])
+    if tokens and tokens[0] == "hash-discrimination":
+        return _hash_discrimination_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":

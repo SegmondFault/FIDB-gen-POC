@@ -15,6 +15,7 @@ from .coverage_universe import load_coverage_universe
 from .lane_registry import load_lane_registry
 from .machine_validation import compile_machine_validation
 from .ecological_validation import compile_ecological_validation
+from .hash_discrimination import compile_hash_discrimination
 from .noisy_hashes import compile_noisy_hashes
 from .plan_request import (
     REQUEST_SCHEMA,
@@ -31,7 +32,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v15"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v16"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -672,6 +673,12 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         )
     ecological_validation = compile_ecological_validation(root)
     noisy_hashes = compile_noisy_hashes(root)
+    hash_discrimination = compile_hash_discrimination(
+        root,
+        _machine_validation=machine_validations[0],
+        _ecological_validation=ecological_validation,
+        _noisy_hashes=noisy_hashes,
+    )
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]
     width_compilation_paths = [
@@ -688,6 +695,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "machine_validations": machine_validations,
         "ecological_validation": ecological_validation,
         "noisy_hashes": noisy_hashes,
+        "hash_discrimination": hash_discrimination,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -718,6 +726,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "machine_validations": "validation/*.toml + plans/validation-schedule.toml",
             "ecological_validation": "validation/ecological-validation.toml + var/fidb-ecological-validation/cases/",
             "noisy_hashes": "validation/noisy-hashes.toml + validation/noisy-hash-decisions/*.toml",
+            "hash_discrimination": "validation/hash-discrimination.toml + artifacts/hash-discrimination/",
             "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -769,6 +778,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                     path.read_bytes()
                     for path in sorted((root / "validation/noisy-hash-decisions").glob("*.toml"))
                 )
+            ).hexdigest(),
+            "hash_discrimination_sha256": hashlib.sha256(
+                (root / "validation/hash-discrimination.toml").read_bytes()
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()
