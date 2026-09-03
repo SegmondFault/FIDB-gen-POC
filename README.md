@@ -199,6 +199,28 @@ the Android gap remains explicitly disarmed even though OpenSSL is ready. See
 [`batches/README.md`](batches/README.md) for the drift guards and activation
 boundary.
 
+### Portable performance profiles
+
+[`performance/profiles.toml`](performance/profiles.toml) keeps cell concurrency,
+nested compiler jobs and embedded-Ghidra JVM bounds in one reviewed authority.
+The existing memory/CPU-aware policy remains the `auto` default. Explicit
+profiles cover 8/16/32 GiB laptops, the current 94 GiB `reference-host` allocation,
+a 112 GiB throughput allocation, and the 64 GiB M1 Max external host. Inspect
+them without running work:
+
+```sh
+uv run fidb-poc performance --project-root .
+uv run fidb-poc run-width --project-root . --canary \
+  --performance-profile laptop-4c-8g
+```
+
+The second command is still a preview because it omits `--execute`. Profile IDs
+are written into run/benchmark evidence. `-Xmx` is a JVM maximum, not an eager
+per-worker reservation; portable profiles are starting points until benchmarked
+on their named host class. The control panel exposes the same authority under
+**Timing**. See [`performance/README.md`](performance/README.md) for selection,
+hardware interpretation and qualification.
+
 `worker.toml` is trusted operator configuration for the single Linux route, one
 treatment and one profile. It is not untrusted request data.
 

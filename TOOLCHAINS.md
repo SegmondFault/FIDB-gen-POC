@@ -154,6 +154,27 @@ per worker, and caps at twenty. An unbounded JVM is conservatively budgeted at
 peak. On `reference-host`, 32 logical CPUs and about 94 GiB visible memory therefore
 select twenty workers with the default 4 GiB heap.
 
+The same settings are now named in `performance/profiles.toml`. `auto` preserves
+the behaviour above; fixed profiles cover ordinary laptop envelopes,
+`reference-host` with either about 94 or 112 GiB visible memory, and a 64 GiB M1 Max.
+They control width cell workers, nested build jobs, the Ghidra JVM `-Xmx`
+ceiling and an optional per-JVM core limit. Inspect and select them without
+starting a run:
+
+```sh
+fidb-poc performance --project-root .
+fidb-poc run-width --project-root . --canary \
+  --performance-profile reference-host-94g-balanced
+```
+
+The latter remains disarmed without `--execute`. Named profiles reject manual
+resource overrides so their recorded identity remains exact. `-Xmx4096m` is a
+maximum rather than 4 GiB of immediately committed RSS. The executor already
+keeps an embedded Ghidra JVM alive across multiple cells in each process;
+calling Ghidra through direct Java instead of PyGhidra would not remove that JVM
+heap. See `performance/README.md` for measured/starting-point distinctions and
+the qualification loop.
+
 Successful cells discard reproducible bulk source, build and Ghidra-project
 scratch after measuring it. After the process pool exits, application logs are
 gzip-archived under each group and the reproducible Ghidra user cache is
