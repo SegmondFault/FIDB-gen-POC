@@ -49,6 +49,26 @@ The raw SQLite database is evidence and interchange state, not a native Ghidra
 ledgers do not retain every Ghidra FID function relationship needed to prove a
 faithful reconstruction. No lane pack is active or approved for analyst use.
 
+## Future queue-to-lane importer
+
+The queue-to-lane database importer is not yet implemented. Its authoritative
+input must be each complete, atomically published final attempt below
+`artifacts/runs/job-*/attempt-*`, never a reduced selection of material files or
+an unpublished staging directory. The importer must validate and preserve the
+cell seal; resolved cell, source and source-digest identity; compiler/toolchain
+identity and version; treatment and flags; pipeline and build manifests;
+selected objects/static archives and object-set evidence; Ghidra project and
+reference data; logs; per-stage timings; resource measurements; and the full
+attempt-directory structure alongside the packed `.fidb` and raw `.fidbf`.
+
+A separate signature JSONL ledger is optional evidence because some
+source-library cells do not emit one. When it is absent, the importer must be
+able to reopen the retained packed `.fidb` and export the signatures and
+relationships needed for lane compilation, recording the source paths and
+digests in import provenance and failing closed if they cannot be verified.
+Until that importer exists, complete final attempt directories are durable
+evidence and must not be pruned merely to `.fidb`, `.fidbf` and a seal.
+
 ## Preview and build a raw generation
 
 All examples run from the repository root. Registry inspection is read-only:
