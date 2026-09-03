@@ -299,6 +299,34 @@ matrices = ["tier0-uclibc-powerpc"]
                 ["batch.admitted", "batch.drained", "batch.admitted"],
             )
 
+    def test_chaining_schedule_admits_next_batch_after_durable_drain(self):
+        path = self.write_queue(
+            batches=(
+                ("batch-mirai", "mirai", "plans/mirai-baseline.toml"),
+                ("batch-bzip2", "bzip2", "plans/bzip2-native.toml"),
+            )
+        )
+        window = "2026-09-04T01:00:00+02:00"
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(path), now=10)
+            first = coordinator.start_next_block(
+                window, scheduled=True, allow_scheduled_reentry=True, now=20
+            )
+            self.assertEqual(first["batch_id"], "batch-mirai")
+            lease = coordinator.claim("worker", batch_id="batch-mirai", now=21)
+            coordinator.complete(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                now=22,
+            )
+            self.assertTrue(coordinator.finish_active_block_if_drained(now=23))
+
+            second = coordinator.start_next_block(
+                window, scheduled=True, allow_scheduled_reentry=True, now=24
+            )
+            self.assertEqual(second["batch_id"], "batch-bzip2")
+
     def test_max_workers_caps_concurrent_leases(self):
         path = self.write_queue(max_workers=2)
         with Coordinator(self.database) as coordinator:

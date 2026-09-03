@@ -267,9 +267,7 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _upload_lock_path(
-    config: RemoteApiConfig, staging: Path, relative: Path
-) -> Path:
+def _upload_lock_path(config: RemoteApiConfig, staging: Path, relative: Path) -> Path:
     lock_root = config.project_root / "var/fidb-remote-upload-locks"
     if lock_root.is_symlink():
         raise RemoteApiError(
@@ -801,6 +799,9 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                     block = coordinator.start_next_block(
                         schedule.window_started_at,
                         scheduled=True,
+                        allow_scheduled_reentry=(
+                            queue.operations.schedule.chain_batches
+                        ),
                         actor=credential.worker_id,
                     )
                 claims_allowed = (

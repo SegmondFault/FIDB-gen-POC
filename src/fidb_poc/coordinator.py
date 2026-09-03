@@ -1376,10 +1376,16 @@ class Coordinator:
         admission_id: str,
         *,
         scheduled: bool,
+        allow_scheduled_reentry: bool = False,
         now: float | datetime | None = None,
         actor: str = "operator",
     ) -> dict[str, object] | None:
-        """Admit one ordered queue batch, without claiming or executing a cell."""
+        """Admit one ordered queue batch, without claiming or executing a cell.
+
+        Re-entry is explicit and only used by a chaining schedule after the
+        previous batch has durably drained.  The active-batch guard still
+        serializes concurrent workers at the admission boundary.
+        """
 
         admission = _text(admission_id, "block admission id")
         timestamp = self._now(now)
@@ -1389,7 +1395,11 @@ class Coordinator:
                 return None
             if state["active_batch_id"] is not None:
                 return self.execution_block()
-            if scheduled and state["last_schedule_admission_id"] == admission:
+            if (
+                scheduled
+                and not allow_scheduled_reentry
+                and state["last_schedule_admission_id"] == admission
+            ):
                 return None
             batch = self._connection.execute("""
                 SELECT batches.* FROM batches

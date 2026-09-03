@@ -86,6 +86,7 @@ class SchedulePolicy:
     stop_claiming: time = time(23, 58)
     hard_cutoff: time | None = time(23, 59)
     finish_started_batch: bool = False
+    chain_batches: bool = False
 
     @property
     def zone(self) -> ZoneInfo:
@@ -102,6 +103,7 @@ class SchedulePolicy:
                 self.hard_cutoff.strftime("%H:%M") if self.hard_cutoff else None
             ),
             "finish_started_batch": self.finish_started_batch,
+            "chain_batches": self.chain_batches,
         }
 
     def _boundary(self, start_date: date, clock: time) -> datetime:
@@ -110,9 +112,7 @@ class SchedulePolicy:
             day += timedelta(days=1)
         return datetime.combine(day, clock, self.zone)
 
-    def _window(
-        self, start_date: date
-    ) -> tuple[datetime, datetime, datetime | None]:
+    def _window(self, start_date: date) -> tuple[datetime, datetime, datetime | None]:
         started = datetime.combine(start_date, self.start, self.zone)
         stop = self._boundary(start_date, self.stop_claiming)
         cutoff = (
@@ -352,6 +352,7 @@ def load_operations_policy(
             "stop_claiming",
             "hard_cutoff",
             "finish_started_batch",
+            "chain_batches",
         },
         "schedule table",
     )
@@ -376,6 +377,11 @@ def load_operations_policy(
     finish_started_batch = schedule_row.get("finish_started_batch", False)
     if not isinstance(finish_started_batch, bool):
         raise ValueError("schedule finish_started_batch must be a boolean")
+    chain_batches = schedule_row.get("chain_batches", False)
+    if not isinstance(chain_batches, bool):
+        raise ValueError("schedule chain_batches must be a boolean")
+    if chain_batches and not finish_started_batch:
+        raise ValueError("schedule chain_batches requires finish_started_batch")
     hard_cutoff_value = schedule_row.get(
         "hard_cutoff", None if finish_started_batch else "23:59"
     )
@@ -394,6 +400,7 @@ def load_operations_policy(
             else None
         ),
         finish_started_batch=finish_started_batch,
+        chain_batches=chain_batches,
     )
     schedule._window(date(2026, 1, 1))
 

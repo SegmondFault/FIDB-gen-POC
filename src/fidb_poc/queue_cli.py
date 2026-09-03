@@ -1099,6 +1099,9 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     block = coordinator.start_next_block(
                         window_id,
                         scheduled=True,
+                        allow_scheduled_reentry=(
+                            config.operations.schedule.chain_batches
+                        ),
                         actor=arguments.worker_id,
                     )
                 claims_authorized = (

@@ -59,6 +59,7 @@ class OperationsPolicyTests(unittest.TestCase):
                     "start": "01:00",
                     "stop_claiming": "05:30",
                     "finish_started_batch": True,
+                    "chain_batches": True,
                 }
             },
             self.root,
@@ -72,6 +73,7 @@ class OperationsPolicyTests(unittest.TestCase):
         self.assertIsNone(open_state.hard_cutoff_at)
         self.assertFalse(closed.claims_allowed)
         self.assertTrue(policy.finish_started_batch)
+        self.assertTrue(policy.chain_batches)
         self.assertEqual(policy.document()["start"], "01:00")
         self.assertEqual(policy.document()["stop_claiming"], "05:30")
         self.assertIsNone(policy.document()["hard_cutoff"])
@@ -96,6 +98,10 @@ class OperationsPolicyTests(unittest.TestCase):
                     }
                 },
                 "must not be after",
+            ),
+            (
+                {"schedule": {"chain_batches": True}},
+                "requires finish_started_batch",
             ),
             (
                 {"notifications": {"webhook_url_env": "lowercase"}},
