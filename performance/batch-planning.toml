@@ -1,0 +1,103 @@
+schema_version = "fidb-batch-time-model/v1"
+id = "c-top10-nonapple-width-v2"
+label = "C top ten · complete non-Apple width v2"
+state = "draft-disarmed"
+language_id = "c"
+performance_profile = "reference-host-94g-balanced"
+campaign_batch_paths = [
+  "batches/c-openssl-android-gap.toml",
+  "batches/c-next-nine-mega-width.toml",
+]
+target_block_hours = 4.5
+max_block_hours = 5.0
+uncertainty_fraction = 0.40
+reference_source_id = "openssl"
+library_complexity_exponent = 0.5
+minimum_complexity_factor = 0.35
+maximum_complexity_factor = 1.0
+
+[reference]
+evidence_path = "benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml"
+evidence_sha256 = "ee89e7ba48848954c1e47f6e9e4fc29676d6c258a50ad7c5b2080c5241e997b2"
+case_id = "heap4096-twenty-workers-fixed-twenty-nine-routes"
+worker_scaling_exponent = 0.55
+
+# Source-line counts are a deliberately inspectable first estimator. The
+# square-root curve reflects the expectation that popular libraries shrink
+# through the tail while fixed per-cell analysis work remains. New measured
+# library evidence should replace this heuristic incrementally.
+[[libraries]]
+id = "openssl"
+rank = 1
+source_lines = 269909
+
+[[libraries]]
+id = "sqlite"
+rank = 2
+source_lines = 351276
+
+[[libraries]]
+id = "xz"
+rank = 3
+source_lines = 63893
+
+[[libraries]]
+id = "zstd"
+rank = 4
+source_lines = 136589
+
+[[libraries]]
+id = "pcre2"
+rank = 5
+source_lines = 149512
+
+[[libraries]]
+id = "lz4"
+rank = 6
+source_lines = 28036
+
+[[libraries]]
+id = "gettext"
+rank = 7
+source_lines = 444115
+
+[[libraries]]
+id = "nghttp2"
+rank = 8
+source_lines = 272128
+
+[[libraries]]
+id = "readline"
+rank = 9
+source_lines = 44183
+
+[[libraries]]
+id = "gmp"
+rank = 10
+source_lines = 211294
+
+# Relative service costs come from the completed 174-cell OpenSSL run. The
+# baseline-O2 mean is 1.0; these weights make treatment changes affect time.
+[[treatments]]
+id = "baseline_o2"
+relative_cost = 1.0
+
+[[treatments]]
+id = "optimization_o0"
+relative_cost = 0.83843
+
+[[treatments]]
+id = "optimization_o3"
+relative_cost = 0.99117
+
+[[treatments]]
+id = "optimization_os"
+relative_cost = 0.99467
+
+[[treatments]]
+id = "frame_pointer_omitted"
+relative_cost = 1.01167
+
+[[treatments]]
+id = "stack_protector_strong"
+relative_cost = 0.99937

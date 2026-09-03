@@ -53,6 +53,30 @@ def _performance_main(argv: list[str]) -> int:
         return 1
 
 
+def _plan_time_blocks_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc plan-time-blocks",
+        description="Compile evidence-based, bounded width blocks without queuing work.",
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument("--model", type=Path, default=Path("performance/batch-planning.toml"))
+    result.add_argument("--performance-profile")
+    arguments = result.parse_args(argv)
+    try:
+        from .batch_time_model import compile_time_block_plan
+
+        document = compile_time_block_plan(
+            arguments.project_root,
+            arguments.model,
+            performance_profile=arguments.performance_profile,
+        )
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _selected_performance(
     arguments: argparse.Namespace,
     *,
@@ -631,6 +655,8 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_batch_main(tokens[1:])
     if tokens and tokens[0] == "performance":
         return _performance_main(tokens[1:])
+    if tokens and tokens[0] == "plan-time-blocks":
+        return _plan_time_blocks_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":
