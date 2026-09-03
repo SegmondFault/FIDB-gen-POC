@@ -1120,12 +1120,13 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v11';
+  schema_version: 'fidb-authority-catalog/v12';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
   width_batches: WidthBatch[];
   time_block_plan: TimeBlockPlan;
+  materialized_campaigns: MaterializedCampaign[];
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
@@ -1143,6 +1144,55 @@ export type FactoryAuthority = {
   factor_variants: AuthorityFactorVariant[];
   plans: AuthorityPlan[];
   sources: Record<string, string>;
+};
+
+export type MaterializedCampaignBlock = {
+  id: string;
+  position: number;
+  state: 'materialized-disarmed';
+  plan: string;
+  plan_sha256: string;
+  queue_digest: string;
+  executions: number;
+  estimated_hours: number;
+  planning_lower_hours: number;
+  planning_upper_hours: number;
+  source_ids: string[];
+  recipe_ids: string[];
+  plan_integrity: 'verified' | 'drifted';
+  queue_registered: boolean;
+  queue_position: number | null;
+};
+
+export type MaterializedCampaign = {
+  schema_version: 'fidb-materialized-campaign/v1';
+  id: string;
+  label: string;
+  state: 'queued-disarmed' | 'queued-armed' | 'materialization-drifted';
+  language_id: string;
+  time_model: string;
+  time_plan_digest: string;
+  performance_profile: string;
+  output_directory: string;
+  materialization_digest: string;
+  authority_path: string;
+  authority_sha256: string;
+  summary: {
+    blocks: number;
+    libraries: number;
+    executions: number;
+    estimated_hours: number;
+    planning_lower_hours: number;
+    planning_upper_hours: number;
+  };
+  source_digests: Record<string, string>;
+  blocks: MaterializedCampaignBlock[];
+  readiness: {
+    verified_plans: number;
+    registered_blocks: number;
+    queue_armed: boolean;
+    ready: boolean;
+  };
 };
 
 export type TimeBlockWorkItem = {

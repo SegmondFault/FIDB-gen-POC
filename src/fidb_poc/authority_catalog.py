@@ -8,6 +8,7 @@ from pathlib import Path
 import tomllib
 
 from .batch_time_model import compile_time_block_plan
+from .batch_materializer import load_materialization_manifest
 from .config import load_configuration
 from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
@@ -27,7 +28,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v11"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v12"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -248,6 +249,8 @@ def _sensitivity_authority(
 def _plan_authority(root: Path) -> list[dict[str, object]]:
     plans = []
     for path in sorted((root / "plans").rglob("*.toml")):
+        if "materialized" in path.relative_to(root / "plans").parts:
+            continue
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
         if raw.get("schema_version") != REQUEST_SCHEMA:
             continue
@@ -268,6 +271,81 @@ def _plan_authority(root: Path) -> list[dict[str, object]]:
             }
         )
     return plans
+
+
+def _materialized_campaign_authority(root: Path) -> list[dict[str, object]]:
+    queue_path = root / "plans/priority-queue.toml"
+    queue = tomllib.loads(queue_path.read_text(encoding="utf-8"))
+    queue_table = queue.get("queue", {})
+    queued = {
+        str(row["id"]): row
+        for row in queue.get("batch", [])
+        if isinstance(row, dict) and "id" in row
+    }
+    batch_order = list(queue_table.get("batch_order", []))
+    armed = queue_table.get("armed") is True
+    campaigns = []
+    for path in sorted((root / "plans/materialized").glob("*/manifest.toml")):
+        manifest = load_materialization_manifest(path)
+        blocks = []
+        for block in manifest.get("blocks", []):
+            row = dict(block)
+            plan_path = root / str(row["plan"])
+            actual_sha256 = (
+                hashlib.sha256(plan_path.read_bytes()).hexdigest()
+                if plan_path.is_file()
+                else None
+            )
+            queued_row = queued.get(str(row["id"]))
+            queue_registered = (
+                queued_row is not None
+                and queued_row.get("plan") == row["plan"]
+                and queued_row.get("plan_sha256") == row["plan_sha256"]
+                and queued_row.get("queue_digest") == row["queue_digest"]
+                and queued_row.get("executions") == row["executions"]
+            )
+            row.update(
+                {
+                    "plan_integrity": (
+                        "verified" if actual_sha256 == row["plan_sha256"] else "drifted"
+                    ),
+                    "queue_registered": queue_registered,
+                    "queue_position": (
+                        batch_order.index(row["id"]) + 1
+                        if row["id"] in batch_order
+                        else None
+                    ),
+                }
+            )
+            blocks.append(row)
+        ready = all(
+            row["plan_integrity"] == "verified" and row["queue_registered"]
+            for row in blocks
+        )
+        campaigns.append(
+            {
+                **manifest,
+                "authority_path": _relative(root, path),
+                "authority_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "state": (
+                    "queued-armed"
+                    if ready and armed
+                    else "queued-disarmed" if ready else "materialization-drifted"
+                ),
+                "blocks": blocks,
+                "readiness": {
+                    "verified_plans": sum(
+                        row["plan_integrity"] == "verified" for row in blocks
+                    ),
+                    "registered_blocks": sum(
+                        bool(row["queue_registered"]) for row in blocks
+                    ),
+                    "queue_armed": armed,
+                    "ready": ready,
+                },
+            }
+        )
+    return campaigns
 
 
 def _width_batch_authority(
@@ -466,6 +544,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         root, recipes, toolchain_pack_catalog, toolchain_inspections
     )
     time_block_plan = compile_time_block_plan(root)
+    materialized_campaigns = _materialized_campaign_authority(root)
     width_ids = {"c-width-v1"}
     width_ids.update(
         Path(str(row["authorities"]["width"])).stem for row in width_batches
@@ -490,6 +569,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "width_studies": width_studies,
         "width_batches": width_batches,
         "time_block_plan": time_block_plan,
+        "materialized_campaigns": materialized_campaigns,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -515,6 +595,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "width_studies": "coverage/*-width-study.toml",
             "width_batches": "batches/*.toml",
             "time_block_plan": "performance/batch-planning.toml",
+            "materialized_campaigns": "plans/materialized/*/manifest.toml",
             "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -537,6 +618,12 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "batch_planning_sha256": hashlib.sha256(
                 (root / "performance/batch-planning.toml").read_bytes()
+            ).hexdigest(),
+            "materialized_campaigns_sha256": hashlib.sha256(
+                b"".join(
+                    (root / str(row["authority_path"])).read_bytes()
+                    for row in materialized_campaigns
+                )
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()

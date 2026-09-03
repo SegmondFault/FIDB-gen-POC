@@ -12,7 +12,7 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v11")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v12")
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["performance_profiles"]["profiles"]), 8)
         self.assertEqual(
@@ -147,6 +147,17 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(time_plan["summary"]["blocks"], 5)
         self.assertTrue(
             all(block["estimated_hours"] <= 5 for block in time_plan["blocks"])
+        )
+        materialized = document["materialized_campaigns"][0]
+        self.assertEqual(materialized["id"], "c-top10-nonapple-width-v2")
+        self.assertEqual(materialized["state"], "queued-disarmed")
+        self.assertEqual(materialized["summary"]["executions"], 2_046)
+        self.assertEqual(materialized["readiness"]["verified_plans"], 5)
+        self.assertEqual(materialized["readiness"]["registered_blocks"], 5)
+        self.assertFalse(materialized["readiness"]["queue_armed"])
+        self.assertTrue(materialized["readiness"]["ready"])
+        self.assertTrue(
+            all(block["plan_integrity"] == "verified" for block in materialized["blocks"])
         )
 
         targets = {row["id"]: row for row in document["targets"]}

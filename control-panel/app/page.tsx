@@ -261,7 +261,7 @@ export default function Home() {
     const built = plan.inventory.summary.built ?? 0;
     const kinds = Array.from(new Set(plan.matrices.map(matrix => String(matrix.kind ?? 'unknown'))));
     const executors = Array.from(new Set(plan.matrices.map(matrix => (
-      matrix.kind === 'native' ? 'native' : String(matrix.executor ?? 'unspecified')
+      matrix.kind === 'native' || matrix.kind === 'width-native' ? 'native' : String(matrix.executor ?? 'unspecified')
     ))));
     return {
       id: `plan:${plan.name}`,
@@ -319,7 +319,20 @@ export default function Home() {
       note: `${batch.authority_path} · ${batch.summary.total_executions.toLocaleString()} exact executions · disarmed`,
     };
   });
-  const staticWidthRows = [...widthStudyBatchRows, ...widthBatchRows];
+  const materializedBatchRows: BatchRow[] = (factory.authority?.materialized_campaigns ?? [])
+    .flatMap(campaign => campaign.blocks.map((block): BatchRow => ({
+      id: block.id,
+      name: block.source_ids.join(' + '),
+      status: campaign.readiness.ready ? 'Defined' : 'Blocked',
+      progress: `0 / ${block.executions.toLocaleString()} cells completed`,
+      percent: 0,
+      worker: '—',
+      route: `${block.executions.toLocaleString()} exact width cells`,
+      eta: `≈${block.estimated_hours.toFixed(1)}h`,
+      tier: 'W2',
+      note: `${block.plan} · ${block.plan_integrity} · queue #${block.queue_position ?? '—'}`,
+    })));
+  const staticWidthRows = [...materializedBatchRows, ...widthStudyBatchRows, ...widthBatchRows];
   const authorityBatchRows = [...planBatchRows, ...staticWidthRows];
   const currentBatchRows = factory.snapshot
     ? [
@@ -1621,13 +1634,16 @@ function AttemptTimingRow({ attempt, now }: { attempt: CoordinatorAttempt; now: 
 function TimeBlockPlanPanel({ factory }: { factory: FactoryApiState }) {
   const plan = factory.authority?.time_block_plan;
   if (!plan) return null;
+  const materialized = factory.authority?.materialized_campaigns.find(campaign => campaign.id === plan.id);
+  const materializedBlocks = new Map(materialized?.blocks.map(block => [block.id, block]));
   const schedule = factory.preflight?.policy.schedule;
   const start = typeof schedule?.start === 'string' ? schedule.start : plan.blocks[0]?.expected_start_local ?? '01:00';
   const stop = typeof schedule?.stop_claiming === 'string' ? schedule.stop_claiming : '05:30';
   const finishStarted = schedule?.finish_started_batch === true;
   const active = factory.snapshot?.execution_block;
+  const materializedReady = materialized?.readiness.ready === true;
   return <section className="panel time-block-panel">
-    <div className="panel-header"><div><p className="panel-kicker">TIME-AWARE WIDTH CAMPAIGN</p><h3>{plan.label}</h3><small>{plan.authority_path} · recomputed from pinned width, treatment and performance evidence</small></div><span className="authority-badge">DRAFT · DISARMED</span></div>
+    <div className="panel-header"><div><p className="panel-kicker">TIME-AWARE WIDTH CAMPAIGN</p><h3>{plan.label}</h3><small>{materializedReady ? `${materialized?.authority_path} · frozen from ${plan.authority_path}` : `${plan.authority_path} · recomputed from pinned width, treatment and performance evidence`}</small></div><span className="authority-badge">{materializedReady ? materialized?.state.replaceAll('-', ' ').toUpperCase() : 'DRAFT · DISARMED'}</span></div>
     <div className="time-block-summary">
       <article><span>NOMINAL WALL TIME</span><strong>{plan.summary.estimated_hours.toFixed(1)} h</strong><small>{plan.summary.planning_lower_hours.toFixed(1)}–{plan.summary.planning_upper_hours.toFixed(1)} h planning range</small></article>
       <article><span>BLOCKS</span><strong>{plan.summary.blocks}</strong><small>target {plan.policy.target_block_hours.toFixed(1)} h · hard planning ceiling {plan.policy.max_block_hours.toFixed(0)} h</small></article>
@@ -1637,9 +1653,12 @@ function TimeBlockPlanPanel({ factory }: { factory: FactoryApiState }) {
     <div className="time-block-schedule"><div><span>AUTOMATIC ADMISSION</span><strong>{start}–{stop} · Europe/Luxembourg</strong><small>At most one ordered block starts per window. {finishStarted ? 'A started block drains completely after the window closes.' : 'Finish-started policy is not active.'}</small></div><div><span>CURRENT ADMISSION</span><strong>{active?.active ? active.batch_id : 'No block active'}</strong><small>{active?.active ? `${active.remaining ?? '—'} jobs remain · ${active.admission_id}` : 'Queue remains disarmed until explicit review'}</small></div><div><span>MANUAL TIMER BYPASS</span><code>fidb-poc queue start-block --project-root .</code><small>Requires an armed queue; admits one block but executes nothing itself.</small></div></div>
     <div className="time-block-ledger">
       <header><span>Block / nominal window</span><span>Libraries</span><span>Width</span><span>Estimate / range</span><span>State</span></header>
-      {plan.blocks.map(block => <article key={block.id}><div><strong>#{String(block.position).padStart(2, '0')} · {start} → {block.expected_nominal_end_local}</strong><small>{block.id}</small></div><div><strong>{block.items.map(item => item.label).join(' + ')}</strong><small>{block.items.map(item => `${item.source_id}@${item.version}`).join(' · ')}</small></div><div><strong>{block.executions.toLocaleString()} executions</strong><small>{block.android_executions.toLocaleString()} Android · exact applicability</small></div><div><strong>{block.estimated_hours.toFixed(2)} h</strong><small>{block.planning_lower_hours.toFixed(2)}–{block.planning_upper_hours.toFixed(2)} h · ±{Math.round(plan.policy.uncertainty_fraction * 100)}%</small></div><span className="evidence-badge cold">{block.state.replaceAll('-', ' ')}</span></article>)}
+      {plan.blocks.map(block => {
+        const frozen = materializedBlocks.get(block.id);
+        return <article key={block.id}><div><strong>#{String(block.position).padStart(2, '0')} · {start} → {block.expected_nominal_end_local}</strong><small>{block.id}</small></div><div><strong>{block.items.map(item => item.label).join(' + ')}</strong><small>{block.items.map(item => `${item.source_id}@${item.version}`).join(' · ')}</small></div><div><strong>{block.executions.toLocaleString()} executions</strong><small>{block.android_executions.toLocaleString()} Android · exact applicability</small></div><div><strong>{block.estimated_hours.toFixed(2)} h</strong><small>{block.planning_lower_hours.toFixed(2)}–{block.planning_upper_hours.toFixed(2)} h · ±{Math.round(plan.policy.uncertainty_fraction * 100)}%</small></div><span className={`evidence-badge ${frozen?.plan_integrity === 'verified' && frozen.queue_registered ? 'ready' : 'cold'}`}>{frozen ? `${frozen.plan_integrity} · ${frozen.queue_registered ? 'queued' : 'unregistered'}` : block.state.replaceAll('-', ' ')}</span></article>;
+      })}
     </div>
-    <footer className="time-block-note"><strong>Dynamic draft, stable execution.</strong><span>Factor, compiler, route, treatment, source-size or performance-profile changes automatically update this projection. Materialization must freeze the block membership and plan digest first, so an armed campaign can never reshape itself silently.</span><code>{plan.plan_digest}</code></footer>
+    <footer className="time-block-note"><strong>{materializedReady ? 'Frozen cells, disarmed execution.' : 'Dynamic draft, stable execution.'}</strong><span>{materializedReady ? 'All five generated plans match their file pins and ordered queue-cell digests. The queue is registered but remains disarmed pending explicit operator review.' : 'Factor, compiler, route, treatment, source-size or performance-profile changes automatically update this projection. Materialization must freeze the block membership and plan digest first, so an armed campaign can never reshape itself silently.'}</span><code>{materialized?.materialization_digest ?? plan.plan_digest}</code></footer>
   </section>;
 }
 
