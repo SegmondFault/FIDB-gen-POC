@@ -216,13 +216,17 @@ with function-level collision and miss evidence; unlabelled exploratory cases
 do not manufacture confusion counts.
 
 The control panel groups these workflows under **Validation** and adds a
-separate **Noisy hashes** trust ledger. It combines recurring collision
-evidence from machine and ecological reports within the exact query-compatible
-sublane, marks one-off candidates separately from cross-run recurrence, and
-requires a reasoned TOML disposition. Decisions never rewrite published
-evidence; `quarantine` is explicitly a forward-admission contract until the
-lane builder consumes it. See [`validation/README.md`](validation/README.md)
-for the thresholds and management states.
+**Hash discrimination** workspace. Its initial noisy-hash ledger combines
+recurring collision evidence from machine and ecological reports within the
+exact query-compatible sublane, marks one-off candidates separately from
+cross-run recurrence, and requires a reasoned TOML disposition. The broader
+Hash Discrimination Index will measure how strongly each signature supports
+library provenance, compare unweighted, exclusion, down-weighted and contextual
+treatments, and remain explicitly unscored until sufficient corpus evidence
+exists. Decisions never rewrite published evidence; `quarantine` is a
+forward-admission contract until the lane builder consumes it. See
+[`HASH_DISCRIMINATION.md`](HASH_DISCRIMINATION.md) for the model boundary and
+[`validation/README.md`](validation/README.md) for operational authorities.
 
 The disarmed next-run campaign is split between
 [`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml) and

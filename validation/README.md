@@ -112,3 +112,19 @@ signature from a **future** admission generation; it never edits or deletes a
 published raw or compact database. That downstream admission filter must be
 implemented and verified before quarantine is treated as operationally
 enforced.
+
+## Hash Discrimination Index
+
+The noisy-hash ledger is one input to the broader Hash Discrimination system.
+That system will estimate the provenance value of every compatible FID
+signature, not merely collect signatures which already appeared in collision
+reports. Its principal analyst-facing measure is the **Hash Discrimination
+Index (HDI)**: higher means more useful for distinguishing a library. A
+separate noise-risk measure records ambiguity or demonstrated attribution harm,
+and every result retains evidence sufficiency and an explainable reason.
+
+Until the first complete C10 corpus and validation evidence exist, the
+authority and GUI are readiness projections only. They must not invent scores
+or enable filtering. The full measurement, generation, treatment-ablation and
+rollback contract is documented in
+[`../HASH_DISCRIMINATION.md`](../HASH_DISCRIMINATION.md).
