@@ -136,6 +136,10 @@ class WidthRunTests(unittest.TestCase):
                     "status": "complete",
                     "analysis_artifact_sha256": "a" * 64,
                     "fidb_sha256": "b" * 64,
+                    "fid_signatures_sha256": "d" * 64,
+                    "fid_signature_records": "8",
+                    "fid_unique_full_hashes": "7",
+                    "fid_unique_signatures": "6",
                     "fid_programs": "1",
                     "fid_attempted": "10",
                     "fid_added": "8",
@@ -151,6 +155,10 @@ class WidthRunTests(unittest.TestCase):
                     "status": "complete",
                     "analysis_artifact_sha256": "a" * 64,
                     "fidb_sha256": "c" * 64,
+                    "fid_signatures_sha256": "d" * 64,
+                    "fid_signature_records": "8",
+                    "fid_unique_full_hashes": "7",
+                    "fid_unique_signatures": "6",
                     "fid_programs": "1",
                     "fid_attempted": "11",
                     "fid_added": "8",
@@ -167,6 +175,33 @@ class WidthRunTests(unittest.TestCase):
         self.assertEqual(comparison["fidb_container_bytes"]["matching_cells"], 0)
         self.assertEqual(comparison["fid_semantics"]["matching_cells"], 0)
         self.assertEqual(len(comparison["fid_semantics"]["mismatches"]), 1)
+
+    def test_replay_comparison_detects_signature_drift_with_equal_counts(self):
+        def cell(digest: str) -> dict[str, str]:
+            return {
+                "route_id": "route-a",
+                "treatment_id": "treatment-a",
+                "status": "complete",
+                "analysis_artifact_sha256": "a" * 64,
+                "fidb_sha256": "b" * 64,
+                "fid_signatures_sha256": digest,
+                "fid_signature_records": "8",
+                "fid_unique_full_hashes": "7",
+                "fid_unique_signatures": "6",
+                "fid_programs": "1",
+                "fid_attempted": "10",
+                "fid_added": "8",
+                "fid_excluded": "2",
+            }
+
+        comparison = _replay_comparison(
+            [{"cells": [cell("c" * 64)]}, {"cells": [cell("d" * 64)]}]
+        )
+
+        self.assertEqual(comparison["fid_semantics"]["matching_cells"], 0)
+        mismatch = comparison["fid_semantics"]["mismatches"][0]
+        self.assertEqual(mismatch["baseline"]["fid_signatures_sha256"], "c" * 64)
+        self.assertEqual(mismatch["observed"]["fid_signatures_sha256"], "d" * 64)
 
     def test_scratch_release_keeps_logs_and_ghidra_user_state(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -457,6 +457,10 @@ def _replay_comparison(replays: list[dict[str, object]]) -> dict[str, object]:
         return {"route_id": key[0], "treatment_id": key[1]}
 
     semantic_fields = (
+        "fid_signatures_sha256",
+        "fid_signature_records",
+        "fid_unique_full_hashes",
+        "fid_unique_signatures",
         "fid_programs",
         "fid_attempted",
         "fid_added",
