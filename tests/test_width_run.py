@@ -36,6 +36,8 @@ class WidthRunTests(unittest.TestCase):
 
         self.assertEqual(preview["state"], "disarmed-preview")
         self.assertEqual(preview["mode"], "full")
+        self.assertEqual(preview["performance_profile"], "auto")
+        self.assertEqual(preview["build_jobs_per_cell"], 4)
         self.assertEqual(preview["ghidra_heap_mib"], 4096)
         self.assertEqual(preview["java_tool_options"], "-Xmx4096m")
         self.assertEqual(preview["build_cells_per_replay"], qualified * 6)
@@ -104,6 +106,48 @@ class WidthRunTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIsNone(document["ghidra_heap_mib"])
         self.assertEqual(document["java_tool_options"], "")
+        self.assertEqual(document["performance_profile"], "manual")
+
+    def test_named_performance_profile_is_an_exact_disarmed_choice(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(
+                [
+                    "run-width",
+                    "--project-root",
+                    str(self.root),
+                    "--canary",
+                    "--performance-profile",
+                    "laptop-4c-8g",
+                ]
+            )
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertEqual(document["performance_profile"], "laptop-4c-8g")
+        self.assertEqual(document["parallel_workers"], 1)
+        self.assertEqual(document["build_jobs_per_cell"], 2)
+        self.assertEqual(document["ghidra_heap_mib"], 2048)
+        self.assertEqual(document["java_tool_options"], "-Xmx2048m")
+
+    def test_named_profile_rejects_ambiguous_manual_overrides(self):
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            status = main(
+                [
+                    "run-width",
+                    "--project-root",
+                    str(self.root),
+                    "--canary",
+                    "--performance-profile",
+                    "laptop-4c-8g",
+                    "--workers",
+                    "2",
+                ]
+            )
+
+        self.assertEqual(status, 1)
+        self.assertIn("cannot be combined", errors.getvalue())
 
     def test_default_workers_select_measured_knee_with_memory_headroom(self):
         visible = int(93.93 * 1024**3)
@@ -266,6 +310,7 @@ class WidthRunTests(unittest.TestCase):
             group.mkdir()
 
             def fake_execute(_configuration, project_root, **kwargs):
+                self.assertEqual(kwargs["build_jobs_per_cell"], 3)
                 with kwargs["timing"]("compile", "benchmark compile stage"):
                     pass
                 kwargs["skipped"]("patch", "no patch required")
@@ -275,7 +320,9 @@ class WidthRunTests(unittest.TestCase):
                 return manifest
 
             with patch("fidb_poc.width_run.execute", side_effect=fake_execute):
-                measurement = _execute_cell(configuration, str(group), False)
+                measurement = _execute_cell(
+                    configuration, str(group), False, build_jobs_per_cell=3
+                )
 
             timing = measurement["stage_timing"]
             self.assertEqual(timing["schema_version"], "fidb-execution-timing/v1")

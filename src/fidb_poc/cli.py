@@ -25,6 +25,80 @@ _HUNT_SUBCOMMANDS = {
 }
 
 
+def _performance_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc performance",
+        description="Inspect the reviewed performance-profile authority.",
+    )
+    result.add_argument("profile", nargs="?")
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    arguments = result.parse_args(argv)
+    try:
+        from .performance_profiles import load_performance_profiles
+
+        catalog = load_performance_profiles(arguments.project_root)
+        document = catalog.document()
+        if arguments.profile:
+            document = {
+                "schema_version": document["schema_version"],
+                "authority_path": document["authority_path"],
+                "default_profile": document["default_profile"],
+                "profile": catalog.select(arguments.profile).document(),
+            }
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
+def _selected_performance(
+    arguments: argparse.Namespace,
+    *,
+    default_heap_mib: int | None,
+    require_manual_workers: bool,
+) -> dict[str, object]:
+    """Resolve either one named profile or the existing explicit CLI controls."""
+
+    explicit_names = (
+        "workers",
+        "ghidra_heap_mib",
+        "ghidra_core_limit",
+        "build_jobs_per_cell",
+    )
+    explicit = [name for name in explicit_names if hasattr(arguments, name)]
+    profile_id = getattr(arguments, "performance_profile", None)
+    if profile_id:
+        if explicit:
+            flags = ", ".join(name.replace("_", "-") for name in explicit)
+            raise ValueError(
+                f"--performance-profile cannot be combined with explicit {flags}"
+            )
+        from .performance_profiles import load_performance_profiles
+
+        profile = load_performance_profiles(arguments.project_root).select(profile_id)
+        settings = profile.settings
+        return {
+            "workers": settings.workers,
+            "heap_mib": settings.ghidra_heap_mib,
+            "core_limit": settings.ghidra_core_limit,
+            "build_jobs_per_cell": settings.build_jobs_per_cell,
+            "performance_profile_id": profile.id,
+        }
+    workers = getattr(arguments, "workers", None)
+    if require_manual_workers and workers is None:
+        raise ValueError(
+            "benchmark-width requires --workers or --performance-profile"
+        )
+    return {
+        "workers": workers,
+        "heap_mib": getattr(arguments, "ghidra_heap_mib", default_heap_mib),
+        "core_limit": getattr(arguments, "ghidra_core_limit", None),
+        "build_jobs_per_cell": getattr(arguments, "build_jobs_per_cell", 4),
+        "performance_profile_id": "manual" if explicit else "auto",
+    }
+
+
 def _resolve_plan_main(argv: list[str]) -> int:
     result = argparse.ArgumentParser(
         prog="fidb-poc resolve-plan",
@@ -107,6 +181,10 @@ def _run_width_main(argv: list[str]) -> int:
     result.add_argument("--project-root", type=Path, default=Path.cwd())
     result.add_argument("--width", default="c-width-v1")
     result.add_argument(
+        "--performance-profile",
+        help="select one exact policy from performance/profiles.toml",
+    )
+    result.add_argument(
         "--canary",
         action="store_true",
         help="select only the authority's baseline O2 cells and one replay",
@@ -119,6 +197,7 @@ def _run_width_main(argv: list[str]) -> int:
     result.add_argument(
         "--workers",
         type=int,
+        default=argparse.SUPPRESS,
         help=(
             "bounded parallel cell workers "
             "(default: memory/CPU-aware and capped at 20; explicit maximum: 32)"
@@ -129,6 +208,7 @@ def _run_width_main(argv: list[str]) -> int:
         "--ghidra-heap-mib",
         type=int,
         dest="ghidra_heap_mib",
+        default=argparse.SUPPRESS,
         help="maximum heap per embedded Ghidra JVM (default: 4096 MiB)",
     )
     heap.add_argument(
@@ -136,13 +216,20 @@ def _run_width_main(argv: list[str]) -> int:
         action="store_const",
         const=None,
         dest="ghidra_heap_mib",
+        default=argparse.SUPPRESS,
         help="preserve an inherited -Xmx or use Java's ergonomic heap",
     )
-    result.set_defaults(ghidra_heap_mib=4096)
     result.add_argument(
         "--ghidra-core-limit",
         type=int,
+        default=argparse.SUPPRESS,
         help="optional Ghidra cpu.core.limit per embedded JVM",
+    )
+    result.add_argument(
+        "--build-jobs-per-cell",
+        type=int,
+        default=argparse.SUPPRESS,
+        help="native compiler jobs within each width cell (default: 4)",
     )
     result.add_argument("--verbose", "-v", action="store_true")
     arguments = result.parse_args(argv)
@@ -151,6 +238,11 @@ def _run_width_main(argv: list[str]) -> int:
             compile_width_run_plan,
             execute_width_run,
             width_run_preview,
+        )
+        performance = _selected_performance(
+            arguments,
+            default_heap_mib=4096,
+            require_manual_workers=False,
         )
 
         if not arguments.execute:
@@ -163,9 +255,7 @@ def _run_width_main(argv: list[str]) -> int:
                 json.dumps(
                     width_run_preview(
                         plan,
-                        workers=arguments.workers,
-                        heap_mib=arguments.ghidra_heap_mib,
-                        core_limit=arguments.ghidra_core_limit,
+                        **performance,
                     ),
                     indent=2,
                     sort_keys=True,
@@ -178,9 +268,7 @@ def _run_width_main(argv: list[str]) -> int:
             authority_id=arguments.width,
             progress=print,
             verbose=arguments.verbose,
-            workers=arguments.workers,
-            heap_mib=arguments.ghidra_heap_mib,
-            core_limit=arguments.ghidra_core_limit,
+            **performance,
         )
         print(f"Width result: {path}")
         return 0 if outcome["state"] == "measured-complete" else 1
@@ -197,13 +285,24 @@ def _benchmark_width_main(argv: list[str]) -> int:
     result.add_argument("--project-root", type=Path, default=Path.cwd())
     result.add_argument("--width", default="c-width-v1")
     result.add_argument("--label", default="width-pipeline")
+    result.add_argument(
+        "--performance-profile",
+        help="select one exact policy from performance/profiles.toml",
+    )
     result.add_argument("--route", action="append", required=True, dest="routes")
     result.add_argument(
         "--treatment", action="append", required=True, dest="treatments"
     )
-    result.add_argument("--workers", type=int, required=True)
-    result.add_argument("--ghidra-heap-mib", type=int)
-    result.add_argument("--ghidra-core-limit", type=int)
+    result.add_argument("--workers", type=int, default=argparse.SUPPRESS)
+    result.add_argument(
+        "--ghidra-heap-mib", type=int, default=argparse.SUPPRESS
+    )
+    result.add_argument(
+        "--ghidra-core-limit", type=int, default=argparse.SUPPRESS
+    )
+    result.add_argument(
+        "--build-jobs-per-cell", type=int, default=argparse.SUPPRESS
+    )
     result.add_argument(
         "--execute",
         action="store_true",
@@ -216,15 +315,18 @@ def _benchmark_width_main(argv: list[str]) -> int:
             execute_width_benchmark,
             width_benchmark_preview,
         )
+        performance = _selected_performance(
+            arguments,
+            default_heap_mib=None,
+            require_manual_workers=True,
+        )
 
         options = {
             "project_root": arguments.project_root,
             "authority_id": arguments.width,
             "route_ids": arguments.routes,
             "treatment_ids": arguments.treatments,
-            "workers": arguments.workers,
-            "heap_mib": arguments.ghidra_heap_mib,
-            "core_limit": arguments.ghidra_core_limit,
+            **performance,
         }
         if not arguments.execute:
             print(
@@ -459,6 +561,8 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_main(tokens[1:])
     if tokens and tokens[0] == "compile-width-batch":
         return _compile_width_batch_main(tokens[1:])
+    if tokens and tokens[0] == "performance":
+        return _performance_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":

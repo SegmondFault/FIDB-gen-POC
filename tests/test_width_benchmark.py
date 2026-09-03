@@ -26,6 +26,8 @@ class WidthBenchmarkTests(unittest.TestCase):
         self.assertEqual(preview["state"], "disarmed-preview")
         self.assertEqual(preview["scheduled_cells"], 2)
         self.assertEqual(preview["parallel_workers"], 2)
+        self.assertEqual(preview["performance_profile"], "manual")
+        self.assertEqual(preview["build_jobs_per_cell"], 4)
         self.assertEqual(preview["java_tool_options"], "-Xmx4096m -Dcpu.core.limit=2")
 
     def test_cli_does_not_execute_without_flag(self):
@@ -61,6 +63,29 @@ class WidthBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(preview["width_id"], "c-android-gap-v1")
         self.assertEqual(preview["scheduled_cells"], 1)
+
+    def test_cli_accepts_a_named_profile_without_manual_workers(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(
+                [
+                    "benchmark-width",
+                    "--project-root",
+                    str(self.root),
+                    "--route",
+                    "linux-x86-64-gcc-13",
+                    "--treatment",
+                    "baseline_o2",
+                    "--performance-profile",
+                    "reference-host-94g-balanced",
+                ]
+            )
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertEqual(document["performance_profile"], "reference-host-94g-balanced")
+        self.assertEqual(document["parallel_workers"], 20)
+        self.assertEqual(document["build_jobs_per_cell"], 4)
 
     def test_heap_and_core_bounds_are_validated(self):
         with self.assertRaisesRegex(ValueError, "heap"):

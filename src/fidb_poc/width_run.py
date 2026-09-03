@@ -279,12 +279,16 @@ def width_run_preview(
     workers: int | None = None,
     heap_mib: int | None = DEFAULT_WIDTH_GHIDRA_HEAP_MIB,
     core_limit: int | None = None,
+    build_jobs_per_cell: int = 4,
+    performance_profile_id: str | None = None,
 ) -> dict[str, object]:
     parallel_workers = (
         default_width_workers(heap_mib=heap_mib) if workers is None else workers
     )
     if parallel_workers < 1 or parallel_workers > 32:
         raise ValueError("width workers must be between 1 and 32")
+    if build_jobs_per_cell < 1 or build_jobs_per_cell > 32:
+        raise ValueError("build jobs per cell must be between 1 and 32")
     configured_java_options = java_options(heap_mib, core_limit, inherited="")
     cells = [
         {
@@ -307,6 +311,15 @@ def width_run_preview(
         "scheduled_executions": plan.cell_count * plan.replays,
         "groups_per_replay": len(_groups(plan)),
         "parallel_workers": parallel_workers,
+        "build_jobs_per_cell": build_jobs_per_cell,
+        "performance_profile": performance_profile_id or (
+            "auto"
+            if workers is None
+            and heap_mib == DEFAULT_WIDTH_GHIDRA_HEAP_MIB
+            and core_limit is None
+            and build_jobs_per_cell == 4
+            else "manual"
+        ),
         "ghidra_heap_mib": heap_mib,
         "ghidra_core_limit": core_limit,
         "java_tool_options": configured_java_options,
@@ -660,6 +673,7 @@ def _execute_cell(
     group_root_text: str,
     verbose: bool,
     java_options_text: str | None = None,
+    build_jobs_per_cell: int = 4,
 ) -> dict[str, object]:
     """Process-pool entry point for one isolated route/treatment cell."""
     if java_options_text is not None:
@@ -681,6 +695,7 @@ def _execute_cell(
                 configuration,
                 group_root,
                 verbose=verbose,
+                build_jobs_per_cell=build_jobs_per_cell,
                 timing=timing.span,
                 skipped=timing.skip,
             )
@@ -740,6 +755,8 @@ def execute_width_run(
     workers: int | None = None,
     heap_mib: int | None = DEFAULT_WIDTH_GHIDRA_HEAP_MIB,
     core_limit: int | None = None,
+    build_jobs_per_cell: int = 4,
+    performance_profile_id: str | None = None,
 ) -> tuple[dict[str, object], Path]:
     root = Path(project_root).expanduser().resolve()
     plan = compile_width_run_plan(root, canary=canary, authority_id=authority_id)
@@ -755,6 +772,8 @@ def execute_width_run(
         workers=parallel_workers,
         heap_mib=heap_mib,
         core_limit=core_limit,
+        build_jobs_per_cell=build_jobs_per_cell,
+        performance_profile_id=performance_profile_id,
     )
     effective_java_options = java_options(heap_mib, core_limit)
     _atomic_json(run_root / "width-run-plan.json", preview)
@@ -794,6 +813,7 @@ def execute_width_run(
                         str(group_root),
                         verbose,
                         effective_java_options,
+                        build_jobs_per_cell,
                     ): (group_index, configuration, group_root)
                     for group_index, configuration, group_root in scheduled
                 }
@@ -934,6 +954,8 @@ def execute_width_run(
         "build_cells_per_replay": plan.cell_count,
         "scheduled_executions": expected,
         "parallel_workers": parallel_workers,
+        "build_jobs_per_cell": build_jobs_per_cell,
+        "performance_profile": preview["performance_profile"],
         "ghidra_heap_mib": heap_mib,
         "ghidra_core_limit": core_limit,
         "java_tool_options": effective_java_options,

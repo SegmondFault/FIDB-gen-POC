@@ -1,7 +1,11 @@
 import tempfile
 import unittest
+import contextlib
+import io
+import json
 from pathlib import Path
 
+from fidb_poc.cli import main
 from fidb_poc.performance_profiles import load_performance_profiles
 
 
@@ -35,6 +39,23 @@ class PerformanceProfilesTests(unittest.TestCase):
     def test_unknown_profile_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "unknown performance profile"):
             load_performance_profiles(self.root).select("not-real")
+
+    def test_cli_exposes_one_profile_without_running_work(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(
+                [
+                    "performance",
+                    "m1-max-64g-balanced",
+                    "--project-root",
+                    str(self.root),
+                ]
+            )
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertEqual(document["profile"]["host"]["memory_model"], "unified")
+        self.assertEqual(document["profile"]["settings"]["workers"], 8)
 
     def test_invalid_profile_cannot_escape_resource_bounds(self):
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:

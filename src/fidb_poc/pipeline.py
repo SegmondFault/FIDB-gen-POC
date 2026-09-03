@@ -713,6 +713,7 @@ def build_library(
     logs: Path,
     verbose: bool = False,
     *,
+    build_jobs_per_cell: int = 4,
     timing: TimingFactory | None = None,
     skipped: SkipCallback | None = None,
 ) -> tuple[BuildRecord, list[Path]]:
@@ -764,7 +765,7 @@ def build_library(
         detection.build_system,
         route=route,
         compiler_flags=treatment.flags_for(route),
-        jobs=4,
+        jobs=build_jobs_per_cell,
     )
     _skip(
         skipped,
@@ -1498,9 +1499,12 @@ def execute(
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
     *,
+    build_jobs_per_cell: int = 4,
     timing: TimingFactory | None = None,
     skipped: SkipCallback | None = None,
 ) -> Path:
+    if build_jobs_per_cell < 1 or build_jobs_per_cell > 32:
+        raise ValueError("build jobs per cell must be between 1 and 32")
     announce = progress or (lambda _: None)
     _skip(
         skipped,
@@ -1607,6 +1611,7 @@ def execute(
                         work,
                         logs,
                         verbose=verbose,
+                        build_jobs_per_cell=build_jobs_per_cell,
                         timing=timing,
                         skipped=skipped,
                     )

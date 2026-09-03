@@ -97,10 +97,14 @@ def width_benchmark_preview(
     workers: int,
     heap_mib: int | None,
     core_limit: int | None,
+    build_jobs_per_cell: int = 4,
+    performance_profile_id: str | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     if workers < 1 or workers > 32:
         raise ValueError("benchmark workers must be between 1 and 32")
+    if build_jobs_per_cell < 1 or build_jobs_per_cell > 32:
+        raise ValueError("build jobs per cell must be between 1 and 32")
     routes = tuple(route_ids)
     treatments = tuple(treatment_ids)
     compilation, groups = _selected_groups(root, routes, treatments, authority_id)
@@ -115,6 +119,8 @@ def width_benchmark_preview(
         "treatments": list(treatments),
         "scheduled_cells": len(groups),
         "parallel_workers": workers,
+        "build_jobs_per_cell": build_jobs_per_cell,
+        "performance_profile": performance_profile_id or "manual",
         "ghidra_heap_mib": heap_mib,
         "ghidra_core_limit": core_limit,
         "java_tool_options": java_options,
@@ -126,12 +132,18 @@ def _execute_benchmark_cell(
     group_root: str,
     verbose: bool,
     java_options: str,
+    build_jobs_per_cell: int,
 ) -> dict[str, object]:
     if java_options:
         os.environ["JAVA_TOOL_OPTIONS"] = java_options
     else:
         os.environ.pop("JAVA_TOOL_OPTIONS", None)
-    measurement = _execute_cell(configuration, group_root, verbose)
+    measurement = _execute_cell(
+        configuration,
+        group_root,
+        verbose,
+        build_jobs_per_cell=build_jobs_per_cell,
+    )
     try:
         from java.lang import Runtime as JavaRuntime
 
@@ -225,6 +237,8 @@ def execute_width_benchmark(
     workers: int,
     heap_mib: int | None,
     core_limit: int | None,
+    build_jobs_per_cell: int = 4,
+    performance_profile_id: str | None = None,
     progress: Callable[[str], None] | None = None,
     verbose: bool = False,
 ) -> tuple[dict[str, object], Path]:
@@ -239,6 +253,8 @@ def execute_width_benchmark(
         workers=workers,
         heap_mib=heap_mib,
         core_limit=core_limit,
+        build_jobs_per_cell=build_jobs_per_cell,
+        performance_profile_id=performance_profile_id,
     )
     compilation, groups = _selected_groups(root, routes, treatments, authority_id)
     run_root = _benchmark_root(root, label, preview)
@@ -274,6 +290,7 @@ def execute_width_benchmark(
                     str(group_root),
                     verbose,
                     java_options,
+                    build_jobs_per_cell,
                 ): (index, configuration, group_root)
                 for index, configuration, group_root in scheduled
             }
