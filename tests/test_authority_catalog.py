@@ -12,7 +12,7 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v10")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v11")
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["performance_profiles"]["profiles"]), 8)
         self.assertEqual(
@@ -138,6 +138,14 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(android_gap["summary"]["total_executions"], 48)
         self.assertEqual(
             android_gap["readiness"]["queue_state"], "not-materialized-disarmed"
+        )
+        time_plan = document["time_block_plan"]
+        self.assertEqual(time_plan["state"], "draft-disarmed")
+        self.assertEqual(time_plan["summary"]["executions"], 2_046)
+        self.assertEqual(time_plan["summary"]["android_executions"], 480)
+        self.assertEqual(time_plan["summary"]["blocks"], 5)
+        self.assertTrue(
+            all(block["estimated_hours"] <= 5 for block in time_plan["blocks"])
         )
 
         targets = {row["id"]: row for row in document["targets"]}

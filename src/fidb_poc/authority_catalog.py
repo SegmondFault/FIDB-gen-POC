@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tomllib
 
+from .batch_time_model import compile_time_block_plan
 from .config import load_configuration
 from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
@@ -26,7 +27,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v10"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v11"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -464,6 +465,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     width_batches = _width_batch_authority(
         root, recipes, toolchain_pack_catalog, toolchain_inspections
     )
+    time_block_plan = compile_time_block_plan(root)
     width_ids = {"c-width-v1"}
     width_ids.update(
         Path(str(row["authorities"]["width"])).stem for row in width_batches
@@ -487,6 +489,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "coverage_universe": coverage_universe,
         "width_studies": width_studies,
         "width_batches": width_batches,
+        "time_block_plan": time_block_plan,
         "width_compilations": width_compilations,
         "recipes": recipes,
         "native": native,
@@ -511,6 +514,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
             "width_batches": "batches/*.toml",
+            "time_block_plan": "performance/batch-planning.toml",
             "width_compilations": "coverage/c-width-v1.toml plus batch-referenced width authorities",
             "width_evidence": "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml",
             "plans": "plans/",
@@ -530,6 +534,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "width_batches_sha256": hashlib.sha256(
                 b"".join(path.read_bytes() for path in width_batch_paths)
+            ).hexdigest(),
+            "batch_planning_sha256": hashlib.sha256(
+                (root / "performance/batch-planning.toml").read_bytes()
             ).hexdigest(),
             "c_width_sha256": hashlib.sha256(
                 (root / "coverage/c-width-v1.toml").read_bytes()
