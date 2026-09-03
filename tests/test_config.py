@@ -4,6 +4,7 @@ import tomllib
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from fidb_poc.config import (
     RecipesNotFoundError,
@@ -87,6 +88,22 @@ class ConfigurationTests(unittest.TestCase):
             self.assertNotIn("compiler", row)
             self.assertNotIn("archiver", row)
             self.assertNotIn("ranlib", row)
+
+    def test_managed_routes_share_one_catalog_load(self):
+        root = Path(__file__).resolve().parents[1]
+        from fidb_poc.toolchain_packs import load_toolchain_pack_catalog
+
+        with patch(
+            "fidb_poc.toolchain_packs.load_toolchain_pack_catalog",
+            wraps=load_toolchain_pack_catalog,
+        ) as load_catalog:
+            configuration = load_configuration(root / "worker.toml")
+
+        self.assertGreater(
+            sum(route.managed_toolchain_route is not None for route in configuration.routes),
+            1,
+        )
+        load_catalog.assert_called_once_with(root)
 
     def test_work_request_contains_library_names_not_source_details(self):
         root = Path(__file__).resolve().parents[1]

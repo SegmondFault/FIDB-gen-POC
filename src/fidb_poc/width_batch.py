@@ -89,7 +89,13 @@ def _checked_digest(path: Path, expected: object, field: str) -> str:
     return actual
 
 
-def load_width_batch(project_root: str | Path, path: str | Path) -> dict[str, object]:
+def load_width_batch(
+    project_root: str | Path,
+    path: str | Path,
+    *,
+    _toolchain_catalog: dict[str, object] | None = None,
+    _inspections: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Load and cross-check one immutable, non-executable width batch binding."""
 
     root = Path(project_root).expanduser().resolve()
@@ -168,7 +174,12 @@ def load_width_batch(project_root: str | Path, path: str | Path) -> dict[str, ob
         raise ValueError("width batch selects sources outside its width study")
 
     width_id = width_path.stem
-    width = compile_c_width(root, width_id)
+    width = compile_c_width(
+        root,
+        width_id,
+        _catalog=_toolchain_catalog,
+        _inspections=_inspections,
+    )
     if width["language_id"] != document["language_id"]:
         raise ValueError("width batch authority language does not match")
     if width["authorities"]["width"] != width_relative:  # type: ignore[index]

@@ -248,7 +248,11 @@ def _resolve_requests(
     return tuple(libraries)
 
 
-def _load_route(row: dict, project_root: Path) -> Route:
+def _load_route(
+    row: dict,
+    project_root: Path,
+    toolchain_catalog: dict[str, object] | None = None,
+) -> Route:
     route_id = _path_component(_required(row, "id", "route"), "route id")
     managed = row.get("managed_toolchain_route")
     if managed is not None:
@@ -269,23 +273,13 @@ def _load_route(row: dict, project_root: Path) -> Route:
         toolchain_state = "unavailable"
         toolchain_identity = "unresolved"
         toolchain_blocker = "managed toolchain authority is unavailable"
-        authority_files = (
-            project_root / "toolchains/routes.toml",
-            project_root / "toolchains/packs.toml",
-            project_root / "toolchains/inputs.toml",
-            project_root / "toolchains/qualifications.toml",
-            project_root / "targets/registry.toml",
-            project_root / "coverage/universe.toml",
-            project_root / "toolchains/profiles",
-        )
-        if all(path.exists() for path in authority_files):
-            from .toolchain_packs import load_toolchain_pack_catalog
+        if toolchain_catalog is not None:
             from .toolchain_qualification import (
                 QualificationError,
                 resolve_qualified_route_tools,
             )
 
-            catalog = load_toolchain_pack_catalog(project_root)
+            catalog = toolchain_catalog
             routes = [item for item in catalog["routes"] if item["id"] == managed]
             qualifications = [
                 item
@@ -349,6 +343,8 @@ def _load_route(row: dict, project_root: Path) -> Route:
 def load_configuration(
     path: Path,
     request_override: tuple[str, ...] | None = None,
+    *,
+    toolchain_catalog: dict[str, object] | None = None,
 ) -> Configuration:
     document = tomllib.loads(path.read_text(encoding="utf-8"))
     _reject_unknown(document, WORKER_FIELDS, "worker configuration")
@@ -359,7 +355,27 @@ def load_configuration(
     route_rows = _required(document, "routes", "worker configuration")
     for row in route_rows:
         _reject_unknown(row, ROUTE_FIELDS, "route")
-    routes = tuple(_load_route(row, path.parent.resolve()) for row in route_rows)
+    project_root = path.parent.resolve()
+    authority_files = (
+        project_root / "toolchains/routes.toml",
+        project_root / "toolchains/packs.toml",
+        project_root / "toolchains/inputs.toml",
+        project_root / "toolchains/qualifications.toml",
+        project_root / "targets/registry.toml",
+        project_root / "coverage/universe.toml",
+        project_root / "toolchains/profiles",
+    )
+    if any("managed_toolchain_route" in row for row in route_rows) and all(
+        authority.exists() for authority in authority_files
+    ) and toolchain_catalog is None:
+        from .toolchain_packs import load_toolchain_pack_catalog
+
+        # This catalog hashes cached archives. Resolve it once per configuration,
+        # not once for every managed route in the same worker.toml.
+        toolchain_catalog = load_toolchain_pack_catalog(project_root)
+    routes = tuple(
+        _load_route(row, project_root, toolchain_catalog) for row in route_rows
+    )
     treatment_rows = _required(document, "treatments", "worker configuration")
     for row in treatment_rows:
         _reject_unknown(row, TREATMENT_FIELDS, "treatment")

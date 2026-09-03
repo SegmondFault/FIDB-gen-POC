@@ -32,13 +32,19 @@ def _relative(root: Path, path: Path) -> str:
     return str(path.resolve().relative_to(root))
 
 
-def _native_authority(root: Path) -> tuple[list[dict[str, object]], dict[str, object]]:
+def _native_authority(
+    root: Path, toolchain_pack_catalog: dict[str, object]
+) -> tuple[list[dict[str, object]], dict[str, object]]:
     recipe_paths = sorted((root / "recipes").glob("*.toml"))
     requests = []
     for path in recipe_paths:
         document = tomllib.loads(path.read_text(encoding="utf-8"))
         requests.append(f'{document["name"]}@{document["version"]}')
-    configuration = load_configuration(root / "worker.toml", tuple(requests))
+    configuration = load_configuration(
+        root / "worker.toml",
+        tuple(requests),
+        toolchain_catalog=toolchain_pack_catalog,
+    )
     recipes = [
         {
             "id": f"{row.name}@{row.version}",
@@ -263,10 +269,21 @@ def _plan_authority(root: Path) -> list[dict[str, object]]:
 
 
 def _width_batch_authority(
-    root: Path, recipes: list[dict[str, object]]
+    root: Path,
+    recipes: list[dict[str, object]],
+    toolchain_pack_catalog: dict[str, object],
+    inspections: dict[str, object],
 ) -> list[dict[str, object]]:
     return [
-        project_width_batch_readiness(load_width_batch(root, path), recipes)
+        project_width_batch_readiness(
+            load_width_batch(
+                root,
+                path,
+                _toolchain_catalog=toolchain_pack_catalog,
+                _inspections=inspections,
+            ),
+            recipes,
+        )
         for path in sorted((root / "batches").glob("*.toml"))
     ]
 
@@ -424,7 +441,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     """Return one validated, JSON-safe view of all planning authorities."""
 
     root = Path(project_root).expanduser().resolve()
-    native_recipes, native = _native_authority(root)
+    toolchain_pack_catalog = load_toolchain_pack_catalog(root)
+    toolchain_inspections: dict[str, object] = {}
+    native_recipes, native = _native_authority(root, toolchain_pack_catalog)
     toolchains = _toolchain_authority(root)
     factors, variants, sensitivity_digests = _sensitivity_authority(root)
     target_path = root / "targets/registry.toml"
@@ -433,20 +452,27 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     coverage_universe = load_coverage_universe(coverage_path)
     coverage_universe["authority_path"] = _relative(root, coverage_path)
     recipes = [*native_recipes, *_source_authority(root)]
-    toolchain_pack_catalog = load_toolchain_pack_catalog(root)
     targets = _target_authority(root, native, toolchains, toolchain_pack_catalog)
     lane_registry = load_lane_registry(lane_path, target_path)
     lane_registry["authority_path"] = _relative(root, lane_path)
     width_studies = _width_study_authority(
         root, recipes, native, targets, coverage_universe
     )
-    width_batches = _width_batch_authority(root, recipes)
+    width_batches = _width_batch_authority(
+        root, recipes, toolchain_pack_catalog, toolchain_inspections
+    )
     width_ids = {"c-width-v1"}
     width_ids.update(
         Path(str(row["authorities"]["width"])).stem for row in width_batches
     )
     width_compilations = [
-        compile_c_width(root, width_id) for width_id in sorted(width_ids)
+        compile_c_width(
+            root,
+            width_id,
+            _catalog=toolchain_pack_catalog,
+            _inspections=toolchain_inspections,
+        )
+        for width_id in sorted(width_ids)
     ]
     width_paths = [root / str(row["authority_path"]) for row in width_studies]
     width_batch_paths = [root / str(row["authority_path"]) for row in width_batches]

@@ -245,6 +245,8 @@ def materialize_width_configuration(
     project_root: str | Path,
     fixed_recipe: str,
     route_plan: dict[str, object],
+    *,
+    _catalog: dict[str, object] | None = None,
 ) -> Configuration:
     """Project target-independent compiler routes into executable workers.
 
@@ -255,8 +257,10 @@ def materialize_width_configuration(
     """
 
     root = Path(project_root).expanduser().resolve()
-    configuration = load_configuration(root / "worker.toml", (fixed_recipe,))
-    catalog = load_toolchain_pack_catalog(root)
+    catalog = _catalog or load_toolchain_pack_catalog(root)
+    configuration = load_configuration(
+        root / "worker.toml", (fixed_recipe,), toolchain_catalog=catalog
+    )
     catalog_routes = {str(row["id"]): row for row in catalog["routes"]}
     qualifications = {
         str(row["route_id"]): row for row in catalog["qualifications"]
@@ -369,7 +373,11 @@ def materialize_width_configuration(
 
 
 def compile_c_width(
-    project_root: str | Path, authority_id: str = "c-width-v1"
+    project_root: str | Path,
+    authority_id: str = "c-width-v1",
+    *,
+    _catalog: dict[str, object] | None = None,
+    _inspections: dict[str, object] | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     if WIDTH_ID.fullmatch(authority_id) is None:
@@ -378,9 +386,15 @@ def compile_c_width(
     authority = load_c_width_authority(root / authority_relative)
     study = load_width_study(root / "coverage/c-top10-width-study.toml")
     universe = load_coverage_universe(root / "coverage/universe.toml")
-    route_plan = resolve_toolchain_profile(root, str(authority["toolchain_profile"]))
+    catalog = _catalog or load_toolchain_pack_catalog(root)
+    route_plan = resolve_toolchain_profile(
+        root,
+        str(authority["toolchain_profile"]),
+        _catalog=catalog,
+        _inspections=_inspections,
+    )
     configuration = materialize_width_configuration(
-        root, str(authority["fixed_recipe"]), route_plan
+        root, str(authority["fixed_recipe"]), route_plan, _catalog=catalog
     )
     worker_routes = {route.id: route for route in configuration.routes}
     treatments = {row.id: row for row in configuration.treatments}
