@@ -502,7 +502,11 @@ def extract_source(
                         )
                     with input_stream, target.open("wb") as output_stream:
                         shutil.copyfileobj(input_stream, output_stream)
-                    target.chmod(0o644)
+                    # Preserve only the archive's executable intent.  Source
+                    # releases commonly contain configure helpers which are
+                    # invoked directly, but set-id and write bits from an
+                    # untrusted archive must never survive extraction.
+                    target.chmod(0o755 if member.mode & 0o111 else 0o644)
 
             staged_root = staging / library.source_directory
             if not staged_root.is_dir():

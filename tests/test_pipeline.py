@@ -297,6 +297,11 @@ class PipelineTests(unittest.TestCase):
                 member = tarfile.TarInfo("demo-1.0/demo.c")
                 member.size = len(original)
                 source_tar.addfile(member, io.BytesIO(original))
+                helper = tarfile.TarInfo("demo-1.0/configure-helper")
+                helper.mode = 0o4755
+                helper_bytes = b"#!/bin/sh\nexit 0\n"
+                helper.size = len(helper_bytes)
+                source_tar.addfile(helper, io.BytesIO(helper_bytes))
             library = Library(
                 name="demo",
                 version="1.0",
@@ -315,6 +320,11 @@ class PipelineTests(unittest.TestCase):
             second = extract_source(library, archive, sources)
 
             self.assertEqual((second / "demo.c").read_bytes(), original)
+            self.assertEqual((second / "demo.c").stat().st_mode & 0o7777, 0o644)
+            self.assertEqual(
+                (second / "configure-helper").stat().st_mode & 0o7777,
+                0o755,
+            )
 
     def test_java_identity_prefers_java_home(self):
         with tempfile.TemporaryDirectory() as temporary:
