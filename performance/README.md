@@ -130,3 +130,19 @@ The tracked measurements and raw-result hashes are in
 [`benchmarks/staged-backends-reference-host-2026-09-03.toml`](../benchmarks/staged-backends-reference-host-2026-09-03.toml).
 The optional runner and rollback boundary are documented in
 [`experiments/rust-staged/README.md`](../experiments/rust-staged/README.md).
+
+## Campaign time model
+
+`batch-planning.toml` is the inspectable timing authority for the next C
+top-ten campaign. It reads the exact two width-batch authorities, the selected
+performance profile and the fixed-29-route 20-worker OpenSSL measurement. It
+weights the six treatments by their measured OpenSSL service-time ratios and
+uses a bounded square-root source-line heuristic until each new library has a
+direct measurement.
+
+`fidb-poc plan-time-blocks` is read-only. It currently produces five blocks
+whose central estimates are all at or below five hours and reports a separate
+±40% uncertainty range. The control panel **Batches** workspace shows the same
+compiled authority, including all 480 Android executions. Any width or profile
+change refreshes the draft; materialization must bind its digest so a live
+queue cannot change shape silently.

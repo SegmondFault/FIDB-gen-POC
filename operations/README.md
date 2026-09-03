@@ -51,8 +51,16 @@ input, check connectivity explicitly (for example with
 `/usr/bin/nm-online -q --timeout=60`).  This first native-only commissioning
 run uses already reviewed public source URLs. Managed acquisition has bounded
 timeouts, checksum verification, retry and a content-addressed cache. The queue
-worker also enforces the TOML schedule, hard cutoff, durable retry backoff and
+worker also enforces the TOML admission schedule, durable retry backoff and
 claim-time memory/disk/load/temperature gates.
+
+The reviewed schedule admits at most one ordered batch between 01:00 and 05:30
+Europe/Luxembourg. With `finish_started_batch = true`, 05:30 closes admission
+for the night but does not kill a cell or strand the rest of that batch:
+workers keep claiming from the durable active-batch identity until it drains.
+The next batch waits for a later schedule window. Worker services must already
+be running for automatic admission; their polling loops sleep harmlessly while
+there is no active or admissible block.
 
 Inspect that decision without mutating the ledger:
 
@@ -63,6 +71,16 @@ Inspect that decision without mutating the ledger:
 The command returns nonzero while the queue is disarmed, outside its claim
 window, or blocked by a resource threshold. The control panel reads the same
 evaluation from the loopback API rather than inventing a second policy.
+
+An operator may bypass only the clock and admit the next batch manually:
+
+```sh
+.venv/bin/fidb-poc queue start-block --queue plans/priority-queue.toml
+```
+
+This fails while the TOML queue is disarmed, writes a `batch.admitted` event,
+and starts no subprocess itself. Existing workers then drain that one block
+under the normal pool, lease, retry and resource rules.
 
 ## Deliberately manual installation
 

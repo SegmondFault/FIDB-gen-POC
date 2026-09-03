@@ -30,6 +30,41 @@ study's top ten: 10 libraries × 37 routes × 6 treatments. The broader declared
 width remains visible in the linked coverage authority; unimplemented or
 inapplicable combinations are not silently counted as executable cells.
 
+## Time-aware block projection
+
+`performance/batch-planning.toml` projects this campaign into five nominal
+blocks capped at five estimated hours on `reference-host-94g-balanced`:
+
+| Block | Libraries | Nominal estimate | Executions | Android |
+| --- | --- | ---: | ---: | ---: |
+| 01 | SQLite + Readline | 4.77 h | 444 | 96 |
+| 02 | gettext/libintl + LZ4 | 4.58 h | 444 | 96 |
+| 03 | nghttp2 + OpenSSL Android gap | 4.13 h | 270 | 96 |
+| 04 | GMP + XZ | 4.65 h | 444 | 96 |
+| 05 | PCRE2 + Zstandard | 4.94 h | 444 | 96 |
+
+The central total is 23.08 hours. The deliberately broad ±40% planning range
+is 13.85–32.31 hours because only OpenSSL supplies direct machine evidence;
+the upper range is risk visibility, not a claim that every block will finish
+within five real hours. The packing ceiling applies to the central estimate.
+Each completed library should replace part of the source-size heuristic with
+observed duration evidence.
+
+Inspect or compare a performance profile without queueing work:
+
+```sh
+uv run fidb-poc plan-time-blocks --project-root .
+uv run fidb-poc plan-time-blocks --project-root . \
+  --performance-profile reference-host-112g-throughput
+```
+
+The projection recomputes from exact applicability, treatment-relative cost,
+library source size, measured cells/hour and worker scaling. Adding a compiler,
+route, treatment or artifact/replay multiplier therefore increases the work
+rather than inheriting a stale hand-entered ETA. Before materialization, freeze
+the block membership, selected profile and plan digest; a queued campaign must
+never repack itself as later evidence updates the draft projection.
+
 ## Inspecting the batch
 
 The preview command validates every dependency digest and reports source,
@@ -54,7 +89,8 @@ generalize fixed build adapters as required by the upstream project; do not put
 upstream commands in the batch TOML.  Re-run the preview after every recipe.
 
 When all nine libraries are recipe-ready, the next implementation step is a
-materializer that expands both segments into their 2,046 immutable new cells.
+materializer that expands both segments into their 2,046 immutable new cells
+and binds each cell to the reviewed five-block projection.
 Only after a disarmed preview and operator review should the resolved campaign
 be added to `plans/priority-queue.toml` and armed. This separation ensures that
 defining or editing a batch can never start an expensive run.
