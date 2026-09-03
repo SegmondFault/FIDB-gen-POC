@@ -111,6 +111,14 @@ export type CoordinatorSnapshot = {
   claimable: number;
   retry_wait?: number;
   operations?: Record<string, unknown>;
+  execution_block?: {
+    active: boolean;
+    batch_id: string | null;
+    admission_id: string | null;
+    last_schedule_admission_id: string | null;
+    counts?: CoordinatorCounts;
+    remaining?: number;
+  };
   last_event_id: number;
   batches: CoordinatorBatch[];
   jobs: CoordinatorJob[];
@@ -1112,11 +1120,12 @@ export type WidthBatch = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v10';
+  schema_version: 'fidb-authority-catalog/v11';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
   width_batches: WidthBatch[];
+  time_block_plan: TimeBlockPlan;
   width_compilations: WidthCompilation[];
   recipes: AuthorityRecipe[];
   native: {
@@ -1134,6 +1143,76 @@ export type FactoryAuthority = {
   factor_variants: AuthorityFactorVariant[];
   plans: AuthorityPlan[];
   sources: Record<string, string>;
+};
+
+export type TimeBlockWorkItem = {
+  batch_id: string;
+  batch_authority: string;
+  source_id: string;
+  label: string;
+  version: string;
+  rank: number;
+  executions: number;
+  android_executions: number;
+  weighted_cells: number;
+  source_lines: number;
+  complexity_factor: number;
+  estimated_hours: number;
+  planning_lower_hours: number;
+  planning_upper_hours: number;
+};
+
+export type TimeBlock = {
+  id: string;
+  position: number;
+  state: 'draft-disarmed';
+  estimated_hours: number;
+  planning_lower_hours: number;
+  planning_upper_hours: number;
+  expected_start_local: string;
+  expected_nominal_end_local: string;
+  executions: number;
+  android_executions: number;
+  items: TimeBlockWorkItem[];
+};
+
+export type TimeBlockPlan = {
+  schema_version: 'fidb-time-block-plan/v1';
+  id: string;
+  label: string;
+  state: 'draft-disarmed';
+  language_id: string;
+  authority_path: string;
+  plan_digest: string;
+  performance_profile: PerformanceProfile;
+  reference: {
+    evidence_path: string;
+    case_id: string;
+    workers: number;
+    cells_per_wall_hour: number;
+    worker_scaling_exponent: number;
+    estimated_cells_per_wall_hour: number;
+  };
+  policy: {
+    target_block_hours: number;
+    max_block_hours: number;
+    uncertainty_fraction: number;
+    packing: string;
+    refresh: string;
+    freeze: string;
+  };
+  summary: {
+    campaign_batches: number;
+    libraries: number;
+    blocks: number;
+    executions: number;
+    android_executions: number;
+    estimated_hours: number;
+    planning_lower_hours: number;
+    planning_upper_hours: number;
+  };
+  blocks: TimeBlock[];
+  source_digests: Record<string, string>;
 };
 
 export type PlanDraftResult = {

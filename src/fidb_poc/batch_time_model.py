@@ -107,11 +107,20 @@ def compile_time_block_plan(
     model_path: str | Path = DEFAULT_MODEL_PATH,
     *,
     performance_profile: str | None = None,
-    schedule_start: str = "01:00",
+    schedule_start: str | None = None,
 ) -> dict[str, object]:
     """Compile the current authorities into a dynamic, still-disarmed block plan."""
 
     root = Path(project_root).expanduser().resolve()
+    schedule_path = root / "plans/priority-queue.toml"
+    if schedule_start is None:
+        schedule_document = tomllib.loads(schedule_path.read_text(encoding="utf-8"))
+        schedule_table = schedule_document.get("schedule", {})
+        if not isinstance(schedule_table, dict):
+            raise ValueError("queue schedule must be a table")
+        schedule_start = _text(schedule_table.get("start"), "schedule.start")
+    if re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", schedule_start) is None:
+        raise ValueError("batch time model schedule start must use HH:MM")
     model_relative, path = _project_path(root, model_path, "authority path")
     raw = tomllib.loads(path.read_text(encoding="utf-8"))
     if set(raw) != _TOP_FIELDS:
@@ -316,6 +325,7 @@ def compile_time_block_plan(
         "width_batches_sha256": hashlib.sha256(
             b"".join((root / relative).read_bytes() for relative, _ in compiled_batches)
         ).hexdigest(),
+        "schedule_sha256": hashlib.sha256(schedule_path.read_bytes()).hexdigest(),
     }
     body = {
         "schema_version": TIME_BLOCK_PLAN_SCHEMA,

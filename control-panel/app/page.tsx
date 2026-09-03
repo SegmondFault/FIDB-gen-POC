@@ -294,8 +294,18 @@ export default function Home() {
       note: `${study.authority_path} · ${defaultPreset?.metrics.build_cells.toLocaleString() ?? '—'} default build cells`,
     };
   });
+  const plannedHoursByBatch = new Map<string, number>();
+  for (const block of factory.authority?.time_block_plan.blocks ?? []) {
+    for (const item of block.items) {
+      plannedHoursByBatch.set(
+        item.batch_id,
+        (plannedHoursByBatch.get(item.batch_id) ?? 0) + item.estimated_hours,
+      );
+    }
+  }
   const widthBatchRows: BatchRow[] = (factory.authority?.width_batches ?? []).map((batch: WidthBatch) => {
     const ready = batch.readiness.recipe_ready_libraries;
+    const estimatedHours = plannedHoursByBatch.get(batch.id);
     return {
       id: batch.id,
       name: batch.name,
@@ -304,7 +314,7 @@ export default function Home() {
       percent: Math.round((ready / batch.summary.libraries) * 100),
       worker: '—',
       route: `${batch.summary.route_profiles} routes × ${batch.summary.executable_treatments} treatments`,
-      eta: '—',
+      eta: estimatedHours === undefined ? '—' : `≈${estimatedHours.toFixed(1)}h`,
       tier: 'W+',
       note: `${batch.authority_path} · ${batch.summary.total_executions.toLocaleString()} exact executions · disarmed`,
     };
@@ -635,7 +645,7 @@ type FactoryApiState = ReturnType<typeof useFactoryApi>;
 function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
-  if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} />;
+  if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Evidence') return <EvidenceView snapshot={factory.snapshot} />;
   if (view === 'Automation') return <AutomationView factory={factory} />;
@@ -1608,7 +1618,32 @@ function AttemptTimingRow({ attempt, now }: { attempt: CoordinatorAttempt; now: 
   return <div><span className={`timing-result ${attempt.state}`}>{attempt.attempt_number > 1 ? `retry ${attempt.attempt_number}` : attempt.state}</span><p><strong>{attempt.job_id.slice(0, 12)}</strong><small>{attempt.worker_id} · {formatStartedAt(attempt.started_at)}{attempt.queue_wait_duration_ns !== undefined && attempt.queue_wait_duration_ns !== null ? ` · waited ${formatDurationNs(attempt.queue_wait_duration_ns)}` : ''}</small></p><b>{formatDurationNs(elapsedNs(attempt.started_at, now, attempt.ended_at))}</b></div>;
 }
 
-function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live }: { onNewBatch: () => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; live: boolean }) {
+function TimeBlockPlanPanel({ factory }: { factory: FactoryApiState }) {
+  const plan = factory.authority?.time_block_plan;
+  if (!plan) return null;
+  const schedule = factory.preflight?.policy.schedule;
+  const start = typeof schedule?.start === 'string' ? schedule.start : plan.blocks[0]?.expected_start_local ?? '01:00';
+  const stop = typeof schedule?.stop_claiming === 'string' ? schedule.stop_claiming : '05:30';
+  const finishStarted = schedule?.finish_started_batch === true;
+  const active = factory.snapshot?.execution_block;
+  return <section className="panel time-block-panel">
+    <div className="panel-header"><div><p className="panel-kicker">TIME-AWARE WIDTH CAMPAIGN</p><h3>{plan.label}</h3><small>{plan.authority_path} · recomputed from pinned width, treatment and performance evidence</small></div><span className="authority-badge">DRAFT · DISARMED</span></div>
+    <div className="time-block-summary">
+      <article><span>NOMINAL WALL TIME</span><strong>{plan.summary.estimated_hours.toFixed(1)} h</strong><small>{plan.summary.planning_lower_hours.toFixed(1)}–{plan.summary.planning_upper_hours.toFixed(1)} h planning range</small></article>
+      <article><span>BLOCKS</span><strong>{plan.summary.blocks}</strong><small>target {plan.policy.target_block_hours.toFixed(1)} h · hard planning ceiling {plan.policy.max_block_hours.toFixed(0)} h</small></article>
+      <article><span>EXACT WIDTH</span><strong>{plan.summary.executions.toLocaleString()}</strong><small>{plan.summary.android_executions.toLocaleString()} Android executions included</small></article>
+      <article><span>MEASURED BASIS</span><strong>{plan.reference.estimated_cells_per_wall_hour.toFixed(1)} cells/h</strong><small>{plan.performance_profile.label} · {plan.reference.case_id}</small></article>
+    </div>
+    <div className="time-block-schedule"><div><span>AUTOMATIC ADMISSION</span><strong>{start}–{stop} · Europe/Luxembourg</strong><small>At most one ordered block starts per window. {finishStarted ? 'A started block drains completely after the window closes.' : 'Finish-started policy is not active.'}</small></div><div><span>CURRENT ADMISSION</span><strong>{active?.active ? active.batch_id : 'No block active'}</strong><small>{active?.active ? `${active.remaining ?? '—'} jobs remain · ${active.admission_id}` : 'Queue remains disarmed until explicit review'}</small></div><div><span>MANUAL TIMER BYPASS</span><code>fidb-poc queue start-block --project-root .</code><small>Requires an armed queue; admits one block but executes nothing itself.</small></div></div>
+    <div className="time-block-ledger">
+      <header><span>Block / nominal window</span><span>Libraries</span><span>Width</span><span>Estimate / range</span><span>State</span></header>
+      {plan.blocks.map(block => <article key={block.id}><div><strong>#{String(block.position).padStart(2, '0')} · {start} → {block.expected_nominal_end_local}</strong><small>{block.id}</small></div><div><strong>{block.items.map(item => item.label).join(' + ')}</strong><small>{block.items.map(item => `${item.source_id}@${item.version}`).join(' · ')}</small></div><div><strong>{block.executions.toLocaleString()} executions</strong><small>{block.android_executions.toLocaleString()} Android · exact applicability</small></div><div><strong>{block.estimated_hours.toFixed(2)} h</strong><small>{block.planning_lower_hours.toFixed(2)}–{block.planning_upper_hours.toFixed(2)} h · ±{Math.round(plan.policy.uncertainty_fraction * 100)}%</small></div><span className="evidence-badge cold">{block.state.replaceAll('-', ' ')}</span></article>)}
+    </div>
+    <footer className="time-block-note"><strong>Dynamic draft, stable execution.</strong><span>Factor, compiler, route, treatment, source-size or performance-profile changes automatically update this projection. Materialization must freeze the block membership and plan digest first, so an armed campaign can never reshape itself silently.</span><code>{plan.plan_digest}</code></footer>
+  </section>;
+}
+
+function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live, factory }: { onNewBatch: () => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; live: boolean; factory: FactoryApiState }) {
   const batches = batchOrder.map(id => rows.find(batch => batch.id === id)).filter((batch): batch is BatchRow => Boolean(batch));
   const batchStatusCounts = (status: BatchRow['status']) => batches.filter(batch => batch.status === status).length;
   const moveBatch = (id: string, direction: -1 | 1) => setBatchOrder(current => {
@@ -1622,6 +1657,7 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live }: { on
   });
   return <div className="view-stack">
     <ViewIntro kicker="BATCH OPERATIONS" title="Priority queue and execution ledger" copy={live ? 'Live order and state come from the synchronized plans/priority-queue.toml ledger. Edit and review TOML to change priority; the viewer never silently mutates queue intent.' : 'Preview order only. The CLI authority is plans/priority-queue.toml; connect the local API to read the durable execution ledger.'} action={<button className="primary-action" onClick={onNewBatch}>Open matrix draft</button>} />
+    <TimeBlockPlanPanel factory={factory} />
     <section className="panel data-panel">
       <div className="filterbar"><button className="filter active">All <span>{batches.length}</span></button><button className="filter">Defined <span>{batchStatusCounts('Defined')}</span></button><button className="filter">Running <span>{batchStatusCounts('Running')}</span></button><button className="filter">Blocked <span>{batchStatusCounts('Blocked')}</span></button><button className="filter">Queued <span>{batchStatusCounts('Queued')}</span></button><button className="filter">Complete <span>{batchStatusCounts('Complete')}</span></button><div className="filter-search">⌕&nbsp; Filter batches</div></div>
       <div className="batch-table">
@@ -1955,7 +1991,7 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
   const schedulePolicy = preflight?.policy.schedule;
   const startWindow = typeof schedulePolicy?.start === 'string' ? schedulePolicy.start : '—';
   const stopClaiming = typeof schedulePolicy?.stop_claiming === 'string' ? schedulePolicy.stop_claiming : '—';
-  const hardCutoff = typeof schedulePolicy?.hard_cutoff === 'string' ? schedulePolicy.hard_cutoff : '—';
+  const finishStarted = schedulePolicy?.finish_started_batch === true;
   const control = snapshot?.paused
     ? { label: 'Resume claims', action: factory.resume }
     : snapshot?.armed
@@ -1968,14 +2004,15 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
       <section className="panel automation-form">
         <div className="panel-header"><div><p className="panel-kicker">TOML AUTHORITY</p><h3>plans/priority-queue.toml</h3></div><span className={`plan-state ${snapshot?.armed && !snapshot.paused ? 'ready' : ''}`}>{snapshot?.status.toUpperCase() ?? 'NOT SYNCED'}</span></div>
         <div className="policy-body">
-          <label className="field-label">Enforced overnight policy</label><div className="mode-grid"><button className="selected" disabled><span>Night</span><small>all configured days</small></button><button disabled><span>{preflight?.schedule.claims_allowed ? 'Claims open' : 'Claims closed'}</span><small>{preflight?.schedule.reason ?? 'not evaluated'}</small></button><button disabled><span>Morning</span><small>hard cutoff {hardCutoff}</small></button><button disabled><span>{preflight?.resources.passed ? 'Host ready' : 'Host gated'}</span><small>measured before claim</small></button></div>
+          <label className="field-label">Enforced overnight policy</label><div className="mode-grid"><button className="selected" disabled><span>Night</span><small>all configured days</small></button><button disabled><span>{preflight?.schedule.claims_allowed ? 'Claims open' : 'Claims closed'}</span><small>{preflight?.schedule.reason ?? 'not evaluated'}</small></button><button disabled><span>Block drain</span><small>{finishStarted ? `finish after ${stopClaiming}` : 'hard cutoff policy'}</small></button><button disabled><span>{preflight?.resources.passed ? 'Host ready' : 'Host gated'}</span><small>measured before claim</small></button></div>
           <div className="section-divider" />
-          <div className="two-fields"><label><span>Start claiming · TOML</span><input type="text" value={startWindow} readOnly /></label><label><span>Stop claiming / hard cutoff · TOML</span><input type="text" value={`${stopClaiming} / ${hardCutoff}`} readOnly /></label></div>
+          <div className="two-fields"><label><span>Start claiming · TOML</span><input type="text" value={startWindow} readOnly /></label><label><span>Stop admitting / active block · TOML</span><input type="text" value={`${stopClaiming} / ${finishStarted ? 'finish' : 'cut off'}`} readOnly /></label></div>
           <div className="two-fields"><label><span>Maximum active leases · TOML</span><input type="number" value={snapshot?.max_workers ?? 2} readOnly /></label><label><span>Retry ceiling · TOML</span><input type="number" value={snapshot?.max_attempts ?? 3} readOnly /></label></div>
           <div className="toggle-list">
             <label><div><strong>Library-local pool only</strong><small>Native, explicitly local source-library, and pinned archive-extraction routes. QEMU and malware are excluded.</small></div><input type="checkbox" checked readOnly /></label>
             <label><div><strong>Exponential retry backoff</strong><small>{snapshot?.retry_backoff_seconds ?? '—'}s initial · {snapshot?.retry_backoff_max_seconds ?? '—'}s maximum.</small></div><input type="checkbox" checked={Boolean(snapshot?.retry_backoff_seconds)} readOnly /></label>
-            <label><div><strong>Durable notification outbox</strong><small>Failures, retry, drain, resource block and cutoff events are retained locally; HTTPS delivery is optional.</small></div><input type="checkbox" checked readOnly /></label>
+            <label><div><strong>Finish an admitted block</strong><small>05:30 stops the next admission; workers and resource gates continue until the current block drains.</small></div><input type="checkbox" checked={finishStarted} readOnly /></label>
+            <label><div><strong>Durable notification outbox</strong><small>Failures, retry, drain and resource-block events are retained locally; HTTPS delivery is optional.</small></div><input type="checkbox" checked readOnly /></label>
           </div>
         </div>
       </section>
