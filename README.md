@@ -389,8 +389,7 @@ After an operator deliberately changes `armed` to `true`, one or more workers
 can consume it continuously:
 
 ```sh
-uv run fidb-poc queue run --pool library-local --worker-id reference-host-1
-uv run fidb-poc queue run --pool library-local --worker-id reference-host-2
+systemctl --user enable --now fidb-library-local-workers.target
 ```
 
 The active queue is deliberately library-only: native cells, source-library
@@ -398,11 +397,11 @@ cells with the explicit `local` executor, and typed `archive-library` cells
 which only extract objects from a pinned static archive. Archive cells have no
 source executor choice and record `archive-local` routing. The typed
 `library-local` worker pool fails closed against QEMU and malware cells even if
-a later queue edit places one before an eligible library cell. `max_workers = 2` is the initial active
-lease cap for this 16-core/32-thread host; raise it only after the ledger has
-representative build and Ghidra memory/timing evidence. A worker may invoke
-four compiler jobs and one Ghidra JVM, so hardware-thread count is not a safe
-worker count.
+a later queue edit places one before an eligible library cell. The queue binds
+the measured `reference-host-94g-balanced` profile; its twenty service processes,
+four build jobs per cell and 4 GiB JVM ceiling are one reviewed policy rather
+than independent knobs. Queue loading fails if `max_workers` drifts from that
+profile.
 
 TOML remains the source of requested coverage and priority. The ignored local
 SQLite ledger at `var/fidb-coordinator/ledger.sqlite3` records only runtime

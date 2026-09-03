@@ -1,10 +1,26 @@
 [Unit]
-Description=FIDB local library worker pool (four declared instances)
+Description=FIDB local library worker pool (twenty qualified instances)
 Documentation=file:///home/fidb-operator/Projects/circl/FIDB-POC-unified/operations/README.md
 Wants=fidb-library-local-worker@1.service
 Wants=fidb-library-local-worker@2.service
 Wants=fidb-library-local-worker@3.service
 Wants=fidb-library-local-worker@4.service
+Wants=fidb-library-local-worker@5.service
+Wants=fidb-library-local-worker@6.service
+Wants=fidb-library-local-worker@7.service
+Wants=fidb-library-local-worker@8.service
+Wants=fidb-library-local-worker@9.service
+Wants=fidb-library-local-worker@10.service
+Wants=fidb-library-local-worker@11.service
+Wants=fidb-library-local-worker@12.service
+Wants=fidb-library-local-worker@13.service
+Wants=fidb-library-local-worker@14.service
+Wants=fidb-library-local-worker@15.service
+Wants=fidb-library-local-worker@16.service
+Wants=fidb-library-local-worker@17.service
+Wants=fidb-library-local-worker@18.service
+Wants=fidb-library-local-worker@19.service
+Wants=fidb-library-local-worker@20.service
 
 [Install]
 WantedBy=default.target

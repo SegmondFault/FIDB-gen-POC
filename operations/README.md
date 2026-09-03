@@ -14,13 +14,14 @@ user does not have lingering enabled, so a final logout can stop them. This
 dated record does not turn the repository files into an installer and does not
 imply that later checkout changes reached the installed copies.
 
-The host has 16 physical cores/32 hardware threads, but each reviewed build
-adapter may use four make jobs and every worker embeds a Ghidra JVM.  The
-current coordinator cap in `plans/priority-queue.toml` is two active leases.
-The four units named by `fidb-library-local-workers.target` are a declared
-expansion ceiling, not permission to run four jobs: with the current cap, any
-additional service instances remain idle.  Do not interpret 32 hardware
-threads as 32 safe end-to-end workers.
+The host has 16 physical cores/32 hardware threads, and each reviewed build
+adapter may use four make jobs while every worker embeds one reusable Ghidra
+JVM. The queue binds `reference-host-94g-balanced`: twenty active leases, four build
+jobs per cell and a 4 GiB JVM heap ceiling. The twenty units named by
+`fidb-library-local-workers.target` supply exactly that measured concurrency;
+the queue rejects a `max_workers` value which drifts from the named profile.
+Do not interpret 32 hardware threads as permission to exceed the qualified
+twenty-worker envelope.
 
 ## Before activation
 
@@ -40,9 +41,11 @@ cd /home/fidb-operator/Projects/circl/FIDB-POC-unified
 
 Confirm that `/opt/ghidra/support/analyzeHeadless`, Java 21, the native route
 tools, required pinned source/toolchain archives or network access, and ample
-disk space are available.  The example environment limits each JVM to a 4 GiB
-heap and four visible processors.  The service adds a 6 GiB soft memory limit,
-an 8 GiB hard limit, and a four-CPU quota.
+disk space are available. The example environment limits each JVM to a 4 GiB
+heap and four visible processors. The queue worker validates that inherited
+heap policy against its named performance profile and applies the profile's
+four nested build jobs. The service adds a 6 GiB soft memory limit, an 8 GiB
+hard limit, and a four-CPU quota.
 
 The units deliberately do not name `network.target` or
 `network-online.target`: those are system-manager targets and do not exist in
@@ -167,25 +170,20 @@ When execution is deliberately approved, change `armed = false` to
 `armed = true`, synchronize the queue again, and verify the resolved cells
 before starting any worker.
 
-Start and observe two workers first:
+After the queue is explicitly armed, start the complete qualified pool:
 
 ```sh
-systemctl --user enable --now fidb-library-local-worker@1.service fidb-library-local-worker@2.service
-systemctl --user status fidb-library-local-worker@1.service fidb-library-local-worker@2.service
+systemctl --user enable --now fidb-library-local-workers.target
+systemctl --user status fidb-library-local-workers.target
 journalctl --user -u 'fidb-library-local-worker@*.service' -f
 ```
 
-For the two-cell commissioning queue, the foreground zlib canary consumes the
-first cell.  Expect worker 1 or worker 2 to claim the remaining bzip2 cell and
-the other instance to remain idle; do not replay zlib merely to make both
-workers busy.  Enable the two instances explicitly.  Do not enable the
-four-instance target during this smoke.
-
-Only after representative library cells complete without sustained memory,
-swap, or storage pressure should a four-worker configuration be reviewed.  A
-reviewed expansion requires changing `max_workers` from 2 to 4 in the TOML,
-synchronizing and inspecting the queue again, and then explicitly enabling the
-four-instance target:
+The twenty-worker selection is grounded in the fixed-route OpenSSL measurement
+at 94 GiB. It peaked at 50.52 GB aggregate worker RSS, leaving substantial
+headroom on this host's current 93.93 GiB allocation. The resource gate still
+checks available memory, disk, load and temperature before each new claim.
+Twenty-nine workers remain an explicit burst experiment, not the default for
+previously unmeasured libraries.
 
 Use the control panel's **Timing** workspace or inspect
 `http://127.0.0.1:8765/api/v1/timings` on `reference-host`.  Require multiple
@@ -193,10 +191,6 @@ completed worker-monotonic samples for compile and Ghidra/FID stages, and review
 their CPU and peak-RSS metrics, failures, retries, queue-wait basis and workflow
 p50/p90 before raising the cap.  Coordinator-interrupted spans are diagnostic
 evidence only and must not be treated as capacity samples.
-
-```sh
-systemctl --user enable --now fidb-library-local-workers.target
-```
 
 Pause the coordinator before maintenance so no new jobs are claimed, wait for
 active leases to drain, then stop the target and any individually enabled
