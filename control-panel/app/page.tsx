@@ -684,7 +684,7 @@ function WidthStudyPanel({ study, compilation, capabilities }: { study: WidthStu
   const buildWidth = axisValues.releases * axisValues.routes * axisValues.build_profiles * axisValues.artifact_shapes;
   const activePreset = study.presets.find(preset => study.axes.every(axis => preset[axis.id] === axisValues[axis.id]));
   const activeRequirements = study.toolchain_requirements.slice(0, axisValues.routes);
-  const capabilityById = new Map((capabilities?.toolchains ?? []).map(row => [row.id, row]));
+  const capabilityById = new Map((capabilities?.toolchains.entries ?? []).map(row => [row.id, row]));
   const requirementState = (requirement: WidthStudy['toolchain_requirements'][number]) => {
     if (requirement.route_state === 'pinned-source' && requirement.source_capable_toolchain_ids.some(id => capabilityById.get(id)?.state === 'verified-cached')) return 'pinned-cache-ready';
     return requirement.route_state;
@@ -1161,6 +1161,115 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
     note: 'Catalogued authority · not present in the active priority queue',
     rows: orderedRecipeOptions.filter(recipe => recipe.batch === 'unassigned'),
   }] : []);
+  const completedCellIds = new Set([
+    ...builtCellIds,
+    ...(factory.snapshot?.jobs ?? [])
+      .filter(job => job.state === 'complete')
+      .map(job => job.base_cell),
+  ]);
+  const cellRoute = (cellId: string) => cellId.split(':').at(-2) ?? 'unknown-route';
+  const cellTreatment = (cellId: string) => cellId.split(':').at(-1) ?? 'unknown-treatment';
+  const frozenWidthByRecipe = new Map<string, WidthCompilation[]>();
+  for (const compilation of authority?.width_compilations ?? []) {
+    if (!compilation.freeze) continue;
+    const recipeName = compilation.fixed_recipe.split('@', 1)[0];
+    frozenWidthByRecipe.set(recipeName, [
+      ...(frozenWidthByRecipe.get(recipeName) ?? []),
+      compilation,
+    ]);
+  }
+  const builtWidthRows = recipeOptions.map(recipe => {
+    const cellIds = [...completedCellIds].filter(cellId => (
+      cellMatchesRecipe(cellId, recipe.name, recipe.version)
+    ));
+    const frozen = frozenWidthByRecipe.get(recipe.name) ?? [];
+    const measuredRuns = (factory.laneInventory?.width_runs ?? [])
+      .filter(run => (
+        run.state === 'measured-complete'
+        && run.fixed_recipe?.split('@', 1)[0] === recipe.name
+      ))
+      .sort((left, right) => right.completed_executions - left.completed_executions);
+    const widestMeasuredRun = measuredRuns[0];
+    const measuredCompilation = authority?.width_compilations.find(compilation => (
+      compilation.id === widestMeasuredRun?.width_id
+    ));
+    const measuredTreatmentCount = new Set(
+      (measuredCompilation?.build_profiles ?? [])
+        .map(profile => profile.execution_treatment)
+        .filter((value): value is string => Boolean(value)),
+    ).size;
+    const measuredPairCount = widestMeasuredRun?.successful_route_profile_pairs ?? 0;
+    const measuredRouteCount = measuredTreatmentCount > 0
+      && measuredPairCount % measuredTreatmentCount === 0
+      ? measuredPairCount / measuredTreatmentCount
+      : 0;
+    const frozenCells = frozen.reduce((total, compilation) => (
+      total + (compilation.freeze?.completed_executions ?? 0)
+    ), 0);
+    const frozenRoutes = new Set(frozen.flatMap(compilation => (
+      compilation.routes.map(route => route.id)
+    )));
+    const frozenTreatments = new Set(frozen.flatMap(compilation => (
+      compilation.build_profiles
+        .map(profile => profile.execution_treatment)
+        .filter((value): value is string => Boolean(value))
+    )));
+    return {
+      recipe,
+      cells: Math.max(cellIds.length, frozenCells, measuredPairCount),
+      routes: Math.max(new Set(cellIds.map(cellRoute)).size, frozenRoutes.size, measuredRouteCount),
+      treatments: Math.max(
+        new Set(cellIds.map(cellTreatment)).size,
+        frozenTreatments.size,
+        measuredTreatmentCount,
+      ),
+      sources: [
+        cellIds.length ? 'ledger / sealed inventory' : null,
+        frozen.length ? `${frozen.length} frozen width run${frozen.length === 1 ? '' : 's'}` : null,
+        widestMeasuredRun
+          ? `${widestMeasuredRun.completed_executions} measured executions · ${measuredPairCount} unique route/profile pairs`
+          : null,
+      ].filter((value): value is string => Boolean(value)),
+    };
+  }).filter(row => row.cells > 0)
+    .sort((left, right) => right.cells - left.cells || left.recipe.name.localeCompare(right.recipe.name));
+  const scheduledBatchRows = batchOrder.map((batchId, index) => {
+    const batch = factory.snapshot?.batches.find(row => row.id === batchId);
+    const batchJobs = (factory.snapshot?.jobs ?? []).filter(job => job.batch_id === batchId);
+    const recipeNamesFromJobs = recipeOptions
+      .filter(recipe => batchJobs.some(job => cellMatchesRecipe(job.base_cell, recipe.name, recipe.version)))
+      .map(recipe => recipe.name);
+    const recipeNames = recipeNamesFromJobs.length
+      ? recipeNamesFromJobs
+      : recipeOptions.filter(recipe => recipe.batch === batchId).map(recipe => recipe.name);
+    const stateCounts = batchJobs.reduce<Record<string, number>>((counts, job) => ({
+      ...counts,
+      [job.state]: (counts[job.state] ?? 0) + 1,
+    }), {});
+    const queued = (stateCounts.queued ?? 0) + (stateCounts.leased ?? 0) + (stateCounts.running ?? 0);
+    return {
+      id: batchId,
+      position: batch?.position ?? index + 1,
+      label: batch?.name ?? rows.find(row => row.id === batchId)?.name ?? batchId,
+      planPath: batch?.plan_path ?? rows.find(row => row.id === batchId)?.note ?? 'plans/priority-queue.toml',
+      recipeNames,
+      jobs: batchJobs.length,
+      complete: stateCounts.complete ?? 0,
+      failed: (stateCounts.failed ?? 0) + (stateCounts.blocked ?? 0),
+      queued,
+    };
+  }).sort((left, right) => left.position - right.position);
+  const nextScheduledBatchId = scheduledBatchRows.find(row => row.queued > 0)?.id ?? null;
+  const unscheduledRecipes = recipeOptions.filter(recipe => (
+    recipe.planEligible && recipe.batch === 'unassigned'
+  ));
+  const missingRecipeFamilies = (widthStudy?.families ?? []).filter(family => (
+    family.recipe_state !== 'reviewed-recipe' || family.recipe_ids.length === 0
+  ));
+  const missingToolchainRequirements = (widthStudy?.toolchain_requirements ?? []).filter(requirement => (
+    requirement.native_route_ids.length === 0
+    && requirement.source_capable_toolchain_ids.length === 0
+  ));
   const combinationsForRecipe = (recipeId: string) => {
     const selectedRows = allFactorOptions.filter(option => (factorSelections[recipeId] || []).includes(option.id));
     const dimensions = selectedRows.reduce<Record<string, typeof selectedRows>>((groups, option) => {
@@ -1324,9 +1433,63 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
 
       <LanguageScopeSelector languages={coverageUniverse?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
-      {selectedLanguage && <section className="panel language-matrix-contract"><div><span className={`language-state ${selectedLanguage.state}`}>{selectedLanguage.state.replaceAll('-', ' ')}</span><p className="panel-kicker">{selectedLanguage.label.toUpperCase()} DENOMINATOR</p><h3>{selectedLanguage.scope}</h3><p>{selectedLanguage.denominator}</p><small>{selectedLanguage.caveat}</small></div><div><span>TREATMENT AXES</span><div>{selectedLanguage.treatment_axes.map(axis => <em key={axis}>{axis}</em>)}</div></div></section>}
+      <section className="panel operational-matrix-index" aria-label="Operational matrix build order">
+        <header>
+          <div><p className="panel-kicker">OPERATIONAL MATRIX INDEX</p><h3>Evidence first, then the exact queue, then actionable gaps</h3><small>This ordering is derived from sealed inventory, the synchronized TOML queue, reviewed recipes and target/toolchain authority. A library may appear in built evidence and in a scheduled batch when its requested width is only partly complete.</small></div>
+          <div className="operational-matrix-counts"><span><b>{builtWidthRows.length}</b> built subjects</span><span><b>{scheduledBatchRows.length}</b> ordered batches</span><span><b>{unscheduledRecipes.length}</b> buildable / unscheduled</span><span><b>{missingRecipeFamilies.length}</b> recipe gaps</span><span><b>{missingToolchainRequirements.length}</b> toolchain gaps</span></div>
+        </header>
 
-      {widthStudy && <WidthStudyPanel key={widthStudy.id} study={widthStudy} compilation={widthCompilation} capabilities={factory.capabilities} />}
+        <section className="operational-matrix-band built-band">
+          <div className="operational-band-title"><b>01</b><span><strong>Already built</strong><small>Sealed evidence, with achieved width—not declared possibility.</small></span><em>{builtWidthRows.reduce((total, row) => total + row.cells, 0).toLocaleString()} cells</em></div>
+          <div className="operational-built-list">
+            {builtWidthRows.map(row => <article key={row.recipe.id}><span className="operational-state built">BUILT</span><p><strong>{row.recipe.name} {row.recipe.version}</strong><small>{row.sources.join(' · ')}</small></p><dl><div><dt>CELLS</dt><dd>{row.cells}</dd></div><div><dt>ROUTES</dt><dd>{row.routes}</dd></div><div><dt>TREATMENTS</dt><dd>{row.treatments}</dd></div></dl></article>)}
+            {!builtWidthRows.length && <div className="operational-empty"><strong>No sealed builds detected</strong><small>Declared routes and loose artifacts are deliberately not counted as built.</small></div>}
+          </div>
+        </section>
+
+        <section className="operational-matrix-band scheduled-band">
+          <div className="operational-band-title"><b>02</b><span><strong>Scheduled next</strong><small>Exact execution order from plans/priority-queue.toml and its synchronized ledger.</small></span><em>{scheduledBatchRows.reduce((total, row) => total + row.jobs, 0).toLocaleString()} cells</em></div>
+          <ol className="operational-batch-list">
+            {scheduledBatchRows.map(row => {
+              const complete = row.jobs > 0 && row.complete === row.jobs;
+              const state = complete ? 'complete' : row.id === nextScheduledBatchId ? 'next' : row.failed > 0 && row.queued === 0 ? 'blocked' : 'scheduled';
+              return <li className={state} key={row.id}><b>{String(row.position).padStart(2, '0')}</b><span className={`operational-state ${state}`}>{state === 'next' ? 'NEXT' : state.toUpperCase()}</span><p><strong>{row.label}</strong><small>{row.recipeNames.join(' + ') || row.planPath}</small></p><div><span><b>{row.complete}</b> complete</span><span><b>{row.queued}</b> remaining</span>{row.failed > 0 && <span className="failed"><b>{row.failed}</b> failed / blocked</span>}</div></li>;
+            })}
+            {!scheduledBatchRows.length && <li className="empty"><p><strong>No active queue batches</strong><small>Add reviewed plan paths to the TOML queue; draft selections are not scheduled work.</small></p></li>}
+          </ol>
+        </section>
+
+        <div className="operational-gap-grid">
+          <section className="operational-matrix-band unscheduled-band">
+            <div className="operational-band-title"><b>03</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
+            <div className="operational-compact-list">
+              {unscheduledRecipes.map(recipe => <article key={recipe.id}><span className="operational-state ready">READY</span><p><strong>{recipe.name} {recipe.version}</strong><small>{recipe.adapter} · {recipe.coverage}</small></p></article>)}
+              {!unscheduledRecipes.length && <div className="operational-empty"><strong>No reviewed recipe is stranded</strong><small>Every currently buildable top-ten subject is represented in the active queue.</small></div>}
+            </div>
+          </section>
+
+          <section className="operational-matrix-band recipe-gap-band">
+            <div className="operational-band-title"><b>04</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
+            <div className="operational-compact-list">
+              {missingRecipeFamilies.map(family => <article key={family.id}><span className="operational-state gap">RECIPE GAP</span><p><strong>#{family.rank} {family.label}</strong><small>{family.source_state} · {family.selection_evidence}</small></p></article>)}
+              {!missingRecipeFamilies.length && <div className="operational-empty"><strong>Top-ten recipe set complete</strong><small>The broader C-family census is not promoted into this executable matrix until its family rows and source evidence are registered.</small></div>}
+            </div>
+          </section>
+
+          <section className="operational-matrix-band toolchain-gap-band">
+            <div className="operational-band-title"><b>05</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
+            <div className="operational-compact-list">
+              {missingToolchainRequirements.map(requirement => <article key={requirement.id}><span className="operational-state gap">{requirement.route_state.replaceAll('-', ' ')}</span><p><strong>{requirement.target_label} · {requirement.compiler_label}</strong><small>#{requirement.order} · {requirement.acquisition} · {requirement.worker_class}</small></p></article>)}
+              {!missingToolchainRequirements.length && <div className="operational-empty"><strong>No toolchain gaps in the selected width</strong><small>Every demanded target/compiler pair has an executable route authority.</small></div>}
+            </div>
+          </section>
+        </div>
+        <footer><span>BUILT</span> means sealed output. <span>SCHEDULED</span> means present in the active TOML queue. <span>READY</span> means buildable but not queued. Gaps remain visible until their recipe or toolchain authority exists.</footer>
+      </section>
+
+      {selectedLanguage && <details className="panel matrix-detail-section"><summary><span><b>Scope and denominator</b><small>{selectedLanguage.label} family boundary, caveat and treatment-axis vocabulary</small></span><em>EXPAND</em></summary><section className="language-matrix-contract"><div><span className={`language-state ${selectedLanguage.state}`}>{selectedLanguage.state.replaceAll('-', ' ')}</span><p className="panel-kicker">{selectedLanguage.label.toUpperCase()} DENOMINATOR</p><h3>{selectedLanguage.scope}</h3><p>{selectedLanguage.denominator}</p><small>{selectedLanguage.caveat}</small></div><div><span>TREATMENT AXES</span><div>{selectedLanguage.treatment_axes.map(axis => <em key={axis}>{axis}</em>)}</div></div></section></details>}
+
+      {widthStudy && <details className="panel matrix-detail-section"><summary><span><b>Width laboratory and applicability map</b><small>{widthStudy.family_count} ranked families · {widthCompilation?.summary.executable_route_profile_pairs ?? 0} executable route/profile pairs · scaling controls</small></span><em>EXPAND</em></summary><WidthStudyPanel key={widthStudy.id} study={widthStudy} compilation={widthCompilation} capabilities={factory.capabilities} /></details>}
 
       {selectedLanguageId !== 'c' && <div className="inline-warning language-registration-warning">The {selectedLanguage?.label} matrix is defined conceptually, but no screened family denominator, finite profile pack or executable recipe rows are registered. The empty rows below are deliberate—not zero coverage.</div>}
 
@@ -1335,7 +1498,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
         <span className="authority-badge">{selectedLanguageId === 'c' ? 'PRIORITY AUTHORITY' : 'DESIGN SCOPE'}</span>
       </section>
 
-      <div className="matrix-workspace">
+      <details className="panel matrix-detail-section crosspoint-drilldown"><summary><span><b>Full variable crosspoint and plan-draft editor</b><small>Cell-level families × routes × compilers × treatments × admission. Open only when you need to inspect or draft exact cells.</small></span><em>EXPAND</em></summary><div className="matrix-workspace">
         <section className="panel crosspoint-matrix-panel">
           <div className="matrix-main-header"><div><p className="panel-kicker">{selectedLanguage?.label.toUpperCase() ?? 'C'} COVERAGE MATRIX</p><h2>Families × hard routes × language toolchains × treatments × admission</h2><small>Raw possibility, registered capability, planned work, built evidence and admitted coverage remain separate layers.</small></div><div className="matrix-live-summary"><span>RAW TREATMENT SPACE <strong>{rawNamedTreatmentSpace ? rawNamedTreatmentSpace.toLocaleString() : '—'}</strong><small>{selectedLanguageId === 'c' ? 'named C tuples / target / release; not a run plan' : 'finite profile pack not qualified'}</small></span><span>CANDIDATE PROFILES <strong>{languageProfiles.length || '—'}</strong><small>language-scoped · assumptions labelled</small></span><span>TARGET CONTEXTS <strong>{authority?.targets.length ?? '—'}</strong><small>{executableTargetCount} have a registered source route</small></span><span>DRAFT EXECUTIONS <strong>{desiredCellCount}</strong><small>TOML intent</small></span><span>QUEUEABLE <strong>{plannedCells}</strong><small>{selectedLanguageId === 'c' ? `${knownFactorCount} known factors · ${measuredFactorCount} observed` : 'no executable language pack'}</small></span><span>BUILT EVIDENCE <strong>{selectedLanguageId === 'c' ? builtCellIds.size : '—'}</strong><small>sealed cells · not yet coverage</small></span><span>ADMITTED COVERAGE <strong>—</strong><small>admission ledger not projected</small></span></div></div>
           <div className="matrix-toolbar">
@@ -1433,7 +1596,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
 
           {tomlOpen && <section className="panel toml-panel"><div className="panel-header"><div><p className="panel-kicker">VALIDATED REQUEST DRAFT</p><h3>Equivalent TOML</h3></div><span className={draftIsCurrent ? 'plan-state ready' : 'plan-state'}>{draftIsCurrent ? 'RESOLVED' : 'DRAFT'}</span></div><pre>{toml}</pre><div className="draft-controls"><label><span>DRAFT NAME</span><input value={draftName} onChange={event => { setDraftName(event.target.value); setDraftMessage('Draft changed; resolve it again before saving.'); }} spellCheck={false} /></label><div><button onClick={() => void resolveDraft()} disabled={factory.busyAction !== null || !plannedRecipeRows.length}>{factory.busyAction === 'plan-draft-resolve' ? 'Resolving…' : 'Resolve against authority'}</button><button className="primary" onClick={() => void saveDraft()} disabled={factory.busyAction !== null || !draftIsCurrent}>{factory.busyAction === 'plan-draft-save' ? 'Saving…' : savedAuthorityDraft || savedDraftSha256 ? 'Save validated update' : 'Save validated draft'}</button></div><p className={draftIsCurrent ? 'valid' : ''}>{draftResult && !draftIsCurrent ? 'Draft changed; resolve it again before saving.' : draftMessage}</p></div><div className="toml-footer"><span>Only catalog identities are accepted; saving does not enqueue or execute the plan</span><code>{savedAuthorityDraft?.path ?? 'plans/drafts/&lt;name&gt;.toml'}</code></div></section>}
         </aside>
-      </div>
+      </div></details>
     </div>
   );
 }

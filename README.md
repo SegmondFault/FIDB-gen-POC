@@ -248,8 +248,9 @@ uv run fidb-poc run-width --project-root . --canary \
 The second command is still a preview because it omits `--execute`. Profile IDs
 are written into run/benchmark evidence. `-Xmx` is a JVM maximum, not an eager
 per-worker reservation; portable profiles are starting points until benchmarked
-on their named host class. The control panel exposes the same authority under
-**Timing**. See [`performance/README.md`](performance/README.md) for selection,
+on their named host class. The control panel exposes this authority under
+**Performance** and keeps measured execution evidence under **Timing**. See
+[`performance/README.md`](performance/README.md) for selection,
 hardware interpretation and qualification.
 
 An optional staged-backend benchmark can separate compiler work from a bounded
@@ -507,6 +508,17 @@ tools and checksum-cached registry inputs without confusing an
 archive-only libc candidate with a source-build compiler. The matrix therefore
 does not maintain a second hard-coded build catalog. Its `built` markers use
 the sealed inventory from that projection.
+
+The **Matrix** page is operationally ordered: sealed builds and their achieved
+route/treatment width; active queue batches in exact TOML order; reviewed
+recipes that are buildable but unscheduled; ranked families missing recipes;
+and target/compiler requirements missing executable toolchains. Declared
+possibility is never presented as built or scheduled. The denominator study,
+applicability laboratory and full cell crosspoint are collapsed drill-downs by
+default so the queue and its actionable gaps remain readable at a glance. The
+control panel requests a bounded, compact snapshot projection for display;
+the complete attempts, timing payloads and job authorities remain in the
+SQLite ledger and evidence files.
 
 The panel can submit its generated TOML to a resolve-only endpoint, then save a
 successfully resolved request under `plans/drafts/`. Updates use the previous
