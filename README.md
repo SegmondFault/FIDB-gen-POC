@@ -195,11 +195,22 @@ uv run fidb-poc compile-width-batch batch-020 --project-root .
 uv run fidb-poc compile-width-batch batch-020-android-gap --project-root .
 ```
 
-Neither segment is in `plans/priority-queue.toml`. Both segments are now
-source-, recipe-, and toolchain-ready, but remain unmaterialized and explicitly
-disarmed. The next implementation boundary is the reviewed batch materializer,
-not permission to start work. See [`batches/README.md`](batches/README.md) for
-the drift guards and activation boundary.
+Both segments are source-, recipe-, and toolchain-ready. The reviewed
+materializer has frozen them into five plans under
+[`plans/materialized/c-top10-nonapple-width-v2/`](plans/materialized/c-top10-nonapple-width-v2/)
+and registered the exact 2,046-cell order in `plans/priority-queue.toml`. The
+queue remains explicitly disarmed. Preview or verify that materialization
+without synchronizing a ledger or starting work:
+
+```sh
+uv run fidb-poc materialize-batches --project-root .
+uv run fidb-poc materialize-batches --project-root . --check
+```
+
+`--write` is the deliberate regeneration boundary after an authority change.
+It atomically replaces the generated plans and manifest but still cannot arm,
+synchronize, claim, or execute work. See [`batches/README.md`](batches/README.md)
+for the drift guards, review process, and rollback boundary.
 
 ### Portable performance profiles
 
@@ -362,6 +373,10 @@ authority. Its `batch_order` is the priority list: workers claim the first
 runnable cell in the first batch, skip blocked coverage, and continue down the
 list. Each batch points to a reviewed `fidb-plan/v1` document. The queue ships
 with `armed = false`, so inspection and synchronization cannot start a build.
+The next five entries are the materialized top-ten width blocks. Each pins both
+the generated plan bytes and a portable digest of its ordered resolved cell
+identities; queue synchronization fails before its transaction if either has
+drifted.
 
 Synchronize and inspect its durable state without executing anything:
 

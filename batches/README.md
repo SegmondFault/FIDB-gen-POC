@@ -3,8 +3,8 @@
 This directory binds an already reviewed source selection to an exact compiled
 width.  A batch file is planning authority, not permission to execute.  It is
 kept separate from `plans/priority-queue.toml` until every selected source has a
-matching reviewed native recipe and an operator deliberately materializes and
-arms the work.
+matching reviewed native recipe and an operator deliberately materializes the
+work. Materialization and arming remain separate decisions.
 
 The next top-ten campaign has two disarmed segments so completed OpenSSL work
 is not repeated:
@@ -79,21 +79,48 @@ uv run fidb-poc compile-width-batch batch-020-android-gap --project-root .
 The control panel reads both projections. All nine new libraries now have
 source-matching reviewed recipes, so `batch-020` reports 9/9 recipe-ready and
 1,998 materializable executions. The Android gap reports 48 more. Both remain
-unmaterialized and separately disarmed by policy.
+independently disarmed as input authorities; their combined output is now the
+five-block materialized campaign below.
 
-## Making it runnable later
+## Materialized campaign
 
 The nine command-free `fidb-recipe/v3` recipes and their fixed adapters are now
 present and compilation-qualified at the target-family and oldest-generation
 edges described in `recipes/README.md`. Their name, version, URL, and SHA-256
 match the source pack; no upstream commands live in the batch TOML.
 
-The next implementation step is a materializer that expands both segments into
-their 2,046 immutable new cells and binds each cell to the reviewed five-block
-projection.
-Only after a disarmed preview and operator review should the resolved campaign
-be added to `plans/priority-queue.toml` and armed. This separation ensures that
-defining or editing a batch can never start an expensive run.
+`fidb-poc materialize-batches` expands the two authorities through a
+`width-native` plan matrix, preserving all 37 compiler-generation routes rather
+than collapsing them to the 17 ordinary worker route templates. It checks that
+every route is qualified, the applicability set is rectangular and executable,
+every native recipe matches its source pin, every cell resolves unblocked, and
+the total is exactly 2,046. The generated plans and manifest live under
+`plans/materialized/c-top10-nonapple-width-v2/`.
+
+```sh
+# Read-only proposed materialization
+uv run fidb-poc materialize-batches --project-root .
+
+# Verify checked-in plans and manifest byte-for-byte
+uv run fidb-poc materialize-batches --project-root . --check
+
+# Deliberately regenerate after reviewing changed authorities
+uv run fidb-poc materialize-batches --project-root . --write
+```
+
+The five plans are registered in `plans/priority-queue.toml` with a plan-file
+SHA-256, exact execution count, and portable ordered-cell digest. File drift is
+rejected while loading the queue; route, treatment, recipe, cardinality or
+blocked-cell drift is rejected before coordinator synchronization mutates its
+ledger. The queue remains `armed = false`, so materialization and synchronization
+still cannot start an expensive run.
+
+To reverse the experiment, leave the queue disarmed, remove the five block IDs
+and `[[batch]]` rows from `plans/priority-queue.toml`, and remove the generated
+campaign directory. If a disarmed queue was already synchronized, synchronizing
+the reduced queue deactivates those jobs while retaining the append-only audit
+history; it does not delete evidence. No source, toolchain cache, completed
+OpenSSL artifact, or lane database depends on the generated plans.
 
 Dependency SHA-256 values, the portable route-profile digest, and expected
 cardinalities are intentional drift guards. Host-local qualification is reported

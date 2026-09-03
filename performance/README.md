@@ -146,3 +146,9 @@ whose central estimates are all at or below five hours and reports a separate
 compiled authority, including all 480 Android executions. Any width or profile
 change refreshes the draft; materialization must bind its digest so a live
 queue cannot change shape silently.
+
+The reviewed projection is now frozen as
+`plans/materialized/c-top10-nonapple-width-v2/manifest.toml`. Its five plans
+retain the central 23.075-hour estimate and 13.845–32.305-hour planning range.
+`fidb-poc materialize-batches --check` recomputes the authorities and verifies
+the checked-in output; it performs no queue synchronization or execution.
