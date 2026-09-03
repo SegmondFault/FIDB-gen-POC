@@ -62,7 +62,12 @@ input, check connectivity explicitly (for example with
 run uses already reviewed public source URLs. Managed acquisition has bounded
 timeouts, checksum verification, retry and a content-addressed cache. The queue
 worker also enforces the TOML admission schedule, durable retry backoff and
-claim-time memory/disk/load/temperature gates.
+claim-time memory/disk/load/temperature gates. Authority-resolution failures
+are normalized by stage and exception type; five terminal failures in the same
+class and active batch pause the coordinator and append a
+`queue.circuit-opened` event. Already leased cells retain their normal fences,
+but no further cells are claimed until an operator has inspected the evidence
+and explicitly resumes the queue.
 
 The reviewed schedule admits at most one ordered batch between 01:00 and 05:30
 Europe/Luxembourg. With `finish_started_batch = true`, 05:30 closes admission

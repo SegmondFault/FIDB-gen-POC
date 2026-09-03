@@ -26,6 +26,8 @@ max_attempts = 3
 # per failed attempt and is capped, so a broken cell cannot spin overnight.
 retry_backoff_seconds = 30
 retry_backoff_max_seconds = 900
+# Pause new claims after five terminal failures in the same authority class.
+authority_failure_threshold = 5
 
 [schedule]
 enabled = true

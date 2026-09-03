@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from fidb_poc.cell_runner import CellRunResult
+from fidb_poc.cell_runner import CellResolutionError, CellRunResult
 from fidb_poc.coordinator import Coordinator
 from fidb_poc.queue_cli import (
     QueueCliError,
@@ -817,6 +817,48 @@ finish_started_batch = true
         self.assertEqual(snapshot["stage_attempts"][0]["state"], "interrupted")
         self.assertEqual(timings["sample_counts"]["completed_workflows"], 0)
         self.assertIsNone(timings["throughput"])
+
+    def test_worker_classifies_authority_resolution_failures_for_breaker(self) -> None:
+        queue = self._queue(armed=True)
+
+        def reject_authority(_cell, _variants, _root, _attempt, **kwargs):
+            kwargs["progress"](
+                ProgressEvent(
+                    stage=CellStage.AUTHORITY_RESOLUTION,
+                    status=ProgressStatus.STARTED,
+                    message="resolving queued identity",
+                    duration_ns=None,
+                    metrics={},
+                    started_at="2026-09-03T12:00:00Z",
+                    finished_at=None,
+                )
+            )
+            kwargs["progress"](
+                ProgressEvent(
+                    stage=CellStage.AUTHORITY_RESOLUTION,
+                    status=ProgressStatus.FAILED,
+                    message="queued identity differs from reviewed authority",
+                    duration_ns=1,
+                    metrics={},
+                    started_at="2026-09-03T12:00:00Z",
+                    finished_at="2026-09-03T12:00:00.000001Z",
+                )
+            )
+            raise CellResolutionError("queued identity differs from authority")
+
+        arguments = self._arguments("run", queue)
+        arguments.extend(("--worker-id", "test-worker", "--once"))
+        with patch("fidb_poc.queue_cli.run_cell", side_effect=reject_authority):
+            status = main(arguments)
+
+        self.assertEqual(status, 1)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            failed = coordinator.snapshot()["jobs"][0]
+        self.assertEqual(failed["state"], "failed")
+        self.assertEqual(
+            failed["failure_class"],
+            "authority-resolution:CellResolutionError",
+        )
 
     def test_library_local_pool_is_passed_to_atomic_claim(self) -> None:
         queue = self._mixed_pool_queue()

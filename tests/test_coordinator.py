@@ -563,6 +563,77 @@ matrices = ["tier0-uclibc-powerpc"]
                 with self.assertRaisesRegex(ValueError, message):
                     QueueConfig.load(path, self.project_root)
 
+    def test_authority_failure_circuit_breaker_pauses_new_claims(self):
+        path = self.write_queue(
+            queue_extra="authority_failure_threshold = 3",
+        )
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(path), now=10)
+            failed_jobs = []
+            for position in range(3):
+                lease = coordinator.claim(f"worker-{position}", now=20 + position)
+                self.assertIsNotNone(lease)
+                failed_jobs.append(lease["job_id"])
+                coordinator.fail(
+                    lease["job_id"],
+                    lease["lease_token"],
+                    lease["lease_generation"],
+                    "queued authority no longer matches",
+                    retryable=False,
+                    failure_class="authority-resolution:CellResolutionError",
+                    now=20.5 + position,
+                )
+                self.assertEqual(coordinator.status()["paused"], position == 2)
+
+            self.assertIsNone(coordinator.claim("worker-blocked", now=30))
+            self.assertEqual(
+                coordinator.get_job(failed_jobs[-1])["failure_class"],
+                "authority-resolution:CellResolutionError",
+            )
+            circuit_events = [
+                event
+                for event in coordinator.events()
+                if event["event_type"] == "queue.circuit-opened"
+            ]
+
+        self.assertEqual(len(circuit_events), 1)
+        self.assertEqual(circuit_events[0]["payload"]["failure_count"], 3)
+        self.assertEqual(circuit_events[0]["payload"]["threshold"], 3)
+
+    def test_authority_failure_circuit_breaker_groups_normalized_classes(self):
+        path = self.write_queue(
+            queue_extra="authority_failure_threshold = 3",
+        )
+        classes = (
+            "authority-resolution:CellResolutionError",
+            "authority-resolution:CellResolutionError",
+            "authority-resolution:ValueError",
+        )
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(path), now=10)
+            for position, failure_class in enumerate(classes):
+                lease = coordinator.claim(f"worker-{position}", now=20 + position)
+                coordinator.fail(
+                    lease["job_id"],
+                    lease["lease_token"],
+                    lease["lease_generation"],
+                    "authority failure with cell-specific details",
+                    retryable=False,
+                    failure_class=failure_class,
+                    now=20.5 + position,
+                )
+
+            self.assertFalse(coordinator.status()["paused"])
+            self.assertIsNotNone(coordinator.claim("worker-next", now=30))
+
+    def test_authority_failure_threshold_configuration_fails_closed(self):
+        path = self.write_queue(
+            batches=(("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),),
+            queue_extra="authority_failure_threshold = -1",
+        )
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            QueueConfig.load(path, self.project_root)
+
     def test_stale_worker_is_fenced_after_requeue(self):
         path = self.write_queue(
             batches=(("batch-mirai", "mirai baseline", "plans/mirai-baseline.toml"),),
@@ -676,10 +747,12 @@ matrices = ["tier0-uclibc-powerpc"]
             {
                 "retry_backoff_seconds",
                 "retry_backoff_max_seconds",
+                "authority_failure_threshold",
                 "operations_json",
             }.issubset(state_columns)
         )
         self.assertIn("eligible_at", job_columns)
+        self.assertIn("failure_class", job_columns)
         self.assertIn("jobs_claim_eligibility", job_indexes)
 
     def test_retry_eligibility_migrates_a_pre_backoff_job_table(self):

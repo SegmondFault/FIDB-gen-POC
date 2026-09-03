@@ -424,7 +424,11 @@ Retryable failures are returned to the ordered queue with a durable exponential
 backoff. `retry_backoff_seconds` supplies the initial delay and
 `retry_backoff_max_seconds` caps it; the next eligible time is persisted in the
 ledger, so restarting or adding workers cannot turn a failing cell into a tight
-retry loop.
+retry loop. Terminal failures are assigned a normalized stage/error class.
+`authority_failure_threshold` opens a durable circuit breaker after that many
+failures in one authority-resolution class within the active batch. The breaker
+pauses new claims without cancelling leases already in flight; an operator must
+inspect the appended `queue.circuit-opened` event before resuming.
 
 The same queue document owns the unattended operating envelope. `[schedule]`
 defines an IANA-timezone admission window. The reviewed default is

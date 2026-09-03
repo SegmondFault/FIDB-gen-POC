@@ -734,8 +734,12 @@ def _execute_claim(
     generation = int(lease["lease_generation"])
     job_id = str(lease["job_id"])
     heartbeat = _Heartbeat(database, root, lease, lease_seconds)
+    failed_stage: str | None = None
 
     def progress(event: ProgressEvent) -> None:
+        nonlocal failed_stage
+        if event.status == ProgressStatus.FAILED:
+            failed_stage = event.stage.value
         heartbeat.check()
         coordinator.record_stage(
             job_id,
@@ -826,6 +830,11 @@ def _execute_claim(
         raise
     except Exception as error:
         retryable = not isinstance(error, (CellResolutionError, ValueError))
+        failure_class = (
+            f"{failed_stage}:{type(error).__name__}"
+            if failed_stage is not None
+            else f"worker:{type(error).__name__}"
+        )
         try:
             failed = coordinator.fail(
                 job_id,
@@ -833,6 +842,7 @@ def _execute_claim(
                 generation,
                 f"{type(error).__name__}: {error}",
                 retryable=retryable,
+                failure_class=failure_class,
             )
             _notify(
                 notifications,

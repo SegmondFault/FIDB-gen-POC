@@ -86,6 +86,7 @@ class QueueConfig:
     max_attempts: int
     retry_backoff_seconds: int
     retry_backoff_max_seconds: int
+    authority_failure_threshold: int
     operations: OperationsPolicy
     batches: tuple[BatchConfig, ...]
     project_root: Path
@@ -140,6 +141,7 @@ class QueueConfig:
                 "performance_profile",
                 "retry_backoff_seconds",
                 "retry_backoff_max_seconds",
+                "authority_failure_threshold",
             },
             "queue table",
         )
@@ -188,6 +190,10 @@ class QueueConfig:
                 "queue retry_backoff_max_seconds must be at least "
                 "retry_backoff_seconds"
             )
+        authority_failure_threshold = _nonnegative_integer(
+            queue.get("authority_failure_threshold", 0),
+            "queue authority_failure_threshold",
+        )
         operations = load_operations_policy(document, root)
 
         raw_batches = document.get("batch")
@@ -289,6 +295,7 @@ class QueueConfig:
             max_attempts=max_attempts,
             retry_backoff_seconds=retry_backoff_seconds,
             retry_backoff_max_seconds=retry_backoff_max_seconds,
+            authority_failure_threshold=authority_failure_threshold,
             operations=operations,
             batches=ordered_batches,
             project_root=root,
@@ -569,6 +576,8 @@ class Coordinator:
                     CHECK (retry_backoff_seconds >= 0),
                 retry_backoff_max_seconds INTEGER NOT NULL DEFAULT 0
                     CHECK (retry_backoff_max_seconds >= retry_backoff_seconds),
+                authority_failure_threshold INTEGER NOT NULL DEFAULT 0
+                    CHECK (authority_failure_threshold >= 0),
                 operations_json TEXT NOT NULL DEFAULT '{}',
                 active_batch_id TEXT,
                 active_admission_id TEXT,
@@ -630,6 +639,7 @@ class Coordinator:
                 current_stage TEXT,
                 result_json TEXT,
                 error TEXT,
+                failure_class TEXT,
                 active INTEGER NOT NULL CHECK (active IN (0, 1)),
                 sync_generation INTEGER NOT NULL,
                 created_at TEXT NOT NULL,
@@ -802,6 +812,12 @@ class Coordinator:
                 "ALTER TABLE coordinator_state ADD COLUMN retry_backoff_max_seconds "
                 "INTEGER NOT NULL DEFAULT 0 CHECK (retry_backoff_max_seconds >= 0)"
             )
+        if "authority_failure_threshold" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state "
+                "ADD COLUMN authority_failure_threshold INTEGER NOT NULL DEFAULT 0 "
+                "CHECK (authority_failure_threshold >= 0)"
+            )
         if "operations_json" not in state_columns:
             self._connection.execute(
                 "ALTER TABLE coordinator_state ADD COLUMN operations_json "
@@ -827,6 +843,8 @@ class Coordinator:
             self._connection.execute(
                 "ALTER TABLE jobs ADD COLUMN eligible_at REAL NOT NULL DEFAULT 0"
             )
+        if "failure_class" not in job_columns:
+            self._connection.execute("ALTER TABLE jobs ADD COLUMN failure_class TEXT")
         # Create this only after migrating older ledgers which predate the
         # eligibility column; placing it in the initial script would make the
         # migration fail before ALTER TABLE can run.
@@ -851,11 +869,12 @@ class Coordinator:
                 singleton, config_name, config_path, armed, paused,
                 max_workers, performance_json, poll_seconds, lease_seconds, max_attempts,
                 retry_backoff_seconds, retry_backoff_max_seconds,
+                authority_failure_threshold,
                 operations_json, active_batch_id, active_admission_id,
                 last_schedule_admission_id,
                 sync_generation, synced_at
             ) VALUES (
-                1, NULL, NULL, 0, 0, 4, NULL, 5, 3600, 3, 0, 0, '{}',
+                1, NULL, NULL, 0, 0, 4, NULL, 5, 3600, 3, 0, 0, 0, '{}',
                 NULL, NULL, NULL, 0, NULL
             )
             """)
@@ -1028,6 +1047,7 @@ class Coordinator:
                     max_workers = ?, performance_json = ?, poll_seconds = ?,
                     lease_seconds = ?, max_attempts = ?,
                     retry_backoff_seconds = ?, retry_backoff_max_seconds = ?,
+                    authority_failure_threshold = ?,
                     operations_json = ?,
                     sync_generation = ?, synced_at = ?
                 WHERE singleton = 1
@@ -1047,6 +1067,7 @@ class Coordinator:
                     queue_config.max_attempts,
                     queue_config.retry_backoff_seconds,
                     queue_config.retry_backoff_max_seconds,
+                    queue_config.authority_failure_threshold,
                     _canonical_json(queue_config.operations.document()),
                     generation,
                     self._timestamp(timestamp),
@@ -1695,7 +1716,8 @@ class Coordinator:
                 UPDATE jobs
                 SET state = 'leased', attempt_count = ?, lease_token = ?,
                     lease_generation = ?, leased_by = ?, lease_expires_at = ?,
-                    current_stage = NULL, error = NULL, eligible_at = 0, updated_at = ?
+                    current_stage = NULL, error = NULL, failure_class = NULL,
+                    eligible_at = 0, updated_at = ?
                 WHERE job_id = ? AND state = 'queued' AND active = 1
                 """,
                 (
@@ -2258,6 +2280,7 @@ class Coordinator:
         error: str,
         *,
         retryable: bool = True,
+        failure_class: str | None = None,
         now: float | datetime | None = None,
     ) -> dict[str, object]:
         """Record a fenced failure and requeue while attempts remain."""
@@ -2265,6 +2288,9 @@ class Coordinator:
         failure = _text(error, "failure error")
         if not isinstance(retryable, bool):
             raise ValueError("retryable must be a boolean")
+        classified = (
+            _text(failure_class, "failure class") if failure_class is not None else None
+        )
         timestamp = self._now(now)
         with self._transaction():
             row = self._require_lease_locked(
@@ -2292,12 +2318,13 @@ class Coordinator:
                 UPDATE jobs
                 SET state = ?, lease_token = NULL, leased_by = NULL,
                     lease_expires_at = NULL, current_stage = NULL,
-                    error = ?, eligible_at = ?, updated_at = ?
+                    error = ?, failure_class = ?, eligible_at = ?, updated_at = ?
                 WHERE job_id = ? AND lease_token = ? AND lease_generation = ?
                 """,
                 (
                     next_state,
                     failure,
+                    classified,
                     eligible_at,
                     self._timestamp(timestamp),
                     job_id,
@@ -2330,11 +2357,47 @@ class Coordinator:
                     "lease_generation": lease_generation,
                     "attempt_count": int(row["attempt_count"]),
                     "retryable": retryable,
+                    "failure_class": classified,
                     "retry_cap_reached": retryable and not should_retry,
                     "retry_delay_seconds": retry_delay,
                     "eligible_at": eligible_at if should_retry else None,
                 },
             )
+            if (
+                next_state == "failed"
+                and classified is not None
+                and classified.startswith("authority-resolution:")
+                and int(state["authority_failure_threshold"]) > 0
+            ):
+                repeated = self._connection.execute(
+                    """
+                    SELECT COUNT(*) AS count FROM jobs
+                    JOIN batches ON batches.batch_id = jobs.batch_id
+                    WHERE jobs.active = 1 AND batches.active = 1
+                      AND jobs.batch_id = ? AND jobs.state = 'failed'
+                      AND jobs.failure_class = ?
+                    """,
+                    (row["batch_id"], classified),
+                ).fetchone()
+                failure_count = int(repeated["count"])
+                threshold = int(state["authority_failure_threshold"])
+                if failure_count >= threshold and not bool(state["paused"]):
+                    self._connection.execute(
+                        "UPDATE coordinator_state SET paused = 1 WHERE singleton = 1"
+                    )
+                    self._event_locked(
+                        "queue.circuit-opened",
+                        now=timestamp,
+                        actor="coordinator",
+                        batch_id=str(row["batch_id"]),
+                        plan_digest=str(row["plan_digest"]),
+                        payload={
+                            "reason": "repeated authority-resolution failure",
+                            "failure_class": classified,
+                            "failure_count": failure_count,
+                            "threshold": threshold,
+                        },
+                    )
         return self.get_job(job_id)
 
     def fail_job(
@@ -2345,6 +2408,7 @@ class Coordinator:
         error: str,
         *,
         retryable: bool = True,
+        failure_class: str | None = None,
         now: float | datetime | None = None,
     ) -> dict[str, object]:
         """Alias for :meth:`fail`."""
@@ -2355,6 +2419,7 @@ class Coordinator:
             lease_generation,
             error,
             retryable=retryable,
+            failure_class=failure_class,
             now=now,
         )
 
@@ -2426,6 +2491,7 @@ class Coordinator:
                 else None
             ),
             "error": row["error"],
+            "failure_class": row["failure_class"],
             "active": bool(row["active"]),
             "queue_row": json.loads(row["queue_row_json"]),
         }
@@ -2724,6 +2790,7 @@ class Coordinator:
             "max_attempts": int(state["max_attempts"]),
             "retry_backoff_seconds": int(state["retry_backoff_seconds"]),
             "retry_backoff_max_seconds": int(state["retry_backoff_max_seconds"]),
+            "authority_failure_threshold": int(state["authority_failure_threshold"]),
             "operations": json.loads(state["operations_json"]),
             "execution_block": self.execution_block(),
             "sync_generation": int(state["sync_generation"]),
