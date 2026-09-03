@@ -98,6 +98,7 @@ export type CoordinatorSnapshot = {
   armed: boolean;
   paused: boolean;
   max_workers: number;
+  performance_profile?: PerformanceProfile | null;
   active_workers: number;
   available_worker_slots: number;
   poll_seconds: number;

@@ -542,7 +542,7 @@ export default function Home() {
             <article className="metric-card">
               <div className="metric-top"><span>WORKER SLOTS</span><b className="metric-symbol">⌘</b></div>
               <strong>{factory.snapshot?.active_workers ?? '—'} <small>/ {factory.snapshot?.max_workers ?? '—'}</small></strong>
-              <p><i className={factory.snapshot?.active_workers ? 'healthy' : 'warning'}>●</i> local library lease cap</p>
+              <p><i className={factory.snapshot?.active_workers ? 'healthy' : 'warning'}>●</i> {factory.snapshot?.performance_profile?.id ?? 'unbound queue policy'}</p>
             </article>
             <article className="metric-card">
               <div className="metric-top"><span>SUCCESS RATE</span><b className="metric-symbol">⌁</b></div>
@@ -627,7 +627,7 @@ export default function Home() {
                 <p className="panel-kicker">ACTION REQUIRED</p>
                 <h3>{factory.connection === 'live' ? (factory.capabilities?.analysis.ready ? 'Library pool is visible' : 'Worker environment needs configuration') : 'Coordinator API unavailable'}</h3>
                 <p>{factory.connection === 'live' ? `${pool?.ready_now ?? 0} jobs are ready immediately; ${pool?.runnable_with_pinned_acquisition ?? 0} can run after pinned acquisition. ${factory.capabilities?.analysis.ghidra.state === 'installed-unconfigured' ? 'Ghidra is installed but GHIDRA_HEADLESS is not configured for the API/worker service.' : ''}` : (factory.error ?? 'Start the loopback API service to read the durable ledger and toolchain inventory.')}</p>
-                <div className="alert-tags"><span>library-local</span><span>max {factory.snapshot?.max_workers ?? 2}</span><span>no QEMU</span></div>
+                <div className="alert-tags"><span>library-local</span><span>max {factory.snapshot?.max_workers ?? 2}</span><span>{factory.snapshot?.performance_profile?.id ?? 'profile unbound'}</span><span>no QEMU</span></div>
               </div>
               <button className="amber-button" onClick={() => setActiveView('Automation')}>Review automation</button>
             </article>
@@ -2026,7 +2026,8 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
           <label className="field-label">Enforced overnight policy</label><div className="mode-grid"><button className="selected" disabled><span>Night</span><small>all configured days</small></button><button disabled><span>{preflight?.schedule.claims_allowed ? 'Claims open' : 'Claims closed'}</span><small>{preflight?.schedule.reason ?? 'not evaluated'}</small></button><button disabled><span>Block drain</span><small>{finishStarted ? `finish after ${stopClaiming}` : 'hard cutoff policy'}</small></button><button disabled><span>{preflight?.resources.passed ? 'Host ready' : 'Host gated'}</span><small>measured before claim</small></button></div>
           <div className="section-divider" />
           <div className="two-fields"><label><span>Start claiming · TOML</span><input type="text" value={startWindow} readOnly /></label><label><span>Stop admitting / active block · TOML</span><input type="text" value={`${stopClaiming} / ${finishStarted ? 'finish' : 'cut off'}`} readOnly /></label></div>
-          <div className="two-fields"><label><span>Maximum active leases · TOML</span><input type="number" value={snapshot?.max_workers ?? 2} readOnly /></label><label><span>Retry ceiling · TOML</span><input type="number" value={snapshot?.max_attempts ?? 3} readOnly /></label></div>
+          <div className="two-fields"><label><span>Performance profile · TOML</span><input type="text" value={snapshot?.performance_profile?.id ?? 'unbound'} readOnly /></label><label><span>Maximum active leases · TOML</span><input type="number" value={snapshot?.max_workers ?? 2} readOnly /></label></div>
+          <div className="two-fields"><label><span>Build jobs per cell · profile</span><input type="number" value={snapshot?.performance_profile?.settings.build_jobs_per_cell ?? 4} readOnly /></label><label><span>JVM heap ceiling · MiB</span><input type="number" value={snapshot?.performance_profile?.settings.ghidra_heap_mib ?? 4096} readOnly /></label></div>
           <div className="toggle-list">
             <label><div><strong>Library-local pool only</strong><small>Native, explicitly local source-library, and pinned archive-extraction routes. QEMU and malware are excluded.</small></div><input type="checkbox" checked readOnly /></label>
             <label><div><strong>Exponential retry backoff</strong><small>{snapshot?.retry_backoff_seconds ?? '—'}s initial · {snapshot?.retry_backoff_max_seconds ?? '—'}s maximum.</small></div><input type="checkbox" checked={Boolean(snapshot?.retry_backoff_seconds)} readOnly /></label>
