@@ -1218,11 +1218,14 @@ export type MachineValidationRun = {
   validation_id?: string;
   run_id: string | null;
   mode: 'canary' | 'full' | null;
-  state: 'not-started' | 'queued' | 'preparing-index' | 'running' | 'complete' | 'failed' | 'invalid';
+  state: 'not-started' | 'queued' | 'preparing-index' | 'running' | 'pausing' | 'paused' | 'interrupted' | 'complete' | 'failed' | 'invalid';
   pid?: number | null;
   worker_pids?: number[];
   started_at?: string | null;
   finished_at?: string | null;
+  paused_at?: string | null;
+  resumed_at?: string | null;
+  resume_count?: number;
   expected_work_units?: number;
   complete_work_units: number;
   failed_work_units: number;
@@ -2251,6 +2254,24 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, [refreshValidation]);
 
+  const controlMachineValidation = useCallback(async (action: 'pause' | 'resume') => {
+    setBusyAction(`machine-validation-${action}`);
+    try {
+      await json<MachineValidationRun>(`machine-validation/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      await refreshValidation();
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : `Machine validation failed to ${action}`;
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [refreshValidation]);
+
   const importEcological = useCallback(async (
     file: File,
     metadata: {
@@ -2389,6 +2410,8 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     importEcological,
     runEcological,
     runMachineValidation,
+    pauseMachineValidation: () => controlMachineValidation('pause'),
+    resumeMachineValidation: () => controlMachineValidation('resume'),
     decideNoisyHash,
     planRetention: () => runRetention('plan'),
     applyRetention: (planDigest: string) => runRetention('apply', planDigest),

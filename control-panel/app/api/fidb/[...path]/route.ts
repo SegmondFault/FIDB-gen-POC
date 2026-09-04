@@ -28,6 +28,8 @@ const writeRoutes = new Set([
   'ecological-validation/import',
   'ecological-validation/run',
   'machine-validation/start',
+  'machine-validation/pause',
+  'machine-validation/resume',
   'noisy-hashes/decision',
   'retention/plan',
   'retention/apply',
