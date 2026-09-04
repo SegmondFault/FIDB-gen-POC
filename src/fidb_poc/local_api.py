@@ -39,6 +39,8 @@ from .hash_discrimination import compile_hash_discrimination
 from .machine_validation import compile_machine_validation
 from .machine_validation_runner import (
     canary_gate_status as machine_validation_canary_gate_status,
+    pause_validation as pause_machine_validation,
+    resume_validation as resume_machine_validation,
     runtime_status as machine_validation_runtime_status,
     start_validation as start_machine_validation,
 )
@@ -91,6 +93,8 @@ _POST_PATHS = {
     "/api/v1/ecological-validation/import",
     "/api/v1/ecological-validation/run",
     "/api/v1/machine-validation/start",
+    "/api/v1/machine-validation/pause",
+    "/api/v1/machine-validation/resume",
     "/api/v1/noisy-hashes/decision",
     "/api/v1/retention/plan",
     "/api/v1/retention/apply",
@@ -1019,6 +1023,32 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 raise ApiError(
                     HTTPStatus.CONFLICT,
                     "machine-validation-not-ready",
+                    str(error),
+                ) from error
+            self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
+            return
+        elif path == "/api/v1/machine-validation/pause":
+            self._only_fields(document, set())
+            try:
+                result = pause_machine_validation(
+                    self.api_server.config.project_root, actor="local-api"
+                )
+            except ValueError as error:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "machine-validation-not-active",
+                    str(error),
+                ) from error
+            self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
+            return
+        elif path == "/api/v1/machine-validation/resume":
+            self._only_fields(document, set())
+            try:
+                result = resume_machine_validation(self.api_server.config.project_root)
+            except ValueError as error:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "machine-validation-not-resumable",
                     str(error),
                 ) from error
             self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)

@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import signal
 import shutil
 import sqlite3
 import subprocess
@@ -34,6 +35,7 @@ UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
 REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 QUERY_COPY_POLICY = "debug-stripped-symbol-indexed"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
+PAUSE_REQUEST_NAME = "pause-request.json"
 
 
 def _now() -> str:
@@ -68,6 +70,80 @@ def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _result_documents(run_root: Path, mode: str) -> list[dict[str, object]]:
+    documents = []
+    for path in (run_root / "units").glob("*/result.json"):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if document.get("mode") == mode:
+            documents.append(document)
+    return documents
+
+
+def _result_counts(run_root: Path, mode: str) -> tuple[int, int]:
+    documents = _result_documents(run_root, mode)
+    return (
+        sum(row.get("state") == "complete" for row in documents),
+        sum(row.get("state") == "failed" for row in documents),
+    )
+
+
+def _validation_process_active(pid: object, run_id: str) -> bool:
+    """Reject stale PIDs and zombies without signalling an unrelated process."""
+    if type(pid) is not int or pid < 1:
+        return False
+    process = Path("/proc") / str(pid)
+    try:
+        fields = (process / "stat").read_text(encoding="utf-8").split()
+        command = (process / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", errors="replace")
+    except OSError:
+        return False
+    return (
+        len(fields) > 2 and fields[2] != "Z"
+        and "machine-validation" in command and run_id in command
+    )
+
+
+def _terminate_worker_groups(processes: list[subprocess.Popen[bytes]]) -> None:
+    """Stop validation sessions, including their Ghidra descendants."""
+    live = [process for process in processes if process.poll() is None]
+    for process in live:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 15
+    for process in live:
+        try:
+            process.wait(timeout=max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+
+
+def _archive_failed_result(result_path: Path) -> None:
+    """Retain concise failure evidence before an explicit resume retries a unit."""
+    if not result_path.is_file():
+        return
+    try:
+        document = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if document.get("state") == "complete":
+        return
+    attempts = result_path.parent / "attempts"
+    attempts.mkdir(parents=True, exist_ok=True)
+    attempt = 1
+    while (attempts / f"result-{attempt:03d}.json").exists():
+        attempt += 1
+    result_path.replace(attempts / f"result-{attempt:03d}.json")
 
 
 def load_runtime(project_root: str | Path, authority: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
@@ -595,8 +671,11 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
         unit = units[position]
         unit_root = run_root / "units" / f"{position:03d}-{unit['route_id']}-{unit['treatment_id']}"
         result_path = unit_root / "result.json"
-        if result_path.is_file() and json.loads(result_path.read_text(encoding="utf-8")).get("state") == "complete":
-            continue
+        if result_path.is_file():
+            previous = json.loads(result_path.read_text(encoding="utf-8"))
+            if previous.get("state") == "complete":
+                continue
+            _archive_failed_result(result_path)
         route = routes[str(unit["route_id"])]
         treatment = treatments[str(unit["treatment_id"])]
         folds = sorted(canary_folds[position]) if mode == "canary" else ["A", "B"]
@@ -829,13 +908,25 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
         if mode == "canary" else {int(unit["position"]) for unit in evidence["manifest"]["work_unit"]}
     )
     status_path = run_root / "status.json"
-    started = _now()
+    prior_status = {}
+    if status_path.is_file():
+        try:
+            prior_status = json.loads(status_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            prior_status = {}
+    started = str(prior_status.get("started_at") or _now())
+    attempt_started = _now()
+    resume_count = int(prior_status.get("resume_count", 0))
+    complete_count, failed_count = _result_counts(run_root, mode)
+    pause_request = run_root / PAUSE_REQUEST_NAME
     _atomic_json(current_path, {"run_id": run_id, "path": str(status_path.relative_to(root))})
     _atomic_json(status_path, {
         "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
         "run_id": run_id, "mode": mode, "state": "preparing-index", "pid": os.getpid(),
-        "started_at": started, "finished_at": None, "expected_work_units": len(positions),
-        "complete_work_units": 0, "failed_work_units": 0,
+        "started_at": started, "attempt_started_at": attempt_started,
+        "resume_count": resume_count, "finished_at": None,
+        "expected_work_units": len(positions),
+        "complete_work_units": complete_count, "failed_work_units": failed_count,
     })
     try:
         index = build_reference_index(root, evidence, output_root)
@@ -862,17 +953,44 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
                     start_new_session=True, close_fds=True,
                 )
             processes.append(process)
+        pause_requested = False
         while any(process.poll() is None for process in processes):
-            documents = [json.loads(path.read_text(encoding="utf-8")) for path in (run_root / "units").glob("*/result.json")]
+            documents = _result_documents(run_root, mode)
+            if pause_request.is_file():
+                pause_requested = True
+                _atomic_json(status_path, {
+                    "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
+                    "run_id": run_id, "mode": mode, "state": "pausing", "pid": os.getpid(),
+                    "worker_pids": [process.pid for process in processes], "started_at": started,
+                    "attempt_started_at": attempt_started, "resume_count": resume_count,
+                    "finished_at": None, "expected_work_units": len(positions),
+                    "complete_work_units": sum(row.get("state") == "complete" for row in documents),
+                    "failed_work_units": sum(row.get("state") == "failed" for row in documents),
+                })
+                _terminate_worker_groups(processes)
+                break
             _atomic_json(status_path, {
                 "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
                 "run_id": run_id, "mode": mode, "state": "running", "pid": os.getpid(),
                 "worker_pids": [process.pid for process in processes], "started_at": started,
+                "attempt_started_at": attempt_started, "resume_count": resume_count,
                 "finished_at": None, "expected_work_units": len(positions),
                 "complete_work_units": sum(row.get("state") == "complete" for row in documents),
                 "failed_work_units": sum(row.get("state") == "failed" for row in documents),
             })
             time.sleep(5)
+        if pause_requested:
+            complete_count, failed_count = _result_counts(run_root, mode)
+            paused = {
+                "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
+                "run_id": run_id, "mode": mode, "state": "paused", "pid": os.getpid(),
+                "worker_pids": [], "started_at": started, "attempt_started_at": attempt_started,
+                "resume_count": resume_count, "finished_at": None, "paused_at": _now(),
+                "expected_work_units": len(positions), "complete_work_units": complete_count,
+                "failed_work_units": failed_count,
+            }
+            _atomic_json(status_path, paused)
+            return paused
         minimum = int(runtime["canary" if mode == "canary" else "execution"]["minimum_distinct_hashes"])
         report = _aggregate(
             run_root,
@@ -890,6 +1008,7 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             "run_id": run_id, "mode": mode, "state": "complete" if report["state"] == "measured-complete" else "failed",
             "pid": os.getpid(), "worker_pids": [process.pid for process in processes],
             "started_at": started, "finished_at": _now(), "expected_work_units": len(positions),
+            "attempt_started_at": attempt_started, "resume_count": resume_count,
             "complete_work_units": report["metrics"]["complete_work_units"],
             "failed_work_units": report["metrics"]["failed_work_units"],
             "report_path": str(report_path.relative_to(root)),
@@ -900,7 +1019,10 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
             "run_id": run_id, "mode": mode, "state": "failed", "pid": os.getpid(),
             "started_at": started, "finished_at": _now(), "expected_work_units": len(positions),
-            "complete_work_units": 0, "failed_work_units": 1, "error": f"{type(error).__name__}: {error}",
+            "attempt_started_at": attempt_started, "resume_count": resume_count,
+            "complete_work_units": _result_counts(run_root, mode)[0],
+            "failed_work_units": max(1, _result_counts(run_root, mode)[1]),
+            "error": f"{type(error).__name__}: {error}",
         })
         raise
     finally:
@@ -917,7 +1039,143 @@ def runtime_status(project_root: str | Path, runtime_path: str | Path = DEFAULT_
     status_path = _inside(root, str(pointer["path"]), "validation run status")
     if not status_path.is_file():
         return {"state": "invalid", "run_id": pointer.get("run_id"), "mode": None, "complete_work_units": 0, "failed_work_units": 0}
-    return json.loads(status_path.read_text(encoding="utf-8"))
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    if status.get("state") in {"queued", "preparing-index", "running", "pausing"}:
+        run_id = str(status.get("run_id") or "")
+        if not _validation_process_active(status.get("pid"), run_id):
+            status = {**status, "state": "interrupted", "worker_pids": []}
+    return status
+
+
+def _current_status_path(root: Path, runtime: Mapping[str, object]) -> Path:
+    current = _inside(root, str(runtime["output_root"]), "validation output") / "current.json"
+    if not current.is_file():
+        raise ValueError("machine validation has no current run")
+    pointer = json.loads(current.read_text(encoding="utf-8"))
+    status_path = _inside(root, str(pointer["path"]), "validation run status")
+    if not status_path.is_file():
+        raise ValueError("machine validation current status is missing")
+    return status_path
+
+
+def _clear_stale_lock(output_root: Path, run_id: str) -> None:
+    lock = output_root / ".runner.lock"
+    if not lock.is_file():
+        return
+    try:
+        pid = int(lock.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        pid = 0
+    if _validation_process_active(pid, run_id):
+        raise ValueError("machine-validation run process is still active")
+    lock.unlink(missing_ok=True)
+
+
+def _spawn_validation(
+    root: Path,
+    runtime_path: str | Path,
+    mode: str,
+    run_id: str,
+    log_path: Path,
+) -> subprocess.Popen[bytes]:
+    with log_path.open("ab", buffering=0) as log:
+        return subprocess.Popen(
+            [sys.executable, "-m", "fidb_poc.cli", "machine-validation", "run",
+             "--project-root", str(root), "--runtime", str(runtime_path),
+             "--mode", mode, "--run-id", run_id],
+            cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True, close_fds=True,
+        )
+
+
+def pause_validation(
+    project_root: str | Path,
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+    *,
+    actor: str = "operator",
+) -> dict[str, object]:
+    root = Path(project_root).resolve()
+    runtime = load_runtime(root, runtime_path)
+    status_path = _current_status_path(root, runtime)
+    status = runtime_status(root, runtime_path)
+    if status.get("state") == "paused":
+        return status
+    if status.get("state") == "interrupted":
+        paused = {
+            **status, "state": "paused", "paused_at": _now(),
+            "pause_actor": actor, "worker_pids": [],
+        }
+        _atomic_json(status_path, paused)
+        return paused
+    if status.get("state") not in {"queued", "preparing-index", "running", "pausing"}:
+        raise ValueError("machine validation is not active")
+    run_id = str(status["run_id"])
+    requested_at = _now()
+    _atomic_json(
+        status_path.parent / PAUSE_REQUEST_NAME,
+        {
+            "schema_version": "fidb-machine-validation-pause-request/v1",
+            "run_id": run_id,
+            "requested_at": requested_at,
+            "actor": actor,
+        },
+    )
+    pausing = {
+        **status, "state": "pausing", "pause_requested_at": requested_at,
+        "pause_actor": actor,
+    }
+    _atomic_json(status_path, pausing)
+    return pausing
+
+
+def resume_validation(
+    project_root: str | Path,
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+) -> dict[str, object]:
+    root = Path(project_root).resolve()
+    runtime = load_runtime(root, runtime_path)
+    status_path = _current_status_path(root, runtime)
+    status = runtime_status(root, runtime_path)
+    if status.get("state") not in {"paused", "interrupted", "failed"}:
+        raise ValueError("machine validation is not resumable")
+    run_id = str(status.get("run_id") or "")
+    mode = str(status.get("mode") or "")
+    if mode not in {"canary", "full"} or not run_id:
+        raise ValueError("machine validation resume identity is invalid")
+    if int(status.get("complete_work_units", 0)) >= int(status.get("expected_work_units", 0)):
+        raise ValueError("machine validation has no incomplete work to resume")
+    if _validation_process_active(status.get("pid"), run_id):
+        raise ValueError("machine-validation run process is still active")
+    pre = preflight(root, runtime_path)
+    if pre["state"] != "ready":
+        raise ValueError("; ".join(pre["blockers"]))
+    if mode == "full" and not canary_gate_status(root, runtime_path)["ready"]:
+        raise ValueError(
+            "full machine validation requires a completed canary for the current "
+            "runtime and reference-index contract"
+        )
+    output_root = _inside(root, str(runtime["output_root"]), "validation output")
+    _clear_stale_lock(output_root, run_id)
+    (status_path.parent / PAUSE_REQUEST_NAME).unlink(missing_ok=True)
+    resume_count = int(status.get("resume_count", 0)) + 1
+    queued = {
+        **status, "state": "queued", "pid": None, "worker_pids": [],
+        "finished_at": None, "resumed_at": _now(), "resume_count": resume_count,
+    }
+    queued.pop("error", None)
+    queued.pop("report_path", None)
+    _atomic_json(status_path, queued)
+    log_path = status_path.parent / "run.log"
+    process = _spawn_validation(root, runtime_path, mode, run_id, log_path)
+    queued["pid"] = process.pid
+    _atomic_json(status_path, queued)
+    return {
+        "state": "queued", "run_id": run_id, "mode": mode, "pid": process.pid,
+        "resume_count": resume_count,
+        "complete_work_units": int(status.get("complete_work_units", 0)),
+        "failed_work_units": int(status.get("failed_work_units", 0)),
+        "log_path": str(log_path.relative_to(root)),
+    }
 
 
 def start_validation(project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
@@ -928,8 +1186,10 @@ def start_validation(project_root: str | Path, mode: str, runtime_path: str | Pa
     if pre["state"] != "ready":
         raise ValueError("; ".join(pre["blockers"]))
     current = runtime_status(root, runtime_path)
-    if current.get("state") in {"preparing-index", "running", "queued"}:
+    if current.get("state") in {"preparing-index", "running", "queued", "pausing"}:
         raise ValueError("machine validation is already running")
+    if current.get("state") in {"paused", "interrupted"}:
+        raise ValueError("resume or explicitly retire the checkpointed machine-validation run")
     if mode == "full" and not canary_gate_status(root, runtime_path)["ready"]:
         raise ValueError(
             "full machine validation requires a completed canary for the current "
@@ -957,19 +1217,14 @@ def start_validation(project_root: str | Path, mode: str, runtime_path: str | Pa
             "expected_work_units": 0,
             "complete_work_units": 0,
             "failed_work_units": 0,
+            "resume_count": 0,
         },
     )
     _atomic_json(
         output_root / "current.json",
         {"run_id": run_id, "path": str(status_path.relative_to(root))},
     )
-    with log_path.open("ab", buffering=0) as log:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "fidb_poc.cli", "machine-validation", "run",
-             "--project-root", str(root), "--runtime", str(runtime_path), "--mode", mode, "--run-id", run_id],
-            cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-            start_new_session=True, close_fds=True,
-        )
+    process = _spawn_validation(root, runtime_path, mode, run_id, log_path)
     queued = json.loads(status_path.read_text(encoding="utf-8"))
     queued["pid"] = process.pid
     _atomic_json(status_path, queued)

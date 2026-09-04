@@ -3,14 +3,18 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fidb_poc.machine_validation_runner import (
     QUERY_COPY_POLICY,
     REFERENCE_INDEX_SCHEMA,
+    _archive_failed_result,
     _query_index,
     canary_gate_status,
     load_runtime,
+    pause_validation,
+    resume_validation,
+    runtime_status,
 )
 
 
@@ -148,6 +152,100 @@ class MachineValidationRunnerTests(unittest.TestCase):
 
             self.assertTrue(accepted["ready"])
             self.assertEqual(accepted["run_id"], current.parent.name)
+
+    def test_pause_and_resume_preserve_the_current_run_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed-full"
+            run_root.mkdir(parents=True)
+            status_path = run_root / "status.json"
+            current = root / "runs/current.json"
+            current.write_text(
+                json.dumps({"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}),
+                encoding="utf-8",
+            )
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "fidb-machine-validation-run-status/v1",
+                        "validation_id": "validation",
+                        "run_id": "fixed-full",
+                        "mode": "full",
+                        "state": "running",
+                        "pid": 42,
+                        "expected_work_units": 222,
+                        "complete_work_units": 119,
+                        "failed_work_units": 2,
+                        "resume_count": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runtime = {"output_root": "runs"}
+            with (
+                patch("fidb_poc.machine_validation_runner.load_runtime", return_value=runtime),
+                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=True),
+            ):
+                pausing = pause_validation(root, actor="test")
+            self.assertEqual(pausing["state"], "pausing")
+            self.assertEqual(pausing["run_id"], "fixed-full")
+            self.assertTrue((run_root / "pause-request.json").is_file())
+
+            paused = {**pausing, "state": "paused", "pid": 42, "worker_pids": []}
+            status_path.write_text(json.dumps(paused), encoding="utf-8")
+            process = Mock(pid=84)
+            with (
+                patch("fidb_poc.machine_validation_runner.load_runtime", return_value=runtime),
+                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=False),
+                patch("fidb_poc.machine_validation_runner.preflight", return_value={"state": "ready", "blockers": []}),
+                patch("fidb_poc.machine_validation_runner.canary_gate_status", return_value={"ready": True}),
+                patch("fidb_poc.machine_validation_runner._spawn_validation", return_value=process),
+            ):
+                resumed = resume_validation(root)
+            self.assertEqual(resumed["state"], "queued")
+            self.assertEqual(resumed["run_id"], "fixed-full")
+            self.assertEqual(resumed["complete_work_units"], 119)
+            self.assertEqual(resumed["resume_count"], 1)
+            self.assertFalse((run_root / "pause-request.json").exists())
+            stored = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(stored["pid"], 84)
+
+    def test_runtime_status_marks_a_missing_process_interrupted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed"
+            run_root.mkdir(parents=True)
+            (root / "runs/current.json").write_text(
+                json.dumps({"run_id": "fixed", "path": "runs/fixed/status.json"}),
+                encoding="utf-8",
+            )
+            (run_root / "status.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "fixed", "mode": "full", "state": "running",
+                        "pid": 42, "worker_pids": [43], "complete_work_units": 3,
+                        "failed_work_units": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("fidb_poc.machine_validation_runner.load_runtime", return_value={"output_root": "runs"}),
+                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=False),
+            ):
+                status = runtime_status(root)
+            self.assertEqual(status["state"], "interrupted")
+            self.assertEqual(status["worker_pids"], [])
+
+    def test_failed_result_is_archived_before_retry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = Path(temporary) / "unit/result.json"
+            result.parent.mkdir()
+            result.write_text(json.dumps({"state": "failed", "error": "link"}), encoding="utf-8")
+            _archive_failed_result(result)
+            self.assertFalse(result.exists())
+            archived = result.parent / "attempts/result-001.json"
+            self.assertEqual(json.loads(archived.read_text(encoding="utf-8"))["error"], "link")
 
 
 if __name__ == "__main__":

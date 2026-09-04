@@ -573,6 +573,28 @@ class LocalApiTests(unittest.TestCase):
             document["error"]["code"], "invalid-machine-validation-mode"
         )
 
+        paused = {"state": "pausing", "run_id": "fixed-full", "mode": "full"}
+        with patch(
+            "fidb_poc.local_api.pause_machine_validation", return_value=paused
+        ) as pause:
+            status, document, _ = self.request(
+                "POST", "/api/v1/machine-validation/pause", {}
+            )
+        self.assertEqual(status, 202)
+        self.assertEqual(document, paused)
+        pause.assert_called_once_with(self.root, actor="local-api")
+
+        resumed = {"state": "queued", "run_id": "fixed-full", "mode": "full"}
+        with patch(
+            "fidb_poc.local_api.resume_machine_validation", return_value=resumed
+        ) as resume:
+            status, document, _ = self.request(
+                "POST", "/api/v1/machine-validation/resume", {}
+            )
+        self.assertEqual(status, 202)
+        self.assertEqual(document, resumed)
+        resume.assert_called_once_with(self.root)
+
     def test_noisy_hash_status_endpoint_is_read_only(self):
         status, document, _ = self.request("GET", "/api/v1/noisy-hashes")
         self.assertEqual(status, 200)

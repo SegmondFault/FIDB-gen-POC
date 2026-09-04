@@ -60,6 +60,21 @@ uv run fidb-poc machine-validation start --project-root . --mode canary
 uv run fidb-poc machine-validation start --project-root . --mode full
 ```
 
+Active runs are checkpointed after every completed width identity. Pause stops
+the worker process groups (including Ghidra children), preserves completed unit
+results and releases the run lock. Resume keeps the same run ID, skips complete
+units and retains each failed result under the unit's `attempts/` directory
+before retrying it:
+
+```sh
+uv run fidb-poc machine-validation pause --project-root .
+uv run fidb-poc machine-validation resume --project-root .
+```
+
+The control panel exposes the same two bounded API operations. An active status
+whose recorded parent process is absent is reported as `interrupted` and can be
+resumed explicitly; PID reuse cannot make an unrelated process resumable.
+
 The full run is rejected unless the latest successful canary records the exact
 runtime-authority digest, query-copy policy and reference-index schema in use.
 The reference index stores exact identity presence separately from one

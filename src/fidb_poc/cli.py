@@ -234,7 +234,10 @@ def _machine_validation_main(argv: list[str]) -> int:
         ),
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("status", "reconcile", "materialize", "preflight", "start", "run", "_worker"):
+    for command in (
+        "status", "reconcile", "materialize", "preflight", "start", "pause",
+        "resume", "run", "_worker",
+    ):
         child = commands.add_parser(command)
         child.add_argument("--project-root", type=Path, default=Path.cwd())
         if command in {"status", "reconcile", "materialize"}:
@@ -270,7 +273,9 @@ def _machine_validation_main(argv: list[str]) -> int:
         )
         from .machine_validation_runner import (
             _worker,
+            pause_validation,
             preflight,
+            resume_validation,
             run_validation,
             runtime_status,
             start_validation,
@@ -282,6 +287,14 @@ def _machine_validation_main(argv: list[str]) -> int:
             return 0 if document["state"] == "ready" else 1
         if arguments.command == "start":
             document = start_validation(arguments.project_root, arguments.mode, arguments.runtime)
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
+        if arguments.command == "pause":
+            document = pause_validation(arguments.project_root, arguments.runtime, actor="cli")
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
+        if arguments.command == "resume":
+            document = resume_validation(arguments.project_root, arguments.runtime)
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "run":
