@@ -78,6 +78,40 @@ class OperationsPolicyTests(unittest.TestCase):
         self.assertEqual(policy.document()["stop_claiming"], "05:30")
         self.assertIsNone(policy.document()["hard_cutoff"])
 
+    def test_date_override_extends_only_the_named_claim_window(self):
+        policy = load_operations_policy(
+            {
+                "schedule": {
+                    "enabled": True,
+                    "timezone": "Europe/Luxembourg",
+                    "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                    "start": "00:00",
+                    "stop_claiming": "05:30",
+                    "finish_started_batch": True,
+                    "chain_batches": True,
+                    "date_overrides": [
+                        {
+                            "date": "2026-09-04",
+                            "stop_claiming": "18:00",
+                        }
+                    ],
+                }
+            },
+            self.root,
+        ).schedule
+        zone = ZoneInfo("Europe/Luxembourg")
+
+        extended = policy.evaluate(datetime(2026, 9, 4, 12, 0, tzinfo=zone))
+        expired = policy.evaluate(datetime(2026, 9, 5, 12, 0, tzinfo=zone))
+
+        self.assertTrue(extended.claims_allowed)
+        self.assertEqual(extended.stop_claiming_at, "2026-09-04T18:00:00+02:00")
+        self.assertFalse(expired.claims_allowed)
+        self.assertEqual(expired.next_window_at, "2026-09-06T00:00:00+02:00")
+        self.assertEqual(
+            policy.document()["date_overrides"][0]["date"], "2026-09-04"
+        )
+
     def test_schedule_and_policy_validation_fail_closed(self):
         cases = (
             (

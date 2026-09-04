@@ -78,6 +78,26 @@ class ScheduleState:
 
 
 @dataclass(frozen=True)
+class DateScheduleOverride:
+    date: date
+    enabled: bool
+    start: time
+    stop_claiming: time
+    hard_cutoff: time | None
+
+    def document(self) -> dict[str, object]:
+        return {
+            "date": self.date.isoformat(),
+            "enabled": self.enabled,
+            "start": self.start.strftime("%H:%M"),
+            "stop_claiming": self.stop_claiming.strftime("%H:%M"),
+            "hard_cutoff": (
+                self.hard_cutoff.strftime("%H:%M") if self.hard_cutoff else None
+            ),
+        }
+
+
+@dataclass(frozen=True)
 class SchedulePolicy:
     enabled: bool = False
     timezone_name: str = "UTC"
@@ -87,6 +107,7 @@ class SchedulePolicy:
     hard_cutoff: time | None = time(23, 59)
     finish_started_batch: bool = False
     chain_batches: bool = False
+    date_overrides: tuple[DateScheduleOverride, ...] = ()
 
     @property
     def zone(self) -> ZoneInfo:
@@ -104,25 +125,43 @@ class SchedulePolicy:
             ),
             "finish_started_batch": self.finish_started_batch,
             "chain_batches": self.chain_batches,
+            "date_overrides": [override.document() for override in self.date_overrides],
         }
 
-    def _boundary(self, start_date: date, clock: time) -> datetime:
+    def _boundary(self, start_date: date, start: time, clock: time) -> datetime:
         day = start_date
-        if clock <= self.start:
+        if clock <= start:
             day += timedelta(days=1)
         return datetime.combine(day, clock, self.zone)
 
-    def _window(self, start_date: date) -> tuple[datetime, datetime, datetime | None]:
-        started = datetime.combine(start_date, self.start, self.zone)
-        stop = self._boundary(start_date, self.stop_claiming)
+    def _override_for(self, start_date: date) -> DateScheduleOverride | None:
+        return next(
+            (override for override in self.date_overrides if override.date == start_date),
+            None,
+        )
+
+    def _window(
+        self, start_date: date
+    ) -> tuple[bool, datetime, datetime, datetime | None]:
+        override = self._override_for(start_date)
+        start = override.start if override else self.start
+        stop_claiming = override.stop_claiming if override else self.stop_claiming
+        hard_cutoff = override.hard_cutoff if override else self.hard_cutoff
+        enabled = (
+            override.enabled
+            if override is not None
+            else DAY_NAMES[start_date.weekday()] in self.days
+        )
+        started = datetime.combine(start_date, start, self.zone)
+        stop = self._boundary(start_date, start, stop_claiming)
         cutoff = (
-            self._boundary(start_date, self.hard_cutoff)
-            if self.hard_cutoff is not None
+            self._boundary(start_date, start, hard_cutoff)
+            if hard_cutoff is not None
             else None
         )
         if cutoff is not None and stop > cutoff:
             raise ValueError("schedule stop_claiming must not be after hard_cutoff")
-        return started, stop, cutoff
+        return enabled, started, stop, cutoff
 
     def evaluate(self, now: datetime | None = None) -> ScheduleState:
         current = now or datetime.now(timezone.utc)
@@ -132,21 +171,26 @@ class SchedulePolicy:
         if not self.enabled:
             return ScheduleState(True, "schedule-disabled", None, None, None, None)
 
-        candidate_date = local.date()
-        if local.timetz().replace(tzinfo=None) < self.start:
-            candidate_date -= timedelta(days=1)
-        started, stop, cutoff = self._window(candidate_date)
-        day_enabled = DAY_NAMES[candidate_date.weekday()] in self.days
-        window_end = cutoff or stop
-        inside = day_enabled and started <= local < window_end
-        claims_allowed = inside and local < stop
+        active_window = None
+        for candidate_date in (local.date() - timedelta(days=1), local.date()):
+            enabled, started, stop, cutoff = self._window(candidate_date)
+            if enabled and started <= local < (cutoff or stop):
+                active_window = (started, stop, cutoff)
+        if active_window is None:
+            started = stop = cutoff = None
+            inside = False
+            claims_allowed = False
+        else:
+            started, stop, cutoff = active_window
+            inside = True
+            claims_allowed = local < stop
 
         next_window = None
         for offset in range(0, 9):
             next_date = local.date() + timedelta(days=offset)
-            if DAY_NAMES[next_date.weekday()] not in self.days:
+            enabled, next_start, _next_stop, _next_cutoff = self._window(next_date)
+            if not enabled:
                 continue
-            next_start = datetime.combine(next_date, self.start, self.zone)
             if next_start > local:
                 next_window = next_start
                 break
@@ -160,9 +204,9 @@ class SchedulePolicy:
         return ScheduleState(
             claims_allowed,
             reason,
-            started.isoformat() if inside else None,
-            stop.isoformat() if inside else None,
-            cutoff.isoformat() if inside and cutoff is not None else None,
+            started.isoformat() if started is not None else None,
+            stop.isoformat() if stop is not None else None,
+            cutoff.isoformat() if cutoff is not None else None,
             next_window.isoformat() if next_window else None,
         )
 
@@ -353,6 +397,7 @@ def load_operations_policy(
             "hard_cutoff",
             "finish_started_batch",
             "chain_batches",
+            "date_overrides",
         },
         "schedule table",
     )
@@ -382,27 +427,76 @@ def load_operations_policy(
         raise ValueError("schedule chain_batches must be a boolean")
     if chain_batches and not finish_started_batch:
         raise ValueError("schedule chain_batches requires finish_started_batch")
+    start = _clock(schedule_row.get("start", "00:00"), "schedule start")
+    stop_claiming = _clock(
+        schedule_row.get("stop_claiming", "23:58"),
+        "schedule stop_claiming",
+    )
     hard_cutoff_value = schedule_row.get(
         "hard_cutoff", None if finish_started_batch else "23:59"
     )
+    hard_cutoff = (
+        _clock(hard_cutoff_value, "schedule hard_cutoff")
+        if hard_cutoff_value is not None
+        else None
+    )
+    raw_overrides = schedule_row.get("date_overrides", [])
+    if not isinstance(raw_overrides, list):
+        raise ValueError("schedule date_overrides must be an array of tables")
+    overrides: list[DateScheduleOverride] = []
+    override_dates: set[date] = set()
+    for index, row in enumerate(raw_overrides):
+        context = f"schedule date_overrides[{index}]"
+        if not isinstance(row, dict):
+            raise ValueError(f"{context} must be a table")
+        _only_keys(
+            row,
+            {"date", "enabled", "start", "stop_claiming", "hard_cutoff"},
+            context,
+        )
+        raw_date = row.get("date")
+        if not isinstance(raw_date, str):
+            raise ValueError(f"{context} date must use YYYY-MM-DD")
+        try:
+            override_date = date.fromisoformat(raw_date)
+        except ValueError as error:
+            raise ValueError(f"{context} date must use YYYY-MM-DD") from error
+        if override_date in override_dates:
+            raise ValueError(f"duplicate schedule date override: {raw_date}")
+        override_dates.add(override_date)
+        override_enabled = row.get("enabled", True)
+        if not isinstance(override_enabled, bool):
+            raise ValueError(f"{context} enabled must be a boolean")
+        override_hard_cutoff_value = row.get("hard_cutoff", hard_cutoff_value)
+        override = DateScheduleOverride(
+            date=override_date,
+            enabled=override_enabled,
+            start=_clock(row.get("start", start.strftime("%H:%M")), f"{context} start"),
+            stop_claiming=_clock(
+                row.get("stop_claiming", stop_claiming.strftime("%H:%M")),
+                f"{context} stop_claiming",
+            ),
+            hard_cutoff=(
+                _clock(override_hard_cutoff_value, f"{context} hard_cutoff")
+                if override_hard_cutoff_value is not None
+                else None
+            ),
+        )
+        overrides.append(override)
     schedule = SchedulePolicy(
         enabled=enabled,
         timezone_name=timezone_name,
         days=tuple(raw_days),
-        start=_clock(schedule_row.get("start", "00:00"), "schedule start"),
-        stop_claiming=_clock(
-            schedule_row.get("stop_claiming", "23:58"),
-            "schedule stop_claiming",
-        ),
-        hard_cutoff=(
-            _clock(hard_cutoff_value, "schedule hard_cutoff")
-            if hard_cutoff_value is not None
-            else None
-        ),
+        start=start,
+        stop_claiming=stop_claiming,
+        hard_cutoff=hard_cutoff,
         finish_started_batch=finish_started_batch,
         chain_batches=chain_batches,
+        date_overrides=tuple(overrides),
     )
     schedule._window(date(2026, 1, 1))
+    for override in overrides:
+        schedule._window(override.date)
 
     resources_row = _table(document, "resources")
     resource_fields = {
