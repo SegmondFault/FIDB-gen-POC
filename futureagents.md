@@ -6,6 +6,22 @@ and `artifacts/runs/` as evidence governed by the explicit retention boundary.
 A green unit test or resolution
 preflight is necessary, but a real end-to-end canary is the execution boundary.
 
+The operational recovery procedure is
+[`operations/RECOVERY_RUNBOOK.md`](operations/RECOVERY_RUNBOOK.md). Start every
+incident with the read-only queue doctor; do not reconstruct recovery SQL from
+memory:
+
+```sh
+uv run fidb-poc queue doctor --project-root . \
+  --state var/fidb-coordinator/ledger.sqlite3 \
+  --include-inactive --services
+```
+
+The report contains exact current failure counts and fingerprints, ordered
+failed-job digests, live-work and requeue guards, installed worker-unit drift,
+recent failed stages and evidence-linked next commands. It performs no queue
+transition and starts no build or JVM.
+
 ## Authority chain
 
 The execution identity is assembled from separate reviewed layers:
@@ -149,6 +165,28 @@ production job (`android-arm64-ndk-r27d-clang-api21`, `optimization_o0`) then
 sealed on attempt 6 under the 2,048-task unit. Treat 20 as the profile's maximum,
 not a requirement to start every unit for every library shape; record the
 actual active-service count alongside the named profile.
+
+### Dated regression registry
+
+The recovery runbook records every failure repaired during the first top-ten
+campaign. Future agents must preserve these boundaries:
+
+- canonical base/versioned route resolution and exact material identity;
+- full-generation execution-resolution preflight and the five-failure circuit
+  breaker;
+- the shared content-addressed source cache rather than per-cell downloads;
+- Android x86/x86-64 Ghidra compiler spec `gcc`;
+- safe relative Zstandard links and preserved nghttp2 source mtimes;
+- bounded OpenSSL manifest CSV fields;
+- GMP build-host generators, bounded gettext Windows paths and header-based
+  PCRE2 AMD64 COFF validation;
+- measured `TasksMax=2048`, fourteen-service worst-shape recovery concurrency,
+  and unchanged heap/memory guardrails; and
+- post-drain JVM recycle, memory audit and cheap terminal worker parking.
+
+Run the doctor's diagnostic rules and the cited regression canaries before
+changing any of these. A passing build for one target is not permission to
+remove a cross-target accommodation.
 
 ## Time-aware campaign
 

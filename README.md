@@ -452,7 +452,14 @@ Synchronize and inspect its durable state without executing anything:
 uv run fidb-poc queue sync
 uv run fidb-poc queue status --full
 uv run fidb-poc queue resolve-preflight
+uv run fidb-poc queue doctor --include-inactive --services
 ```
+
+`queue doctor` is the read-only incident entry point. It collects a coherent
+ledger snapshot, failure/stage fingerprints, worker-unit drift and guarded
+recovery candidates without changing the queue. Follow
+[`operations/RECOVERY_RUNBOOK.md`](operations/RECOVERY_RUNBOOK.md) for the
+containment, canary, evidence-preserving requeue and rollback sequence.
 
 The resolution preflight is an execution-free gate over the exact active ledger
 jobs. It uses the worker's canonical runtime resolver, including versioned width
