@@ -167,8 +167,10 @@ def load_width_batch(
     if source_pack["study_path"] != study_relative:
         raise ValueError("width batch source pack and width study do not match")
     study = load_width_study(study_path)
-    if study["id"] != "batch-010":
-        raise ValueError("width batch must bind the reviewed C top-ten width study")
+    if study["language_id"] != document["language_id"]:
+        raise ValueError("width batch study language does not match")
+    if study["state"] != "defined-disarmed":
+        raise ValueError("width batch study must remain explicitly defined-disarmed")
     study_source_ids = {str(row["id"]) for row in study["families"]}
     if not set(source_ids) <= study_source_ids:
         raise ValueError("width batch selects sources outside its width study")

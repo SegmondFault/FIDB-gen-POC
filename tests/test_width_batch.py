@@ -51,6 +51,31 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(batch["summary"]["total_executions"], 48)
         self.assertEqual(batch["summary"]["locally_executable_per_library"], 48)
 
+    def test_c11_to_c20_batch_preserves_global_rank_and_width(self):
+        batch = load_width_batch(
+            self.root, self.root / "batches/c-11-20-mega-width.toml"
+        )
+
+        self.assertEqual(
+            [(row["rank"], row["id"]) for row in batch["libraries"]],
+            [
+                (11, "harfbuzz"),
+                (12, "freetype"),
+                (13, "glib"),
+                (14, "expat"),
+                (15, "brotli"),
+                (16, "libjpeg-turbo"),
+                (17, "libunistring"),
+                (18, "bzip2"),
+                (19, "libtiff"),
+                (20, "libpng"),
+            ],
+        )
+        self.assertEqual(batch["summary"]["route_profiles"], 37)
+        self.assertEqual(batch["summary"]["executions_per_library"], 222)
+        self.assertEqual(batch["summary"]["total_executions"], 2_220)
+        self.assertEqual(batch["summary"]["locally_qualified_routes"], 37)
+
     def test_recipe_gates_expose_reviewed_libraries_without_arming_queue(self):
         catalog = authority_catalog(self.root)
         batch = project_width_batch_readiness(
