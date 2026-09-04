@@ -500,6 +500,21 @@ def _safe_member_path(destination: Path, member_name: str) -> Path:
     return resolved
 
 
+def _safe_symlink_target(destination: Path, link_path: Path, link_name: str) -> Path:
+    """Resolve a deferred archive symlink without permitting an escape."""
+
+    link = Path(link_name)
+    if link.is_absolute():
+        raise PipelineError(f"unsafe archive symlink target: {link_name}")
+    resolved = (link_path.parent / link).resolve()
+    root = destination.resolve()
+    if root not in (resolved, *resolved.parents):
+        raise PipelineError(f"archive symlink target escapes destination: {link_name}")
+    if not resolved.is_file():
+        raise PipelineError(f"archive symlink target is not a file: {link_name}")
+    return resolved
+
+
 def extract_source(
     library: Library,
     archive: Path,
@@ -525,12 +540,17 @@ def extract_source(
         ) as temporary:
             staging = Path(temporary) / library.identifier
             staging.mkdir()
+            deferred_symlinks: list[tuple[Path, str]] = []
             with tarfile.open(archive, "r:*") as source_tar:
                 for member in source_tar.getmembers():
                     member_count += 1
                     target = _safe_member_path(staging, member.name)
                     if member.isdir():
                         target.mkdir(parents=True, exist_ok=True)
+                        continue
+                    if member.issym():
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        deferred_symlinks.append((target, member.linkname))
                         continue
                     if not member.isfile():
                         raise PipelineError(
@@ -550,6 +570,14 @@ def extract_source(
                     # invoked directly, but set-id and write bits from an
                     # untrusted archive must never survive extraction.
                     target.chmod(0o755 if member.mode & 0o111 else 0o644)
+
+            # Create links only after every regular member has been written.
+            # This prevents an earlier archive link from redirecting extraction
+            # of a later member outside the staging root.
+            for target, link_name in deferred_symlinks:
+                _safe_symlink_target(staging, target, link_name)
+                target.symlink_to(link_name)
+                file_count += 1
 
             staged_root = staging / library.source_directory
             if not staged_root.is_dir():

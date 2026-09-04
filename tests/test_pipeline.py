@@ -347,6 +347,10 @@ class PipelineTests(unittest.TestCase):
                 helper_bytes = b"#!/bin/sh\nexit 0\n"
                 helper.size = len(helper_bytes)
                 source_tar.addfile(helper, io.BytesIO(helper_bytes))
+                helper_link = tarfile.TarInfo("demo-1.0/configure-link")
+                helper_link.type = tarfile.SYMTYPE
+                helper_link.linkname = "configure-helper"
+                source_tar.addfile(helper_link)
             library = Library(
                 name="demo",
                 version="1.0",
@@ -370,6 +374,37 @@ class PipelineTests(unittest.TestCase):
                 (second / "configure-helper").stat().st_mode & 0o7777,
                 0o755,
             )
+            self.assertTrue((second / "configure-link").is_symlink())
+            self.assertEqual(
+                (second / "configure-link").read_bytes(), helper_bytes
+            )
+
+    def test_source_archive_symlink_cannot_escape_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "demo.tar.gz"
+            with tarfile.open(archive, "w:gz") as source_tar:
+                directory = tarfile.TarInfo("demo-1.0")
+                directory.type = tarfile.DIRTYPE
+                source_tar.addfile(directory)
+                link = tarfile.TarInfo("demo-1.0/escape")
+                link.type = tarfile.SYMTYPE
+                link.linkname = "../../outside"
+                source_tar.addfile(link)
+            library = Library(
+                name="demo",
+                version="1.0",
+                url="https://example.invalid/demo.tar.gz",
+                sha256=sha256(archive),
+                source_directory="demo-1.0",
+                project_markers=("escape",),
+                allowed_build_systems=("make",),
+                preferred_build_system="make",
+                static_archives=("libdemo.a",),
+            )
+
+            with self.assertRaisesRegex(PipelineError, "symlink target escapes"):
+                extract_source(library, archive, root / "sources")
 
     def test_java_identity_prefers_java_home(self):
         with tempfile.TemporaryDirectory() as temporary:
