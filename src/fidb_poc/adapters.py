@@ -381,6 +381,11 @@ def build_environment(
         "RANLIB": tool_text(route.ranlib),
         "CFLAGS": " ".join(compiler_flags),
     }
+    if build_system == "gmp-autoconf":
+        # GMP builds target-independent table/header generators during a cross
+        # build. Its fallback can incorrectly reuse CC and then attempt to run
+        # a Windows target executable on the Linux build host.
+        environment["CC_FOR_BUILD"] = "/usr/bin/cc"
     if build_system == "gettext-autoconf":
         environment["CXX"] = _cxx_compiler(route)
     if route.target_os == "android":

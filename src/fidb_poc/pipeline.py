@@ -110,6 +110,10 @@ class BuildRecord:
     compiler_sha256: str = ""
     compiler_version: str = ""
     compiler_flags: str = ""
+    host_compiler_command: str = ""
+    host_compiler_path: str = ""
+    host_compiler_sha256: str = ""
+    host_compiler_version: str = ""
     archiver_command: str = ""
     archiver_path: str = ""
     archiver_sha256: str = ""
@@ -882,6 +886,15 @@ def build_library(
             compiler_flags=treatment.flags_for(route),
         )
     )
+    host_compiler = environment.get("CC_FOR_BUILD")
+    if host_compiler:
+        host_path, host_version = executable_identity(
+            (host_compiler,), environment, label="host compiler"
+        )
+        record.host_compiler_command = host_compiler
+        record.host_compiler_path = str(host_path)
+        record.host_compiler_sha256 = sha256(host_path)
+        record.host_compiler_version = host_version.replace("\n", " | ")
     compiler_path, compiler_version = compiler_identity(route, environment)
     archiver_path, archiver_version = executable_identity(
         route.archiver, environment, label="archiver"

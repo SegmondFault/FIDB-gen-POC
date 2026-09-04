@@ -204,6 +204,16 @@ class AdapterTests(unittest.TestCase):
 
         self.assertEqual(environment["CXX"], "/usr/bin/g++")
 
+    def test_gmp_cross_build_uses_a_native_host_generator_compiler(self):
+        windows = replace(route(), target_os="windows")
+
+        environment = build_environment(
+            "gmp-autoconf", route=windows, compiler_flags=("-O2",)
+        )
+
+        self.assertEqual(environment["CC_FOR_BUILD"], "/usr/bin/cc")
+        self.assertEqual(environment["CC"], "/usr/bin/gcc")
+
     def test_specialized_autoconf_adapter_maps_android_host(self):
         ndk_root = Path("/reviewed/android-ndk-r29")
         android = replace(
