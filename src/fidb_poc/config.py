@@ -210,13 +210,18 @@ def _recipe_catalog(recipe_directory: Path) -> dict[str, Library]:
     if not recipe_directory.is_dir():
         raise ValueError(f"recipe directory does not exist: {recipe_directory}")
     recipes: dict[str, Library] = {}
+    families: dict[str, list[Library]] = {}
     for path in sorted(recipe_directory.glob("*.toml")):
         recipe = _load_recipe(path)
-        keys = (recipe.name, recipe.identifier, f"{recipe.name}@{recipe.version}")
+        keys = (recipe.identifier, f"{recipe.name}@{recipe.version}")
         for key in keys:
             if key in recipes:
                 raise ValueError(f"duplicate recipe request key: {key}")
             recipes[key] = recipe
+        families.setdefault(recipe.name, []).append(recipe)
+    for name, versions in families.items():
+        if len(versions) == 1:
+            recipes[name] = versions[0]
     return recipes
 
 
@@ -241,7 +246,9 @@ def _resolve_requests(
             continue
         libraries.append(recipe)
     if missing:
-        known = tuple(sorted({recipe.name for recipe in catalog.values()}))
+        known = tuple(
+            sorted({f"{recipe.name}@{recipe.version}" for recipe in catalog.values()})
+        )
         raise RecipesNotFoundError(tuple(missing), known)
     if len({library.identifier for library in libraries}) != len(libraries):
         raise ValueError("library requests resolve to duplicate recipes")

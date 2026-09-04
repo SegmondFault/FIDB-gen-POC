@@ -116,7 +116,9 @@ class ConfigurationTests(unittest.TestCase):
     def test_work_request_contains_library_names_not_source_details(self):
         root = Path(__file__).resolve().parents[1]
         document = tomllib.loads((root / "worker.toml").read_text())
-        self.assertEqual(document["requested_libraries"], ["zlib", "bzip2"])
+        self.assertEqual(
+            document["requested_libraries"], ["zlib", "bzip2@1.0.7"]
+        )
         self.assertNotIn("url", document)
         self.assertNotIn("sources", document)
 
@@ -137,6 +139,32 @@ class ConfigurationTests(unittest.TestCase):
             [row.identifier for row in configuration.libraries],
             ["zlib-1.3.1"],
         )
+
+    def test_multiple_recipe_versions_require_an_exact_request(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = Path(temporary)
+            shutil.copy(root / "worker.toml", checkout / "worker.toml")
+            shutil.copytree(root / "recipes", checkout / "recipes")
+            old = checkout / "recipes/bzip2.toml"
+            new = checkout / "recipes/bzip2-1.0.8.toml"
+            new.write_text(
+                old.read_text(encoding="utf-8")
+                .replace('version = "1.0.7"', 'version = "1.0.8"')
+                .replace('source_directory = "bzip2-1.0.7"', 'source_directory = "bzip2-1.0.8"')
+                .replace("e768a87c5b1a79511499beb41500bcc4caf203726fff46a6f5f9ad27fe08ab2b", "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(RecipesNotFoundError):
+                load_configuration(
+                    checkout / "worker.toml", request_override=("bzip2",)
+                )
+            exact = load_configuration(
+                checkout / "worker.toml", request_override=("bzip2@1.0.8",)
+            )
+
+        self.assertEqual(exact.libraries[0].identifier, "bzip2-1.0.8")
 
     def test_openssl_recipe_is_pinned_and_static(self):
         root = Path(__file__).resolve().parents[1]

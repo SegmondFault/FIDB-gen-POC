@@ -1,6 +1,6 @@
 schema_version = "fidb-worker/v3"
 recipe_directory = "recipes"
-requested_libraries = ["zlib", "bzip2"]
+requested_libraries = ["zlib", "bzip2@1.0.7"]
 
 [[routes]]
 id = "linux-x86_64-gnu-gcc"
