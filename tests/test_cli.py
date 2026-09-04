@@ -91,7 +91,7 @@ class CommandLineTests(unittest.TestCase):
                         str(root),
                         "--plan",
                         "--library",
-                        "libpng",
+                        "imaginary-lib",
                         "--route",
                         "linux-x86_64-gnu-gcc",
                         "--request-priority",
@@ -103,7 +103,7 @@ class CommandLineTests(unittest.TestCase):
             path = root / "recipe_requests/pending.csv"
             with path.open(newline="", encoding="utf-8") as stream:
                 rows = list(csv.DictReader(stream))
-            self.assertEqual(rows[0]["library_request"], "libpng")
+            self.assertEqual(rows[0]["library_request"], "imaginary-lib")
             self.assertEqual(rows[0]["priority"], "1")
             self.assertIn(str(path), errors.getvalue())
 

@@ -24,6 +24,8 @@ BUILD_MARKERS = {
     "harfbuzz-cmake": ("CMakeLists.txt", "src/hb.h"),
     "brotli-cmake": ("CMakeLists.txt", "c/include/brotli/encode.h"),
     "libjpeg-turbo-cmake": ("CMakeLists.txt", "src/jpeglib.h"),
+    "libpng-cmake": ("CMakeLists.txt", "png.h"),
+    "glib-meson": ("meson.build", "glib/glib.h"),
     "freetype-autoconf": ("configure", "include/freetype/freetype.h"),
     "expat-autoconf": ("configure", "lib/expat.h"),
     "libunistring-autoconf": ("configure", "lib/unistr.in.h"),
@@ -174,6 +176,73 @@ def _cxx_compiler(route: Route) -> str:
     return tool_text(tuple(command))
 
 
+def _meson_values(values: tuple[str, ...]) -> str:
+    escaped = [value.replace("\\", "\\\\").replace("'", "\\'") for value in values]
+    return "[" + ", ".join(f"'{value}'" for value in escaped) + "]"
+
+
+def prepare_build_workspace(
+    build_system: str,
+    *,
+    route: Route,
+    compiler_flags: tuple[str, ...],
+    source_root: Path,
+) -> None:
+    """Write fixed adapter-owned files which cannot be supplied by recipes."""
+
+    if build_system != "glib-meson":
+        return
+    machines = {
+        ("linux", "x86_64"): ("linux", "x86_64", "x86_64", "little"),
+        ("linux", "arm"): ("linux", "arm", "armv7", "little"),
+        ("linux", "aarch64"): ("linux", "aarch64", "aarch64", "little"),
+        ("linux", "mips"): ("linux", "mips", "mips", "big"),
+        ("linux", "mipsel"): ("linux", "mips", "mipsel", "little"),
+        ("linux", "powerpc"): ("linux", "ppc", "ppc", "big"),
+        ("linux", "sh4"): ("linux", "sh4", "sh4", "little"),
+        ("linux", "m68k"): ("linux", "m68k", "m68k", "big"),
+        ("windows", "x86_64"): ("windows", "x86_64", "x86_64", "little"),
+        ("android", "aarch64"): ("android", "aarch64", "aarch64", "little"),
+        ("android", "arm"): ("android", "arm", "armv7", "little"),
+        ("android", "x86_64"): ("android", "x86_64", "x86_64", "little"),
+        ("android", "i686"): ("android", "x86", "i686", "little"),
+    }
+    machine = machines.get((route.target_os, route.architecture))
+    if machine is None:
+        raise AdapterError(
+            f"no reviewed Meson machine for {route.target_os}/{route.architecture}"
+        )
+    system, cpu_family, cpu, endian = machine
+    path = source_root / "fidb-cross.ini"
+    path.write_text(
+        "\n".join(
+            (
+                "[binaries]",
+                f"c = {_meson_values(route.compiler)}",
+                f"cpp = {_meson_values((_cxx_compiler(route),))}",
+                f"ar = {_meson_values(route.archiver)}",
+                "",
+                "[host_machine]",
+                f"system = '{system}'",
+                f"cpu_family = '{cpu_family}'",
+                f"cpu = '{cpu}'",
+                f"endian = '{endian}'",
+                "",
+                "[properties]",
+                "needs_exe_wrapper = true",
+                "growing_stack = false",
+                "",
+                "[built-in options]",
+                "default_library = 'static'",
+                f"c_args = {_meson_values(compiler_flags)}",
+                f"cpp_args = {_meson_values(compiler_flags)}",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+
 AUTOCONF_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "sqlite-autoconf": (
         ("--disable-shared", "--enable-static"),
@@ -319,6 +388,17 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ),
         ("jpeg-static", "turbojpeg-static"),
     ),
+    "libpng-cmake": (
+        (
+            "-DPNG_SHARED=OFF",
+            "-DPNG_STATIC=ON",
+            "-DPNG_TESTS=OFF",
+            "-DPNG_TOOLS=OFF",
+            "-DPNG_EXECUTABLES=OFF",
+            "-DCMAKE_STATIC_LIBRARY_PREFIX=lib",
+        ),
+        ("png_static",),
+    ),
 }
 
 
@@ -360,6 +440,7 @@ def build_commands(
     route: Route,
     compiler_flags: tuple[str, ...],
     jobs: int,
+    source_root: Path | None = None,
 ) -> tuple[tuple[str, ...], ...]:
     compiler = tool_text(route.compiler)
     archiver = tool_text(route.archiver)
@@ -461,36 +542,73 @@ def build_commands(
         return tuple(commands)
     if build_system in CMAKE_ADAPTERS:
         project_options, targets = CMAKE_ADAPTERS[build_system]
+        configure = (
+            "cmake",
+            "-S",
+            ".",
+            "-B",
+            "fidb-build",
+            "-G",
+            "Ninja",
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+            f"-DCMAKE_C_COMPILER={compiler}",
+            f"-DCMAKE_CXX_COMPILER={_cxx_compiler(route)}",
+            f"-DCMAKE_AR={archiver}",
+            f"-DCMAKE_RANLIB={ranlib}",
+            f"-DCMAKE_C_FLAGS={flags}",
+            f"-DCMAKE_CXX_FLAGS={flags}",
+            *_cmake_target_options(route),
+            *project_options,
+        )
+        build = (
+            "cmake",
+            "--build",
+            "fidb-build",
+            "--parallel",
+            str(jobs),
+            "--target",
+            *targets,
+        )
+        if build_system != "libpng-cmake":
+            return (configure, build)
+        if source_root is None or not source_root.is_absolute():
+            raise AdapterError("libpng adapter requires an absolute source root")
+        zlib_source = source_root / "fidb-inputs/zlib-1.3.1"
+        zlib_build = source_root / "fidb-deps/zlib-build"
+        zlib_install = source_root / "fidb-deps/zlib-install"
+        dependency_configure = (
+            "cmake",
+            "-S",
+            str(zlib_source),
+            "-B",
+            str(zlib_build),
+            "-G",
+            "Ninja",
+            "-DZLIB_BUILD_EXAMPLES=OFF",
+            "-DSKIP_INSTALL_FILES=ON",
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+            f"-DCMAKE_INSTALL_PREFIX={zlib_install}",
+            f"-DCMAKE_C_COMPILER={compiler}",
+            f"-DCMAKE_AR={archiver}",
+            f"-DCMAKE_RANLIB={ranlib}",
+            f"-DCMAKE_C_FLAGS={flags}",
+            *_cmake_target_options(route),
+        )
         return (
-            (
-                "cmake",
-                "-S",
-                ".",
-                "-B",
-                "fidb-build",
-                "-G",
-                "Ninja",
-                "-DBUILD_SHARED_LIBS=OFF",
-                "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
-                "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-                f"-DCMAKE_C_COMPILER={compiler}",
-                f"-DCMAKE_CXX_COMPILER={_cxx_compiler(route)}",
-                f"-DCMAKE_AR={archiver}",
-                f"-DCMAKE_RANLIB={ranlib}",
-                f"-DCMAKE_C_FLAGS={flags}",
-                f"-DCMAKE_CXX_FLAGS={flags}",
-                *_cmake_target_options(route),
-                *project_options,
-            ),
+            dependency_configure,
             (
                 "cmake",
                 "--build",
-                "fidb-build",
+                str(zlib_build),
                 "--parallel",
                 str(jobs),
-                "--target",
-                *targets,
             ),
+            ("cmake", "--install", str(zlib_build)),
+            (*configure, f"-DZLIB_ROOT={zlib_install}"),
+            build,
         )
     if build_system == "lz4-make":
         platform = ("TARGET_OS=Windows_NT",) if route.target_os == "windows" else ()
@@ -523,6 +641,48 @@ def build_commands(
                 *platform,
             ),
         )
+    if build_system == "glib-meson":
+        if source_root is None or not source_root.is_absolute():
+            raise AdapterError("GLib adapter requires an absolute source root")
+        return (
+            (
+                "meson",
+                "setup",
+                "fidb-build",
+                "--cross-file",
+                str(source_root / "fidb-cross.ini"),
+                "--wrap-mode=forcefallback",
+                "--default-library=static",
+                "--buildtype=plain",
+                "-Db_lto=false",
+                "-Dtests=false",
+                "-Dinstalled_tests=false",
+                "-Ddocumentation=false",
+                "-Dintrospection=disabled",
+                "-Dman-pages=disabled",
+                "-Dnls=disabled",
+                "-Dlibmount=disabled",
+                "-Dselinux=disabled",
+                "-Dlibelf=disabled",
+                "-Dxattr=false",
+                "-Ddtrace=disabled",
+                "-Dsystemtap=disabled",
+                "-Dsysprof=disabled",
+                "-Dglib_debug=disabled",
+            ),
+            (
+                "meson",
+                "compile",
+                "-C",
+                "fidb-build",
+                "-j",
+                str(jobs),
+                "glib-2.0",
+                "gmodule-2.0",
+                "gobject-2.0",
+                "gio-2.0",
+            ),
+        )
     raise AdapterError(
         f"detected build system {build_system!r} has no implemented adapter"
     )
@@ -534,10 +694,16 @@ def build_environment(
     route: Route,
     compiler_flags: tuple[str, ...],
 ) -> dict[str, str]:
-    if build_system not in {
-        "autoconf",
-        "openssl-configure",
-    } and not build_system.endswith("-autoconf") and build_system not in CMAKE_ADAPTERS:
+    if (
+        build_system
+        not in {
+            "autoconf",
+            "openssl-configure",
+            "glib-meson",
+        }
+        and not build_system.endswith("-autoconf")
+        and build_system not in CMAKE_ADAPTERS
+    ):
         return {}
     environment = {
         "CC": tool_text(route.compiler),
@@ -548,6 +714,11 @@ def build_environment(
     if build_system in CMAKE_ADAPTERS:
         environment["CXX"] = _cxx_compiler(route)
         environment["CXXFLAGS"] = " ".join(compiler_flags)
+    if build_system == "glib-meson":
+        environment["CXX"] = _cxx_compiler(route)
+        environment["CXXFLAGS"] = " ".join(compiler_flags)
+        environment["CC_FOR_BUILD"] = "/usr/bin/cc"
+        environment["CXX_FOR_BUILD"] = "/usr/bin/c++"
     if build_system == "gmp-autoconf":
         # GMP builds target-independent table/header generators during a cross
         # build. Its fallback can incorrectly reuse CC and then attempt to run

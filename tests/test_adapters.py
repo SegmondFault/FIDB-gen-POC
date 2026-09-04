@@ -9,6 +9,7 @@ from fidb_poc.adapters import (
     build_environment,
     detect_project,
     linked_output_command,
+    prepare_build_workspace,
 )
 from fidb_poc.config import Library, Route, Treatment
 
@@ -314,6 +315,89 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("-DWITH_SIMD=OFF", commands[0])
         self.assertIn("-DWITH_SYSTEM_ZLIB=OFF", commands[0])
         self.assertEqual(commands[1][-2:], ("jpeg-static", "turbojpeg-static"))
+
+    def test_libpng_adapter_builds_pinned_route_matched_zlib_first(self):
+        source_root = Path("/work/libpng").resolve()
+
+        commands = build_commands(
+            "libpng-cmake",
+            route=route(),
+            compiler_flags=("-Os", "-fPIC"),
+            jobs=5,
+            source_root=source_root,
+        )
+
+        self.assertEqual(len(commands), 5)
+        self.assertIn(
+            f"-DCMAKE_INSTALL_PREFIX={source_root}/fidb-deps/zlib-install",
+            commands[0],
+        )
+        self.assertIn("-DCMAKE_C_COMPILER=/usr/bin/gcc", commands[0])
+        self.assertIn("-DCMAKE_C_FLAGS=-Os -fPIC", commands[0])
+        self.assertEqual(
+            commands[1][0:3],
+            ("cmake", "--build", f"{source_root}/fidb-deps/zlib-build"),
+        )
+        self.assertEqual(commands[2][0:2], ("cmake", "--install"))
+        self.assertIn(
+            f"-DZLIB_ROOT={source_root}/fidb-deps/zlib-install", commands[3]
+        )
+        self.assertEqual(commands[4][-2:], ("--target", "png_static"))
+
+    def test_libpng_adapter_rejects_an_unbound_dependency_workspace(self):
+        with self.assertRaisesRegex(AdapterError, "absolute source root"):
+            build_commands(
+                "libpng-cmake",
+                route=route(),
+                compiler_flags=("-O2",),
+                jobs=4,
+            )
+
+    def test_glib_adapter_writes_target_machine_and_uses_offline_fallbacks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary).resolve()
+            prepare_build_workspace(
+                "glib-meson",
+                route=route(),
+                compiler_flags=("-O3", "-fPIC"),
+                source_root=source_root,
+            )
+            commands = build_commands(
+                "glib-meson",
+                route=route(),
+                compiler_flags=("-O3", "-fPIC"),
+                jobs=6,
+                source_root=source_root,
+            )
+            cross_file = (source_root / "fidb-cross.ini").read_text()
+
+        self.assertIn("c = ['/usr/bin/gcc']", cross_file)
+        self.assertIn("cpp = ['/usr/bin/g++']", cross_file)
+        self.assertIn("system = 'linux'", cross_file)
+        self.assertIn("cpu_family = 'x86_64'", cross_file)
+        self.assertIn("needs_exe_wrapper = true", cross_file)
+        self.assertIn("c_args = ['-O3', '-fPIC']", cross_file)
+        self.assertIn("--wrap-mode=forcefallback", commands[0])
+        self.assertIn("-Dtests=false", commands[0])
+        self.assertEqual(
+            commands[1][-4:],
+            ("glib-2.0", "gmodule-2.0", "gobject-2.0", "gio-2.0"),
+        )
+
+    def test_glib_cross_file_preserves_target_endianness(self):
+        big_endian = replace(route(), architecture="mips")
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary).resolve()
+            prepare_build_workspace(
+                "glib-meson",
+                route=big_endian,
+                compiler_flags=("-O2",),
+                source_root=source_root,
+            )
+            cross_file = (source_root / "fidb-cross.ini").read_text()
+
+        self.assertIn("cpu_family = 'mips'", cross_file)
+        self.assertIn("endian = 'big'", cross_file)
 
     def test_fixed_make_adapters_keep_treatment_flags_and_platform(self):
         windows = replace(route(), target_os="windows")

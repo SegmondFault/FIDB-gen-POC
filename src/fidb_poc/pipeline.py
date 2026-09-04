@@ -30,6 +30,7 @@ from .adapters import (
     detect_project,
     find_static_archives,
     linked_output_command,
+    prepare_build_workspace,
 )
 from .config import Configuration, Library, Route, Treatment
 from .toolchain_cache import acquire_pinned, inspect_cached
@@ -942,6 +943,12 @@ def build_library(
     _remove_generated_path(build_root)
     cell_source = copy_pristine_source(source_root, build_root / "source")
     _stage_build_inputs(library, build_inputs or {}, cell_source)
+    prepare_build_workspace(
+        detection.build_system,
+        route=route,
+        compiler_flags=treatment.flags_for(route),
+        source_root=cell_source,
+    )
     objects_root = build_root / "objects"
     environment = pipeline_environment(
         build_environment(
@@ -971,6 +978,7 @@ def build_library(
         route=route,
         compiler_flags=treatment.flags_for(route),
         jobs=build_jobs_per_cell,
+        source_root=cell_source,
     )
     _skip(
         skipped,
@@ -980,7 +988,11 @@ def build_library(
     )
 
     def command_stage(command: tuple[str, ...]) -> str:
-        if "configure" in command or command[:2] == ("cmake", "-S"):
+        if (
+            "configure" in command
+            or command[:2] == ("cmake", "-S")
+            or command[:2] == ("meson", "setup")
+        ):
             return "configure"
         return "compile"
 

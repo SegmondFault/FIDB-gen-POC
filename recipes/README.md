@@ -22,18 +22,20 @@ The current top-ten set is:
 | Readline 8.3 | `readline-autoconf` | `libreadline.a`, `libhistory.a` |
 | GMP 6.3.0 | `gmp-autoconf` | `libgmp.a` |
 
-The dependency-free portion of ranks 11–20 is also authored:
+The ranks 11–20 set is also authored:
 
 | Recipe | Fixed adapter | Retained archive(s) |
 | --- | --- | --- |
 | HarfBuzz 14.4.0 | `harfbuzz-cmake` | `libharfbuzz.a` plus subset, raster, vector and GPU archives |
 | FreeType 2.14.3 | `freetype-autoconf` | `libfreetype.a` |
+| GLib 2.88.3 | `glib-meson` | GLib, GModule, GObject and GIO static archives |
 | Expat 2.8.2 | `expat-autoconf` | `libexpat.a` |
 | Brotli 1.2.0 | `brotli-cmake` | common, decoder and encoder archives |
 | libjpeg-turbo 3.2.0 | `libjpeg-turbo-cmake` | `libjpeg.a`, `libturbojpeg.a` |
 | libunistring 1.4.2 | `libunistring-autoconf` | `libunistring.a` |
 | bzip2 1.0.8 | `make` | `libbz2.a` |
 | libtiff 4.7.2 | `libtiff-autoconf` | `libtiff.a` |
+| libpng 1.6.58 | `libpng-cmake` | `libpng16.a` |
 
 These adapters deliberately avoid unpinned host libraries. FreeType and
 libtiff disable optional external codecs. libjpeg-turbo uses its in-tree
@@ -41,12 +43,17 @@ portable implementation and has SIMD disabled until assembler/toolchain width
 is modelled explicitly. HarfBuzz retains all five dependency-free library
 components and uses the adjacent compiler-pack C++ driver.
 
-GLib 2.88.3 and libpng 1.6.58 remain recipe blockers. GLib requires an offline
-Meson dependency set for PCRE2, libffi, zlib and proxy-libintl plus reviewed
-cross files. libpng requires zlib built for the exact same route and treatment.
-Neither may fall back to host `pkg-config`, system libraries, or a networked
-Meson wrap download. Add a pinned dependency contract to the recipe/pipeline
-before authoring those two files.
+GLib 2.88.3 pins the exact PCRE2, libffi, zlib and proxy-libintl source and
+WrapDB patch payloads named by the upstream release. Its fixed adapter writes a
+reviewed cross file for every qualified target, disables optional host
+integrations and forces Meson to consume only the staged package cache. The
+x86-64 Linux configure canary resolved every fallback from that offline cache.
+
+The libpng recipe declares zlib 1.3.1 as a checksum-pinned secondary source
+input. Its fixed adapter builds zlib with the exact cell route and treatment,
+installs it only into the cell workspace, then configures libpng against that
+prefix. The dependency digest is carried through planning, runtime authority
+resolution and retained provenance.
 
 The specialized adapter names are intentional. They allow each upstream
 project to have a reviewed, minimal static-library target without making
@@ -89,12 +96,11 @@ not run Ghidra, every compiler generation, or every treatment, and they did not
 arm or materialize `batch-020`. Full object-format validation, analysis, and
 hash comparison remain work for the disarmed campaign.
 
-The eight C11–C20 recipes above have passed pin matching, source-marker
+The ten C11–C20 recipes above have passed pin matching, source-marker
 detection and fixed-command tests, but have not yet crossed this compilation
 qualification boundary. `batch-c11-20` therefore stays outside the priority
 queue. Before materialization, repeat the target-class and oldest-generation
-canaries, record their exact archive/object results here, and resolve the two
-dependency-bearing recipes.
+canaries and record their exact archive/object results here.
 
 To review pins without executing a build:
 

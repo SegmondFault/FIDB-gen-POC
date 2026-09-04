@@ -247,25 +247,24 @@ This projection is intentionally not in `plans/priority-queue.toml`. At the
 time it was added, all ten libraries reported `recipe-required`; a source pin
 and a qualified toolchain do not constitute a build recipe.
 
-The first authoring pass added fixed recipes for HarfBuzz, FreeType, Expat,
-Brotli, libjpeg-turbo, libunistring, bzip2 1.0.8 and libtiff. Exact recipe pins
-match the C20 source authority and project detection was checked against every
-cached source tree. This moves the read-only projection to 8/10 recipe-ready,
-1,776 materializable cells and 444 blocked cells, but compilation qualification
-is still outstanding and the batch remains disarmed.
+The first authoring passes added fixed recipes for HarfBuzz, FreeType, Expat,
+Brotli, libjpeg-turbo, libunistring, bzip2 1.0.8, libtiff, libpng and GLib.
+Exact recipe pins match the C20 source authority and project detection was
+checked against every cached source tree. This moves the read-only projection
+to 10/10 recipe-ready and 2,220 materializable cells, but compilation
+qualification is still outstanding and the batch remains disarmed.
 
-The remaining blockers are structural, not missing downloads:
+The two dependency-bearing recipes require special care:
 
-- GLib needs an offline Meson dependency set for PCRE2, libffi, zlib and
-  proxy-libintl plus per-target cross files. Its checked-in wraps name exact
-  upstream and WrapDB source/patch hashes, but runtime network access is not an
-  acceptable build mechanism.
-- libpng requires a zlib build produced by the same route and treatment. Do not
-  satisfy it from the Linux host or an uncontrolled sysroot.
+- GLib pins the upstream release's PCRE2, libffi, zlib and proxy-libintl
+  source/WrapDB patch set. Its adapter writes the per-target cross file and
+  forces those staged fallbacks; runtime network access is not acceptable.
+- libpng uses the declarative secondary-input contract to pin zlib 1.3.1. Its
+  adapter builds zlib with the same route and treatment inside each cell; do
+  not replace that with a host or sysroot library.
 
-Implement a declarative pinned-dependency contract, stage those inputs from the
-content-addressed cache, and include every dependency digest in cell provenance.
-Then run focused tests and target-family/oldest-generation compilation canaries
+The x86-64 Linux GLib configure canary resolved all four dependencies from the
+staged offline cache. Run target-family/oldest-generation compilation canaries
 for all ten before materialisation. Never mark the C11–C20 batch ready merely
 to make it appear in the scheduler.
 

@@ -221,6 +221,46 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(recipe.sha256, source["sha256"])
             self.assertEqual(recipe.source_directory, source["source_directory"])
 
+    def test_libpng_recipe_pins_its_route_matched_zlib_input(self):
+        root = Path(__file__).resolve().parents[1]
+        configuration = load_configuration(
+            root / "worker.toml", request_override=("libpng@1.6.58",)
+        )
+
+        recipe = configuration.libraries[0]
+        self.assertEqual(recipe.preferred_build_system, "libpng-cmake")
+        self.assertEqual(recipe.static_archives, ("libpng16.a",))
+        self.assertEqual(len(recipe.build_inputs), 1)
+        zlib = recipe.build_inputs[0]
+        self.assertEqual(zlib.kind, "source-tree")
+        self.assertEqual(zlib.identifier, "zlib-1.3.1")
+        self.assertEqual(
+            zlib.sha256,
+            "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+        )
+
+    def test_glib_recipe_pins_every_offline_wrap_input(self):
+        root = Path(__file__).resolve().parents[1]
+        configuration = load_configuration(
+            root / "worker.toml", request_override=("glib@2.88.3",)
+        )
+
+        recipe = configuration.libraries[0]
+        self.assertEqual(recipe.preferred_build_system, "glib-meson")
+        self.assertEqual(len(recipe.build_inputs), 7)
+        self.assertEqual(
+            {row.filename for row in recipe.build_inputs},
+            {
+                "pcre2-10.46.tar.bz2",
+                "pcre2_10.46-1_patch.zip",
+                "libffi-3.5.2.tar.gz",
+                "libffi_3.5.2-1_patch.zip",
+                "zlib-1.3.1.tar.gz",
+                "zlib_1.3.1-1_patch.zip",
+                "proxy-libintl-0.5.tar.gz",
+            },
+        )
+
     def test_unknown_library_request_fails_closed(self):
         root = Path(__file__).resolve().parents[1]
         with self.assertRaisesRegex(ValueError, "no approved recipe"):

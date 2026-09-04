@@ -453,7 +453,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["schema_version"], "fidb-authority-catalog/v16")
         self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
-        self.assertEqual(len(document["recipes"]), 22)
+        self.assertEqual(len(document["recipes"]), 24)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
@@ -483,7 +483,8 @@ class LocalApiTests(unittest.TestCase):
             row for row in document["width_batches"] if row["id"] == "batch-c11-20"
         )
         self.assertEqual(next_cohort["summary"]["total_executions"], 2_220)
-        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 444)
+        self.assertEqual(next_cohort["readiness"]["recipe_ready_libraries"], 10)
+        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 2_220)
         self.assertEqual(
             next_cohort["readiness"]["queue_state"],
             "not-materialized-disarmed",
