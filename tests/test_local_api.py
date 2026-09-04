@@ -534,6 +534,13 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["run"]["state"], "not-started")
         self.assertFalse(document["canary_gate"]["ready"])
 
+        status, live, _ = self.request(
+            "GET", "/api/v1/machine-validation/run"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(live["run"]["state"], "not-started")
+        self.assertFalse(live["canary_gate"]["ready"])
+
         status, document, _ = self.request(
             "GET", "/api/v1/machine-validation?mode=full"
         )

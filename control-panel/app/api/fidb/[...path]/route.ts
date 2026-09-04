@@ -13,6 +13,7 @@ const readRoutes = new Set([
   'lane-inventory',
   'ecological-validation',
   'machine-validation',
+  'machine-validation/run',
   'hash-discrimination',
   'noisy-hashes',
   'retention',

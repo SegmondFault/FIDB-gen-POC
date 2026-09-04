@@ -77,6 +77,7 @@ _GET_PATHS = {
     "/api/v1/preflight",
     "/api/v1/ecological-validation",
     "/api/v1/machine-validation",
+    "/api/v1/machine-validation/run",
     "/api/v1/hash-discrimination",
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
@@ -750,6 +751,27 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self.api_server.config.project_root
             )
             self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
+
+        if path == "/api/v1/machine-validation/run":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "machine validation runtime takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                {
+                    "run": machine_validation_runtime_status(
+                        self.api_server.config.project_root
+                    ),
+                    "canary_gate": machine_validation_canary_gate_status(
+                        self.api_server.config.project_root
+                    ),
+                },
+                origin=origin,
+            )
             return
 
         if path == "/api/v1/noisy-hashes":

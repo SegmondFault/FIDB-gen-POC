@@ -1238,6 +1238,11 @@ export type MachineValidationCanaryGate = {
   runtime_authority_sha256: string;
 };
 
+export type MachineValidationLive = {
+  run: MachineValidationRun;
+  canary_gate: MachineValidationCanaryGate;
+};
+
 export type MachineValidation = {
   schema_version: 'fidb-machine-validation-status/v1';
   id: string;
@@ -2109,12 +2114,16 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setRetention(retentionResult);
       } else {
         const [machineResult, ecologicalResult, noisyResult, retentionResult] = await Promise.all([
-          json<MachineValidation>('machine-validation'),
+          json<MachineValidationLive>('machine-validation/run'),
           json<EcologicalValidation>('ecological-validation'),
           json<NoisyHashStatus>('noisy-hashes'),
           json<RetentionStatus>('retention'),
         ]);
-        setMachineValidation(machineResult);
+        setMachineValidation(current => current ? {
+          ...current,
+          run: machineResult.run,
+          canary_gate: machineResult.canary_gate,
+        } : current);
         setEcologicalValidation(ecologicalResult);
         setNoisyHashes(noisyResult);
         setRetention(retentionResult);
