@@ -41,6 +41,7 @@ from .timing import (
 
 SEAL_SCHEMA = "fidb-cell-seal/v1"
 VARIANTS_SCHEMA = "fidb-factor-variants/v1"
+MANIFEST_FIELD_LIMIT = 16 * 1024 * 1024
 SUPPORTED_KINDS = frozenset({"native", "source-library", "archive-library", "malware"})
 RAW_COMMAND_FIELDS = frozenset(
     {
@@ -1016,8 +1017,13 @@ def _native_outputs(
         "validating native pipeline FID result",
     ) as metrics:
         manifest = _relative_artifact(Path(manifest), attempt_root, "native manifest")
-        with manifest.open(newline="", encoding="utf-8") as stream:
-            rows = list(csv.DictReader(stream))
+        previous_limit = csv.field_size_limit()
+        csv.field_size_limit(max(previous_limit, MANIFEST_FIELD_LIMIT))
+        try:
+            with manifest.open(newline="", encoding="utf-8") as stream:
+                rows = list(csv.DictReader(stream))
+        finally:
+            csv.field_size_limit(previous_limit)
         if len(rows) != 1 or rows[0].get("status") != "complete":
             raise CellRunnerError(
                 f"native pipeline did not return exactly one complete cell: {rows!r}"

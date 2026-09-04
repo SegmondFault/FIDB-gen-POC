@@ -258,6 +258,9 @@ class CellRunnerTests(unittest.TestCase):
                 "ghidra_headless_path": "/opt/ghidra/support/analyzeHeadless",
                 "java_path": "/usr/bin/java",
                 "java_version": "21",
+                # Real compiler banners and paths can make a manifest field
+                # exceed Python's conservative 128 KiB CSV default.
+                "compiler_version": "v" * (256 * 1024),
                 "pyghidra_version": "3.1.0",
                 "source_url": "https://example.invalid/source",
                 "source_sha256": "b" * 64,
