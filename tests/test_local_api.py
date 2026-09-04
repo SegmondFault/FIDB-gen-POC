@@ -68,6 +68,7 @@ class LocalApiTests(unittest.TestCase):
             "performance",
             "plans",
             "recipes",
+            "retention",
             "sensitivity",
             "sources",
             "targets",
@@ -531,6 +532,34 @@ class LocalApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertEqual(document["error"]["code"], "invalid-query")
+
+    def test_retention_endpoints_preserve_dry_run_and_exact_apply_contract(self):
+        self.sync()
+
+        status, initial, _ = self.request("GET", "/api/v1/retention")
+        self.assertEqual(status, 200)
+        self.assertEqual(initial["schema_version"], "fidb-retention-status/v1")
+        self.assertIsNone(initial["latest_plan"])
+
+        status, planned, _ = self.request("POST", "/api/v1/retention/plan", {})
+        self.assertEqual(status, 200)
+        digest = planned["latest_plan"]["plan_digest"]
+        self.assertEqual(len(digest), 64)
+        self.assertEqual(planned["latest_plan"]["summary"]["actions"], 0)
+        self.assertIsNone(planned["last_run"])
+
+        status, applied, _ = self.request(
+            "POST", "/api/v1/retention/apply", {"plan_digest": digest}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(applied["last_run"]["state"], "complete")
+        self.assertEqual(applied["last_run"]["plan_digest"], digest)
+
+        status, rejected, _ = self.request(
+            "POST", "/api/v1/retention/apply", {"plan_digest": "wrong"}
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(rejected["error"]["code"], "operation-failed")
 
     def test_lane_inventory_endpoint_is_read_only_and_rejects_query(self):
         status, document, _ = self.request("GET", "/api/v1/lane-inventory")

@@ -39,6 +39,13 @@ from .hash_discrimination import compile_hash_discrimination
 from .noisy_hashes import compile_noisy_hashes, save_noisy_hash_decision
 from .operations_policy import evaluate_operations
 from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
+from .retention import (
+    RetentionError,
+    apply_retention_plan,
+    compile_retention_plan,
+    retention_status,
+    write_retention_plan,
+)
 
 API_SCHEMA = "fidb-local-api/v1"
 DEFAULT_BIND = "127.0.0.1"
@@ -65,6 +72,7 @@ _GET_PATHS = {
     "/api/v1/ecological-validation",
     "/api/v1/hash-discrimination",
     "/api/v1/noisy-hashes",
+    "/api/v1/retention",
 }
 _POST_PATHS = {
     "/api/v1/sync",
@@ -75,6 +83,8 @@ _POST_PATHS = {
     "/api/v1/ecological-validation/import",
     "/api/v1/ecological-validation/run",
     "/api/v1/noisy-hashes/decision",
+    "/api/v1/retention/plan",
+    "/api/v1/retention/apply",
 }
 
 log = logging.getLogger(__name__)
@@ -235,9 +245,7 @@ def _public_snapshot(
 ) -> dict[str, object]:
     if detail not in {"full", "control-panel"}:
         raise ValueError("snapshot detail must be full or control-panel")
-    history_limit = (
-        CONTROL_PANEL_HISTORY_LIMIT if detail == "control-panel" else None
-    )
+    history_limit = CONTROL_PANEL_HISTORY_LIMIT if detail == "control-panel" else None
     result = coordinator.snapshot(
         include_inactive=include_inactive,
         include_events=False,
@@ -418,7 +426,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             operation()
         except ApiError as error:
             self._error(error, origin)
-        except (CoordinatorError, ValueError, OSError) as error:
+        except (CoordinatorError, RetentionError, ValueError, OSError) as error:
             self._error(
                 ApiError(HTTPStatus.CONFLICT, "operation-failed", str(error)),
                 origin,
@@ -745,6 +753,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/retention":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "retention status takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                retention_status(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
         if path == "/api/v1/preflight":
             if query:
                 raise ApiError(
@@ -872,9 +894,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 )
             raise ApiError(HTTPStatus.NOT_FOUND, "not-found", "endpoint not found")
         if path == "/api/v1/ecological-validation/import":
-            config = compile_ecological_validation(
-                self.api_server.config.project_root
-            )
+            config = compile_ecological_validation(self.api_server.config.project_root)
             length = self._binary_body_length(int(config["policy"]["max_file_bytes"]))
             result = import_ecological_binary(
                 self.api_server.config.project_root,
@@ -929,9 +949,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "invalid-case-id",
                     "case_id must be a string",
                 )
-            result = start_ecological_case(
-                self.api_server.config.project_root, case_id
-            )
+            result = start_ecological_case(self.api_server.config.project_root, case_id)
             self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
             return
         elif path == "/api/v1/noisy-hashes/decision":
@@ -939,7 +957,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             signature_id = document.get("signature_id")
             state = document.get("state")
             reason = document.get("reason")
-            if not all(isinstance(value, str) for value in (signature_id, state, reason)):
+            if not all(
+                isinstance(value, str) for value in (signature_id, state, reason)
+            ):
                 raise ApiError(
                     HTTPStatus.BAD_REQUEST,
                     "invalid-noisy-hash-decision",
@@ -953,6 +973,29 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
             self._json_response(HTTPStatus.OK, result, origin=origin)
             return
+        elif path == "/api/v1/retention/plan":
+            self._only_fields(document, set())
+            plan = compile_retention_plan(
+                self.api_server.config.project_root,
+                self.api_server.config.state_path,
+            )
+            write_retention_plan(plan, self.api_server.config.project_root)
+            result = retention_status(self.api_server.config.project_root)
+        elif path == "/api/v1/retention/apply":
+            self._only_fields(document, {"plan_digest"})
+            plan_digest = document.get("plan_digest")
+            if not isinstance(plan_digest, str):
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-plan-digest",
+                    "plan_digest must be a string",
+                )
+            apply_retention_plan(
+                self.api_server.config.project_root,
+                plan_digest,
+                self.api_server.config.state_path,
+            )
+            result = retention_status(self.api_server.config.project_root)
         elif path == "/api/v1/sync":
             self._only_fields(document, set())
             with Coordinator(

@@ -14,6 +14,7 @@ const readRoutes = new Set([
   'ecological-validation',
   'hash-discrimination',
   'noisy-hashes',
+  'retention',
   'preflight',
 ]);
 const writeRoutes = new Set([
@@ -25,6 +26,8 @@ const writeRoutes = new Set([
   'ecological-validation/import',
   'ecological-validation/run',
   'noisy-hashes/decision',
+  'retention/plan',
+  'retention/apply',
 ]);
 const maxRequestBytes = 64 * 1024;
 const maxImportBytes = 512 * 1024 * 1024;
