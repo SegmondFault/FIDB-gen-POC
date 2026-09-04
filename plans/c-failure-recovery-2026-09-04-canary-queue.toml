@@ -4,7 +4,7 @@ schema_version = "fidb-queue/v1"
 name = "c-failure-recovery-2026-09-04-canary"
 
 [queue]
-armed = false
+armed = true
 max_workers = 6
 batch_order = ["c-failure-recovery-2026-09-04-canary"]
 poll_seconds = 1
