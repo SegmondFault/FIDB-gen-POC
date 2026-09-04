@@ -158,10 +158,11 @@ Read `RETENTION.md` before changing attempt cleanup. The authority is
 an ad-hoc `rm` to a worker or nightly script.
 
 The order is fixed: terminal queue, content-addressed dry-run, bounded apply if
-eligible, then one worker recycle per drain-session ID. A deferred apply must
-not defer worker recycling: stale Ghidra JVM state was observed retaining about
-38 GiB across 20 idle workers. Recycling releases it without host-wide cache or
-swap manipulation.
+eligible, then one worker recycle per drain-session ID. Queue completion is the
+trigger even when it occurs outside the configured claim window. A deferred
+apply must not defer worker recycling: stale Ghidra JVM state was observed
+retaining about 38 GiB across 20 idle workers. Recycling releases it without
+host-wide cache or swap manipulation.
 
 Successful attempt scratch is ineligible until the queue-to-lane importer has
 emitted a valid relationship-complete receipt. The importer is not implemented,

@@ -17,6 +17,7 @@ from fidb_poc.queue_cli import (
     QueueCliError,
     _RETENTION_RECYCLED_SESSION,
     _durably_publish,
+    _maybe_post_drain_maintenance,
     _post_drain_maintenance,
     _staging_root,
     _validate_cell_timing,
@@ -103,6 +104,55 @@ class QueueCommandTests(unittest.TestCase):
             )
 
         recycle.assert_called_once_with("batch-drained-42")
+
+    def test_terminal_maintenance_is_independent_of_claim_window(self) -> None:
+        coordinator = type(
+            "TerminalCoordinator",
+            (),
+            {
+                "status": lambda _self: {
+                    "counts": {"queued": 0, "leased": 0, "running": 0}
+                }
+            },
+        )()
+        notifications = type("Notifications", (), {})()
+        with (
+            patch(
+                "fidb_poc.retention.current_retention_session",
+                return_value="batch-drained-42",
+            ),
+            patch("fidb_poc.queue_cli._notify") as notify,
+            patch("fidb_poc.queue_cli._post_drain_maintenance") as maintain,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            handled = _maybe_post_drain_maintenance(
+                coordinator,
+                self.project_root,
+                self.database,
+                "worker-1",
+                notifications,
+                already_notified=False,
+            )
+
+        self.assertTrue(handled)
+        notify.assert_called_once()
+        maintain.assert_called_once_with(
+            self.project_root, self.database, "batch-drained-42"
+        )
+
+    def test_terminal_maintenance_skips_status_after_notification(self) -> None:
+        coordinator = type("UnexpectedCoordinator", (), {})()
+
+        handled = _maybe_post_drain_maintenance(
+            coordinator,
+            self.project_root,
+            self.database,
+            "worker-1",
+            type("Notifications", (), {})(),
+            already_notified=True,
+        )
+
+        self.assertTrue(handled)
 
     @staticmethod
     def _write_fake_seal(

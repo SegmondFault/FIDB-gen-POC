@@ -49,8 +49,9 @@ uv run fidb-poc retention apply --project-root . \
 ```
 
 `fidb-poc retention auto` follows `[automation]` in the policy. Workers call
-the same operation after a terminal queue. The default automatic ceiling is
-600 seconds. Plans above it remain available for manual review and are not
+the same operation after a terminal queue, including when the last admitted
+block drains after the claim window has closed. The default automatic ceiling
+is 600 seconds. Plans above it remain available for manual review and are not
 applied automatically.
 
 The control panel exposes the same status and guarded operations under

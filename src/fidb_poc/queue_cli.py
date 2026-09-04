@@ -109,6 +109,45 @@ def _post_drain_maintenance(root: Path, state: Path, session_id: str) -> None:
             _recycle_worker_process(session_id)
 
 
+def _maybe_post_drain_maintenance(
+    coordinator: Coordinator,
+    root: Path,
+    state: Path,
+    worker_id: str,
+    notifications: NotificationPolicy,
+    *,
+    already_notified: bool,
+) -> bool:
+    """Run terminal maintenance once, including outside the claim window."""
+
+    if already_notified:
+        return True
+    status = coordinator.status()
+    counts = status["counts"]
+    if not (
+        isinstance(counts, dict)
+        and counts.get("queued") == 0
+        and counts.get("leased") == 0
+        and counts.get("running") == 0
+    ):
+        return False
+    from .retention import current_retention_session
+
+    retention_session = current_retention_session(root, state)
+    if os.environ.get(_RETENTION_RECYCLED_SESSION) != retention_session:
+        _notify(
+            notifications,
+            "queue-drained",
+            {
+                "worker_id": worker_id,
+                "counts": counts,
+                "retention_session": retention_session,
+            },
+        )
+        _post_drain_maintenance(root, state, retention_session)
+    return True
+
+
 def _common_parser(*, queue: bool) -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(add_help=False)
     result.add_argument(
@@ -1161,12 +1200,28 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     else bool(schedule["claims_allowed"])
                 )
                 if not claims_authorized:
+                    drained_notified = _maybe_post_drain_maintenance(
+                        coordinator,
+                        root,
+                        state,
+                        arguments.worker_id,
+                        config.operations.notifications,
+                        already_notified=drained_notified,
+                    )
                     if arguments.once:
                         _print_json(operations)
                         return 0
                     time.sleep(config.poll_seconds)
                     continue
                 if not bool(resources["passed"]):
+                    drained_notified = _maybe_post_drain_maintenance(
+                        coordinator,
+                        root,
+                        state,
+                        arguments.worker_id,
+                        config.operations.notifications,
+                        already_notified=drained_notified,
+                    )
                     reasons = tuple(str(value) for value in resources["reasons"])
                     if reasons != last_resource_block:
                         _notify(
@@ -1274,30 +1329,14 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                 if arguments.once:
                     _print_json(coordinator.status())
                     return 0
-                status = coordinator.status()
-                counts = status["counts"]
-                if (
-                    isinstance(counts, dict)
-                    and not drained_notified
-                    and counts.get("queued") == 0
-                    and counts.get("leased") == 0
-                    and counts.get("running") == 0
-                ):
-                    from .retention import current_retention_session
-
-                    retention_session = current_retention_session(root, state)
-                    if os.environ.get(_RETENTION_RECYCLED_SESSION) != retention_session:
-                        _notify(
-                            config.operations.notifications,
-                            "queue-drained",
-                            {
-                                "worker_id": arguments.worker_id,
-                                "counts": counts,
-                                "retention_session": retention_session,
-                            },
-                        )
-                        _post_drain_maintenance(root, state, retention_session)
-                    drained_notified = True
+                drained_notified = _maybe_post_drain_maintenance(
+                    coordinator,
+                    root,
+                    state,
+                    arguments.worker_id,
+                    config.operations.notifications,
+                    already_notified=drained_notified,
+                )
                 time.sleep(config.poll_seconds)
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
