@@ -24,7 +24,11 @@ the queue rejects a `max_workers` value which drifts from the named profile. An
 at queue load; its effective settings and host facts are retained in coordinator
 state, and a different resolved worker count also fails closed.
 Do not interpret 32 hardware threads as permission to exceed the qualified
-twenty-worker envelope.
+twenty-worker envelope. That value is a coordinator ceiling, not a requirement
+to start every service instance. The 1,129-object OpenSSL Android recovery used
+14 active workers after its isolated 2,048-task canary measured about 5.43 GiB;
+twenty simultaneous copies of that observed worst-cell footprint would exceed
+94 GiB before host overhead.
 
 ## Before activation
 

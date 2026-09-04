@@ -141,6 +141,15 @@ and remote worker units therefore use the bounded 2,048-task ceiling. Inspect
 `TasksCurrent`, `TasksMax`, `MemoryCurrent`, `MemoryPeak`, host available memory
 and the exact exception before changing heap or concurrency.
 
+The 94 GiB production recovery resumed with 14 active service instances, not
+all 20 allowed by the queue ceiling. Fourteen times the measured 5.43 GiB
+worst-cell peak plus the host baseline remains bounded; twenty simultaneous
+worst cells would exceed available physical memory. The exact formerly failing
+production job (`android-arm64-ndk-r27d-clang-api21`, `optimization_o0`) then
+sealed on attempt 6 under the 2,048-task unit. Treat 20 as the profile's maximum,
+not a requirement to start every unit for every library shape; record the
+actual active-service count alongside the named profile.
+
 ## Time-aware campaign
 
 `plans/c-top10-nonapple-width-v2-queue-policy.toml` is the stable operational
