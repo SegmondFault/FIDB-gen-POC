@@ -4,7 +4,7 @@ schema_version = "fidb-queue/v1"
 name = "c-nghttp2-aarch64-gcc13-os-recovery-canary"
 
 [queue]
-armed = false
+armed = true
 max_workers = 1
 batch_order = ["c-nghttp2-aarch64-gcc13-os-recovery-canary"]
 poll_seconds = 1
