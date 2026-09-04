@@ -122,6 +122,21 @@ superseded. The authority-failure circuit breaker pauses claims after five
 terminal failures in one authority class; investigate it rather than repeatedly
 resuming.
 
+The guarded transition accepts either no active admission or an admission for
+the exact selected batch. It rejects an admission for any other batch. This
+permits recovery of a paused partially completed block without clearing its
+untouched rows or losing the block boundary. On 2026-09-04, 21 OpenSSL failures
+in chunk 001 were requeued this way; 24 sealed completions and 21 untouched jobs
+were left unchanged, and the returned job-ID digest was retained in the ledger.
+
+Do not classify every Java `OutOfMemoryError` as heap exhaustion. The 2026-09-04
+OpenSSL run had ample host memory and a 4 GiB heap but reached about 470 tasks in
+individual worker cgroups. Under `TasksMax=512`, Ghidra failed with `unable to
+create native thread`. The reviewed local and remote worker units now use the
+bounded `TasksMax=1024` ceiling. Inspect `TasksCurrent`, `TasksMax`,
+`MemoryCurrent`, `MemoryPeak`, host available memory and the exact exception
+before changing heap or concurrency.
+
 ## Time-aware campaign
 
 `plans/c-top10-nonapple-width-v2-queue-policy.toml` is the stable operational

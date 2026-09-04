@@ -50,8 +50,9 @@ campaign unless it reports every active job as passed; `--batch ID` may be
 repeated when checking a deliberately bounded subset.
 
 Do not recover a failed campaign with SQLite updates. Keep it disarmed and
-paused, verify that no batch is admitted and no lease is live, then use the
-guarded transition:
+paused and verify that no lease is live, then use the guarded transition. No
+different batch may be admitted; the selected failed batch may remain admitted
+so its untouched and recovered cells retain their execution-block boundary:
 
 ```sh
 .venv/bin/fidb-poc queue requeue-failed \
@@ -64,6 +65,13 @@ The command aborts on any state or count drift. It retains attempts, stage
 spans and prior errors in their immutable historical records, clears only the
 current job's terminal error fields, and appends auditable job and batch
 events. Inspect the returned job-ID digest before rearming.
+
+An `OutOfMemoryError` saying `unable to create native thread` is not proof that
+the 4 GiB Java heap or host RAM is exhausted. Compare the worker cgroup's
+`TasksCurrent` with `TasksMax`. OpenSSL analysis reached roughly 470 tasks and
+failed under the former 512-task ceiling; the reviewed 1,024-task limit leaves
+bounded native-thread headroom while `MemoryHigh=6G` and `MemoryMax=8G` retain
+the memory guardrail.
 
 Confirm that `/opt/ghidra/support/analyzeHeadless`, Java 21, the native route
 tools, required pinned source/toolchain archives or network access, and ample

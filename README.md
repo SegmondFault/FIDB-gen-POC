@@ -460,8 +460,10 @@ routes and compiler identities, but performs no compilation and starts no JVM.
 Every active job must pass before the queue is armed.
 
 A reviewed recovery never edits or clears the ledger. While the queue is
-disarmed, paused, has no active admission and has no live leases, requeue an
-exact terminal failure set with an explicit cardinality guard:
+disarmed, paused and has no live leases, requeue an exact terminal failure set
+with an explicit cardinality guard. There may be no active admission for a
+different batch; the selected batch itself may remain admitted so its untouched
+cells and repaired failures can resume together:
 
 ```sh
 uv run fidb-poc queue requeue-failed \
@@ -472,6 +474,12 @@ The transition preserves every attempt and stage record, appends a per-job
 operator event plus a batch summary and leaves the attempt counter intact.
 Consequently the recovered claim becomes the next numbered attempt instead of
 rewriting history.
+
+The worker unit bounds each Ghidra process by memory and tasks. Large OpenSSL
+analyses reached roughly 470 tasks and exhausted the former `TasksMax=512`
+service limit before exhausting either the 4 GiB Java heap or host RAM. The
+reviewed unit now uses `TasksMax=1024`; diagnose `unable to create native
+thread` against `TasksCurrent`/`TasksMax` before treating it as a heap failure.
 
 After an operator deliberately changes `armed` to `true`, one or more workers
 can consume it continuously:
