@@ -35,10 +35,18 @@ updates:
   its private gnulib archive is built first. Its configure-time C++ probe uses
   the adjacent cross-toolchain driver even though the retained library is C.
 - GMP's `all` target must run its host-side table/header generators before the
-  static library can be built.
+  static library can be built. Cross builds pin `CC_FOR_BUILD` to the reviewed
+  native host compiler and record that compiler in provenance; the target
+  compiler remains the compiler of every retained object.
 - Readline 8.3 leaves an otherwise-unused POSIX `winsize` tag undefined under
   MinGW. Only `terminal.o` and `rltty.o` receive the fixed opaque-tag mapping;
   Unix and Android builds are untouched.
+
+Source extraction preserves reviewed archive mtimes and permits only relative
+symlinks whose resolved targets stay within the extraction root. Windows build
+workspaces use a stable short digest name because long attempt identities can
+change Wine-backed configure probes. These are pipeline-wide invariants rather
+than recipe-controlled exceptions.
 
 ## Qualification boundary
 

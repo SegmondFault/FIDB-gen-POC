@@ -84,6 +84,23 @@ Android x86 32/64, and NDK r27d/r29 base/versioned identities. Its queue remains
 disarmed in Git. The repaired canary completed 8/8 cells on 2026-09-03 in the
 isolated ledger `var/fidb-canary/ledger-v2.sqlite3`.
 
+The later campaign-runtime recovery canary is
+`plans/materialized/canaries/c-failure-recovery-2026-09-04.toml`; its queue is
+disarmed and its isolated ledger is
+`var/fidb-canary/failure-recovery-2026-09-04.sqlite3`. It completed 6/6 real
+cells on 2026-09-04, covering the six terminal campaign failure classes:
+
+- safe relative archive symlinks for Zstandard;
+- preserved archive mtimes for nghttp2's generated Autotools files;
+- large OpenSSL native-manifest CSV fields;
+- GMP host generators under a Windows cross route;
+- bounded Windows build paths for gettext/Wine probes; and
+- header-based AMD64 COFF object validation for PCRE2.
+
+The cells took 46.2, 32.7, 518.8, 117.7, 162.3 and 41.0 seconds respectively.
+Before any production recovery, the exact active generation also resolved
+2,046/2,046 cells across 37 routes and six treatments with zero failures.
+
 ## Queue transitions and recovery
 
 Pause first, disarm second, then verify no leases or active workers before
