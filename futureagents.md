@@ -130,12 +130,16 @@ in chunk 001 were requeued this way; 24 sealed completions and 21 untouched jobs
 were left unchanged, and the returned job-ID digest was retained in the ledger.
 
 Do not classify every Java `OutOfMemoryError` as heap exhaustion. The 2026-09-04
-OpenSSL run had ample host memory and a 4 GiB heap but reached about 470 tasks in
-individual worker cgroups. Under `TasksMax=512`, Ghidra failed with `unable to
-create native thread`. The reviewed local and remote worker units now use the
-bounded `TasksMax=1024` ceiling. Inspect `TasksCurrent`, `TasksMax`,
-`MemoryCurrent`, `MemoryPeak`, host available memory and the exact exception
-before changing heap or concurrency.
+OpenSSL run had ample host memory and a 4 GiB heap. The Android ARM64/O0 cell
+imports 1,129 objects and failed with `unable to create native thread` under
+both the former 512 and 1,024 task limits. The isolated one-worker canary at
+`plans/c-openssl-tasksmax-2048-2026-09-04-canary-queue.toml` observed 1,103
+live tasks and completed all stages in 458.379 seconds under `TasksMax=2048`;
+Ghidra analysis took 428.501 seconds and the systemd memory peak observed during
+sampling was about 5.43 GiB under the unchanged 8 GiB limit. The reviewed local
+and remote worker units therefore use the bounded 2,048-task ceiling. Inspect
+`TasksCurrent`, `TasksMax`, `MemoryCurrent`, `MemoryPeak`, host available memory
+and the exact exception before changing heap or concurrency.
 
 ## Time-aware campaign
 

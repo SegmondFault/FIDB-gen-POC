@@ -68,10 +68,10 @@ events. Inspect the returned job-ID digest before rearming.
 
 An `OutOfMemoryError` saying `unable to create native thread` is not proof that
 the 4 GiB Java heap or host RAM is exhausted. Compare the worker cgroup's
-`TasksCurrent` with `TasksMax`. OpenSSL analysis reached roughly 470 tasks and
-failed under the former 512-task ceiling; the reviewed 1,024-task limit leaves
-bounded native-thread headroom while `MemoryHigh=6G` and `MemoryMax=8G` retain
-the memory guardrail.
+`TasksCurrent` with `TasksMax`. OpenSSL Android ARM64/O0 analysis imported 1,129
+objects, crossed 1,100 observed tasks and failed under both the former 512 and
+1,024-task ceilings. The isolated 2,048-task canary completed and sealed in
+458.379 seconds. `MemoryHigh=6G` and `MemoryMax=8G` retain the memory guardrail.
 
 Confirm that `/opt/ghidra/support/analyzeHeadless`, Java 21, the native route
 tools, required pinned source/toolchain archives or network access, and ample

@@ -475,11 +475,13 @@ operator event plus a batch summary and leaves the attempt counter intact.
 Consequently the recovered claim becomes the next numbered attempt instead of
 rewriting history.
 
-The worker unit bounds each Ghidra process by memory and tasks. Large OpenSSL
-analyses reached roughly 470 tasks and exhausted the former `TasksMax=512`
-service limit before exhausting either the 4 GiB Java heap or host RAM. The
-reviewed unit now uses `TasksMax=1024`; diagnose `unable to create native
-thread` against `TasksCurrent`/`TasksMax` before treating it as a heap failure.
+The worker unit bounds each Ghidra process by memory and tasks. An OpenSSL
+Android ARM64/O0 cell importing 1,129 objects exhausted both the former 512 and
+1,024 task limits before exhausting either the 4 GiB Java heap or host RAM. A
+single-worker qualification observed 1,103 live tasks and sealed the complete
+cell in 458.379 seconds under `TasksMax=2048`, with the 8 GiB memory limit
+unchanged. Diagnose `unable to create native thread` against
+`TasksCurrent`/`TasksMax` before treating it as a heap failure.
 
 After an operator deliberately changes `armed` to `true`, one or more workers
 can consume it continuously:
