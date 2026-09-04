@@ -117,6 +117,21 @@ The cells took 46.2, 32.7, 518.8, 117.7, 162.3 and 41.0 seconds respectively.
 Before any production recovery, the exact active generation also resolved
 2,046/2,046 cells across 37 routes and six treatments with zero failures.
 
+The final C10 recovery used the narrower
+`plans/materialized/canaries/c-nghttp2-aarch64-gcc13-os-recovery.toml` canary.
+The production `nghttp2-1.70.0:linux-aarch64-gcc-13:optimization_os` cell had
+three historical Autotools mtime failures and one SQLite heartbeat-contention
+failure. The exact isolated canary sealed with preserved archive mtimes; the
+production job was then requeued through the guarded transition and sealed on
+attempt 5. C10 ended at 2,046 complete, zero failed, zero queued. The queue was
+paused and disarmed afterwards. Preserve all five production attempts.
+
+Lease heartbeats now retry only transient SQLite `BUSY`/`LOCKED` contention
+inside a bounded window. Do not broaden that retry to non-lock database errors:
+those must still fail visibly. A worker process loaded before an extractor or
+adapter repair still contains the old Python implementation; recycle it before
+using the repaired path, even if tracked files are already correct.
+
 ## Queue transitions and recovery
 
 Pause first, disarm second, then verify no leases or active workers before
@@ -219,6 +234,22 @@ Generation cannot arm, synchronize, or execute work. Arming the active queue is
 a separate, small commit. Before leaving a scheduled run unattended, verify the
 queue is armed and unpaused, exact resolution passes, resource gates pass, and
 all 20 configured worker services are active.
+
+## C11–C20 staging
+
+`coverage/c-top20-width-study.toml` and `sources/c-top20-v1.toml` preserve the
+same provisional ranking method through global ranks 11–20. Their ten new
+archives are checksum-verified in the local content-addressed cache. The
+disarmed projection is `batches/c-11-20-mega-width.toml`: 10 libraries × 37
+qualified routes × 6 treatments = 2,220 exact executions.
+
+This projection is intentionally not in `plans/priority-queue.toml`. At the
+time it was added, all ten libraries reported `recipe-required`; a source pin
+and a qualified toolchain do not constitute a build recipe. Add fixed adapters,
+focused tests and target-family/oldest-generation compilation canaries before
+materialisation. Never mark the C11–C20 batch ready merely to make it appear in
+the scheduler—the Matrix should show it under missing recipes until those
+gates are real.
 
 ## Rollback
 

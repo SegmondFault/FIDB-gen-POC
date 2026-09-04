@@ -30,6 +30,25 @@ study's top ten: 10 libraries × 37 routes × 6 treatments. The broader declared
 width remains visible in the linked coverage authority; unimplemented or
 inapplicable combinations are not silently counted as executable cells.
 
+The completed campaign reached 2,046/2,046 sealed cells on 2026-09-04. Its
+operator queue is paused and disarmed with no failed or queued work.
+
+The following cohort is already visible as a separate disarmed planning layer:
+
+- `c-11-20-mega-width.toml` selects global ranks 11–20 from
+  `sources/c-top20-v1.toml`;
+- all ten source archives are locally cached and checksum-verified;
+- the projection retains the same 37 routes and six treatments, for 2,220
+  potential executions; and
+- it remains outside the active queue while its ten fixed recipes and
+  compilation canaries are absent.
+
+Inspect that boundary with:
+
+```sh
+uv run fidb-poc compile-width-batch batch-c11-20 --project-root .
+```
+
 ## Time-aware block projection
 
 `performance/batch-planning.toml` projects this campaign into five nominal

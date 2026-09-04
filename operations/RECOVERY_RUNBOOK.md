@@ -126,6 +126,7 @@ These are regression boundaries, not generic workarounds:
 | OpenSSL Android ARM64/O0 failed with `unable to create native thread` at 512 and 1,024 tasks | A one-worker canary observed 1,103 tasks and sealed under `TasksMax=2048`; the 4 GiB heap and 8 GiB hard memory limit were unchanged |
 | Twenty simultaneous worst-shape cells could exceed 94 GiB despite a twenty-worker profile ceiling | Recovery used 14 active services; the queue profile remains a ceiling, not an instruction to start every unit |
 | Drained workers retained embedded JVM memory | Post-drain retention recycles each worker once, records pre/post RSS and JVM state, then parks the fresh process until durable work returns |
+| A single nghttp2 recovery reached configure correctly but its lease heartbeat lost a transient SQLite write race | Heartbeats retry only SQLite `BUSY`/`LOCKED` contention for a bounded fraction of the lease; other database errors remain terminal |
 
 The six-cell runtime canary is
 `plans/c-failure-recovery-2026-09-04-canary-queue.toml`. It covers Zstandard,
@@ -133,6 +134,13 @@ nghttp2, OpenSSL, GMP, gettext and PCRE2 and completed all six real pipelines.
 The high-object-count proof is
 `plans/c-openssl-tasksmax-2048-2026-09-04-canary-queue.toml` and completed in
 458.379 seconds, including 428.501 seconds of Ghidra analysis.
+
+The final one-cell C10 proof is
+`plans/materialized/canaries/c-nghttp2-aarch64-gcc13-os-recovery.toml`. It
+sealed the exact AArch64 GCC 13 `Os` identity before the guarded production
+requeue; the production cell then sealed on attempt 5. When a fix changes
+loaded Python execution code, use a fresh canary/worker process—an already
+running worker does not acquire that fix from the worktree.
 
 ## Worker-unit verification
 
