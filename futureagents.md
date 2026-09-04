@@ -136,6 +136,12 @@ next ordered chunk only after the current one drains and only while the window
 is open. `finish_started_batch=true` lets a started chunk finish after 05:30.
 Manual `queue start-block` admits exactly one chunk outside the timer.
 
+One-day operational extensions belong in `[[schedule.date_overrides]]` TOML
+tables, not in a permanent edit to the normal window. A named local date may
+override `start`, `stop_claiming` and `hard_cutoff`; after that date, evaluation
+automatically returns to the normal schedule. Keep `hard_cutoff` absent when an
+already-started chunk must be allowed to drain.
+
 Regenerate only after reviewing changed authorities:
 
 ```sh
