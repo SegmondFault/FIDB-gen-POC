@@ -1308,6 +1308,26 @@ def retention_status(
         )
         if plan_path.is_file():
             plan = _load_json(plan_path, "latest retention plan")
+            action_examples = []
+            for action in list(plan.get("actions", []))[:10]:
+                if not isinstance(action, dict):
+                    continue
+                action_examples.append(
+                    {
+                        key: action[key]
+                        for key in (
+                            "kind",
+                            "job_id",
+                            "bundle_path",
+                            "source_paths",
+                            "paths",
+                            "failure_fingerprint",
+                            "apparent_bytes",
+                            "allocated_bytes",
+                        )
+                        if key in action
+                    }
+                )
             latest = {
                 **latest,
                 "summary": plan.get("summary"),
@@ -1316,11 +1336,19 @@ def retention_status(
                 "automatic_apply_eligible": plan.get("automatic_apply_eligible"),
                 "preserved_examples": list(plan.get("preserved", []))[:10],
                 "quarantine_examples": list(plan.get("quarantined", []))[:20],
-                "action_examples": list(plan.get("actions", []))[:20],
+                "action_examples": action_examples,
             }
-    last_run = (
-        _load_json(policy.state, "retention state") if policy.state.is_file() else None
-    )
+    last_run = None
+    if policy.state.is_file():
+        stored = _load_json(policy.state, "retention state")
+        last_run = {
+            key: value
+            for key, value in stored.items()
+            if key != "completed_actions"
+        }
+        last_run["completed_action_examples"] = list(
+            stored.get("completed_actions", [])
+        )[:10]
     return {
         "schema_version": "fidb-retention-status/v1",
         "policy": policy.document(),
@@ -1375,15 +1403,26 @@ def parser() -> argparse.ArgumentParser:
         prog="fidb-poc retention",
         description="Plan, inspect and apply evidence-safe queue retention.",
     )
-    result.add_argument("--project-root", type=Path, default=Path.cwd())
-    result.add_argument("--state", type=Path, default=DEFAULT_LEDGER)
-    result.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--project-root", type=Path, default=Path.cwd())
+    common.add_argument("--state", type=Path, default=DEFAULT_LEDGER)
+    common.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     commands = result.add_subparsers(dest="command", required=True)
-    commands.add_parser("status", help="show policy, latest plan and last apply")
-    commands.add_parser("plan", help="write a non-destructive content-addressed plan")
-    apply = commands.add_parser("apply", help="apply one exact current plan")
+    commands.add_parser(
+        "status", parents=[common], help="show policy, latest plan and last apply"
+    )
+    commands.add_parser(
+        "plan",
+        parents=[common],
+        help="write a non-destructive content-addressed plan",
+    )
+    apply = commands.add_parser(
+        "apply", parents=[common], help="apply one exact current plan"
+    )
     apply.add_argument("--plan-digest", required=True)
-    commands.add_parser("auto", help="run the configured queue-drained collector")
+    commands.add_parser(
+        "auto", parents=[common], help="run the configured queue-drained collector"
+    )
     return result
 
 

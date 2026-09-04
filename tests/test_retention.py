@@ -7,12 +7,15 @@ import shutil
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from fidb_poc.retention import (
     RetentionError,
     apply_retention_plan,
     compile_retention_plan,
     load_retention_policy,
+    main,
+    retention_status,
     write_retention_plan,
 )
 
@@ -265,6 +268,26 @@ class RetentionTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(RetentionError, "plan is stale"):
             apply_retention_plan(self.root, plan["plan_digest"])
+
+    def test_cli_accepts_project_options_after_subcommand(self) -> None:
+        with patch("fidb_poc.retention.retention_status", return_value={"state": "ok"}):
+            status = main(["status", "--project-root", str(self.root)])
+
+        self.assertEqual(status, 0)
+
+    def test_status_exposes_compact_action_examples(self) -> None:
+        job_id = self.add_job(6, "failed")
+        self.add_failed_attempt(job_id, 61, 1, "compiler failed")
+        plan = compile_retention_plan(self.root)
+        self.assertIn("stage_evidence", plan["actions"][0])
+        write_retention_plan(plan, self.root)
+
+        status = retention_status(self.root)
+
+        example = status["latest_plan"]["action_examples"][0]
+        self.assertEqual(example["job_id"], job_id)
+        self.assertNotIn("stage_evidence", example)
+        self.assertNotIn("evidence_files", example)
 
 
 if __name__ == "__main__":
