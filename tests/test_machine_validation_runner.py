@@ -32,23 +32,36 @@ class MachineValidationRunnerTests(unittest.TestCase):
             root = Path(temporary)
             index = root / "reference.sqlite3"
             connection = sqlite3.connect(index)
-            connection.execute(
+            connection.executescript(
                 """
-                CREATE TABLE reference_signature(
+                CREATE TABLE reference_identity(
                     language TEXT, target_os TEXT, binary_format TEXT,
                     full_hash TEXT, specific_hash TEXT,
                     additional_size INTEGER, code_size INTEGER, owner TEXT,
                     route_id TEXT, treatment_id TEXT, function_name TEXT,
                     evidence_path TEXT
-                )
+                );
+                CREATE TABLE reference_owner_signature(
+                    language TEXT, target_os TEXT, binary_format TEXT,
+                    full_hash TEXT, specific_hash TEXT,
+                    additional_size INTEGER, code_size INTEGER, owner TEXT,
+                    function_name TEXT, evidence_path TEXT, identity_count INTEGER
+                );
                 """
             )
             connection.executemany(
-                "INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO reference_identity VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
                     ("x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4, "one@1", "r1", "t1", "one", "one.jsonl"),
                     ("x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4, "one@1", "r2", "t2", "one", "two.jsonl"),
                 ],
+            )
+            connection.execute(
+                "INSERT INTO reference_owner_signature VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    "x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4,
+                    "one@1", "one", "one.jsonl", 2,
+                ),
             )
             connection.commit()
             connection.close()
@@ -75,7 +88,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(len(included["one@1"]), 1)
             self.assertEqual(len(withheld["one@1"]), 1)
             connection = sqlite3.connect(index)
-            connection.execute("DELETE FROM reference_signature WHERE route_id='r2'")
+            connection.execute("DELETE FROM reference_identity WHERE route_id='r2'")
+            connection.execute(
+                "UPDATE reference_owner_signature SET identity_count=1"
+            )
             connection.commit()
             connection.close()
             withheld, _ = _query_index(index, query, "r1", "t1", "linux", "ELF", False)

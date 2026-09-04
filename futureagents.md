@@ -300,3 +300,26 @@ bytes but estimated 1,041.553 seconds, above the 600-second automatic ceiling.
 It was therefore not applied. Do not raise that ceiling merely to clear the
 backlog; review the exact plan and perform the initial collection manually if
 the evidence set is acceptable.
+
+## Machine-validation execution
+
+The C10 machine-validation executor is independent of the production build
+queue. Its TOML runtime is `validation/machine-validation-runtime.toml`; its
+preflight must resolve all 2,220 exact signature inputs and must see the
+production queue drained. Start a canary before a full run. A canary qualifies
+the full run only when its report pins the current runtime digest, query-copy
+policy and reference-index schema.
+
+Do not simplify the v3 reference index back to a flat occurrence table. The
+first compatibility-aware canary expanded repeated signatures across every
+build occurrence: one Android fold remained in SQLite matching for more than
+ten minutes and exceeded 4 GiB RSS. The v3 index retains exact-identity
+presence plus one owner/signature row. The matcher uses `CROSS JOIN` to force
+the small query table to be the outer loop; the same 18,526-function Android
+query measured 0.075 seconds after that change. SQLite otherwise chose the
+platform corpus as the outer loop and repeatedly scanned the query set.
+
+The control panel polls `/api/v1/machine-validation/run`, not the full compiled
+authority endpoint. Keep that lightweight runtime path: compiling the complete
+2,220-input view measured roughly 2.2 seconds and is suitable for explicit or
+periodic authority refresh, not a five-second progress poll.

@@ -31,7 +31,7 @@ from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_prof
 RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
-REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v2"
+REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 QUERY_COPY_POLICY = "debug-stripped-symbol-indexed"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 
@@ -378,7 +378,9 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
         try:
             row = connection.execute("SELECT value FROM metadata WHERE key='input_digest'").fetchone()
             schema = connection.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
-            count = connection.execute("SELECT COUNT(*) FROM reference_signature").fetchone()[0]
+            count = connection.execute(
+                "SELECT COUNT(*) FROM reference_owner_signature"
+            ).fetchone()[0]
             if row and row[0] == input_digest and schema and schema[0] == REFERENCE_INDEX_SCHEMA and count > 0:
                 return path
         except sqlite3.Error:
@@ -392,13 +394,28 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-            CREATE TABLE reference_signature(
+            CREATE TABLE reference_identity(
                 language TEXT NOT NULL, target_os TEXT NOT NULL, binary_format TEXT NOT NULL,
                 full_hash TEXT NOT NULL, specific_hash TEXT NOT NULL,
                 additional_size INTEGER NOT NULL, code_size INTEGER NOT NULL,
                 owner TEXT NOT NULL, route_id TEXT NOT NULL, treatment_id TEXT NOT NULL,
-                function_name TEXT NOT NULL, evidence_path TEXT NOT NULL
-            );
+                function_name TEXT NOT NULL, evidence_path TEXT NOT NULL,
+                PRIMARY KEY(
+                    target_os, binary_format, language, full_hash, specific_hash,
+                    additional_size, code_size, owner, route_id, treatment_id
+                )
+            ) WITHOUT ROWID;
+            CREATE TABLE reference_owner_signature(
+                language TEXT NOT NULL, target_os TEXT NOT NULL, binary_format TEXT NOT NULL,
+                full_hash TEXT NOT NULL, specific_hash TEXT NOT NULL,
+                additional_size INTEGER NOT NULL, code_size INTEGER NOT NULL,
+                owner TEXT NOT NULL, function_name TEXT NOT NULL,
+                evidence_path TEXT NOT NULL, identity_count INTEGER NOT NULL,
+                PRIMARY KEY(
+                    target_os, binary_format, language, full_hash, specific_hash,
+                    additional_size, code_size, owner
+                )
+            ) WITHOUT ROWID;
         """)
         routes = {route.id: route for route in evidence["configuration"].routes}
         inserted = 0
@@ -415,13 +432,32 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
                     str(item["source"]),
                 ))
                 if len(batch) >= 5000:
-                    connection.executemany("INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", batch)
-                    inserted += len(batch); batch.clear()
+                    before = connection.total_changes
+                    connection.executemany(
+                        "INSERT OR IGNORE INTO reference_identity VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                        batch,
+                    )
+                    inserted += connection.total_changes - before
+                    batch.clear()
             if batch:
-                connection.executemany("INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", batch)
-                inserted += len(batch)
+                before = connection.total_changes
+                connection.executemany(
+                    "INSERT OR IGNORE INTO reference_identity VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    batch,
+                )
+                inserted += connection.total_changes - before
             connection.commit()
-        connection.execute("CREATE INDEX reference_signature_match ON reference_signature(target_os,binary_format,language,full_hash,specific_hash,additional_size,code_size)")
+        connection.execute(
+            """
+            INSERT INTO reference_owner_signature
+            SELECT language, target_os, binary_format, full_hash, specific_hash,
+                   additional_size, code_size, owner, MIN(function_name),
+                   MIN(evidence_path), COUNT(*)
+            FROM reference_identity
+            GROUP BY target_os, binary_format, language, full_hash, specific_hash,
+                     additional_size, code_size, owner
+            """
+        )
         connection.execute("INSERT INTO metadata VALUES ('schema_version',?)", (REFERENCE_INDEX_SCHEMA,))
         connection.execute("INSERT INTO metadata VALUES ('input_digest',?)", (input_digest,))
         connection.execute("INSERT INTO metadata VALUES ('rows',?)", (str(inserted),))
@@ -455,7 +491,24 @@ def _query_index(
             int(row["specific_hash_additional_size"]), int(row["code_unit_size"]),
         ) for row in _read_signature_rows(query_path)]
         connection.executemany("INSERT INTO query_signature VALUES (?,?,?,?,?,?,?)", rows)
-        exact_clause = "" if include_exact else "AND NOT (reference.route_id=? AND reference.treatment_id=?)"
+        exact_clause = "" if include_exact else """
+            AND (
+                reference.identity_count > 1
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM reference_identity AS exact
+                    WHERE exact.target_os=reference.target_os
+                      AND exact.binary_format=reference.binary_format
+                      AND exact.language=reference.language
+                      AND exact.full_hash=reference.full_hash
+                      AND exact.specific_hash=reference.specific_hash
+                      AND exact.additional_size=reference.additional_size
+                      AND exact.code_size=reference.code_size
+                      AND exact.owner=reference.owner
+                      AND exact.route_id=? AND exact.treatment_id=?
+                )
+            )
+        """
         parameters = () if include_exact else (route_id, treatment_id)
         matches: dict[str, set[str]] = defaultdict(set)
         examples: dict[str, dict[str, str]] = {}
@@ -464,13 +517,12 @@ def _query_index(
                    reference.function_name, reference.evidence_path,
                    query.full_hash, query.specific_hash, query.additional_size, query.code_size
             FROM query_signature AS query
-            JOIN reference_signature AS reference
+            CROSS JOIN reference_owner_signature AS reference
               ON reference.target_os=? AND reference.binary_format=?
              AND reference.language=query.language AND reference.full_hash=query.full_hash
              AND reference.specific_hash=query.specific_hash
              AND reference.additional_size=query.additional_size AND reference.code_size=query.code_size
             WHERE 1=1 {exact_clause}
-            GROUP BY query.address, reference.owner
         """
         for row in connection.execute(sql, (target_os, binary_format, *parameters)):
             address, query_name, owner, corpus_name, evidence_path, full_hash, specific_hash, additional, size = row

@@ -50,6 +50,24 @@ executed. The primary queries test the correct fold with the exact identity
 withheld, the opposite fold, and the complete owner-labelled candidate index.
 An exact-inclusion canary verifies the pipeline separately.
 
+Execution settings live in `machine-validation-runtime.toml`. Preflight checks
+all 2,220 signature inputs, the 2,046 retained archives, the 174 reconstructable
+OpenSSL archives, the drained production ledger, free disk and available RAM:
+
+```sh
+uv run fidb-poc machine-validation preflight --project-root .
+uv run fidb-poc machine-validation start --project-root . --mode canary
+uv run fidb-poc machine-validation start --project-root . --mode full
+```
+
+The full run is rejected unless the latest successful canary records the exact
+runtime-authority digest, query-copy policy and reference-index schema in use.
+The reference index stores exact identity presence separately from one
+owner/signature row. Query lookup is deliberately query-first against that
+primary key; reversing the join order recreates a many-occurrence intermediate
+and is a measured performance regression. Run the canary after changing either
+the schema or the matching query.
+
 Formal ecological validation comes later, after the intended dataset and lane
 generation are frozen. It uses held-out real binaries in tag-only/shadow mode
 and is the release gate for operational boilerplate ablation.
