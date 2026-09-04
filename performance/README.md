@@ -192,7 +192,7 @@ For flexible operator windows, `fidb-poc auto-batches` instead partitions the
 same exact work into route bundles while keeping every treatment for a route
 together. Its checked-in 60/85-minute candidate contains 23 disarmed chunks,
 preserves all 2,046 executions, and carries the same 23.075-hour central total.
-The generated queue can chain completed chunks only while the 01:00–05:30
+The generated queue can chain completed chunks only while the 00:00–05:30
 window remains open; once a chunk is admitted it finishes even after 05:30.
 See [`batches/README.md`](../batches/README.md#automatic-short-chunk-materialization)
 for commands, evidence boundaries, and rollback.
