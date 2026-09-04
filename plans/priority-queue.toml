@@ -5,7 +5,7 @@ schema_version = "fidb-queue/v1"
 name = "c-top10-nonapple-width-v2-auto-60m-85m-queue"
 
 [queue]
-armed = true
+armed = false
 performance_profile = "reference-host-94g-balanced"
 max_workers = 20
 batch_order = ["c-top10-nonapple-width-v2-auto-60m-85m-chunk-001", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-002", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-003", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-004", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-005", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-006", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-007", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-008", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-009", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-010", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-011", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-012", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-013", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-014", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-015", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-016", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-017", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-018", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-019", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-020", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-021", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-022", "c-top10-nonapple-width-v2-auto-60m-85m-chunk-023"]
