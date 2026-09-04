@@ -70,6 +70,57 @@ def _path_component(value: object, context: str) -> str:
 
 
 @dataclass(frozen=True)
+class BuildInput:
+    kind: str
+    name: str
+    version: str
+    url: str
+    sha256: str
+    filename: str
+    source_directory: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"source-tree", "meson-package-cache"}:
+            raise ValueError(f"unsupported build input kind: {self.kind}")
+        _path_component(self.name, "build input name")
+        _path_component(self.version, "build input version")
+        _path_component(self.filename, "build input filename")
+        if len(self.sha256) != 64 or re.fullmatch(r"[0-9a-f]{64}", self.sha256) is None:
+            raise ValueError(f"build input {self.identifier} has an invalid SHA-256")
+        if self.kind == "source-tree":
+            if self.source_directory is None:
+                raise ValueError(
+                    f"source-tree build input {self.identifier} needs source_directory"
+                )
+            _path_component(self.source_directory, "build input source_directory")
+        elif self.source_directory is not None:
+            raise ValueError(
+                f"meson package-cache input {self.identifier} cannot set source_directory"
+            )
+
+    @property
+    def identifier(self) -> str:
+        return f"{self.name}-{self.version}"
+
+    @property
+    def cache_key(self) -> str:
+        return f"{self.kind}:{self.identifier}:{self.filename}:{self.sha256}"
+
+    def pin(self) -> dict[str, str]:
+        row = {
+            "kind": self.kind,
+            "name": self.name,
+            "version": self.version,
+            "url": self.url,
+            "sha256": self.sha256,
+            "filename": self.filename,
+        }
+        if self.source_directory is not None:
+            row["source_directory"] = self.source_directory
+        return row
+
+
+@dataclass(frozen=True)
 class Library:
     name: str
     version: str
@@ -80,6 +131,7 @@ class Library:
     allowed_build_systems: tuple[str, ...]
     preferred_build_system: str
     static_archives: tuple[str, ...]
+    build_inputs: tuple[BuildInput, ...] = ()
 
     def __post_init__(self) -> None:
         _path_component(self.name, "library name")
@@ -87,6 +139,16 @@ class Library:
         _path_component(self.source_directory, "library source_directory")
         for archive in self.static_archives:
             _path_component(archive, "library static archive")
+        keys = [row.cache_key for row in self.build_inputs]
+        if len(keys) != len(set(keys)):
+            raise ValueError(f"{self.identifier} contains duplicate build inputs")
+        source_identifiers = [
+            row.identifier for row in self.build_inputs if row.kind == "source-tree"
+        ]
+        if len(source_identifiers) != len(set(source_identifiers)):
+            raise ValueError(
+                f"{self.identifier} contains colliding source-tree build inputs"
+            )
 
     @property
     def identifier(self) -> str:
@@ -166,10 +228,69 @@ def _reject_unknown(record: dict, allowed: set[str], context: str) -> None:
 
 def _load_recipe(path: Path) -> Library:
     row = tomllib.loads(path.read_text(encoding="utf-8"))
+    _reject_unknown(
+        row,
+        {
+            "schema_version",
+            "mode",
+            "name",
+            "version",
+            "url",
+            "sha256",
+            "source_directory",
+            "project_markers",
+            "allowed_build_systems",
+            "preferred_build_system",
+            "static_archives",
+            "build_inputs",
+        },
+        f"recipe {path.name}",
+    )
     if row.get("schema_version") != "fidb-recipe/v3":
         raise ValueError(f"unsupported or missing schema_version in {path}")
     if row.get("mode") != "native":
         raise ValueError(f'{path}: config.py only handles mode="native" recipes')
+    raw_inputs = row.get("build_inputs", [])
+    if not isinstance(raw_inputs, list):
+        raise ValueError(f"recipe {path.name} build_inputs must be an array of tables")
+    build_inputs = []
+    for index, raw in enumerate(raw_inputs, start=1):
+        context = f"recipe {path.name} build input {index}"
+        if not isinstance(raw, dict):
+            raise ValueError(f"{context} must be a table")
+        allowed = {
+            "kind",
+            "name",
+            "version",
+            "url",
+            "sha256",
+            "filename",
+            "source_directory",
+        }
+        _reject_unknown(raw, allowed, context)
+        build_inputs.append(
+            BuildInput(
+                kind=_required(raw, "kind", context),
+                name=_path_component(
+                    _required(raw, "name", context), f"{context} name"
+                ),
+                version=_path_component(
+                    _required(raw, "version", context), f"{context} version"
+                ),
+                url=_required(raw, "url", context),
+                sha256=str(_required(raw, "sha256", context)).lower(),
+                filename=_path_component(
+                    _required(raw, "filename", context), f"{context} filename"
+                ),
+                source_directory=(
+                    _path_component(
+                        raw["source_directory"], f"{context} source_directory"
+                    )
+                    if "source_directory" in raw
+                    else None
+                ),
+            )
+        )
     library = Library(
         name=_path_component(
             _required(row, "name", f"recipe {path.name}"),
@@ -196,6 +317,7 @@ def _load_recipe(path: Path) -> Library:
             _path_component(value, f"recipe {path.name} static archive")
             for value in _required(row, "static_archives", f"recipe {path.name}")
         ),
+        build_inputs=tuple(build_inputs),
     )
     if len(library.sha256) != 64:
         raise ValueError(f"{library.identifier} has an invalid SHA-256")

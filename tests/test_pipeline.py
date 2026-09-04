@@ -13,6 +13,7 @@ from fidb_poc.pipeline import (
     BuildRecord,
     PipelineError,
     _build_workspace_name,
+    _stage_build_inputs,
     _populate_group,
     _missing_file_markers,
     _validate_population_report,
@@ -34,10 +35,98 @@ from fidb_poc.pipeline import (
     write_manifest,
 )
 from fidb_poc.adapters import Detection
-from fidb_poc.config import Library, load_configuration, select_configuration
+from fidb_poc.config import BuildInput, Library, load_configuration, select_configuration
 
 
 class PipelineTests(unittest.TestCase):
+    def test_recipe_build_inputs_stage_only_at_fixed_adapter_locations(self):
+        source_input = BuildInput(
+            kind="source-tree",
+            name="zlib",
+            version="1.3.1",
+            url="https://example.invalid/zlib.tar.gz",
+            sha256="a" * 64,
+            filename="zlib-1.3.1.tar.gz",
+            source_directory="zlib-1.3.1",
+        )
+        package_input = BuildInput(
+            kind="meson-package-cache",
+            name="libffi-wrap-patch",
+            version="3.5.2-1",
+            url="https://example.invalid/libffi-patch.zip",
+            sha256="b" * 64,
+            filename="libffi_3.5.2-1_patch.zip",
+        )
+        library = Library(
+            name="example",
+            version="1.0",
+            url="https://example.invalid/example.tar.gz",
+            sha256="c" * 64,
+            source_directory="example-1.0",
+            project_markers=("meson.build",),
+            allowed_build_systems=("meson",),
+            preferred_build_system="meson",
+            static_archives=("libexample.a",),
+            build_inputs=(source_input, package_input),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "prepared-zlib"
+            source.mkdir()
+            (source / "zlib.h").write_text("/* pinned */\n", encoding="utf-8")
+            package = root / "cached-patch"
+            package.write_bytes(b"pinned patch")
+            cell = root / "cell"
+            cell.mkdir()
+
+            _stage_build_inputs(
+                library,
+                {
+                    source_input.cache_key: source,
+                    package_input.cache_key: package,
+                },
+                cell,
+            )
+
+            self.assertEqual(
+                (cell / "fidb-inputs/zlib-1.3.1/zlib.h").read_text(),
+                "/* pinned */\n",
+            )
+            self.assertEqual(
+                (
+                    cell / "subprojects/packagecache/libffi_3.5.2-1_patch.zip"
+                ).read_bytes(),
+                b"pinned patch",
+            )
+
+    def test_missing_prepared_recipe_input_fails_closed(self):
+        build_input = BuildInput(
+            kind="source-tree",
+            name="zlib",
+            version="1.3.1",
+            url="https://example.invalid/zlib.tar.gz",
+            sha256="a" * 64,
+            filename="zlib-1.3.1.tar.gz",
+            source_directory="zlib-1.3.1",
+        )
+        example = Library(
+            name="example",
+            version="1.0",
+            url="https://example.invalid/example.tar.gz",
+            sha256="b" * 64,
+            source_directory="example-1.0",
+            project_markers=("CMakeLists.txt",),
+            allowed_build_systems=("cmake",),
+            preferred_build_system="cmake",
+            static_archives=("libexample.a",),
+            build_inputs=(build_input,),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(
+                PipelineError, "prepared build input is missing"
+            ):
+                _stage_build_inputs(example, {}, Path(temporary))
+
     def test_windows_build_workspace_is_short_and_identity_stable(self):
         configuration = load_configuration(
             Path(__file__).resolve().parents[1] / "worker.toml",

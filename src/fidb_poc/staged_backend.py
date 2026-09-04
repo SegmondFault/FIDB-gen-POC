@@ -23,7 +23,7 @@ import time
 from typing import Callable, Iterable
 
 from .adapters import AdapterError, detect_project
-from .config import Configuration, Library, Route, Treatment
+from .config import BuildInput, Configuration, Library, Route, Treatment
 from .pipeline import (
     BuildRecord,
     PipelineError,
@@ -33,6 +33,7 @@ from .pipeline import (
     download_library,
     extract_source,
     populate_fidbs,
+    prepare_build_inputs,
     write_manifest,
 )
 from .timing import TimingRecorder, utc_now
@@ -105,6 +106,8 @@ def _tuple_fields(cls: type[object]) -> set[str]:
             "factor_values",
             "factor_variants",
         }
+    if cls is BuildInput:
+        return set()
     raise TypeError(f"unsupported staged authority class: {cls!r}")
 
 
@@ -118,6 +121,14 @@ def _authority_item(cls, row: object, context: str):
     # Dataclass constructors provide defaults for optional fields.  Required
     # field errors remain explicit without attempting to invoke default_factory.
     values = dict(row)
+    if cls is Library and "build_inputs" in values:
+        build_inputs = values["build_inputs"]
+        if not isinstance(build_inputs, list):
+            raise ValueError(f"{context}.build_inputs must be an array")
+        values["build_inputs"] = tuple(
+            _authority_item(BuildInput, item, f"{context}.build_inputs[{index}]")
+            for index, item in enumerate(build_inputs)
+        )
     for name in _tuple_fields(cls):
         if name in values:
             value = values[name]
@@ -286,6 +297,12 @@ def execute_build_stage(
                 timing=timing.span,
                 verified=True,
             )
+            build_inputs = prepare_build_inputs(
+                library,
+                group_root / "work/downloads",
+                group_root / "work/sources/build-inputs",
+                timing=timing.span,
+            )
             try:
                 detection = detect_project(library, source_root)
             except AdapterError as error:
@@ -300,6 +317,7 @@ def execute_build_stage(
                     group_root / "work",
                     group_root / "work/logs",
                     verbose=verbose,
+                    build_inputs=build_inputs,
                     build_jobs_per_cell=build_jobs_per_cell,
                     timing=timing.span,
                     skipped=timing.skip,

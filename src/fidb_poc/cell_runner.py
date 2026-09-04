@@ -535,6 +535,10 @@ def _resolve_native(
         "url": library.url,
         "sha256": library.sha256,
     }
+    if library.build_inputs:
+        reviewed_recipe["build_inputs"] = [
+            build_input.pin() for build_input in library.build_inputs
+        ]
     reviewed_target = {
         "os": route.target_os,
         "architecture": route.architecture,
@@ -1056,6 +1060,7 @@ def _native_outputs(
     source_evidence = {
         "source_url": row.get("source_url"),
         "source_sha256": row.get("source_sha256"),
+        "build_inputs": json.loads(row.get("build_input_pins", "[]")),
         "static_archive_path": row.get("static_archive_path"),
         "static_archive_sha256": row.get("static_archive_sha256"),
         "analysis_artifact_kind": row.get("analysis_artifact_kind"),

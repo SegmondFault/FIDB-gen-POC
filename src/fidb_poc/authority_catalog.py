@@ -68,6 +68,15 @@ def _native_authority(
             "build_adapter": row.preferred_build_system,
             "allowed_build_adapters": list(row.allowed_build_systems),
             "static_archives": list(row.static_archives),
+            **(
+                {
+                    "build_inputs": [
+                        build_input.pin() for build_input in row.build_inputs
+                    ]
+                }
+                if row.build_inputs
+                else {}
+            ),
             "authority_path": _relative(root, recipe_paths[index]),
         }
         for index, row in enumerate(configuration.libraries)

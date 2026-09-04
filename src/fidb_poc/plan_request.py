@@ -664,6 +664,16 @@ def _native_cells_from_configuration(
                         "version": library.version,
                         "url": library.url,
                         "sha256": library.sha256,
+                        **(
+                            {
+                                "build_inputs": [
+                                    build_input.pin()
+                                    for build_input in library.build_inputs
+                                ]
+                            }
+                            if library.build_inputs
+                            else {}
+                        ),
                     },
                     "target": {
                         "os": route.target_os,

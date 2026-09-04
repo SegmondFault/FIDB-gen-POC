@@ -4,6 +4,7 @@ from contextlib import nullcontext
 import csv
 import hashlib
 import importlib.metadata
+import json
 import os
 import re
 import shutil
@@ -105,6 +106,7 @@ class BuildRecord:
     detection_evidence: str = ""
     source_url: str = ""
     source_sha256: str = ""
+    build_input_pins: str = "[]"
     compiler_command: str = ""
     compiler_path: str = ""
     compiler_sha256: str = ""
@@ -678,6 +680,11 @@ def _base_record(
         detection_evidence=";".join(detection.evidence),
         source_url=library.url,
         source_sha256=library.sha256,
+        build_input_pins=json.dumps(
+            [row.pin() for row in library.build_inputs],
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         compiler_command=command_text(route.compiler),
         compiler_flags=command_text(treatment.flags_for(route)),
         archiver_command=command_text(route.archiver),
@@ -696,6 +703,61 @@ def _build_workspace_name(library: Library, route: Route, treatment: Treatment) 
     # than Linux; long treatment names previously made probe results vary.
     digest = hashlib.sha256(cell_id.encode("utf-8")).hexdigest()[:16]
     return f"{library.name}-{digest}"
+
+
+def _stage_build_inputs(
+    library: Library, prepared_inputs: Mapping[str, Path], cell_source: Path
+) -> None:
+    """Place only checksum-verified recipe inputs in fixed adapter locations."""
+
+    for build_input in library.build_inputs:
+        prepared = prepared_inputs.get(build_input.cache_key)
+        if prepared is None:
+            raise PipelineError(
+                f"prepared build input is missing for {build_input.cache_key}"
+            )
+        if build_input.kind == "source-tree":
+            destination = cell_source / "fidb-inputs" / build_input.identifier
+            copy_pristine_source(prepared, destination)
+        elif build_input.kind == "meson-package-cache":
+            package_cache = cell_source / "subprojects/packagecache"
+            package_cache.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(prepared, package_cache / build_input.filename)
+        else:  # guarded by the recipe loader; retain a fail-closed runtime edge
+            raise PipelineError(f"unsupported build input kind: {build_input.kind}")
+
+
+def prepare_build_inputs(
+    library: Library,
+    downloads: Path,
+    sources: Path,
+    *,
+    content_addressed: bool = False,
+    timing: TimingFactory | None = None,
+    skipped: SkipCallback | None = None,
+) -> dict[str, Path]:
+    """Acquire and prepare every checksum-pinned secondary recipe input."""
+
+    prepared: dict[str, Path] = {}
+    for build_input in library.build_inputs:
+        archive = download_library(
+            build_input,
+            downloads,
+            content_addressed=content_addressed,
+            timing=timing,
+            skipped=skipped,
+        )
+        if build_input.kind == "source-tree":
+            prepared[build_input.cache_key] = extract_source(
+                build_input,
+                archive,
+                sources,
+                timing=timing,
+                verified=True,
+            )
+        else:
+            prepared[build_input.cache_key] = archive
+    return prepared
 
 
 def _extract_archive_objects(
@@ -845,6 +907,7 @@ def build_library(
     logs: Path,
     verbose: bool = False,
     *,
+    build_inputs: dict[str, Path] | None = None,
     build_jobs_per_cell: int = 4,
     timing: TimingFactory | None = None,
     skipped: SkipCallback | None = None,
@@ -878,6 +941,7 @@ def build_library(
     build_root = work / "builds" / _build_workspace_name(library, route, treatment)
     _remove_generated_path(build_root)
     cell_source = copy_pristine_source(source_root, build_root / "source")
+    _stage_build_inputs(library, build_inputs or {}, cell_source)
     objects_root = build_root / "objects"
     environment = pipeline_environment(
         build_environment(
@@ -914,6 +978,7 @@ def build_library(
         "native reviewed adapter has no patch phase",
         {"library": library.identifier, "patch_count": 0},
     )
+
     def command_stage(command: tuple[str, ...]) -> str:
         if "configure" in command or command[:2] == ("cmake", "-S"):
             return "configure"
@@ -1705,11 +1770,20 @@ def execute(
     records: dict[tuple[str, str, str], BuildRecord] = {}
     object_sets: dict[tuple[str, str, str], list[Path]] = {}
     source_roots: dict[str, Path] = {}
+    build_input_roots: dict[str, dict[str, Path]] = {}
     detections: dict[str, Detection] = {}
 
     for index, library in enumerate(configuration.libraries, start=1):
         announce(
             f"[source {index}/{len(configuration.libraries)}] " f"{library.identifier}"
+        )
+        build_input_roots[library.identifier] = prepare_build_inputs(
+            library,
+            downloads,
+            sources / "build-inputs",
+            content_addressed=source_downloads is not None,
+            timing=timing,
+            skipped=skipped,
         )
         archive = download_library(
             library,
@@ -1769,6 +1843,7 @@ def execute(
                         work,
                         logs,
                         verbose=verbose,
+                        build_inputs=build_input_roots[library.identifier],
                         build_jobs_per_cell=build_jobs_per_cell,
                         timing=timing,
                         skipped=skipped,
