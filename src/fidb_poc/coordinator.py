@@ -2465,10 +2465,10 @@ class Coordinator:
         """Requeue an exact failed batch without erasing attempt evidence.
 
         This is deliberately an operator recovery transition rather than a
-        ledger edit.  It is available only while the queue is both disarmed
-        and paused, with no admission or live leases.  The explicit expected
-        count prevents an operator from broadening a reviewed recovery set by
-        accident.
+        ledger edit. It is available only while the queue is both disarmed and
+        paused, with no live leases and no admission for a different batch. The
+        explicit expected count prevents an operator from broadening a reviewed
+        recovery set by accident.
         """
 
         selected_batch = _identifier(batch_id, "requeue batch id")
@@ -2481,9 +2481,9 @@ class Coordinator:
                 raise CoordinatorError("failed-job recovery requires a disarmed queue")
             if not bool(state["paused"]):
                 raise CoordinatorError("failed-job recovery requires a paused queue")
-            if state["active_batch_id"] is not None:
+            if state["active_batch_id"] not in (None, selected_batch):
                 raise CoordinatorError(
-                    "failed-job recovery requires no active batch admission"
+                    "failed-job recovery cannot cross an active batch admission"
                 )
             live = self._connection.execute(
                 "SELECT COUNT(*) AS count FROM jobs "

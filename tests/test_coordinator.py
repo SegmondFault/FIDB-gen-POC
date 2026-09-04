@@ -788,6 +788,38 @@ matrices = ["tier0-uclibc-powerpc"]
         self.assertEqual(terminal["state"], "failed")
         self.assertEqual(len(snapshot["attempts"]), 2)
 
+    def test_operator_requeue_can_recover_the_paused_active_batch(self):
+        armed_path = self.write_queue(filename="armed.toml", armed=True)
+        disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            block = coordinator.start_next_block(
+                "manual:recovery-test", scheduled=False, now=11
+            )
+            lease = coordinator.claim(
+                "worker-one", batch_id=block["batch_id"], now=20
+            )
+            coordinator.fail(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "failure in the active batch",
+                retryable=False,
+                now=21,
+            )
+            coordinator.sync(self.config(disarmed_path), now=22)
+            coordinator.pause("review active batch recovery", now=23)
+
+            result = coordinator.requeue_failed_batch(
+                "batch-baseline", 1, "active batch repair verified", now=24
+            )
+            status = coordinator.status()
+
+        self.assertEqual(result["requeued"], 1)
+        self.assertEqual(status["execution_block"]["batch_id"], "batch-baseline")
+        self.assertEqual(status["execution_block"]["counts"]["queued"], 4)
+        self.assertEqual(status["execution_block"]["counts"]["failed"], 0)
+
     def test_operator_requeue_fails_closed_on_state_or_count_drift(self):
         armed_path = self.write_queue(filename="armed.toml", armed=True)
         disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
