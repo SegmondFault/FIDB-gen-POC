@@ -375,8 +375,9 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
         connection = sqlite3.connect(path)
         try:
             row = connection.execute("SELECT value FROM metadata WHERE key='input_digest'").fetchone()
+            schema = connection.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
             count = connection.execute("SELECT COUNT(*) FROM reference_signature").fetchone()[0]
-            if row and row[0] == input_digest and count > 0:
+            if row and row[0] == input_digest and schema and schema[0] == "fidb-machine-validation-reference-index/v2" and count > 0:
                 return path
         except sqlite3.Error:
             pass
@@ -390,31 +391,36 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
             PRAGMA synchronous=NORMAL;
             CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE reference_signature(
-                language TEXT NOT NULL, full_hash TEXT NOT NULL, specific_hash TEXT NOT NULL,
+                language TEXT NOT NULL, target_os TEXT NOT NULL, binary_format TEXT NOT NULL,
+                full_hash TEXT NOT NULL, specific_hash TEXT NOT NULL,
                 additional_size INTEGER NOT NULL, code_size INTEGER NOT NULL,
                 owner TEXT NOT NULL, route_id TEXT NOT NULL, treatment_id TEXT NOT NULL,
                 function_name TEXT NOT NULL, evidence_path TEXT NOT NULL
             );
         """)
+        routes = {route.id: route for route in evidence["configuration"].routes}
         inserted = 0
         for (owner, route, treatment), item in sorted(evidence["signatures"].items()):
+            route_authority = routes[route]
             batch = []
             for row in _read_signature_rows(item["path"]):
                 batch.append((
                     str(row.get("language", row.get("ghidra_language_id", ""))),
+                    route_authority.target_os, route_authority.binary_format,
                     str(row["full_hash"]), str(row["specific_hash"]),
                     int(row["specific_hash_additional_size"]), int(row["code_unit_size"]),
                     owner, route, treatment, str(row.get("name", row.get("function_name", ""))),
                     str(item["source"]),
                 ))
                 if len(batch) >= 5000:
-                    connection.executemany("INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?)", batch)
+                    connection.executemany("INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", batch)
                     inserted += len(batch); batch.clear()
             if batch:
-                connection.executemany("INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?)", batch)
+                connection.executemany("INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", batch)
                 inserted += len(batch)
             connection.commit()
-        connection.execute("CREATE INDEX reference_signature_match ON reference_signature(language,full_hash,specific_hash,additional_size,code_size)")
+        connection.execute("CREATE INDEX reference_signature_match ON reference_signature(target_os,binary_format,language,full_hash,specific_hash,additional_size,code_size)")
+        connection.execute("INSERT INTO metadata VALUES ('schema_version','fidb-machine-validation-reference-index/v2')")
         connection.execute("INSERT INTO metadata VALUES ('input_digest',?)", (input_digest,))
         connection.execute("INSERT INTO metadata VALUES ('rows',?)", (str(inserted),))
         connection.commit()
@@ -423,7 +429,15 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
     return path
 
 
-def _query_index(index_path: Path, query_path: Path, route_id: str, treatment_id: str, include_exact: bool) -> tuple[dict[str, set[str]], dict[str, dict[str, str]]]:
+def _query_index(
+    index_path: Path,
+    query_path: Path,
+    route_id: str,
+    treatment_id: str,
+    target_os: str,
+    binary_format: str,
+    include_exact: bool,
+) -> tuple[dict[str, set[str]], dict[str, dict[str, str]]]:
     connection = sqlite3.connect(index_path)
     try:
         connection.executescript("""
@@ -449,13 +463,14 @@ def _query_index(index_path: Path, query_path: Path, route_id: str, treatment_id
                    query.full_hash, query.specific_hash, query.additional_size, query.code_size
             FROM query_signature AS query
             JOIN reference_signature AS reference
-              ON reference.language=query.language AND reference.full_hash=query.full_hash
+              ON reference.target_os=? AND reference.binary_format=?
+             AND reference.language=query.language AND reference.full_hash=query.full_hash
              AND reference.specific_hash=query.specific_hash
              AND reference.additional_size=query.additional_size AND reference.code_size=query.code_size
             WHERE 1=1 {exact_clause}
             GROUP BY query.address, reference.owner
         """
-        for row in connection.execute(sql, parameters):
+        for row in connection.execute(sql, (target_os, binary_format, *parameters)):
             address, query_name, owner, corpus_name, evidence_path, full_hash, specific_hash, additional, size = row
             signature = f"{full_hash}:{specific_hash}:{additional}:{size}"
             matches[str(owner)].add(f"{address}:{signature}")
@@ -501,7 +516,7 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
     root = Path(project_root).resolve()
     evidence = resolve_evidence(root, runtime_path)
     run_root = _run_root(root, evidence["runtime"], run_id)
-    index = run_root / "reference-index.sqlite3"
+    index = _inside(root, str(evidence["runtime"]["output_root"]), "validation output") / "reference-index.sqlite3"
     if not index.is_file():
         raise ValueError("machine-validation reference index is absent")
     configuration = evidence["configuration"]
@@ -574,7 +589,15 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
                 signature_summary = ghidra_fid.export_program_signatures(
                     project_dir, "composite", program_path, query_signatures
                 )
-                matches, examples = _query_index(index, query_signatures, route.id, treatment.id, mode == "canary")
+                matches, examples = _query_index(
+                    index,
+                    query_signatures,
+                    route.id,
+                    treatment.id,
+                    route.target_os,
+                    route.binary_format,
+                    mode == "canary",
+                )
                 threshold = int(evidence["runtime"]["canary" if mode == "canary" else "execution"]["minimum_distinct_hashes"])
                 positive = {owner for owner, values in matches.items() if len(values) >= threshold}
                 cohort = set(evidence["status"]["randomization"]["canonical_ids"])
@@ -700,7 +723,7 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
         "complete_work_units": 0, "failed_work_units": 0,
     })
     try:
-        index = build_reference_index(root, evidence, run_root)
+        index = build_reference_index(root, evidence, output_root)
         if mode == "full":
             canaries = sorted(output_root.glob("*-canary/canary-report.json"))
             if not canaries or json.loads(canaries[-1].read_text(encoding="utf-8")).get("state") != "measured-complete":

@@ -28,7 +28,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
             connection.execute(
                 """
                 CREATE TABLE reference_signature(
-                    language TEXT, full_hash TEXT, specific_hash TEXT,
+                    language TEXT, target_os TEXT, binary_format TEXT,
+                    full_hash TEXT, specific_hash TEXT,
                     additional_size INTEGER, code_size INTEGER, owner TEXT,
                     route_id TEXT, treatment_id TEXT, function_name TEXT,
                     evidence_path TEXT
@@ -36,10 +37,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 """
             )
             connection.executemany(
-                "INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO reference_signature VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
-                    ("x86:LE:64:default", "01", "02", 3, 4, "one@1", "r1", "t1", "one", "one.jsonl"),
-                    ("x86:LE:64:default", "01", "02", 3, 4, "one@1", "r2", "t2", "one", "two.jsonl"),
+                    ("x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4, "one@1", "r1", "t1", "one", "one.jsonl"),
+                    ("x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4, "one@1", "r2", "t2", "one", "two.jsonl"),
                 ],
             )
             connection.commit()
@@ -61,8 +62,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            included, _ = _query_index(index, query, "r1", "t1", True)
-            withheld, _ = _query_index(index, query, "r1", "t1", False)
+            included, _ = _query_index(index, query, "r1", "t1", "linux", "ELF", True)
+            withheld, _ = _query_index(index, query, "r1", "t1", "linux", "ELF", False)
 
             self.assertEqual(len(included["one@1"]), 1)
             self.assertEqual(len(withheld["one@1"]), 1)
@@ -70,8 +71,13 @@ class MachineValidationRunnerTests(unittest.TestCase):
             connection.execute("DELETE FROM reference_signature WHERE route_id='r2'")
             connection.commit()
             connection.close()
-            withheld, _ = _query_index(index, query, "r1", "t1", False)
+            withheld, _ = _query_index(index, query, "r1", "t1", "linux", "ELF", False)
             self.assertNotIn("one@1", withheld)
+
+            wrong_platform, _ = _query_index(
+                index, query, "r1", "t1", "android", "ELF", True
+            )
+            self.assertEqual(wrong_platform, {})
 
 
 if __name__ == "__main__":
