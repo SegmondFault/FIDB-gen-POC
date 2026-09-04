@@ -486,6 +486,76 @@ finish_started_batch = true
         preflight.assert_called_once()
         run_cell.assert_not_called()
 
+    def test_doctor_reports_guarded_recovery_without_mutating_ledger(self) -> None:
+        queue = self._queue(armed=True)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync(queue, now=10)
+            lease = coordinator.claim("test-worker", now=20)
+            coordinator.fail(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "java.lang.OutOfMemoryError: unable to create native thread",
+                retryable=False,
+                failure_class="ghidra-analysis:RuntimeError",
+                now=21,
+            )
+            queue = self._queue(armed=False)
+            coordinator.sync(queue, now=22)
+            coordinator.pause("reviewing evidence", now=23)
+            before_event = coordinator.status()["last_event_id"]
+
+        output = io.StringIO()
+        arguments = self._arguments("doctor")
+        arguments.extend(("--batch", "batch-mirai"))
+        with contextlib.redirect_stdout(output):
+            status = main(arguments)
+
+        self.assertEqual(status, 0)
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["schema_version"], "fidb-queue-incident-report/v1")
+        self.assertTrue(document["read_only"])
+        self.assertEqual(document["failures"]["current"], 1)
+        self.assertEqual(document["queue"]["global_live_work"], 0)
+        self.assertEqual(
+            document["worker_unit"]["repository_limits"]["TasksMax"], "2048"
+        )
+        rule_ids = {row["id"] for row in document["matched_diagnostic_rules"]}
+        self.assertIn("native-thread-task-ceiling", rule_ids)
+        candidate = document["recovery"]["candidates"][0]
+        self.assertTrue(candidate["ready"])
+        self.assertEqual(candidate["failed_jobs"], 1)
+        self.assertIn("--expected-count 1", candidate["command"])
+        self.assertEqual(len(candidate["job_ids_sha256"]), 64)
+
+        with Coordinator(self.database, self.project_root) as coordinator:
+            after = coordinator.status()
+        self.assertEqual(after["last_event_id"], before_event)
+        self.assertEqual(after["counts"]["failed"], 1)
+
+    def test_doctor_refuses_to_describe_live_armed_queue_as_recoverable(self) -> None:
+        queue = self._queue(armed=True)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync(queue, now=10)
+            coordinator.claim("test-worker", now=20)
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(self._arguments("doctor"))
+
+        self.assertEqual(status, 0)
+        document = json.loads(output.getvalue())
+        self.assertTrue(document["queue"]["armed"])
+        self.assertEqual(document["queue"]["global_live_work"], 1)
+        self.assertIn(
+            "the durable queue is armed",
+            document["recovery"]["global_blockers"],
+        )
+        self.assertIn(
+            "the durable queue is not paused",
+            document["recovery"]["global_blockers"],
+        )
+
     def test_hard_cutoff_requeues_once_worker_without_becoming_operator_interrupt(
         self,
     ) -> None:

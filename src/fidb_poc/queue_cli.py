@@ -379,6 +379,37 @@ def parser() -> argparse.ArgumentParser:
         help="limit validation to an exact active batch id; repeat as needed",
     )
 
+    doctor = commands.add_parser(
+        "doctor",
+        parents=[_common_parser(queue=False)],
+        help=(
+            "compile a read-only incident report and guarded recovery plan; "
+            "never pause, requeue or execute work"
+        ),
+    )
+    doctor.add_argument(
+        "--batch",
+        action="append",
+        dest="batches",
+        help="limit the report to an exact batch id; repeat as needed",
+    )
+    doctor.add_argument(
+        "--include-inactive",
+        action="store_true",
+        help="include superseded job generations in counts and failure history",
+    )
+    doctor.add_argument(
+        "--history-limit",
+        type=int,
+        default=20,
+        help="maximum recent failed attempts, stages and incident events (1-200)",
+    )
+    doctor.add_argument(
+        "--services",
+        action="store_true",
+        help="also inspect live worker limits using read-only systemctl show",
+    )
+
     commands.add_parser(
         "start-block",
         parents=[_common_parser(queue=True)],
@@ -1246,6 +1277,23 @@ def _resolution_preflight(arguments: argparse.Namespace) -> int:
     return 0 if document["summary"]["ready"] else 1
 
 
+def _doctor(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    from .incident_report import compile_incident_report
+
+    document = compile_incident_report(
+        root,
+        state,
+        batches=tuple(arguments.batches) if arguments.batches else None,
+        include_inactive=arguments.include_inactive,
+        history_limit=arguments.history_limit,
+        services=arguments.services,
+    )
+    _print_json(document)
+    return 0
+
+
 def _start_block(arguments: argparse.Namespace) -> int:
     root, state, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
@@ -1483,6 +1531,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "requeue-failed": _requeue_failed,
         "preflight": _preflight,
         "resolve-preflight": _resolution_preflight,
+        "doctor": _doctor,
         "start-block": _start_block,
         "run": _run_worker,
     }
