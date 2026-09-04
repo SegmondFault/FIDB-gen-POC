@@ -746,6 +746,48 @@ matrices = ["tier0-uclibc-powerpc"]
             ["job.operator-requeued", "batch.failed-jobs-requeued"],
         )
 
+    def test_operator_requeue_can_claim_after_automatic_attempt_ceiling(self):
+        armed_path = self.write_queue(
+            filename="armed.toml", armed=True, max_attempts=1
+        )
+        disarmed_path = self.write_queue(
+            filename="disarmed.toml", armed=False, max_attempts=1
+        )
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            first = coordinator.claim("worker-one", now=20)
+            coordinator.fail(
+                first["job_id"],
+                first["lease_token"],
+                first["lease_generation"],
+                "exhausted failure",
+                retryable=True,
+                now=21,
+            )
+            coordinator.sync(self.config(disarmed_path), now=22)
+            coordinator.pause("reviewed recovery", now=23)
+            coordinator.requeue_failed_batch(
+                "batch-baseline", 1, "verified repair", now=24
+            )
+            coordinator.sync(self.config(armed_path), now=25)
+            coordinator.resume(now=26)
+
+            recovered = coordinator.claim("worker-two", now=27)
+            self.assertIsNotNone(recovered)
+            self.assertEqual(recovered["attempt_number"], 2)
+            terminal = coordinator.fail(
+                recovered["job_id"],
+                recovered["lease_token"],
+                recovered["lease_generation"],
+                "recovery still failed",
+                retryable=True,
+                now=28,
+            )
+            snapshot = coordinator.snapshot()
+
+        self.assertEqual(terminal["state"], "failed")
+        self.assertEqual(len(snapshot["attempts"]), 2)
+
     def test_operator_requeue_fails_closed_on_state_or_count_drift(self):
         armed_path = self.write_queue(filename="armed.toml", armed=True)
         disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)

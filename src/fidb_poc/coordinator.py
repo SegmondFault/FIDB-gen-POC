@@ -1706,9 +1706,14 @@ class Coordinator:
                 WHERE jobs.active = 1 AND batches.active = 1
                   AND jobs.state = 'queued'
                   AND jobs.eligible_at <= ?
-                  AND jobs.attempt_count < ?
                 """
-            parameters: list[object] = [timestamp, int(state["max_attempts"])]
+            # ``fail`` enforces the automatic retry ceiling before it places a
+            # job back in ``queued``. An operator recovery transition also
+            # deliberately creates a queued job while preserving its exhausted
+            # attempt count. The durable state is therefore the claim authority;
+            # filtering it by the historical count would make reviewed recovery
+            # jobs impossible to execute.
+            parameters: list[object] = [timestamp]
             if selected_batch is not None:
                 claim_query += " AND jobs.batch_id = ?"
                 parameters.append(selected_batch)
