@@ -1691,8 +1691,8 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
         </section>}
 
         <section className="operational-matrix-band retention-band">
-          <div className="operational-band-title"><b>04</b><span><strong>Retention & garbage collection</strong><small>Terminal queue → verified dry-run → bounded collection → worker recycle.</small></span><em>{retention?.latest_plan ? `${retention.latest_plan.summary.actions.toLocaleString()} actions · ${formatBytes(retention.latest_plan.summary.recoverable_apparent_bytes)}` : 'awaiting dry-run'}</em></div>
-          <div className="operational-retention-row"><span className={`operational-state ${retention?.latest_plan?.automatic_apply_eligible ? 'ready' : 'blocked'}`}>{retention?.latest_plan ? retention.latest_plan.automatic_apply_eligible ? 'AUTO ELIGIBLE' : 'MANUAL REVIEW' : 'NOT PLANNED'}</span><p><strong>{retention?.policy.authority_path ?? 'retention/policy.toml'}</strong><small>{retention?.latest_plan ? `${retention.latest_plan.summary.verified_successes.toLocaleString()} seals verified · ${retention.latest_plan.summary.preserved.toLocaleString()} protected · ${retention.latest_plan.summary.quarantined.toLocaleString()} quarantined` : 'content-addressed plan required before deletion'}</small></p><div><b>{retention?.latest_plan ? formatDurationNs(retention.latest_plan.estimated_apply_seconds * 1_000_000_000) : '—'}</b><span>estimated apply</span></div><div><b>{retention?.last_run ? formatBytes(retention.last_run.filesystem_free_bytes_delta) : '—'}</b><span>last freed</span></div></div>
+          <div className="operational-band-title"><b>04</b><span><strong>Retention & garbage collection</strong><small>Terminal queue → verified dry-run → bounded collection → worker recycle → memory audit.</small></span><em>{retention?.latest_plan ? `${retention.latest_plan.summary.actions.toLocaleString()} actions · ${formatBytes(retention.latest_plan.summary.recoverable_apparent_bytes)}` : 'awaiting dry-run'}</em></div>
+          <div className="operational-retention-row"><span className={`operational-state ${retention?.latest_plan?.automatic_apply_eligible ? 'ready' : 'blocked'}`}>{retention?.latest_plan ? retention.latest_plan.automatic_apply_eligible ? 'AUTO ELIGIBLE' : 'MANUAL REVIEW' : 'NOT PLANNED'}</span><p><strong>{retention?.policy.authority_path ?? 'retention/policy.toml'}</strong><small>{retention?.latest_plan ? `${retention.latest_plan.summary.verified_successes.toLocaleString()} seals verified · ${retention.latest_plan.summary.preserved.toLocaleString()} protected · ${retention.latest_plan.summary.quarantined.toLocaleString()} quarantined` : 'content-addressed plan required before deletion'}</small></p><div><b>{retention?.latest_plan ? formatDurationNs(retention.latest_plan.estimated_apply_seconds * 1_000_000_000) : '—'}</b><span>estimated apply</span></div><div><b>{retention?.memory_cleanup.latest_session?.workers ? `${retention.memory_cleanup.latest_session.passed ?? 0}/${retention.memory_cleanup.latest_session.workers}` : '—'}</b><span>memory audits pass</span></div></div>
         </section>
 
         <div className="operational-gap-grid">
@@ -1856,6 +1856,7 @@ function RetentionView({ factory }: { factory: FactoryApiState }) {
   if (!retention) return <div className="view-stack"><ViewIntro kicker="RETENTION" title="Retention & garbage collection" /><section className="panel"><div className="empty-state"><span>◇</span><strong>Retention status unavailable</strong><p>Reconnect the local API to read retention/policy.toml.</p></div></section></div>;
   const plan = retention.latest_plan;
   const run = retention.last_run;
+  const memory = retention.memory_cleanup.latest_session;
   const policy = retention.policy;
   const planning = factory.busyAction === 'retention-plan';
   const applying = factory.busyAction === 'retention-apply';
@@ -1890,6 +1891,7 @@ function RetentionView({ factory }: { factory: FactoryApiState }) {
       <article className="panel"><span>QUARANTINED</span><strong>{plan?.summary.quarantined.toLocaleString() ?? '—'}</strong><small>excluded from deletion</small></article>
       <article className="panel"><span>ESTIMATED APPLY</span><strong>{plan ? formatDurationNs(plan.estimated_apply_seconds * 1_000_000_000) : '—'}</strong><small>automatic ceiling {formatDurationNs(policy.automation.maximum_estimated_seconds * 1_000_000_000)}</small></article>
       <article className="panel"><span>LAST FREED</span><strong>{run ? formatBytes(run.filesystem_free_bytes_delta) : '—'}</strong><small>{run ? `${run.actions_completed.toLocaleString()} actions · ${formatDurationNs(run.duration_ns)}` : 'no apply recorded'}</small></article>
+      <article className="panel"><span>MEMORY RELEASE</span><strong>{memory?.reclaimed_rss_bytes !== undefined ? formatBytes(memory.reclaimed_rss_bytes) : '—'}</strong><small>{memory?.workers ? `${memory.passed ?? 0}/${memory.workers} fresh workers passed` : 'awaiting a worker recycle'}</small></article>
     </section>
 
     <section className="panel retention-policy-panel">
@@ -1900,9 +1902,22 @@ function RetentionView({ factory }: { factory: FactoryApiState }) {
         <article><b>03</b><p><strong>PROTECT</strong><small>holds + lane-import boundary</small></p></article>
         <article><b>04</b><p><strong>COLLECT</strong><small>failure bundles + eligible scratch</small></p></article>
         <article><b>05</b><p><strong>RECYCLE</strong><small>{policy.automation.worker_action} long-lived workers</small></p></article>
+        <article><b>06</b><p><strong>VERIFY MEMORY</strong><small>fresh RSS + JVM state</small></p></article>
       </div>
       <div className="retention-contract-grid"><article><span>SUCCESS</span><strong>{policy.success.preserve_until_lane_imported ? 'PRESERVE UNTIL LANE RECEIPT' : 'POLICY CONTROLLED'}</strong><small>required: {policy.success.required_result_artifacts.join(' · ')}</small></article><article><span>FAILURES</span><strong>{policy.failure.retain_latest_evidence_bundle ? 'FINAL EVIDENCE BUNDLE' : 'PRESERVED WHOLE'}</strong><small>identical retries {policy.failure.collapse_identical_retries ? 'collapse' : 'remain whole'}</small></article><article><span>AUTOMATION</span><strong>{policy.automation.enabled ? policy.automation.mode.toUpperCase() : 'DISABLED'}</strong><small>always dry-run first · ≤{policy.automation.maximum_estimated_seconds}s</small></article></div>
       <footer><code>{plan ? `${plan.path} · ${plan.plan_digest}` : 'No content-addressed plan yet'}</code><span>{message}</span></footer>
+    </section>
+
+    <section className="panel retention-memory-panel">
+      <header><div><h3>Post-recycle memory</h3><code>{memory?.session_id ?? 'No audited recycle session'}</code></div><span className={`validation-state ${memory && (memory.warnings ?? 0) === 0 && (memory.unreadable_reports ?? 0) === 0 ? 'ready' : 'waiting'}`}>{memory ? (memory.warnings ?? 0) === 0 && (memory.unreadable_reports ?? 0) === 0 ? 'VERIFIED' : 'REVIEW' : 'WAITING'}</span></header>
+      <div className="retention-memory-summary">
+        <article><span>BEFORE</span><strong>{memory?.before_rss_bytes !== undefined ? formatBytes(memory.before_rss_bytes) : '—'}</strong></article>
+        <article><span>AFTER</span><strong>{memory?.after_rss_bytes !== undefined ? formatBytes(memory.after_rss_bytes) : '—'}</strong></article>
+        <article><span>RELEASED</span><strong>{memory?.reclaimed_rss_bytes !== undefined ? formatBytes(memory.reclaimed_rss_bytes) : '—'}</strong></article>
+        <article><span>THRESHOLD / WORKER</span><strong>{formatBytes(retention.memory_cleanup.post_recycle_rss_warning_bytes)}</strong></article>
+        <article><span>JVM / RSS CHECKS</span><strong>{memory?.workers ? `${memory.passed ?? 0} pass · ${memory.warnings ?? 0} warn` : '—'}</strong></article>
+      </div>
+      <div className="retention-memory-workers">{memory?.reports?.map(report => <article key={report.worker_id}><span className={`operational-state ${report.state === 'passed' ? 'ready' : 'blocked'}`}>{report.state.toUpperCase()}</span><p><strong>{report.worker_id}</strong><small>{formatBytes(report.before.rss_bytes)} → {formatBytes(report.after.rss_bytes)} · JVM {report.after.embedded_jvm_started === false ? 'absent' : 'unverified'}</small></p><b>{formatBytes(report.reclaimed_rss_bytes)}</b></article>)}{!memory?.reports?.length && <div className="operational-empty"><strong>No recycle audit yet</strong></div>}</div>
     </section>
 
     <section className="retention-evidence-grid">

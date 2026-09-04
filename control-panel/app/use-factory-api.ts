@@ -1694,6 +1694,11 @@ export type RetentionStatus = {
       maximum_estimated_seconds: number;
       worker_action: string;
     };
+    memory_cleanup: {
+      enabled: boolean;
+      audit_after_recycle: boolean;
+      post_recycle_rss_warning_mib: number;
+    };
     limits: Record<string, number>;
   };
   latest_plan: null | {
@@ -1725,6 +1730,31 @@ export type RetentionStatus = {
     };
     bundle_bytes: number;
     filesystem_free_bytes_delta: number;
+  };
+  memory_cleanup: {
+    enabled: boolean;
+    audit_after_recycle: boolean;
+    post_recycle_rss_warning_bytes: number;
+    latest_session: null | {
+      session_id?: string;
+      recorded_at?: string;
+      workers?: number;
+      passed?: number;
+      warnings?: number;
+      unreadable_reports: number;
+      before_rss_bytes?: number;
+      after_rss_bytes?: number;
+      reclaimed_rss_bytes?: number;
+      reports?: Array<{
+        state: 'passed' | 'warning' | 'disabled';
+        worker_id: string;
+        recorded_at: string;
+        before: { rss_bytes: number; embedded_jvm_started: boolean | null };
+        after: { rss_bytes: number; embedded_jvm_started: boolean | null };
+        reclaimed_rss_bytes: number;
+        reasons: string[];
+      }>;
+    };
   };
 };
 

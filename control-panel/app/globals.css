@@ -1609,7 +1609,7 @@ button { font: inherit; }
 .empty-state.timing-empty.eta { min-height: 245px; }
 
 /* Retention and garbage collection */
-.retention-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+.retention-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; }
 .retention-metrics article { min-height: 92px; padding: 14px; display: flex; flex-direction: column; gap: 7px; }
 .retention-metrics span, .retention-contract-grid span { color: #677488; font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; }
 .retention-metrics strong { color: #c6d0da; font: 600 16px ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -1619,7 +1619,7 @@ button { font: inherit; }
 .retention-policy-panel > header > div { display: flex; flex-direction: column; gap: 5px; }
 .retention-policy-panel h3, .retention-evidence-grid h3 { margin: 0; color: #c7d0da; font-size: 10px; }
 .retention-policy-panel code, .retention-policy-panel footer code { color: #708095; font: 7px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
-.retention-flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--line-soft); gap: 1px; }
+.retention-flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: var(--line-soft); gap: 1px; }
 .retention-flow article { min-height: 76px; padding: 12px; display: grid; grid-template-columns: 25px 1fr; align-items: center; gap: 8px; background: #101720; }
 .retention-flow article > b { display: grid; place-items: center; width: 24px; height: 24px; color: var(--cyan); border: 1px solid #2b5c61; border-radius: 4px; background: #102327; font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .retention-flow p { margin: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -1631,6 +1631,23 @@ button { font: inherit; }
 .retention-contract-grid strong { color: #aebac8; font: 600 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .retention-policy-panel > footer { min-height: 43px; padding: 9px 14px; display: flex; align-items: center; justify-content: space-between; gap: 15px; border-top: 1px solid var(--line-soft); background: #0d1219; }
 .retention-policy-panel > footer span { color: var(--cyan); font-size: 8px; }
+.retention-memory-panel { overflow: hidden; }
+.retention-memory-panel > header { min-height: 52px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); }
+.retention-memory-panel > header > div { display: flex; flex-direction: column; gap: 5px; }
+.retention-memory-panel h3 { margin: 0; color: #c7d0da; font-size: 10px; }
+.retention-memory-panel code { color: #708095; font: 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-memory-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--line-soft); }
+.retention-memory-summary article { min-height: 69px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid var(--line-soft); }
+.retention-memory-summary article:last-child { border-right: 0; }
+.retention-memory-summary span { color: #677488; font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-memory-summary strong { color: #bfcad5; font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-memory-workers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.retention-memory-workers > article { min-height: 52px; padding: 8px 13px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.retention-memory-workers > article:nth-child(even) { border-right: 0; }
+.retention-memory-workers p { min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.retention-memory-workers p strong { color: #b9c4cf; font: 600 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-memory-workers p small { color: var(--muted-2); font-size: 7px; }
+.retention-memory-workers > article > b { color: var(--cyan); font: 650 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .retention-evidence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .retention-evidence-grid > article { overflow: hidden; }
 .retention-evidence-grid > article > header > span { color: var(--amber); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -1660,6 +1677,7 @@ button { font: inherit; }
 @media (max-width: 1050px) {
   .retention-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .retention-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .retention-memory-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hdi-headline-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hdi-headline-metrics article:nth-child(3n) { border-right: 0; }
   .hdi-headline-metrics article:nth-child(-n+3) { border-bottom: 1px solid var(--line-soft); }
@@ -1736,7 +1754,7 @@ button { font: inherit; }
 }
 
 @media (max-width: 760px) {
-  .retention-metrics, .retention-contract-grid, .retention-evidence-grid { grid-template-columns: 1fr; }
+  .retention-metrics, .retention-contract-grid, .retention-evidence-grid, .retention-memory-summary, .retention-memory-workers { grid-template-columns: 1fr; }
   .retention-flow { grid-template-columns: 1fr; }
   .retention-policy-panel > footer, .view-intro-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .operational-retention-row { grid-template-columns: auto 1fr; }

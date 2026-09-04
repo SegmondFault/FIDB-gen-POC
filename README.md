@@ -695,8 +695,9 @@ until a relationship-complete lane-import receipt exists; failed attempts are
 reduced only after concise evidence is bundled, with unlike retries and holds
 preserved. A terminal queue also recycles long-lived Ghidra workers once so JVM
 heap is returned to the OS, even when the final block drains after the claim
-window closes. The control panel exposes planning, exact apply, protected
-evidence and quarantine under **Operations → Retention**.
+window closes. Each fresh worker records a secondary RSS/JVM audit. The control
+panel exposes planning, exact apply, protected evidence, quarantine and memory
+verification under **Operations → Retention**.
 
 These directories are intentionally ignored and are not source deliverables. A
 source-only handoff must omit `work/`, `artifacts/libs/`, `.venv/`, `.idea/`,

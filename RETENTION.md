@@ -68,6 +68,16 @@ leaving a low-memory worker ready for a later queue. The session marker prevents
 an idle restart loop. Garbage collection never runs `drop_caches`, `swapoff` or
 another host-wide memory command.
 
+Process replacement is the cleanup mechanism; the fresh process then performs
+a secondary audit. The old process hands over its current RSS and embedded-JVM
+state through one-use environment values. Before queue synchronisation or JVM
+startup, the replacement records its RSS and confirms that pyghidra has not
+started a JVM. Per-worker reports are written beneath the ignored
+`var/fidb-retention/memory-audits/` tree and aggregated in **Operations →
+Retention**. `[memory_cleanup]` in `retention/policy.toml` enables this check and
+sets the fresh-worker RSS warning threshold. A warning is evidence for review;
+it does not invoke host-wide memory controls or delete run evidence.
+
 ## First production dry-run
 
 On 2026-09-04 the initial read-only scan took 82.39 seconds. It verified 1,722

@@ -162,7 +162,10 @@ eligible, then one worker recycle per drain-session ID. Queue completion is the
 trigger even when it occurs outside the configured claim window. A deferred
 apply must not defer worker recycling: stale Ghidra JVM state was observed
 retaining about 38 GiB across 20 idle workers. Recycling releases it without
-host-wide cache or swap manipulation.
+host-wide cache or swap manipulation. The replacement worker must record the
+TOML-controlled secondary RSS/JVM audit before queue synchronisation; do not
+replace that cross-process check with `gc.collect()`, which cannot unload an
+embedded JVM.
 
 Successful attempt scratch is ineligible until the queue-to-lane importer has
 emitted a valid relationship-complete receipt. The importer is not implemented,
