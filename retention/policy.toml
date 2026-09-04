@@ -1,0 +1,44 @@
+schema_version = "fidb-retention-policy/v1"
+name = "nightly-safe-retention"
+
+[paths]
+runs = "artifacts/runs"
+failure_bundles = "artifacts/retention/failures"
+plans = "var/fidb-retention/plans"
+state = "var/fidb-retention/state.json"
+lane_import_receipts = "var/fidb-lanes/import-receipts"
+holds = "retention/holds.toml"
+
+[success]
+# The queue-to-lane importer is not implemented yet. Until it emits a verified,
+# relationship-complete receipt, the complete published attempt is evidence.
+preserve_until_lane_imported = true
+prune_after_receipt = ["work"]
+required_result_artifacts = ["seal", "fidb", "fidbf"]
+
+[failure]
+retain_latest_evidence_bundle = true
+collapse_identical_retries = true
+evidence_globs = [
+  "work/logs/**",
+  "work/logs/**/*",
+  "work/**/config.log",
+  "work/**/CMakeError.log",
+  "work/**/CMakeOutput.log",
+  "work/**/meson-log.txt",
+  "artifacts/libs/fidb_manifest.csv",
+  "artifacts/cell-seal.json",
+]
+max_evidence_file_bytes = 67108864
+
+[automation]
+enabled = true
+trigger = "queue-drained"
+mode = "apply"
+dry_run_first = true
+maximum_estimated_seconds = 600
+worker_action = "recycle"
+
+[limits]
+maximum_actions = 10000
+maximum_scan_files = 2000000

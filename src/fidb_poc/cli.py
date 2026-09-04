@@ -1033,6 +1033,10 @@ def main(argv: list[str] | None = None) -> int:
         return _noisy_hashes_main(tokens[1:])
     if tokens and tokens[0] == "hash-discrimination":
         return _hash_discrimination_main(tokens[1:])
+    if tokens and tokens[0] == "retention":
+        from .retention import main as retention_main
+
+        return retention_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":

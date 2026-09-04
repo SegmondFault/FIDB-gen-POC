@@ -1,0 +1,10 @@
+schema_version = "fidb-retention-holds/v1"
+
+# Holds are reviewed source authority. Add one or more entries to preserve every
+# attempt for a job, or list exact attempt numbers.
+#
+# [[hold]]
+# id = "incident-example"
+# job_id = "job-<64 lowercase hex characters>"
+# attempt_numbers = [1, 2]
+# reason = "Evidence retained for incident review"
