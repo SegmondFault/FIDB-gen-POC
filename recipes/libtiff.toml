@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libtiff"
+version = "4.7.2"
+url = "https://download.osgeo.org/libtiff/tiff-4.7.2.tar.xz"
+sha256 = "4996f0c4f93094719b1ca5c6279b20e588773ba8a247533e486416fb662ddb88"
+source_directory = "tiff-4.7.2"
+project_markers = ["configure", "libtiff/tiff.h"]
+allowed_build_systems = ["libtiff-autoconf", "autoconf", "cmake"]
+preferred_build_system = "libtiff-autoconf"
+static_archives = ["libtiff.a"]

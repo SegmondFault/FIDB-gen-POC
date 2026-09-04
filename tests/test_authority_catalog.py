@@ -59,7 +59,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             len(document["source_digests"]["performance_profiles_sha256"]), 64
         )
-        self.assertEqual(len(document["recipes"]), 14)
+        self.assertEqual(len(document["recipes"]), 22)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(
@@ -172,7 +172,7 @@ class AuthorityCatalogTests(unittest.TestCase):
             row for row in document["width_studies"] if row["id"] == "study-c20"
         )
         self.assertEqual(c20_study["readiness"]["source_evidence_families"], 20)
-        self.assertEqual(c20_study["readiness"]["missing_recipe_families"], 9)
+        self.assertEqual(c20_study["readiness"]["missing_recipe_families"], 2)
 
         self.assertEqual(len(document["width_batches"]), 3)
         width_batch = next(
@@ -198,8 +198,8 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(next_cohort["summary"]["libraries"], 10)
         self.assertEqual(next_cohort["summary"]["total_executions"], 2_220)
         self.assertEqual(next_cohort["readiness"]["source_pins"], 10)
-        self.assertEqual(next_cohort["readiness"]["recipe_ready_libraries"], 0)
-        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 2_220)
+        self.assertEqual(next_cohort["readiness"]["recipe_ready_libraries"], 8)
+        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 444)
         self.assertEqual(
             next_cohort["readiness"]["queue_state"],
             "not-materialized-disarmed",

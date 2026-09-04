@@ -1,0 +1,17 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "harfbuzz"
+version = "14.4.0"
+url = "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz"
+sha256 = "2357ed966c6ced7bfa720b0640c0231065af01158fbea215093ffa15aed44371"
+source_directory = "harfbuzz-14.4.0"
+project_markers = ["CMakeLists.txt", "src/hb.h"]
+allowed_build_systems = ["harfbuzz-cmake", "cmake", "meson"]
+preferred_build_system = "harfbuzz-cmake"
+static_archives = [
+  "libharfbuzz.a",
+  "libharfbuzz-subset.a",
+  "libharfbuzz-raster.a",
+  "libharfbuzz-vector.a",
+  "libharfbuzz-gpu.a",
+]

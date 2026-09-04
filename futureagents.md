@@ -245,11 +245,29 @@ qualified routes × 6 treatments = 2,220 exact executions.
 
 This projection is intentionally not in `plans/priority-queue.toml`. At the
 time it was added, all ten libraries reported `recipe-required`; a source pin
-and a qualified toolchain do not constitute a build recipe. Add fixed adapters,
-focused tests and target-family/oldest-generation compilation canaries before
-materialisation. Never mark the C11–C20 batch ready merely to make it appear in
-the scheduler—the Matrix should show it under missing recipes until those
-gates are real.
+and a qualified toolchain do not constitute a build recipe.
+
+The first authoring pass added fixed recipes for HarfBuzz, FreeType, Expat,
+Brotli, libjpeg-turbo, libunistring, bzip2 1.0.8 and libtiff. Exact recipe pins
+match the C20 source authority and project detection was checked against every
+cached source tree. This moves the read-only projection to 8/10 recipe-ready,
+1,776 materializable cells and 444 blocked cells, but compilation qualification
+is still outstanding and the batch remains disarmed.
+
+The remaining blockers are structural, not missing downloads:
+
+- GLib needs an offline Meson dependency set for PCRE2, libffi, zlib and
+  proxy-libintl plus per-target cross files. Its checked-in wraps name exact
+  upstream and WrapDB source/patch hashes, but runtime network access is not an
+  acceptable build mechanism.
+- libpng requires a zlib build produced by the same route and treatment. Do not
+  satisfy it from the Linux host or an uncontrolled sysroot.
+
+Implement a declarative pinned-dependency contract, stage those inputs from the
+content-addressed cache, and include every dependency digest in cell provenance.
+Then run focused tests and target-family/oldest-generation compilation canaries
+for all ten before materialisation. Never mark the C11–C20 batch ready merely
+to make it appear in the scheduler.
 
 ## Rollback
 
