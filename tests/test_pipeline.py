@@ -360,6 +360,7 @@ class PipelineTests(unittest.TestCase):
                 source_tar.addfile(directory)
                 member = tarfile.TarInfo("demo-1.0/demo.c")
                 member.size = len(original)
+                member.mtime = 1_700_000_000
                 source_tar.addfile(member, io.BytesIO(original))
                 helper = tarfile.TarInfo("demo-1.0/configure-helper")
                 helper.mode = 0o4755
@@ -388,6 +389,7 @@ class PipelineTests(unittest.TestCase):
             second = extract_source(library, archive, sources)
 
             self.assertEqual((second / "demo.c").read_bytes(), original)
+            self.assertEqual(int((second / "demo.c").stat().st_mtime), 1_700_000_000)
             self.assertEqual((second / "demo.c").stat().st_mode & 0o7777, 0o644)
             self.assertEqual(
                 (second / "configure-helper").stat().st_mode & 0o7777,

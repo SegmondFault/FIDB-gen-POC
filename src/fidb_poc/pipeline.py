@@ -541,12 +541,14 @@ def extract_source(
             staging = Path(temporary) / library.identifier
             staging.mkdir()
             deferred_symlinks: list[tuple[Path, str]] = []
+            deferred_directory_times: list[tuple[Path, int | float]] = []
             with tarfile.open(archive, "r:*") as source_tar:
                 for member in source_tar.getmembers():
                     member_count += 1
                     target = _safe_member_path(staging, member.name)
                     if member.isdir():
                         target.mkdir(parents=True, exist_ok=True)
+                        deferred_directory_times.append((target, member.mtime))
                         continue
                     if member.issym():
                         target.parent.mkdir(parents=True, exist_ok=True)
@@ -570,6 +572,7 @@ def extract_source(
                     # invoked directly, but set-id and write bits from an
                     # untrusted archive must never survive extraction.
                     target.chmod(0o755 if member.mode & 0o111 else 0o644)
+                    os.utime(target, (member.mtime, member.mtime))
 
             # Create links only after every regular member has been written.
             # This prevents an earlier archive link from redirecting extraction
@@ -578,6 +581,13 @@ def extract_source(
                 _safe_symlink_target(staging, target, link_name)
                 target.symlink_to(link_name)
                 file_count += 1
+
+            # Restore directory timestamps last because creating children
+            # changes them. Autotools release archives rely on the relative
+            # age of configure inputs and generated files; replacing every
+            # mtime with extraction time can trigger an unavailable autoreconf.
+            for target, modified_at in reversed(deferred_directory_times):
+                os.utime(target, (modified_at, modified_at))
 
             staged_root = staging / library.source_directory
             if not staged_root.is_dir():
