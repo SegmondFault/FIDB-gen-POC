@@ -1,0 +1,606 @@
+schema_version = "fidb-width-study/v1"
+id = "study-c20"
+name = "c-top20-width-study"
+label = "C top 20 · width study"
+language_id = "c"
+state = "defined-disarmed"
+selection_status = "provisional-c-screened-ranks-1-20"
+family_count = 20
+default_preset = "campaign-b-18"
+purpose = "Hold the C family count at twenty while release, route, compiler/treatment, artifact, analysis, admission and replay width are measured before scaling to the wider catalogue."
+ranking_authority = "mapping-the-tail/reports/library_popularity_tiers_v0.csv"
+ranking_snapshot = "C-screened two-source priority table; ranks 1-20"
+queue_policy = "Coverage intent only. Materialize a fidb-plan/v1 request and add it to plans/priority-queue.toml only after exact recipes, releases, route profiles and treatment mappings resolve."
+caveat = "This is the agreed provisional C-only top twenty, not a completed four-source native-C eligibility screen. Width estimates are declared experimental denominators, not queued work or admitted coverage."
+
+[scaling]
+comparison_family_counts = [10, 20, 40, 80]
+default_target_families = 80
+default_workers = 2
+maximum_workers = 4
+model = "ideal occupied worker slots; queue, failures, setup and route unavailability excluded"
+
+[calibration]
+evidence_class = "measured"
+sample_count = 2
+successful_wall_ns_min = 11179018021
+successful_wall_ns_p50 = 11182015389
+successful_wall_ns_max = 11185012758
+retained_bundle_bytes_p50 = 31265942
+compact_output_bytes_p50 = 247481
+peak_worker_rss_bytes_p50 = 1554034688
+scratch_peak_state = "not-measured"
+basis = "Completed native zlib 1.3.1 and bzip2 1.0.7 linux-x86_64 GCC O2 commissioning attempts in the durable ledger; retained bundle bytes re-read from their published attempt roots."
+caveat = "Two small libraries on one route are a smoke anchor, not a top-ten forecast. Complexity and retained-byte multipliers remain planning assumptions until this batch supplies a distribution."
+
+# Ordered primary route/toolchain requirements make a numeric route width
+# actionable.  Exact versions and digests still belong in worker.toml or the
+# toolchain registry before any row becomes installable or executable.
+
+[[toolchain_requirement]]
+order = 1
+id = "linux-x86-64-gcc"
+target_id = "linux-x86-64-elf"
+compiler_family = "gcc"
+wave = "campaign-b-core"
+worker_class = "linux-local"
+acquisition = "host-installed"
+version_policy = "Pin current GCC and an adjacent release as separate build profiles."
+rationale = "Commissioned native factory route and local throughput anchor."
+
+[[toolchain_requirement]]
+order = 2
+id = "macos-arm64-apple-clang"
+target_id = "macos-arm64-macho"
+compiler_family = "apple-clang"
+wave = "campaign-b-core"
+worker_class = "macos-native-remote"
+acquisition = "remote-worker"
+version_policy = "Pin Xcode, Apple Clang, SDK and deployment target together."
+rationale = "Measured sensitivity route and native Apple ABI coverage."
+
+[[toolchain_requirement]]
+order = 3
+id = "windows-x86-64-msvc"
+target_id = "windows-x86-64-pecoff"
+compiler_family = "msvc"
+wave = "campaign-b-core"
+worker_class = "windows-native-or-validated-vm"
+acquisition = "remote-worker"
+version_policy = "Pin MSVC toolset, Windows SDK, linker and CRT together."
+rationale = "Measured sensitivity route and primary PE/COFF coverage."
+
+[[toolchain_requirement]]
+order = 4
+id = "linux-arm32-gcc"
+target_id = "linux-arm32-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-core"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin GCC, binutils, sysroot, ARM ABI and float ABI."
+rationale = "Measured sensitivity route and high-value embedded target."
+
+[[toolchain_requirement]]
+order = 5
+id = "linux-aarch64-gcc"
+target_id = "linux-aarch64-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-core"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin GCC, binutils and GNU/Linux sysroot."
+rationale = "Common 64-bit Linux and embedded route."
+
+[[toolchain_requirement]]
+order = 6
+id = "linux-mips32-be-gcc"
+target_id = "linux-mips32-be-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-core"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin GCC, binutils, sysroot, endian and MIPS ABI."
+rationale = "Operationally relevant big-endian embedded route."
+
+[[toolchain_requirement]]
+order = 7
+id = "linux-mips32-le-gcc"
+target_id = "linux-mips32-le-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-core"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin GCC, binutils, sysroot, endian and MIPS ABI."
+rationale = "Operationally relevant little-endian embedded route."
+
+[[toolchain_requirement]]
+order = 8
+id = "linux-powerpc32-be-gcc"
+target_id = "linux-powerpc32-be-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-core"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Qualify the existing pinned PowerPC compiler for generic C recipes, then pin adjacent coverage as needed."
+rationale = "Existing family-specific source-capable toolchain provides the first cross-build qualification path."
+
+[[toolchain_requirement]]
+order = 9
+id = "linux-sh32-gcc"
+target_id = "linux-sh32-le-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-breadth"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin GCC, binutils and SuperH sysroot."
+rationale = "Legacy embedded breadth and malware-route relevance."
+
+[[toolchain_requirement]]
+order = 10
+id = "linux-m68k-gcc"
+target_id = "linux-m68k-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-breadth"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin GCC, binutils and M68K sysroot."
+rationale = "Legacy big-endian embedded breadth."
+
+[[toolchain_requirement]]
+order = 11
+id = "linux-x86-32-gcc"
+target_id = "linux-x86-32-elf"
+compiler_family = "gcc"
+wave = "linux-embedded-breadth"
+worker_class = "linux-cross"
+acquisition = "managed-cross-toolchain"
+version_policy = "Pin multilib GCC/binutils and 32-bit GNU/Linux sysroot."
+rationale = "Common legacy desktop and embedded ABI."
+
+[[toolchain_requirement]]
+order = 12
+id = "linux-sparc32-be-gcc"
+target_id = "linux-sparc32-be-elf"
+compiler_family = "gcc"
+wave = "linux-tail"
+worker_class = "linux-cross"
+acquisition = "unresolved-pin"
+version_policy = "Select and checksum a compatible GCC/binutils/sysroot tuple."
+rationale = "Explicit zero-route gap in the architecture census."
+
+[[toolchain_requirement]]
+order = 13
+id = "linux-mips64-le-gcc"
+target_id = "linux-mips64-le-elf"
+compiler_family = "gcc"
+wave = "linux-tail"
+worker_class = "linux-cross"
+acquisition = "unresolved-pin"
+version_policy = "Select and checksum a MIPS64 little-endian GNU/Linux tuple."
+rationale = "64-bit MIPS tail coverage."
+
+[[toolchain_requirement]]
+order = 14
+id = "linux-riscv64-gcc"
+target_id = "linux-riscv64-elf"
+compiler_family = "gcc"
+wave = "linux-tail"
+worker_class = "linux-cross"
+acquisition = "unresolved-pin"
+version_policy = "Pin GCC/binutils/sysroot and ISA extension baseline."
+rationale = "Growing 64-bit architecture coverage."
+
+[[toolchain_requirement]]
+order = 15
+id = "linux-riscv32-gcc"
+target_id = "linux-riscv32-elf"
+compiler_family = "gcc"
+wave = "linux-tail"
+worker_class = "linux-cross"
+acquisition = "unresolved-pin"
+version_policy = "Pin GCC/binutils/sysroot and ISA extension baseline."
+rationale = "Embedded RISC-V breadth."
+
+[[toolchain_requirement]]
+order = 16
+id = "linux-loongarch64-gcc"
+target_id = "linux-loongarch64-elf"
+compiler_family = "gcc"
+wave = "linux-tail"
+worker_class = "linux-cross"
+acquisition = "unresolved-pin"
+version_policy = "Pin GCC/binutils/sysroot and ABI baseline."
+rationale = "Explicit modern architecture gap."
+
+[[toolchain_requirement]]
+order = 17
+id = "android-arm64-clang"
+target_id = "android-arm64-v8a-elf"
+compiler_family = "llvm-clang"
+wave = "platform-expansion"
+worker_class = "linux-android-ndk"
+acquisition = "android-ndk"
+version_policy = "Pin Android NDK, Clang, API level, linker and runtime."
+rationale = "Primary Android native route."
+
+[[toolchain_requirement]]
+order = 18
+id = "android-arm32-clang"
+target_id = "android-armeabi-v7a-elf"
+compiler_family = "llvm-clang"
+wave = "platform-expansion"
+worker_class = "linux-android-ndk"
+acquisition = "android-ndk"
+version_policy = "Pin Android NDK, Clang, API level, linker, float ABI and runtime."
+rationale = "Legacy Android native breadth."
+
+[[toolchain_requirement]]
+order = 19
+id = "macos-x86-64-apple-clang"
+target_id = "macos-x86-64-macho"
+compiler_family = "apple-clang"
+wave = "platform-expansion"
+worker_class = "macos-native-remote"
+acquisition = "remote-worker"
+version_policy = "Pin Xcode, Apple Clang, SDK and deployment target together."
+rationale = "Intel Mach-O compatibility coverage."
+
+[[toolchain_requirement]]
+order = 20
+id = "windows-x86-32-msvc"
+target_id = "windows-x86-32-pecoff"
+compiler_family = "msvc"
+wave = "platform-expansion"
+worker_class = "windows-native-or-validated-vm"
+acquisition = "remote-worker"
+version_policy = "Pin MSVC toolset, Windows SDK, linker, CRT and x86 target together."
+rationale = "Legacy PE/COFF compatibility coverage."
+
+[[toolchain_requirement]]
+order = 21
+id = "android-x86-64-clang"
+target_id = "android-x86-64-elf"
+compiler_family = "llvm-clang"
+wave = "platform-expansion"
+worker_class = "linux-android-ndk"
+acquisition = "android-ndk"
+version_policy = "Pin Android NDK, Clang, API level, linker and runtime."
+rationale = "Android emulator and ChromeOS-compatible 64-bit x86 native breadth."
+
+[[toolchain_requirement]]
+order = 22
+id = "android-x86-32-clang"
+target_id = "android-x86-32-elf"
+compiler_family = "llvm-clang"
+wave = "platform-expansion"
+worker_class = "linux-android-ndk"
+acquisition = "android-ndk"
+version_policy = "Pin Android NDK, Clang, API level, linker and runtime."
+rationale = "Legacy Android emulator and device-native x86 breadth."
+
+[[family]]
+rank = 1
+id = "openssl"
+label = "OpenSSL"
+source_url = "https://www.openssl.org/source/openssl-3.5.8.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 1; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 2
+id = "sqlite"
+label = "SQLite"
+source_url = "https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 2; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 3
+id = "xz"
+label = "XZ / liblzma"
+source_url = "https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 3; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 4
+id = "zstd"
+label = "Zstandard"
+source_url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 4; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 5
+id = "pcre2"
+label = "PCRE2"
+source_url = "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.48/pcre2-10.48.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 5; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 6
+id = "lz4"
+label = "LZ4"
+source_url = "https://github.com/lz4/lz4/releases/download/v1.10.0/lz4-1.10.0.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 6; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 7
+id = "gettext"
+label = "gettext / libintl"
+source_url = "https://ftp.gnu.org/gnu/gettext/gettext-1.0.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 7; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 8
+id = "nghttp2"
+label = "nghttp2"
+source_url = "https://github.com/nghttp2/nghttp2/releases/download/v1.70.0/nghttp2-1.70.0.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 8; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 9
+id = "readline"
+label = "Readline"
+source_url = "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 9; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 10
+id = "gmp"
+label = "GMP"
+source_url = "https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 10; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 11
+id = "harfbuzz"
+label = "HarfBuzz"
+source_url = "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 11; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 12
+id = "freetype"
+label = "FreeType"
+source_url = "https://sourceforge.net/projects/freetype/files/freetype2/2.14.3/freetype-2.14.3.tar.xz/download"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 12; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 13
+id = "glib"
+label = "GLib"
+source_url = "https://download.gnome.org/sources/glib/2.88/glib-2.88.3.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 13; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 14
+id = "expat"
+label = "Expat"
+source_url = "https://github.com/libexpat/libexpat/releases/download/R_2_8_2/expat-2.8.2.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 14; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 15
+id = "brotli"
+label = "Brotli"
+source_url = "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 15; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 16
+id = "libjpeg-turbo"
+label = "libjpeg-turbo"
+source_url = "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 16; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 17
+id = "libunistring"
+label = "libunistring"
+source_url = "https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 17; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 18
+id = "bzip2"
+label = "bzip2"
+source_url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 18; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 19
+id = "libtiff"
+label = "libtiff"
+source_url = "https://download.osgeo.org/libtiff/tiff-4.7.2.tar.xz"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 19; pinned by sources/c-top20-v1.toml"
+
+[[family]]
+rank = 20
+id = "libpng"
+label = "libpng"
+source_url = "https://sourceforge.net/projects/libpng/files/libpng16/1.6.58/libpng-1.6.58.tar.xz/download"
+source_state = "pinned-study-archive"
+selection_evidence = "C-screened combined rank 20; pinned by sources/c-top20-v1.toml"
+
+# The first four axes multiply separately compiled/artifact build cells.
+# Analysis profiles reuse those build artifacts, admission policies reuse the
+# resulting FID evidence, and replay repeats the full producer/analysis path.
+
+[[axis]]
+id = "releases"
+label = "Pinned source releases"
+layer = "build-cell"
+minimum = 1
+default = 2
+maximum = 3
+unit = "releases per family"
+description = "Current, previous and optionally one older retained source release."
+
+[[axis]]
+id = "routes"
+label = "Eligible hard routes"
+layer = "build-cell"
+minimum = 1
+default = 3
+maximum = 20
+unit = "route profiles per release"
+description = "Architecture × format × OS/ABI/runtime routes; inapplicable combinations remain explicit."
+
+[[axis]]
+id = "build_profiles"
+label = "Compiler / treatment profiles"
+layer = "build-cell"
+minimum = 1
+default = 3
+maximum = 20
+unit = "route-specific profiles"
+description = "Finite compiler family/version and code-generation tuples, never a blind flag Cartesian product."
+
+[[axis]]
+id = "artifact_shapes"
+label = "Artifact shapes"
+layer = "build-cell"
+minimum = 1
+default = 1
+maximum = 4
+unit = "archive/link shapes"
+description = "Static archive, reviewed linked output and other explicitly attributable packaging shapes."
+
+[[axis]]
+id = "analysis_profiles"
+label = "Analysis / recovery profiles"
+layer = "analysis-reuse"
+minimum = 1
+default = 1
+maximum = 6
+unit = "analyses per build artifact"
+description = "Route-selected and guarded recovery profiles reuse compiled artifacts but create separate analysis evidence."
+
+[[axis]]
+id = "admission_profiles"
+label = "Admission / matching policies"
+layer = "policy-reuse"
+minimum = 1
+default = 1
+maximum = 3
+unit = "policy evaluations per analysis"
+description = "Versioned matching and admission comparisons reuse FID evidence and do not trigger recompilation."
+
+[[axis]]
+id = "replay"
+label = "Independent replay"
+layer = "repeat"
+minimum = 1
+default = 2
+maximum = 3
+unit = "producer/analysis attempts"
+description = "Clean repeated execution used to measure reproducibility and factory variance."
+
+[[preset]]
+id = "canary-1"
+label = "Canary · 1 build cell/family"
+evidence_class = "proposed"
+description = "Minimum end-to-end commissioning width before a heterogeneous run."
+releases = 1
+routes = 1
+build_profiles = 1
+artifact_shapes = 1
+analysis_profiles = 1
+admission_profiles = 1
+replay = 1
+
+[[preset]]
+id = "campaign-b-18"
+label = "Campaign B · 18 build cells/family"
+evidence_class = "proposed"
+description = "Two releases × three relevant routes × three admitted hash-changing treatment profiles."
+releases = 2
+routes = 3
+build_profiles = 3
+artifact_shapes = 1
+analysis_profiles = 1
+admission_profiles = 1
+replay = 2
+
+[[preset]]
+id = "lean-42"
+label = "Lean · 42 build cells/family"
+evidence_class = "provisional"
+description = "Appendix H lean case: seven eligible routes × six retained treatment representatives."
+releases = 1
+routes = 7
+build_profiles = 6
+artifact_shapes = 1
+analysis_profiles = 1
+admission_profiles = 1
+replay = 2
+
+[[preset]]
+id = "two-release-84"
+label = "Two-release lean · 84/family"
+evidence_class = "assumption"
+description = "The lean route/treatment pack applied to current and previous stable releases."
+releases = 2
+routes = 7
+build_profiles = 6
+artifact_shapes = 1
+analysis_profiles = 1
+admission_profiles = 1
+replay = 2
+
+[[preset]]
+id = "sensitivity-stack"
+label = "Sensitivity stack"
+evidence_class = "assumption"
+description = "A broad build and recovery experiment that exposes reuse boundaries before global expansion."
+releases = 2
+routes = 3
+build_profiles = 12
+artifact_shapes = 2
+analysis_profiles = 6
+admission_profiles = 2
+replay = 2
+
+[[preset]]
+id = "stress-1200"
+label = "Stress · 1,200 build cells/family"
+evidence_class = "provisional"
+description = "Appendix H literal build-width envelope without extra analysis or artifact multipliers."
+releases = 3
+routes = 20
+build_profiles = 20
+artifact_shapes = 1
+analysis_profiles = 1
+admission_profiles = 1
+replay = 2
+
+[[preset]]
+id = "wild-full-stack"
+label = "Wild · full stack"
+evidence_class = "assumption"
+description = "Maximum declared build, artifact, analysis, policy and replay width; a capacity bound, not a recommended run."
+releases = 3
+routes = 20
+build_profiles = 20
+artifact_shapes = 4
+analysis_profiles = 6
+admission_profiles = 3
+replay = 2
+

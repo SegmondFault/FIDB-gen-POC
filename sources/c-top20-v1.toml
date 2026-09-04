@@ -1,0 +1,248 @@
+schema_version = "fidb-source-pack/v1"
+id = "c-top20-v1"
+label = "C top 20 pinned source releases"
+language_id = "c"
+study_path = "coverage/c-top20-width-study.toml"
+selection_date = "2026-09-04"
+release_policy = "One explicit stable upstream release per ranked family; archives are source-only inputs and do not imply a qualified build recipe."
+
+[[source]]
+rank = 1
+id = "openssl"
+label = "OpenSSL"
+version = "3.5.8"
+release_page = "https://www.openssl.org/source/"
+url = "https://www.openssl.org/source/openssl-3.5.8.tar.gz"
+sha256 = "a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2"
+download_bytes = 53213818
+filename = "openssl-3.5.8.tar.gz"
+source_directory = "openssl-3.5.8"
+
+[[source]]
+rank = 2
+id = "sqlite"
+label = "SQLite"
+version = "3.53.4"
+release_page = "https://www.sqlite.org/download.html"
+url = "https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz"
+sha256 = "0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c"
+download_bytes = 3283177
+filename = "sqlite-autoconf-3530400.tar.gz"
+source_directory = "sqlite-autoconf-3530400"
+
+[[source]]
+rank = 3
+id = "xz"
+label = "XZ / liblzma"
+version = "5.8.3"
+release_page = "https://tukaani.org/xz/"
+url = "https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz"
+sha256 = "fff1ffcf2b0da84d308a14de513a1aa23d4e9aa3464d17e64b9714bfdd0bbfb6"
+download_bytes = 1548064
+filename = "xz-5.8.3.tar.xz"
+source_directory = "xz-5.8.3"
+
+[[source]]
+rank = 4
+id = "zstd"
+label = "Zstandard"
+version = "1.5.7"
+release_page = "https://github.com/facebook/zstd/releases/tag/v1.5.7"
+url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+sha256 = "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"
+download_bytes = 2434947
+filename = "zstd-1.5.7.tar.gz"
+source_directory = "zstd-1.5.7"
+
+[[source]]
+rank = 5
+id = "pcre2"
+label = "PCRE2"
+version = "10.48"
+release_page = "https://github.com/PCRE2Project/pcre2/releases/tag/pcre2-10.48"
+url = "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.48/pcre2-10.48.tar.gz"
+sha256 = "ebcc25aadf2a51fa1fefa9b8bc9e7a79b3dae86870a0f1152a22e42befd46888"
+download_bytes = 2887260
+filename = "pcre2-10.48.tar.gz"
+source_directory = "pcre2-10.48"
+
+[[source]]
+rank = 6
+id = "lz4"
+label = "LZ4"
+version = "1.10.0"
+release_page = "https://github.com/lz4/lz4/releases/tag/v1.10.0"
+url = "https://github.com/lz4/lz4/releases/download/v1.10.0/lz4-1.10.0.tar.gz"
+sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b"
+download_bytes = 387114
+filename = "lz4-1.10.0.tar.gz"
+source_directory = "lz4-1.10.0"
+
+[[source]]
+rank = 7
+id = "gettext"
+label = "gettext / libintl"
+version = "1.0"
+release_page = "https://ftp.gnu.org/gnu/gettext/"
+url = "https://ftp.gnu.org/gnu/gettext/gettext-1.0.tar.xz"
+sha256 = "71132a3fb71e68245b8f2ac4e9e97137d3e5c02f415636eb508ae607bc01add7"
+download_bytes = 10721600
+filename = "gettext-1.0.tar.xz"
+source_directory = "gettext-1.0"
+
+[[source]]
+rank = 8
+id = "nghttp2"
+label = "nghttp2"
+version = "1.70.0"
+release_page = "https://github.com/nghttp2/nghttp2/releases/tag/v1.70.0"
+url = "https://github.com/nghttp2/nghttp2/releases/download/v1.70.0/nghttp2-1.70.0.tar.xz"
+sha256 = "e05cb1388eaca3830aded4ccf20044b6e1ac1a61411dcca11b0437c4285c8bc2"
+download_bytes = 2018996
+filename = "nghttp2-1.70.0.tar.xz"
+source_directory = "nghttp2-1.70.0"
+
+[[source]]
+rank = 9
+id = "readline"
+label = "Readline"
+version = "8.3"
+release_page = "https://ftp.gnu.org/gnu/readline/"
+url = "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz"
+sha256 = "fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc"
+download_bytes = 3419642
+filename = "readline-8.3.tar.gz"
+source_directory = "readline-8.3"
+
+[[source]]
+rank = 10
+id = "gmp"
+label = "GMP"
+version = "6.3.0"
+release_page = "https://gmplib.org/"
+url = "https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
+sha256 = "a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898"
+download_bytes = 2094196
+filename = "gmp-6.3.0.tar.xz"
+source_directory = "gmp-6.3.0"
+
+[[source]]
+rank = 11
+id = "harfbuzz"
+label = "HarfBuzz"
+version = "14.4.0"
+release_page = "https://github.com/harfbuzz/harfbuzz/releases/tag/14.4.0"
+url = "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz"
+sha256 = "2357ed966c6ced7bfa720b0640c0231065af01158fbea215093ffa15aed44371"
+download_bytes = 20107692
+filename = "harfbuzz-14.4.0.tar.xz"
+source_directory = "harfbuzz-14.4.0"
+
+[[source]]
+rank = 12
+id = "freetype"
+label = "FreeType"
+version = "2.14.3"
+release_page = "https://sourceforge.net/projects/freetype/files/freetype2/2.14.3/"
+url = "https://sourceforge.net/projects/freetype/files/freetype2/2.14.3/freetype-2.14.3.tar.xz/download"
+sha256 = "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+download_bytes = 2670220
+filename = "freetype-2.14.3.tar.xz"
+source_directory = "freetype-2.14.3"
+
+[[source]]
+rank = 13
+id = "glib"
+label = "GLib"
+version = "2.88.3"
+release_page = "https://download.gnome.org/sources/glib/2.88/"
+url = "https://download.gnome.org/sources/glib/2.88/glib-2.88.3.tar.xz"
+sha256 = "ab24d24e698dfa1e408b7bcdb508f4aafc906185a8b8ce72fdf79bbbdc9b383b"
+download_bytes = 5794356
+filename = "glib-2.88.3.tar.xz"
+source_directory = "glib-2.88.3"
+
+[[source]]
+rank = 14
+id = "expat"
+label = "Expat"
+version = "2.8.2"
+release_page = "https://github.com/libexpat/libexpat/releases/tag/R_2_8_2"
+url = "https://github.com/libexpat/libexpat/releases/download/R_2_8_2/expat-2.8.2.tar.xz"
+sha256 = "3ad89b8588e6644bd4e49981480d48b21289eebbcd4f0a1a4afb1c29f99b6ab4"
+download_bytes = 515504
+filename = "expat-2.8.2.tar.xz"
+source_directory = "expat-2.8.2"
+
+[[source]]
+rank = 15
+id = "brotli"
+label = "Brotli"
+version = "1.2.0"
+release_page = "https://github.com/google/brotli/releases/tag/v1.2.0"
+url = "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz"
+sha256 = "816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec"
+download_bytes = 646315
+filename = "brotli-1.2.0.tar.gz"
+source_directory = "brotli-1.2.0"
+
+[[source]]
+rank = 16
+id = "libjpeg-turbo"
+label = "libjpeg-turbo"
+version = "3.2.0"
+release_page = "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/tag/3.2.0"
+url = "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz"
+sha256 = "6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e"
+download_bytes = 2537858
+filename = "libjpeg-turbo-3.2.0.tar.gz"
+source_directory = "libjpeg-turbo-3.2.0"
+
+[[source]]
+rank = 17
+id = "libunistring"
+label = "libunistring"
+version = "1.4.2"
+release_page = "https://ftp.gnu.org/gnu/libunistring/"
+url = "https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.xz"
+sha256 = "5b46e74377ed7409c5b75e7a96f95377b095623b689d8522620927964a41499c"
+download_bytes = 2786084
+filename = "libunistring-1.4.2.tar.xz"
+source_directory = "libunistring-1.4.2"
+
+[[source]]
+rank = 18
+id = "bzip2"
+label = "bzip2"
+version = "1.0.8"
+release_page = "https://sourceware.org/bzip2/downloads.html"
+url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
+sha256 = "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"
+download_bytes = 810029
+filename = "bzip2-1.0.8.tar.gz"
+source_directory = "bzip2-1.0.8"
+
+[[source]]
+rank = 19
+id = "libtiff"
+label = "libtiff"
+version = "4.7.2"
+release_page = "https://gitlab.com/libtiff/libtiff/-/tags/v4.7.2"
+url = "https://download.osgeo.org/libtiff/tiff-4.7.2.tar.xz"
+sha256 = "4996f0c4f93094719b1ca5c6279b20e588773ba8a247533e486416fb662ddb88"
+download_bytes = 2409652
+filename = "tiff-4.7.2.tar.xz"
+source_directory = "tiff-4.7.2"
+
+[[source]]
+rank = 20
+id = "libpng"
+label = "libpng"
+version = "1.6.58"
+release_page = "https://sourceforge.net/projects/libpng/files/libpng16/1.6.58/"
+url = "https://sourceforge.net/projects/libpng/files/libpng16/1.6.58/libpng-1.6.58.tar.xz/download"
+sha256 = "28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775"
+download_bytes = 1070096
+filename = "libpng-1.6.58.tar.xz"
+source_directory = "libpng-1.6.58"
+

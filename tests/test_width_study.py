@@ -61,6 +61,33 @@ class WidthStudyTests(unittest.TestCase):
         self.assertEqual(wild["metrics"]["replayed_executions"], 576_000)
         self.assertEqual(wild["metrics"]["policy_evaluations"], 864_000)
 
+    def test_top_twenty_study_preserves_ranked_continuation(self):
+        document = load_width_study(
+            self.root / "coverage/c-top20-width-study.toml"
+        )
+
+        self.assertEqual(document["id"], "study-c20")
+        self.assertEqual(document["family_count"], 20)
+        self.assertEqual(
+            [row["id"] for row in document["families"][10:]],
+            [
+                "harfbuzz",
+                "freetype",
+                "glib",
+                "expat",
+                "brotli",
+                "libjpeg-turbo",
+                "libunistring",
+                "bzip2",
+                "libtiff",
+                "libpng",
+            ],
+        )
+        self.assertEqual(
+            [row["rank"] for row in document["families"][10:]],
+            list(range(11, 21)),
+        )
+
     def test_invalid_preset_outside_axis_bounds_fails_closed(self):
         source = self.path.read_text(encoding="utf-8")
         source = source.replace("routes = 20", "routes = 21", 1)

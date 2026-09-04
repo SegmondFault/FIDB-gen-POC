@@ -59,6 +59,28 @@ class SourcePackTests(unittest.TestCase):
             self.assertEqual(pack["source"][0]["sha256"], digest)
             self.assertEqual(len(pack["catalog_sha256"]), 64)
 
+    def test_top_twenty_pack_pins_the_ranked_continuation(self):
+        root = Path(__file__).resolve().parents[1]
+        pack = load_source_pack(root / "sources/c-top20-v1.toml")
+
+        self.assertEqual(len(pack["source"]), 20)
+        self.assertEqual(
+            [(row["rank"], row["id"]) for row in pack["source"][10:]],
+            [
+                (11, "harfbuzz"),
+                (12, "freetype"),
+                (13, "glib"),
+                (14, "expat"),
+                (15, "brotli"),
+                (16, "libjpeg-turbo"),
+                (17, "libunistring"),
+                (18, "bzip2"),
+                (19, "libtiff"),
+                (20, "libpng"),
+            ],
+        )
+        self.assertEqual(pack["study_path"], "coverage/c-top20-width-study.toml")
+
     def test_status_is_read_only_and_reports_verified_cache(self):
         payload = b"source"
         with tempfile.TemporaryDirectory() as temporary:

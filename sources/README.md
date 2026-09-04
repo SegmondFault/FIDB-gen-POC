@@ -4,8 +4,11 @@ Source packs freeze release archives before build recipes are written or
 qualified. They keep source selection reproducible without implying that every
 library already works across the compiler-width matrix.
 
-`c-top10-v1.toml` is the source authority for the provisional C top-ten width
-study. Every row records the study rank, release, official release page,
+`c-top10-v1.toml` remains the immutable source authority used by the completed
+C10 campaign. `c-top20-v1.toml` preserves those ten pins and extends the same
+ranking snapshot through C20: HarfBuzz, FreeType, GLib, Expat, Brotli,
+libjpeg-turbo, libunistring, bzip2, libtiff and libpng are global ranks 11–20.
+Every row records the study rank, release, official release page,
 immutable archive URL, observed byte count, SHA-256 digest, archive filename,
 and expected top-level source directory. The tracked TOML is portable; archive
 bytes are kept in the ignored local cache.
@@ -14,6 +17,7 @@ Inspect the complete pack without downloading anything:
 
 ```sh
 uv run fidb-poc source status c-top10-v1 --project-root .
+uv run fidb-poc source status c-top20-v1 --project-root .
 ```
 
 Pull every missing archive sequentially into the locked, content-addressed
