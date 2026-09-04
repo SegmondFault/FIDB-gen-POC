@@ -2001,7 +2001,8 @@ type ApiErrorBody = { error?: { code?: string; message?: string } };
 
 const maxEventHistory = 500;
 const eventPageSize = 200;
-const capabilityRefreshMilliseconds = 60_000;
+const capabilityRefreshMilliseconds = 15 * 60_000;
+const idlePollMilliseconds = 30_000;
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/fidb/${path}`, {
@@ -2040,6 +2041,16 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const capabilityCache = useRef<FactoryCapabilities | null>(null);
   const authorityCache = useRef<FactoryAuthority | null>(null);
   const lastCapabilityRead = useRef(0);
+  const workloadActive = Boolean(
+    machineValidation
+    && ['queued', 'preparing-index', 'running', 'pausing'].includes(machineValidation.run.state),
+  ) || Boolean(
+    snapshot
+    && (snapshot.counts.leased > 0 || snapshot.counts.running > 0),
+  );
+  const effectivePollMilliseconds = workloadActive
+    ? pollMilliseconds
+    : Math.max(pollMilliseconds, idlePollMilliseconds);
 
   const resetEvents = useCallback(() => {
     eventCursor.current = 0;
@@ -2168,12 +2179,12 @@ export function useFactoryApi(pollMilliseconds = 5000) {
 
   useEffect(() => {
     const kickoff = window.setTimeout(() => void refresh(false), 0);
-    const timer = window.setInterval(() => void refresh(false), pollMilliseconds);
+    const timer = window.setInterval(() => void refresh(false), effectivePollMilliseconds);
     return () => {
       window.clearTimeout(kickoff);
       window.clearInterval(timer);
     };
-  }, [pollMilliseconds, refresh]);
+  }, [effectivePollMilliseconds, refresh]);
 
   const mutate = useCallback(
     async (action: 'sync' | 'pause' | 'resume', body: Record<string, unknown> = {}) => {
