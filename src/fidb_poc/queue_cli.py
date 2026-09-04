@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import sqlite3
 import stat
 import sys
 import tempfile
@@ -105,23 +106,23 @@ def _recycle_worker_process(session_id: str, worker_id: str) -> None:
     os.execve(sys.executable, [sys.executable, *sys.argv], environment)
 
 
-def _post_recycle_memory_audit(root: Path, worker_id: str) -> None:
+def _post_recycle_memory_audit(root: Path, worker_id: str) -> bool:
     """Verify memory release from the fresh side of an exec-based recycle."""
 
     session_id = os.environ.get(_RETENTION_RECYCLED_SESSION)
     if session_id is None:
-        return
+        return False
     handed_off_worker = os.environ.get(_RETENTION_RECYCLED_WORKER)
     if handed_off_worker != worker_id:
         print(
             "warning: post-recycle memory audit worker identity mismatch",
             file=sys.stderr,
         )
-        return
+        return True
     before_text = os.environ.get(_RETENTION_PRE_RECYCLE_RSS, "")
     if not before_text.isdigit():
         print("warning: post-recycle memory audit lacks prior RSS", file=sys.stderr)
-        return
+        return True
     jvm_text = os.environ.get(_RETENTION_PRE_RECYCLE_JVM, "unknown")
     before_jvm = {"true": True, "false": False}.get(jvm_text)
     try:
@@ -151,6 +152,44 @@ def _post_recycle_memory_audit(root: Path, worker_id: str) -> None:
         )
     except (OSError, ValueError) as error:
         print(f"warning: post-recycle memory audit failed: {error}", file=sys.stderr)
+    return True
+
+
+def _terminal_queue_has_pending_work(state: Path) -> bool:
+    """Check the durable queue cheaply without rebuilding its resolved plans."""
+
+    uri = f"{state.resolve().as_uri()}?mode=ro"
+    with sqlite3.connect(uri, uri=True, timeout=5) as connection:
+        row = connection.execute(
+            """
+            SELECT 1 FROM jobs
+            WHERE active = 1 AND state IN ('queued', 'leased', 'running')
+            LIMIT 1
+            """
+        ).fetchone()
+    return row is not None
+
+
+def _park_recycled_terminal_worker(root: Path, state: Path) -> None:
+    """Keep a clean worker cheap until durable work is queued again."""
+
+    try:
+        from .retention import load_retention_policy
+
+        policy = load_retention_policy(root)
+    except (OSError, ValueError) as error:
+        print(f"warning: terminal worker park policy unavailable: {error}", file=sys.stderr)
+        return
+    if not policy.memory_cleanup_enabled or not policy.park_terminal_workers:
+        return
+    while True:
+        try:
+            if _terminal_queue_has_pending_work(state):
+                return
+        except (OSError, sqlite3.Error) as error:
+            print(f"warning: terminal worker park check failed: {error}", file=sys.stderr)
+            return
+        time.sleep(policy.park_poll_seconds)
 
 
 def _post_drain_maintenance(
@@ -1226,7 +1265,9 @@ def _start_block(arguments: argparse.Namespace) -> int:
 def _run_worker(arguments: argparse.Namespace) -> int:
     root, state, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
-    _post_recycle_memory_audit(root, arguments.worker_id)
+    recycled = _post_recycle_memory_audit(root, arguments.worker_id)
+    if recycled and not arguments.once:
+        _park_recycled_terminal_worker(root, state)
     config = QueueConfig.load(queue_path, root)
     if not config.armed:
         raise QueueCliError(f"queue is disarmed in {queue_path}; no build was started")

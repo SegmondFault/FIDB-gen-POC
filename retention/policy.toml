@@ -44,6 +44,8 @@ worker_action = "recycle"
 enabled = true
 audit_after_recycle = true
 post_recycle_rss_warning_mib = 512
+park_terminal_workers = true
+park_poll_seconds = 10
 
 [limits]
 maximum_actions = 10000

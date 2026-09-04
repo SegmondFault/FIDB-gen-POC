@@ -165,7 +165,9 @@ retaining about 38 GiB across 20 idle workers. Recycling releases it without
 host-wide cache or swap manipulation. The replacement worker must record the
 TOML-controlled secondary RSS/JVM audit before queue synchronisation; do not
 replace that cross-process check with `gc.collect()`, which cannot unload an
-embedded JVM.
+embedded JVM. A recycled worker with a terminal ledger parks before queue
+resolution and wakes on durable pending work; preserve that cheap idle path or
+the pool will immediately rebuild the memory it just released.
 
 Successful attempt scratch is ineligible until the queue-to-lane importer has
 emitted a valid relationship-complete receipt. The importer is not implemented,

@@ -78,6 +78,12 @@ Retention**. `[memory_cleanup]` in `retention/policy.toml` enables this check an
 sets the fresh-worker RSS warning threshold. A warning is evidence for review;
 it does not invoke host-wide memory controls or delete run evidence.
 
+After a successful audit, a terminal worker parks before the expensive queue
+resolution path and performs only the configured lightweight SQLite wake check.
+It resumes normal queue loading when active queued/leased/running work appears.
+This prevents twenty clean replacement processes from immediately rebuilding
+the same terminal plan state and consuming several gigabytes again.
+
 ## First production dry-run
 
 On 2026-09-04 the initial read-only scan took 82.39 seconds. It verified 1,722

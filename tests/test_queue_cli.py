@@ -21,6 +21,7 @@ from fidb_poc.queue_cli import (
     _RETENTION_RECYCLED_WORKER,
     _durably_publish,
     _maybe_post_drain_maintenance,
+    _park_recycled_terminal_worker,
     _post_drain_maintenance,
     _post_recycle_memory_audit,
     _recycle_worker_process,
@@ -154,6 +155,29 @@ class QueueCommandTests(unittest.TestCase):
             before_jvm_started=True,
             after_jvm_started=False,
         )
+
+    def test_recycled_terminal_worker_parks_until_work_is_queued(self) -> None:
+        policy = type(
+            "Policy",
+            (),
+            {
+                "memory_cleanup_enabled": True,
+                "park_terminal_workers": True,
+                "park_poll_seconds": 10,
+            },
+        )()
+        with (
+            patch("fidb_poc.retention.load_retention_policy", return_value=policy),
+            patch(
+                "fidb_poc.queue_cli._terminal_queue_has_pending_work",
+                side_effect=(False, True),
+            ) as pending,
+            patch("fidb_poc.queue_cli.time.sleep") as sleep,
+        ):
+            _park_recycled_terminal_worker(self.project_root, self.database)
+
+        self.assertEqual(pending.call_count, 2)
+        sleep.assert_called_once_with(10)
 
     def test_terminal_maintenance_is_independent_of_claim_window(self) -> None:
         coordinator = type(

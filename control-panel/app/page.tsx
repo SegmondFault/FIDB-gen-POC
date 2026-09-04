@@ -1902,7 +1902,7 @@ function RetentionView({ factory }: { factory: FactoryApiState }) {
         <article><b>03</b><p><strong>PROTECT</strong><small>holds + lane-import boundary</small></p></article>
         <article><b>04</b><p><strong>COLLECT</strong><small>failure bundles + eligible scratch</small></p></article>
         <article><b>05</b><p><strong>RECYCLE</strong><small>{policy.automation.worker_action} long-lived workers</small></p></article>
-        <article><b>06</b><p><strong>VERIFY MEMORY</strong><small>fresh RSS + JVM state</small></p></article>
+        <article><b>06</b><p><strong>VERIFY + PARK</strong><small>fresh RSS + JVM state · {policy.memory_cleanup.park_poll_seconds}s wake check</small></p></article>
       </div>
       <div className="retention-contract-grid"><article><span>SUCCESS</span><strong>{policy.success.preserve_until_lane_imported ? 'PRESERVE UNTIL LANE RECEIPT' : 'POLICY CONTROLLED'}</strong><small>required: {policy.success.required_result_artifacts.join(' · ')}</small></article><article><span>FAILURES</span><strong>{policy.failure.retain_latest_evidence_bundle ? 'FINAL EVIDENCE BUNDLE' : 'PRESERVED WHOLE'}</strong><small>identical retries {policy.failure.collapse_identical_retries ? 'collapse' : 'remain whole'}</small></article><article><span>AUTOMATION</span><strong>{policy.automation.enabled ? policy.automation.mode.toUpperCase() : 'DISABLED'}</strong><small>always dry-run first · ≤{policy.automation.maximum_estimated_seconds}s</small></article></div>
       <footer><code>{plan ? `${plan.path} · ${plan.plan_digest}` : 'No content-addressed plan yet'}</code><span>{message}</span></footer>

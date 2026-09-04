@@ -151,6 +151,8 @@ class RetentionPolicy:
     memory_cleanup_enabled: bool
     audit_after_recycle: bool
     post_recycle_rss_warning_mib: int
+    park_terminal_workers: bool
+    park_poll_seconds: int
     maximum_actions: int
     maximum_scan_files: int
     authority_sha256: str
@@ -195,6 +197,8 @@ class RetentionPolicy:
                 "enabled": self.memory_cleanup_enabled,
                 "audit_after_recycle": self.audit_after_recycle,
                 "post_recycle_rss_warning_mib": self.post_recycle_rss_warning_mib,
+                "park_terminal_workers": self.park_terminal_workers,
+                "park_poll_seconds": self.park_poll_seconds,
             },
             "limits": {
                 "maximum_actions": self.maximum_actions,
@@ -280,7 +284,13 @@ def load_retention_policy(
     )
     _only_keys(
         memory_cleanup,
-        {"enabled", "audit_after_recycle", "post_recycle_rss_warning_mib"},
+        {
+            "enabled",
+            "audit_after_recycle",
+            "post_recycle_rss_warning_mib",
+            "park_terminal_workers",
+            "park_poll_seconds",
+        },
         "retention memory_cleanup",
     )
     _only_keys(limits, {"maximum_actions", "maximum_scan_files"}, "retention limits")
@@ -362,6 +372,14 @@ def load_retention_policy(
         post_recycle_rss_warning_mib=_positive(
             memory_cleanup.get("post_recycle_rss_warning_mib"),
             "memory_cleanup post_recycle_rss_warning_mib",
+        ),
+        park_terminal_workers=_boolean(
+            memory_cleanup.get("park_terminal_workers"),
+            "memory_cleanup park_terminal_workers",
+        ),
+        park_poll_seconds=_positive(
+            memory_cleanup.get("park_poll_seconds"),
+            "memory_cleanup park_poll_seconds",
         ),
         maximum_actions=_positive(
             limits.get("maximum_actions"), "limits maximum_actions"

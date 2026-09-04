@@ -1698,6 +1698,8 @@ export type RetentionStatus = {
       enabled: boolean;
       audit_after_recycle: boolean;
       post_recycle_rss_warning_mib: number;
+      park_terminal_workers: boolean;
+      park_poll_seconds: number;
     };
     limits: Record<string, number>;
   };
