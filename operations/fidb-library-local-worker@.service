@@ -25,11 +25,10 @@ TimeoutStopSec=90
 CPUQuota=400%
 MemoryHigh=6G
 MemoryMax=8G
-# Large OpenSSL archives reached roughly 470 live analysis threads and could
-# not create Ghidra's remaining native threads under the former 512-task cap.
-# MemoryMax remains the primary runaway bound; this ceiling leaves measured
-# headroom without making the service task-unlimited.
-TasksMax=1024
+# OpenSSL Android ARM64/O0 imports 1,129 objects and crossed 1,100 observed
+# tasks. It failed under the former 1,024-task cap and sealed under the
+# measured 2,048-task cap. MemoryMax remains the primary runaway bound.
+TasksMax=2048
 
 [Install]
 WantedBy=default.target

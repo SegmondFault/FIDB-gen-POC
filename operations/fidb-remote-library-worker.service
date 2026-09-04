@@ -18,7 +18,7 @@ CPUQuota=400%
 MemoryHigh=6G
 MemoryMax=8G
 # Match the qualified local worker ceiling for large archive analysis.
-TasksMax=1024
+TasksMax=2048
 
 [Install]
 WantedBy=default.target
