@@ -835,7 +835,7 @@ function UnderConstruction() {
 }
 
 function MachineValidationView({ factory }: { factory: FactoryApiState }) {
-  const validation = factory.authority?.machine_validations[0];
+  const validation = factory.machineValidation ?? factory.authority?.machine_validations[0];
   if (!validation) return <div className="view-stack"><ViewIntro kicker="MACHINE VALIDATION" title="Machine validation" action={<UnderConstruction />} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No validation authority loaded</strong><p>Reconnect the local API or add validation/machine-validation.toml.</p></div></section></div>;
   const matrix = validation.results.confusion_matrix;
   const matrixCells = [
@@ -845,12 +845,27 @@ function MachineValidationView({ factory }: { factory: FactoryApiState }) {
     ['FN', 'False negatives', matrix.false_negatives, 'Expected owned function missed'],
   ] as const;
   const percent = Math.round((validation.summary.completed_exact_inputs / validation.summary.required_exact_inputs) * 100);
+  const run = validation.run;
+  const runExpected = run.expected_work_units ?? 0;
+  const runPercent = runExpected > 0
+    ? Math.round(((run.complete_work_units + run.failed_work_units) / runExpected) * 100)
+    : 0;
+  const runActive = ['queued', 'preparing-index', 'running'].includes(run.state);
+  const startRun = (mode: 'canary' | 'full') => {
+    void factory.runMachineValidation(mode).catch(() => undefined);
+  };
   const folds = [
     ['A', validation.randomization.fold_a],
     ['B', validation.randomization.fold_b],
   ] as const;
   return <div className="view-stack machine-validation-view">
-    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Machine validation" action={<div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
+    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Machine validation" action={<div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => startRun('canary')} disabled={!validation.readiness.eligible || runActive || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-canary' ? 'Starting…' : 'Run canary'}</button><button className="primary-action" onClick={() => startRun('full')} disabled={!validation.readiness.eligible || !validation.canary_gate.ready || runActive || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-full' ? 'Starting…' : 'Run full validation'}</button><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
+    <section className="panel validation-status-panel">
+      <header><h3>Current execution</h3><span className={`validation-state ${run.state === 'complete' ? 'ready' : runActive ? 'waiting' : ''}`}>{run.state.replaceAll('-', ' ')}</span></header>
+      <div className="validation-headline-metrics"><article><span>MODE</span><strong>{run.mode?.toUpperCase() ?? '—'}</strong><small>{run.run_id ?? 'no run admitted'}</small></article><article><span>WORK UNITS</span><strong>{run.complete_work_units} / {runExpected || '—'}</strong><small>{run.failed_work_units} failed</small></article><article><span>CANARY GATE</span><strong>{validation.canary_gate.ready ? 'PASSED' : 'REQUIRED'}</strong><small>{validation.canary_gate.run_id ?? 'current runtime not qualified'}</small></article><article><span>WORKERS</span><strong>{run.worker_pids?.length ?? 0}</strong><small>isolated Ghidra processes</small></article><article><span>STARTED</span><strong>{run.started_at ? new Date(run.started_at).toLocaleTimeString() : '—'}</strong><small>{run.finished_at ? `finished ${new Date(run.finished_at).toLocaleTimeString()}` : 'local browser time'}</small></article><article><span>REPORT</span><strong>{run.report_path ? 'READY' : '—'}</strong><small>{run.report_path ?? run.error ?? 'awaiting measured output'}</small></article></div>
+      <div className="validation-progress"><span style={{ width: `${runPercent}%` }} /><b>{runPercent}% · {run.complete_work_units} complete · {run.failed_work_units} failed</b></div>
+      {run.error && <div className="validation-blockers"><span>! {run.error}</span></div>}
+    </section>
     <section className="panel validation-status-panel">
       <header><h3>{validation.label} · {validation.id}</h3><span className={`validation-state ${validation.readiness.eligible ? 'ready' : 'waiting'}`}>{validation.state.replaceAll('-', ' ')}</span></header>
       <div className="validation-headline-metrics"><article><span>COMPLETE LIBRARIES</span><strong>{validation.summary.complete_libraries} / {validation.summary.cohort_libraries}</strong><small>full-width gate · partial starts do not count</small></article><article><span>EXACT INPUTS</span><strong>{validation.summary.completed_exact_inputs.toLocaleString()} / {validation.summary.required_exact_inputs.toLocaleString()}</strong><small>{percent}% · partial cells count, admission is per complete library</small></article><article><span>LIVE WIDTH</span><strong>{validation.summary.exact_identities}</strong><small>baseline {validation.summary.baseline_exact_identities} · delta {validation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{validation.summary.width_delta_from_baseline}</small></article><article><span>AUTO-SCHEDULE</span><strong>{validation.batch.automatic_scheduling ? 'ENABLED' : 'OFF'}</strong><small>after cohort · first claim needs canary</small></article><article><span>FINAL PARTIAL</span><strong>{validation.cohort_policy.final_partial_override ? 'OVERRIDE' : 'OFF'}</strong><small>{validation.cohort_policy.final_partial_override ? validation.cohort_policy.final_partial_justification : 'explicit TOML exception available for final 2–9'}</small></article><article><span>PLANNING WALL</span><strong>≈{validation.planning.central_wall_hours.toFixed(0)} h</strong><small>{validation.planning.lower_wall_hours}–{validation.planning.upper_wall_hours} h until measured</small></article></div>
@@ -1054,7 +1069,9 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
       right.summary.feasible_full_path_executions
       - left.summary.feasible_full_path_executions
     ))[0];
-  const machineValidation = authority?.machine_validations.find(validation => validation.language_id === selectedLanguageId);
+  const machineValidation = selectedLanguageId === 'c'
+    ? factory.machineValidation
+    : authority?.machine_validations.find(validation => validation.language_id === selectedLanguageId);
   const ecologicalValidation = factory.ecologicalValidation;
   const noisyHashes = factory.noisyHashes;
   const hashDiscrimination = authority?.hash_discrimination;
@@ -1684,7 +1701,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
         {machineValidation && <section className="operational-matrix-band validation-band">
           <div className="operational-band-title"><b>03</b><span><strong>Validation and hash discrimination</strong><small>Machine cohorts measure controlled width; held-out binaries test the corpus; HDI learns how strongly each compatible hash distinguishes provenance.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} cohort · {ecologicalValidation?.summary.completed_cases ?? 0} ecological · HDI {hashDiscrimination?.summary.scored_signatures ?? '—'}</em></div>
           <div className="operational-validation-stack">
-            <div className="operational-validation-row"><span className={`operational-state ${machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{machineValidation.readiness.eligible ? 'READY TO SCHEDULE' : 'WAITING'}</span><p><strong>Machine validation · {machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · fixed RNG seed · {machineValidation.summary.composite_programs} composites</small></p><div><b>{machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>libraries to gate</span></div><div><b>≈{machineValidation.planning.central_wall_hours.toFixed(0)}h</b><span>planning wall</span></div></div>
+            <div className="operational-validation-row"><span className={`operational-state ${machineValidation.run.state === 'complete' ? 'ready' : ['queued', 'preparing-index', 'running'].includes(machineValidation.run.state) ? 'next' : machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{['queued', 'preparing-index', 'running'].includes(machineValidation.run.state) ? machineValidation.run.state.replaceAll('-', ' ').toUpperCase() : machineValidation.run.state === 'complete' ? 'MEASURED' : machineValidation.readiness.eligible ? 'READY TO RUN' : 'WAITING'}</span><p><strong>Machine validation · {machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · fixed RNG seed · {machineValidation.summary.composite_programs} composites</small></p><div><b>{machineValidation.run.expected_work_units ? `${machineValidation.run.complete_work_units}/${machineValidation.run.expected_work_units}` : machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>{machineValidation.run.expected_work_units ? 'run units' : 'libraries to gate'}</span></div><div><b>{machineValidation.canary_gate.ready ? 'PASS' : `≈${machineValidation.planning.central_wall_hours.toFixed(0)}h`}</b><span>{machineValidation.canary_gate.ready ? 'canary gate' : 'planning wall'}</span></div></div>
             <div className="operational-validation-row"><span className={`operational-state ${ecologicalValidation?.corpus.materialized_generations ? 'ready' : 'blocked'}`}>{ecologicalValidation?.corpus.materialized_generations ? 'CORPUS READY' : 'NO CORPUS'}</span><p><strong>Ecological validation · held-out binaries</strong><small>{ecologicalValidation?.summary.imported_cases ?? 0} imports · {ecologicalValidation?.aggregate.measured_cases ?? 0} measured · entire compatible lane corpus · never execute imports</small></p><div><b>{ecologicalValidation?.aggregate.failure_summary.collisions ?? 0}</b><span>collisions</span></div><div><b>{ecologicalValidation?.aggregate.failure_summary.misses ?? 0}</b><span>misses</span></div></div>
             <div className="operational-validation-row"><span className={`operational-state ${hashDiscrimination?.readiness.ready_for_first_fit ? 'ready' : 'blocked'}`}>{hashDiscrimination?.readiness.ready_for_first_fit ? 'READY TO FIT' : 'WAITING HDI'}</span><p><strong>Hash Discrimination Index</strong><small>{hashDiscrimination?.readiness.complete_library_families ?? 0}/{hashDiscrimination?.readiness.required_library_families ?? 10} complete families · {noisyHashes?.summary.observed_hashes ?? 0} collision-bearing hashes · unweighted baseline preserved · no automatic filtering</small></p><div><b>{hashDiscrimination?.summary.scored_signatures ?? '—'}</b><span>scored hashes</span></div><div><b>{noisyHashes?.summary.confirmed_noisy ?? 0}</b><span>confirmed noisy</span></div></div>
           </div>

@@ -1213,6 +1213,31 @@ export type MachineValidationFailure = {
   evidence_path: string;
 };
 
+export type MachineValidationRun = {
+  schema_version?: 'fidb-machine-validation-run-status/v1';
+  validation_id?: string;
+  run_id: string | null;
+  mode: 'canary' | 'full' | null;
+  state: 'not-started' | 'queued' | 'preparing-index' | 'running' | 'complete' | 'failed' | 'invalid';
+  pid?: number | null;
+  worker_pids?: number[];
+  started_at?: string | null;
+  finished_at?: string | null;
+  expected_work_units?: number;
+  complete_work_units: number;
+  failed_work_units: number;
+  report_path?: string;
+  error?: string;
+};
+
+export type MachineValidationCanaryGate = {
+  ready: boolean;
+  state: 'passed' | 'not-run' | 'stale-or-failed';
+  run_id: string | null;
+  report_path: string | null;
+  runtime_authority_sha256: string;
+};
+
 export type MachineValidation = {
   schema_version: 'fidb-machine-validation-status/v1';
   id: string;
@@ -1222,6 +1247,8 @@ export type MachineValidation = {
   batch_kind: 'validation-run';
   authority_path: string;
   status_digest: string;
+  run: MachineValidationRun;
+  canary_gate: MachineValidationCanaryGate;
   randomization: {
     method: string;
     algorithm: string;
@@ -1986,6 +2013,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [snapshot, setSnapshot] = useState<CoordinatorSnapshot | null>(null);
   const [capabilities, setCapabilities] = useState<FactoryCapabilities | null>(null);
   const [authority, setAuthority] = useState<FactoryAuthority | null>(null);
+  const [machineValidation, setMachineValidation] = useState<MachineValidation | null>(null);
   const [laneInventory, setLaneInventory] = useState<LaneInventory | null>(null);
   const [ecologicalValidation, setEcologicalValidation] = useState<EcologicalValidation | null>(null);
   const [noisyHashes, setNoisyHashes] = useState<NoisyHashStatus | null>(null);
@@ -2074,16 +2102,19 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         lastCapabilityRead.current = Date.now();
         setCapabilities(capabilityResult);
         setAuthority(authorityResult);
+        setMachineValidation(authorityResult.machine_validations[0] ?? null);
         setLaneInventory(laneInventoryResult);
         setEcologicalValidation(authorityResult.ecological_validation);
         setNoisyHashes(authorityResult.noisy_hashes);
         setRetention(retentionResult);
       } else {
-        const [ecologicalResult, noisyResult, retentionResult] = await Promise.all([
+        const [machineResult, ecologicalResult, noisyResult, retentionResult] = await Promise.all([
+          json<MachineValidation>('machine-validation'),
           json<EcologicalValidation>('ecological-validation'),
           json<NoisyHashStatus>('noisy-hashes'),
           json<RetentionStatus>('retention'),
         ]);
+        setMachineValidation(machineResult);
         setEcologicalValidation(ecologicalResult);
         setNoisyHashes(noisyResult);
         setRetention(retentionResult);
@@ -2182,14 +2213,34 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   );
 
   const refreshValidation = useCallback(async () => {
-    const [ecologicalResult, noisyResult] = await Promise.all([
+    const [machineResult, ecologicalResult, noisyResult] = await Promise.all([
+      json<MachineValidation>('machine-validation'),
       json<EcologicalValidation>('ecological-validation'),
       json<NoisyHashStatus>('noisy-hashes'),
     ]);
+    setMachineValidation(machineResult);
     setEcologicalValidation(ecologicalResult);
     setNoisyHashes(noisyResult);
     setError(null);
   }, []);
+
+  const runMachineValidation = useCallback(async (mode: 'canary' | 'full') => {
+    setBusyAction(`machine-validation-${mode}`);
+    try {
+      await json<MachineValidationRun>('machine-validation/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      await refreshValidation();
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Machine validation failed to start';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [refreshValidation]);
 
   const importEcological = useCallback(async (
     file: File,
@@ -2300,6 +2351,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     snapshot,
     capabilities,
     authority,
+    machineValidation,
     laneInventory,
     ecologicalValidation,
     noisyHashes,
@@ -2327,6 +2379,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     ),
     importEcological,
     runEcological,
+    runMachineValidation,
     decideNoisyHash,
     planRetention: () => runRetention('plan'),
     applyRetention: (planDigest: string) => runRetention('apply', planDigest),

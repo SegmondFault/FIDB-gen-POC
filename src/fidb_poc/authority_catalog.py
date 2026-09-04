@@ -14,6 +14,10 @@ from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
 from .lane_registry import load_lane_registry
 from .machine_validation import compile_machine_validation
+from .machine_validation_runner import (
+    canary_gate_status as machine_validation_canary_gate_status,
+    runtime_status as machine_validation_runtime_status,
+)
 from .ecological_validation import compile_ecological_validation
 from .hash_discrimination import compile_hash_discrimination
 from .noisy_hashes import compile_noisy_hashes
@@ -672,11 +676,15 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             continue
         width_id = Path(str(authority["width_authority"])).stem
         machine_validations.append(
-            compile_machine_validation(
-                root,
-                path.relative_to(root),
-                _width_compilation=width_compilations_by_id.get(width_id),
-            )
+            {
+                **compile_machine_validation(
+                    root,
+                    path.relative_to(root),
+                    _width_compilation=width_compilations_by_id.get(width_id),
+                ),
+                "run": machine_validation_runtime_status(root),
+                "canary_gate": machine_validation_canary_gate_status(root),
+            }
         )
     ecological_validation = compile_ecological_validation(root)
     noisy_hashes = compile_noisy_hashes(root)

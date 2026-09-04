@@ -36,6 +36,12 @@ from .ecological_validation import (
     start_ecological_case,
 )
 from .hash_discrimination import compile_hash_discrimination
+from .machine_validation import compile_machine_validation
+from .machine_validation_runner import (
+    canary_gate_status as machine_validation_canary_gate_status,
+    runtime_status as machine_validation_runtime_status,
+    start_validation as start_machine_validation,
+)
 from .noisy_hashes import compile_noisy_hashes, save_noisy_hash_decision
 from .operations_policy import evaluate_operations
 from .plan_drafts import DraftConflictError, resolve_plan_draft, save_plan_draft
@@ -70,6 +76,7 @@ _GET_PATHS = {
     "/api/v1/timings",
     "/api/v1/preflight",
     "/api/v1/ecological-validation",
+    "/api/v1/machine-validation",
     "/api/v1/hash-discrimination",
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
@@ -82,6 +89,7 @@ _POST_PATHS = {
     "/api/v1/plan-drafts/save",
     "/api/v1/ecological-validation/import",
     "/api/v1/ecological-validation/run",
+    "/api/v1/machine-validation/start",
     "/api/v1/noisy-hashes/decision",
     "/api/v1/retention/plan",
     "/api/v1/retention/apply",
@@ -725,6 +733,25 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/machine-validation":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "machine validation takes no query",
+                )
+            result = compile_machine_validation(
+                self.api_server.config.project_root
+            )
+            result["run"] = machine_validation_runtime_status(
+                self.api_server.config.project_root
+            )
+            result["canary_gate"] = machine_validation_canary_gate_status(
+                self.api_server.config.project_root
+            )
+            self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
+
         if path == "/api/v1/noisy-hashes":
             if query:
                 raise ApiError(
@@ -950,6 +977,28 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "case_id must be a string",
                 )
             result = start_ecological_case(self.api_server.config.project_root, case_id)
+            self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
+            return
+        elif path == "/api/v1/machine-validation/start":
+            self._only_fields(document, {"mode"})
+            mode = document.get("mode")
+            if mode not in {"canary", "full"}:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-machine-validation-mode",
+                    "mode must be canary or full",
+                )
+            try:
+                result = start_machine_validation(
+                    self.api_server.config.project_root,
+                    mode,
+                )
+            except ValueError as error:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "machine-validation-not-ready",
+                    str(error),
+                ) from error
             self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
             return
         elif path == "/api/v1/noisy-hashes/decision":

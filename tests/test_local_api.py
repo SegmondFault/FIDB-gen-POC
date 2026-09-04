@@ -525,6 +525,47 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(document["summary"]["imported_cases"], 1)
 
+    def test_machine_validation_status_and_start_are_bounded(self):
+        status, document, _ = self.request("GET", "/api/v1/machine-validation")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            document["schema_version"], "fidb-machine-validation-status/v1"
+        )
+        self.assertEqual(document["run"]["state"], "not-started")
+        self.assertFalse(document["canary_gate"]["ready"])
+
+        status, document, _ = self.request(
+            "GET", "/api/v1/machine-validation?mode=full"
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(document["error"]["code"], "invalid-query")
+
+        accepted = {
+            "state": "queued",
+            "run_id": "fixed-canary",
+            "mode": "canary",
+            "pid": 42,
+            "log_path": "artifacts/validation-runs/fixed/run.log",
+        }
+        with patch(
+            "fidb_poc.local_api.start_machine_validation",
+            return_value=accepted,
+        ) as start:
+            status, document, _ = self.request(
+                "POST", "/api/v1/machine-validation/start", {"mode": "canary"}
+            )
+        self.assertEqual(status, 202)
+        self.assertEqual(document, accepted)
+        start.assert_called_once_with(self.root, "canary")
+
+        status, document, _ = self.request(
+            "POST", "/api/v1/machine-validation/start", {"mode": "unsafe"}
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(
+            document["error"]["code"], "invalid-machine-validation-mode"
+        )
+
     def test_noisy_hash_status_endpoint_is_read_only(self):
         status, document, _ = self.request("GET", "/api/v1/noisy-hashes")
         self.assertEqual(status, 200)
