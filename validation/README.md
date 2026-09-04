@@ -5,6 +5,15 @@ validation of each completed ten-library cohort. It freezes a reproducible
 random five/five split and defines a separate `validation-run` batch. This is
 not ecological validation and it does not authorize automatic ablation.
 
+The sealed library cohort is the atomic validation and reporting boundary. A
+cohort may execute across any number of scheduler windows without changing its
+identity. Its library releases, exact-width digest, analysis policy, lane
+generation, RNG seed, query contract and result evidence stay pinned together.
+Later width changes create a new cohort revision rather than mutating a
+published result. The control panel selects these validation batches directly;
+completed attribution results lead the page, while processing, fold assignment
+and provenance remain available in the expandable reproducibility section.
+
 Inspect live admission status without changing the queue or filesystem:
 
 ```sh
