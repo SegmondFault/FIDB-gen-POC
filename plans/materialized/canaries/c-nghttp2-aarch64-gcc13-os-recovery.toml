@@ -1,0 +1,21 @@
+schema_version = "fidb-plan/v1"
+name = "c-nghttp2-aarch64-gcc13-os-recovery"
+
+[policy]
+max_cells = 1
+priority = "high"
+
+[coverage]
+factor_variants = []
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["nghttp2@1.70.0"]
+
+[[matrix]]
+id = "nghttp2-aarch64-gcc13-os-recovery"
+kind = "width-native"
+width_batch = "batches/c-next-nine-mega-width.toml"
+recipes = ["nghttp2@1.70.0"]
+routes = ["linux-aarch64-gcc-13"]
+treatments = ["optimization_os"]
