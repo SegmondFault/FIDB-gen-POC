@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from fidb_poc.cell_runner import CellResolutionError, CellRunResult
 from fidb_poc.coordinator import Coordinator
 from fidb_poc.queue_cli import (
     QueueCliError,
+    _Heartbeat,
     _RETENTION_PRE_RECYCLE_JVM,
     _RETENTION_PRE_RECYCLE_RSS,
     _RETENTION_RECYCLED_SESSION,
@@ -51,6 +53,98 @@ class QueueCommandTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def test_heartbeat_retries_transient_sqlite_writer_contention(self) -> None:
+        class ScriptedStopEvent:
+            def __init__(self) -> None:
+                self.waits: list[float] = []
+                self.was_set = False
+
+            def wait(self, seconds: float) -> bool:
+                self.waits.append(seconds)
+                return len(self.waits) >= 3
+
+            def set(self) -> None:
+                self.was_set = True
+
+        class ContendedCoordinator:
+            def __init__(self) -> None:
+                self.renewals = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args) -> None:
+                return None
+
+            def renew(self, *_args) -> None:
+                self.renewals += 1
+                if self.renewals == 1:
+                    raise sqlite3.OperationalError("database is locked")
+
+        coordinator = ContendedCoordinator()
+        heartbeat = _Heartbeat(
+            self.database,
+            self.project_root,
+            {
+                "job_id": f"job-{'a' * 64}",
+                "lease_token": "token",
+                "lease_generation": 1,
+            },
+            3600,
+        )
+        stop_event = ScriptedStopEvent()
+        heartbeat.stop_event = stop_event
+
+        with patch("fidb_poc.queue_cli.Coordinator", return_value=coordinator):
+            heartbeat._run()
+
+        self.assertIsNone(heartbeat.error)
+        self.assertEqual(heartbeat.lock_retries, 1)
+        self.assertEqual(coordinator.renewals, 2)
+        self.assertEqual(stop_event.waits, [60.0, 1.0, 60.0])
+        self.assertFalse(stop_event.was_set)
+
+    def test_heartbeat_does_not_retry_non_lock_sqlite_errors(self) -> None:
+        class ImmediateEvent:
+            was_set = False
+
+            def wait(self, _seconds: float) -> bool:
+                return False
+
+            def set(self) -> None:
+                self.was_set = True
+
+        class BrokenCoordinator:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args) -> None:
+                return None
+
+            def renew(self, *_args) -> None:
+                raise sqlite3.OperationalError("disk I/O error")
+
+        heartbeat = _Heartbeat(
+            self.database,
+            self.project_root,
+            {
+                "job_id": f"job-{'b' * 64}",
+                "lease_token": "token",
+                "lease_generation": 1,
+            },
+            3600,
+        )
+        stop_event = ImmediateEvent()
+        heartbeat.stop_event = stop_event
+
+        with patch("fidb_poc.queue_cli.Coordinator", return_value=BrokenCoordinator()):
+            heartbeat._run()
+
+        self.assertIsInstance(heartbeat.error, sqlite3.OperationalError)
+        self.assertEqual(str(heartbeat.error), "disk I/O error")
+        self.assertEqual(heartbeat.lock_retries, 0)
+        self.assertTrue(stop_event.was_set)
 
     def test_post_drain_retention_recycles_worker_even_when_collection_is_deferred(
         self,

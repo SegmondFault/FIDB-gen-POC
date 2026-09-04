@@ -593,6 +593,19 @@ class _Heartbeat:
         self.project_root = project_root
         self.lease = lease
         self.interval = max(0.25, min(float(lease_seconds) / 3.0, 60.0))
+        # A heartbeat is deliberately much more patient than an ordinary
+        # coordinator write.  SQLite WAL still permits only one writer at a
+        # time, so a large simultaneous stage flush can outlive the
+        # connection's busy timeout without invalidating a 60-minute lease.
+        # Keep retrying only lock contention, and bound the retry window well
+        # inside the remaining lease lifetime so real fencing failures still
+        # surface promptly.
+        self.lock_retry_seconds = max(
+            1.0,
+            min(30.0, float(lease_seconds) / 6.0),
+        )
+        self.lock_retry_delay = max(0.1, min(1.0, self.interval / 10.0))
+        self.lock_retries = 0
         self.stop_event = threading.Event()
         self.error: BaseException | None = None
         self.thread = threading.Thread(
@@ -616,14 +629,42 @@ class _Heartbeat:
         try:
             with Coordinator(self.database, self.project_root) as coordinator:
                 while not self.stop_event.wait(self.interval):
-                    coordinator.renew(
-                        str(self.lease["job_id"]),
-                        str(self.lease["lease_token"]),
-                        int(self.lease["lease_generation"]),
-                    )
+                    retry_deadline = time.monotonic() + self.lock_retry_seconds
+                    while True:
+                        try:
+                            coordinator.renew(
+                                str(self.lease["job_id"]),
+                                str(self.lease["lease_token"]),
+                                int(self.lease["lease_generation"]),
+                            )
+                            break
+                        except sqlite3.OperationalError as error:
+                            if not _is_sqlite_lock_contention(error):
+                                raise
+                            remaining = retry_deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise
+                            self.lock_retries += 1
+                            if self.stop_event.wait(
+                                min(self.lock_retry_delay, remaining)
+                            ):
+                                return
         except BaseException as error:  # surfaced synchronously by check()
             self.error = error
             self.stop_event.set()
+
+
+def _is_sqlite_lock_contention(error: sqlite3.OperationalError) -> bool:
+    """Recognise only SQLite's transient writer-contention result classes."""
+
+    code = getattr(error, "sqlite_errorcode", None)
+    if isinstance(code, int) and code & 0xFF in (
+        sqlite3.SQLITE_BUSY,
+        sqlite3.SQLITE_LOCKED,
+    ):
+        return True
+    message = str(error).lower()
+    return "database is locked" in message or "database table is locked" in message
 
 
 def _staging_root(root: Path, lease: dict[str, object]) -> tuple[Path, Path]:
