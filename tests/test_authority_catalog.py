@@ -22,7 +22,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertTrue(validation["readiness"]["eligible"])
         self.assertTrue(validation["readiness"]["materializable"])
         self.assertEqual(
-            validation["readiness"]["queue_state"], "waiting-for-cohort"
+            validation["readiness"]["queue_state"], "scheduled-claim-blocked"
         )
         self.assertEqual(validation["results"]["state"], "not-run")
         self.assertEqual(
