@@ -15,7 +15,9 @@ from fidb_poc.cell_runner import CellResolutionError, CellRunResult
 from fidb_poc.coordinator import Coordinator
 from fidb_poc.queue_cli import (
     QueueCliError,
+    _RETENTION_RECYCLED_SESSION,
     _durably_publish,
+    _post_drain_maintenance,
     _staging_root,
     _validate_cell_timing,
     main,
@@ -42,6 +44,65 @@ class QueueCommandTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def test_post_drain_retention_recycles_worker_even_when_collection_is_deferred(
+        self,
+    ) -> None:
+        policy = type("Policy", (), {"worker_action": "recycle"})()
+        with (
+            patch("fidb_poc.retention.load_retention_policy", return_value=policy),
+            patch(
+                "fidb_poc.retention.automatic_retention",
+                return_value={
+                    "state": "manual-review-required",
+                    "plan_digest": "a" * 64,
+                    "summary": {"actions": 2},
+                },
+            ),
+            patch("fidb_poc.queue_cli._recycle_worker_process") as recycle,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            _post_drain_maintenance(
+                self.project_root, self.database, "batch-drained-42"
+            )
+
+        recycle.assert_called_once_with("batch-drained-42")
+
+    def test_post_drain_retention_is_once_per_worker_and_session(self) -> None:
+        with (
+            patch("fidb_poc.retention.load_retention_policy") as load_policy,
+            patch("fidb_poc.retention.automatic_retention") as collect,
+            patch("fidb_poc.queue_cli._recycle_worker_process") as recycle,
+            patch.dict(
+                os.environ,
+                {_RETENTION_RECYCLED_SESSION: "batch-drained-42"},
+                clear=True,
+            ),
+        ):
+            _post_drain_maintenance(
+                self.project_root, self.database, "batch-drained-42"
+            )
+
+        load_policy.assert_not_called()
+        collect.assert_not_called()
+        recycle.assert_not_called()
+
+    def test_post_drain_worker_recycles_after_safe_retention_failure(self) -> None:
+        policy = type("Policy", (), {"worker_action": "recycle"})()
+        with (
+            patch("fidb_poc.retention.load_retention_policy", return_value=policy),
+            patch(
+                "fidb_poc.retention.automatic_retention",
+                side_effect=ValueError("invalid evidence"),
+            ),
+            patch("fidb_poc.queue_cli._recycle_worker_process") as recycle,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            _post_drain_maintenance(
+                self.project_root, self.database, "batch-drained-42"
+            )
+
+        recycle.assert_called_once_with("batch-drained-42")
 
     @staticmethod
     def _write_fake_seal(

@@ -52,10 +52,61 @@ DEFAULT_STATE = Path("var/fidb-coordinator/ledger.sqlite3")
 RESULT_SCHEMA = "fidb-job-result/v1"
 JOB_TIMING_SCHEMA = "fidb-job-timing/v1"
 _JOB_ID = re.compile(r"job-[0-9a-f]{64}\Z")
+_RETENTION_RECYCLED_SESSION = "FIDB_RETENTION_RECYCLED_SESSION"
 
 
 class QueueCliError(RuntimeError):
     """An operator-facing queue command could not be completed safely."""
+
+
+def _recycle_worker_process(session_id: str) -> None:
+    """Replace this process once so imported JVM state is returned to the OS."""
+
+    environment = os.environ.copy()
+    environment[_RETENTION_RECYCLED_SESSION] = session_id
+    os.execve(sys.executable, [sys.executable, *sys.argv], environment)
+
+
+def _post_drain_maintenance(root: Path, state: Path, session_id: str) -> None:
+    """Run configured retention, then recycle a long-lived worker if requested."""
+
+    from .retention import (
+        RetentionError,
+        automatic_retention,
+        load_retention_policy,
+    )
+
+    if os.environ.get(_RETENTION_RECYCLED_SESSION) == session_id:
+        return
+    try:
+        policy = load_retention_policy(root)
+    except (OSError, ValueError) as error:
+        print(
+            f"warning: retention policy unavailable after queue drain: {error}",
+            file=sys.stderr,
+        )
+        return
+    try:
+        result = automatic_retention(root, state)
+        summary = result.get("summary")
+        print(
+            json.dumps(
+                {
+                    "event": "retention.post-drain",
+                    "session_id": session_id,
+                    "state": result.get("state"),
+                    "plan_digest": result.get("plan_digest"),
+                    "summary": summary,
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+    except (OSError, RetentionError, ValueError) as error:
+        print(f"warning: post-drain retention failed safely: {error}", file=sys.stderr)
+    finally:
+        if policy.worker_action == "recycle":
+            _recycle_worker_process(session_id)
 
 
 def _common_parser(*, queue: bool) -> argparse.ArgumentParser:
@@ -1232,11 +1283,20 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     and counts.get("leased") == 0
                     and counts.get("running") == 0
                 ):
-                    _notify(
-                        config.operations.notifications,
-                        "queue-drained",
-                        {"worker_id": arguments.worker_id, "counts": counts},
-                    )
+                    from .retention import current_retention_session
+
+                    retention_session = current_retention_session(root, state)
+                    if os.environ.get(_RETENTION_RECYCLED_SESSION) != retention_session:
+                        _notify(
+                            config.operations.notifications,
+                            "queue-drained",
+                            {
+                                "worker_id": arguments.worker_id,
+                                "counts": counts,
+                                "retention_session": retention_session,
+                            },
+                        )
+                        _post_drain_maintenance(root, state, retention_session)
                     drained_notified = True
                 time.sleep(config.poll_seconds)
     finally:
