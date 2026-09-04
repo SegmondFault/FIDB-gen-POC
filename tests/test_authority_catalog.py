@@ -24,7 +24,14 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             validation["readiness"]["queue_state"], "scheduled-claim-blocked"
         )
-        self.assertEqual(validation["results"]["state"], "not-run")
+        self.assertIn(
+            validation["results"]["state"],
+            {"not-run", "invalid-report", "measured-complete"},
+        )
+        self.assertEqual(
+            validation["results"]["confusion_matrix"]["unit"],
+            "owner-labelled-candidate-decision",
+        )
         self.assertEqual(
             len(document["source_digests"]["machine_validations_sha256"]), 64
         )

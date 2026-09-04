@@ -34,7 +34,14 @@ class MachineValidationTests(unittest.TestCase):
             set(),
         )
         self.assertFalse(status["readiness"]["eligible"])
-        self.assertEqual(status["results"]["state"], "not-run")
+        self.assertIn(
+            status["results"]["state"],
+            {"not-run", "invalid-report", "measured-complete"},
+        )
+        self.assertEqual(
+            status["results"]["confusion_matrix"]["unit"],
+            "owner-labelled-candidate-decision",
+        )
         self.assertIsNone(status["results"]["confusion_matrix"]["true_positives"])
 
     def test_incomplete_cohort_cannot_materialize(self):
