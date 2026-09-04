@@ -1655,6 +1655,79 @@ export type HashDiscriminationStatus = {
   };
 };
 
+export type RetentionPlanSummary = {
+  verified_successes: number;
+  actions: number;
+  failure_bundles: number;
+  success_scratch_prunes: number;
+  source_directories: number;
+  recoverable_apparent_bytes: number;
+  recoverable_allocated_bytes: number;
+  preserved: number;
+  quarantined: number;
+};
+
+export type RetentionStatus = {
+  schema_version: 'fidb-retention-status/v1';
+  policy: {
+    schema_version: string;
+    name: string;
+    authority_path: string;
+    authority_sha256: string;
+    paths: Record<string, string>;
+    success: {
+      preserve_until_lane_imported: boolean;
+      prune_after_receipt: string[];
+      required_result_artifacts: string[];
+    };
+    failure: {
+      retain_latest_evidence_bundle: boolean;
+      collapse_identical_retries: boolean;
+      evidence_globs: string[];
+      max_evidence_file_bytes: number;
+    };
+    automation: {
+      enabled: boolean;
+      trigger: string;
+      mode: string;
+      dry_run_first: boolean;
+      maximum_estimated_seconds: number;
+      worker_action: string;
+    };
+    limits: Record<string, number>;
+  };
+  latest_plan: null | {
+    plan_digest: string;
+    path: string;
+    generated_at: string;
+    summary: RetentionPlanSummary;
+    scan_duration_ns: number;
+    estimated_apply_seconds: number;
+    automatic_apply_eligible: boolean;
+    preserved_examples: Array<Record<string, unknown>>;
+    quarantine_examples: Array<Record<string, unknown>>;
+    action_examples: Array<Record<string, unknown>>;
+  };
+  last_run: null | {
+    state: string;
+    mode: string;
+    plan_digest: string;
+    session_id: string;
+    started_at: string;
+    completed_at: string;
+    duration_ns: number;
+    actions_completed: number;
+    removed: {
+      files: number;
+      directories: number;
+      apparent_bytes: number;
+      allocated_bytes: number;
+    };
+    bundle_bytes: number;
+    filesystem_free_bytes_delta: number;
+  };
+};
+
 export type AutoBatchCampaignChunk = {
   id: string;
   position: number;
@@ -1884,6 +1957,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [laneInventory, setLaneInventory] = useState<LaneInventory | null>(null);
   const [ecologicalValidation, setEcologicalValidation] = useState<EcologicalValidation | null>(null);
   const [noisyHashes, setNoisyHashes] = useState<NoisyHashStatus | null>(null);
+  const [retention, setRetention] = useState<RetentionStatus | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
   const [preflight, setPreflight] = useState<OperationsPreflight | null>(null);
@@ -1957,10 +2031,11 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult, laneInventoryResult] = await Promise.all([
+        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult] = await Promise.all([
           json<FactoryCapabilities>('capabilities'),
           json<FactoryAuthority>('authority'),
           json<LaneInventory>('lane-inventory'),
+          json<RetentionStatus>('retention'),
         ]);
         capabilityCache.current = capabilityResult;
         authorityCache.current = authorityResult;
@@ -1970,13 +2045,16 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setLaneInventory(laneInventoryResult);
         setEcologicalValidation(authorityResult.ecological_validation);
         setNoisyHashes(authorityResult.noisy_hashes);
+        setRetention(retentionResult);
       } else {
-        const [ecologicalResult, noisyResult] = await Promise.all([
+        const [ecologicalResult, noisyResult, retentionResult] = await Promise.all([
           json<EcologicalValidation>('ecological-validation'),
           json<NoisyHashStatus>('noisy-hashes'),
+          json<RetentionStatus>('retention'),
         ]);
         setEcologicalValidation(ecologicalResult);
         setNoisyHashes(noisyResult);
+        setRetention(retentionResult);
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
@@ -2162,6 +2240,29 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
+  const runRetention = useCallback(async (
+    action: 'plan' | 'apply',
+    planDigest?: string,
+  ) => {
+    setBusyAction(`retention-${action}`);
+    try {
+      const result = await json<RetentionStatus>(`retention/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action === 'apply' ? { plan_digest: planDigest } : {}),
+      });
+      setRetention(result);
+      setError(null);
+      return result;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Retention action failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
   return {
     connection,
     snapshot,
@@ -2170,6 +2271,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     laneInventory,
     ecologicalValidation,
     noisyHashes,
+    retention,
     events,
     timings,
     preflight,
@@ -2194,5 +2296,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     importEcological,
     runEcological,
     decideNoisyHash,
+    planRetention: () => runRetention('plan'),
+    applyRetention: (planDigest: string) => runRetention('apply', planDigest),
   };
 }

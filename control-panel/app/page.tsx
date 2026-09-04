@@ -27,16 +27,15 @@ import {
 const navItems = [
   ['01', 'Overview'],
   ['02', 'Matrix'],
-  ['03', 'Timing'],
-  ['04', 'Batches'],
-  ['05', 'Targets & toolchains'],
-  ['06', 'Evidence'],
+  ['03', 'Batches'],
+  ['04', 'Targets & toolchains'],
+  ['05', 'Evidence'],
 ];
 
 const validationNavItems = [
-  ['07', 'Machine validation'],
-  ['08', 'Ecological validation'],
-  ['09', 'Hash discrimination'],
+  ['06', 'Machine validation'],
+  ['07', 'Ecological validation'],
+  ['08', 'Hash discrimination'],
 ];
 
 type BatchRow = {
@@ -469,20 +468,29 @@ export default function Home() {
             >
               <span>{number}</span>
               {label}
-              {label === 'Hash discrimination' && factory.authority?.hash_discrimination && <em>{factory.authority.hash_discrimination.readiness.complete_library_families}/{factory.authority.hash_discrimination.readiness.required_library_families}</em>}
+              <em>UC</em>
             </button>
           ))}
           <p className="nav-label secondary-label">Operations</p>
+          <button className={activeView === 'Timing' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Timing')}>
+            <span>09</span>
+            Timing
+          </button>
           <button className={activeView === 'Performance' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Performance')}>
             <span>10</span>
             Performance
           </button>
-          <button className={activeView === 'Automation' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Automation')}>
+          <button className={activeView === 'Retention' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Retention')}>
             <span>11</span>
+            Retention
+            {factory.retention?.latest_plan && <em>{factory.retention.latest_plan.summary.actions}</em>}
+          </button>
+          <button className={activeView === 'Automation' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Automation')}>
+            <span>12</span>
             Automation
           </button>
           <button className={activeView === 'Activity' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Activity')}>
-            <span>12</span>
+            <span>13</span>
             Activity
           </button>
         </nav>
@@ -697,6 +705,7 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
   if (view === 'Ecological validation') return <EcologicalValidationView factory={factory} />;
   if (view === 'Hash discrimination') return <HashDiscriminationView factory={factory} />;
   if (view === 'Performance') return <PerformanceView factory={factory} />;
+  if (view === 'Retention') return <RetentionView factory={factory} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
@@ -821,9 +830,13 @@ function ViewIntro({ title, action }: { kicker: string; title: string; copy?: st
   );
 }
 
+function UnderConstruction() {
+  return <span className="under-construction">UNDER CONSTRUCTION</span>;
+}
+
 function MachineValidationView({ factory }: { factory: FactoryApiState }) {
   const validation = factory.authority?.machine_validations[0];
-  if (!validation) return <div className="view-stack"><ViewIntro kicker="MACHINE VALIDATION" title="Machine validation" /><section className="panel"><div className="empty-state"><span>◇</span><strong>No validation authority loaded</strong><p>Reconnect the local API or add validation/machine-validation.toml.</p></div></section></div>;
+  if (!validation) return <div className="view-stack"><ViewIntro kicker="MACHINE VALIDATION" title="Machine validation" action={<UnderConstruction />} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No validation authority loaded</strong><p>Reconnect the local API or add validation/machine-validation.toml.</p></div></section></div>;
   const matrix = validation.results.confusion_matrix;
   const matrixCells = [
     ['TP', 'True positives', matrix.true_positives, 'Correct library owner accepted'],
@@ -837,7 +850,7 @@ function MachineValidationView({ factory }: { factory: FactoryApiState }) {
     ['B', validation.randomization.fold_b],
   ] as const;
   return <div className="view-stack machine-validation-view">
-    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Machine validation" action={<button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button>} />
+    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Machine validation" action={<div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
     <section className="panel validation-status-panel">
       <header><h3>{validation.label} · {validation.id}</h3><span className={`validation-state ${validation.readiness.eligible ? 'ready' : 'waiting'}`}>{validation.state.replaceAll('-', ' ')}</span></header>
       <div className="validation-headline-metrics"><article><span>COMPLETE LIBRARIES</span><strong>{validation.summary.complete_libraries} / {validation.summary.cohort_libraries}</strong><small>full-width gate · partial starts do not count</small></article><article><span>EXACT INPUTS</span><strong>{validation.summary.completed_exact_inputs.toLocaleString()} / {validation.summary.required_exact_inputs.toLocaleString()}</strong><small>{percent}% · partial cells count, admission is per complete library</small></article><article><span>LIVE WIDTH</span><strong>{validation.summary.exact_identities}</strong><small>baseline {validation.summary.baseline_exact_identities} · delta {validation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{validation.summary.width_delta_from_baseline}</small></article><article><span>AUTO-SCHEDULE</span><strong>{validation.batch.automatic_scheduling ? 'ENABLED' : 'OFF'}</strong><small>after cohort · first claim needs canary</small></article><article><span>FINAL PARTIAL</span><strong>{validation.cohort_policy.final_partial_override ? 'OVERRIDE' : 'OFF'}</strong><small>{validation.cohort_policy.final_partial_override ? validation.cohort_policy.final_partial_justification : 'explicit TOML exception available for final 2–9'}</small></article><article><span>PLANNING WALL</span><strong>≈{validation.planning.central_wall_hours.toFixed(0)} h</strong><small>{validation.planning.lower_wall_hours}–{validation.planning.upper_wall_hours} h until measured</small></article></div>
@@ -871,7 +884,7 @@ function EcologicalValidationView({ factory }: { factory: FactoryApiState }) {
   const [expectedAbsent, setExpectedAbsent] = useState('');
   const [truthComplete, setTruthComplete] = useState(false);
   const [message, setMessage] = useState('');
-  if (!validation) return <div className="view-stack"><ViewIntro kicker="ECOLOGICAL VALIDATION" title="Ecological validation" /><section className="panel"><div className="empty-state"><span>◇</span><strong>No ecological authority loaded</strong><p>Reconnect the local API or inspect validation/ecological-validation.toml.</p></div></section></div>;
+  if (!validation) return <div className="view-stack"><ViewIntro kicker="ECOLOGICAL VALIDATION" title="Ecological validation" action={<UnderConstruction />} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No ecological authority loaded</strong><p>Reconnect the local API or inspect validation/ecological-validation.toml.</p></div></section></div>;
   const matrix = validation.aggregate.confusion_matrix;
   const matrixCells = [
     ['TP', 'True positives', matrix.true_positives, 'Expected corpus library detected'],
@@ -898,7 +911,7 @@ function EcologicalValidationView({ factory }: { factory: FactoryApiState }) {
     }
   };
   return <div className="view-stack ecological-validation-view">
-    <ViewIntro kicker="HELD-OUT ECOLOGICAL VALIDATION" title="Ecological validation" action={<button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button>} />
+    <ViewIntro kicker="HELD-OUT ECOLOGICAL VALIDATION" title="Ecological validation" action={<div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div>} />
 
     <section className="panel ecological-corpus-panel">
       <header><h3>Corpus</h3><span className={`validation-state ${validation.corpus.materialized_generations ? 'ready' : 'waiting'}`}>{validation.corpus.materialized_generations ? 'CORPUS PRESENT' : 'NO CORPUS YET'}</span></header>
@@ -947,7 +960,7 @@ function HashDiscriminationView({ factory }: { factory: FactoryApiState }) {
   const [draftStates, setDraftStates] = useState<Record<string, NoisyHashRow['disposition']>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
-  if (!hdi || !ledger) return <div className="view-stack"><ViewIntro kicker="HASH DISCRIMINATION" title="Hash discrimination" /><section className="panel"><div className="empty-state"><span>◇</span><strong>No HDI authority loaded</strong><p>Reconnect the local API or inspect validation/hash-discrimination.toml.</p></div></section></div>;
+  if (!hdi || !ledger) return <div className="view-stack"><ViewIntro kicker="HASH DISCRIMINATION" title="Hash discrimination" action={<UnderConstruction />} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No HDI authority loaded</strong><p>Reconnect the local API or inspect validation/hash-discrimination.toml.</p></div></section></div>;
   const applyDecision = async (row: NoisyHashRow) => {
     const state = draftStates[row.signature_id] ?? row.disposition;
     const reason = reasons[row.signature_id] ?? '';
@@ -962,7 +975,7 @@ function HashDiscriminationView({ factory }: { factory: FactoryApiState }) {
     }
   };
   return <div className="view-stack noisy-hash-view hdi-view">
-    <section className="hdi-page-bar"><h2>Hash discrimination</h2><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></section>
+    <section className="hdi-page-bar"><h2>Hash discrimination</h2><div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div></section>
 
     <section className="panel hdi-readiness-panel"><header><h3>Model readiness</h3><span className={`validation-state ${hdi.readiness.ready_for_first_fit ? 'ready' : 'waiting'}`}>{hdi.state.replaceAll('-', ' ')}</span></header><div className="hdi-headline-metrics"><article><span>C10 WIDTH</span><strong>{hdi.readiness.complete_library_families}/{hdi.readiness.required_library_families}</strong><small>complete library families</small></article><article><span>LANE GENERATIONS</span><strong>{hdi.readiness.materialized_lane_generations}</strong><small>occurrence-preserving corpora</small></article><article><span>RAW OBSERVATIONS</span><strong>{hdi.readiness.raw_observations.toLocaleString()}</strong><small>all-signature denominator</small></article><article><span>SCORED HASHES</span><strong>{hdiMeasure(hdi.summary.scored_signatures)}</strong><small>unavailable until first fit</small></article><article><span>VALIDATION</span><strong>{hdi.readiness.machine_validation_state === 'measured-complete' ? 'MEASURED' : '—'}</strong><small>{hdi.readiness.ecological_measured_cases} held-out cases</small></article><article><span>COLLISION LEDGER</span><strong>{hdi.summary.observed_collision_signatures}</strong><small>one input, not the model</small></article></div>{hdi.readiness.blockers.length > 0 && <div className="hdi-blockers"><strong>FIRST-FIT BLOCKERS</strong><div>{hdi.readiness.blockers.map(blocker => <span key={blocker}>! {blocker}</span>)}</div></div>}</section>
 
@@ -1045,6 +1058,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
   const ecologicalValidation = factory.ecologicalValidation;
   const noisyHashes = factory.noisyHashes;
   const hashDiscrimination = authority?.hash_discrimination;
+  const retention = factory.retention;
   const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
   const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (
@@ -1676,9 +1690,14 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </div>
         </section>}
 
+        <section className="operational-matrix-band retention-band">
+          <div className="operational-band-title"><b>04</b><span><strong>Retention & garbage collection</strong><small>Terminal queue → verified dry-run → bounded collection → worker recycle.</small></span><em>{retention?.latest_plan ? `${retention.latest_plan.summary.actions.toLocaleString()} actions · ${formatBytes(retention.latest_plan.summary.recoverable_apparent_bytes)}` : 'awaiting dry-run'}</em></div>
+          <div className="operational-retention-row"><span className={`operational-state ${retention?.latest_plan?.automatic_apply_eligible ? 'ready' : 'blocked'}`}>{retention?.latest_plan ? retention.latest_plan.automatic_apply_eligible ? 'AUTO ELIGIBLE' : 'MANUAL REVIEW' : 'NOT PLANNED'}</span><p><strong>{retention?.policy.authority_path ?? 'retention/policy.toml'}</strong><small>{retention?.latest_plan ? `${retention.latest_plan.summary.verified_successes.toLocaleString()} seals verified · ${retention.latest_plan.summary.preserved.toLocaleString()} protected · ${retention.latest_plan.summary.quarantined.toLocaleString()} quarantined` : 'content-addressed plan required before deletion'}</small></p><div><b>{retention?.latest_plan ? formatDurationNs(retention.latest_plan.estimated_apply_seconds * 1_000_000_000) : '—'}</b><span>estimated apply</span></div><div><b>{retention?.last_run ? formatBytes(retention.last_run.filesystem_free_bytes_delta) : '—'}</b><span>last freed</span></div></div>
+        </section>
+
         <div className="operational-gap-grid">
           <section className="operational-matrix-band unscheduled-band">
-            <div className="operational-band-title"><b>04</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
+            <div className="operational-band-title"><b>05</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
             <div className="operational-compact-list">
               {unscheduledRecipes.map(recipe => <article key={recipe.id}><span className="operational-state ready">READY</span><p><strong>{recipe.name} {recipe.version}</strong><small>{recipe.adapter} · {recipe.coverage}</small></p></article>)}
               {!unscheduledRecipes.length && <div className="operational-empty"><strong>No reviewed recipe is stranded</strong><small>Every currently buildable top-ten subject is represented in the active queue.</small></div>}
@@ -1686,7 +1705,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </section>
 
           <section className="operational-matrix-band recipe-gap-band">
-            <div className="operational-band-title"><b>05</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
+            <div className="operational-band-title"><b>06</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
             <div className="operational-compact-list">
               {missingRecipeFamilies.map(family => <article key={family.id}><span className="operational-state gap">RECIPE GAP</span><p><strong>#{family.rank} {family.label}</strong><small>{family.source_state} · {family.selection_evidence}</small></p></article>)}
               {!missingRecipeFamilies.length && <div className="operational-empty"><strong>Top-ten recipe set complete</strong><small>The broader C-family census is not promoted into this executable matrix until its family rows and source evidence are registered.</small></div>}
@@ -1694,7 +1713,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </section>
 
           <section className="operational-matrix-band toolchain-gap-band">
-            <div className="operational-band-title"><b>06</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
+            <div className="operational-band-title"><b>07</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
             <div className="operational-compact-list">
               {missingToolchainRequirements.map(requirement => <article key={requirement.id}><span className="operational-state gap">{requirement.route_state.replaceAll('-', ' ')}</span><p><strong>{requirement.target_label} · {requirement.compiler_label}</strong><small>#{requirement.order} · {requirement.acquisition} · {requirement.worker_class}</small></p></article>)}
               {!missingToolchainRequirements.length && <div className="operational-empty"><strong>No toolchain gaps in the selected width</strong><small>Every demanded target/compiler pair has an executable route authority.</small></div>}
@@ -1828,6 +1847,68 @@ function PerformanceView({ factory }: { factory: FactoryApiState }) {
     {factory.authority?.performance_profiles
       ? <PerformanceProfilesPanel catalog={factory.authority.performance_profiles} capabilities={factory.capabilities} snapshot={factory.snapshot} />
       : <section className="panel"><div className="empty-state"><span>◇</span><strong>Performance authority unavailable</strong><p>Reconnect the local API to load the reviewed TOML profiles.</p></div></section>}
+  </div>;
+}
+
+function RetentionView({ factory }: { factory: FactoryApiState }) {
+  const retention = factory.retention;
+  const [message, setMessage] = useState('');
+  if (!retention) return <div className="view-stack"><ViewIntro kicker="RETENTION" title="Retention & garbage collection" /><section className="panel"><div className="empty-state"><span>◇</span><strong>Retention status unavailable</strong><p>Reconnect the local API to read retention/policy.toml.</p></div></section></div>;
+  const plan = retention.latest_plan;
+  const run = retention.last_run;
+  const policy = retention.policy;
+  const planning = factory.busyAction === 'retention-plan';
+  const applying = factory.busyAction === 'retention-apply';
+  const buildPlan = async () => {
+    setMessage('Verifying seals, ledger references and candidate bytes…');
+    try {
+      const result = await factory.planRetention();
+      setMessage(`Dry-run ${result.latest_plan?.plan_digest.slice(0, 12) ?? ''} is ready.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Dry-run failed.');
+    }
+  };
+  const applyPlan = async () => {
+    if (!plan) return;
+    const approved = window.confirm(`Apply retention plan ${plan.plan_digest}?\n\n${plan.summary.source_directories.toLocaleString()} directories · ${formatBytes(plan.summary.recoverable_apparent_bytes)} selected. Preserved and quarantined paths are excluded.`);
+    if (!approved) return;
+    setMessage(`Applying ${plan.plan_digest.slice(0, 12)}…`);
+    try {
+      const result = await factory.applyRetention(plan.plan_digest);
+      setMessage(`Collected ${formatBytes(result.last_run?.filesystem_free_bytes_delta ?? 0)} of filesystem space.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Retention apply failed.');
+    }
+  };
+  const exampleRow = (row: Record<string, unknown>, index: number) => <article key={`${String(row.kind)}-${String(row.job_id ?? row.path)}-${index}`}><span>{String(row.kind ?? 'evidence')}</span><p><strong>{String(row.job_id ?? row.path ?? 'unknown')}</strong><small>{String(row.reason ?? row.path ?? '')}</small></p></article>;
+  return <div className="view-stack retention-view">
+    <ViewIntro kicker="POST-SESSION" title="Retention & garbage collection" action={<div className="view-intro-actions"><button className="secondary-action" onClick={() => void buildPlan()} disabled={planning || applying}>{planning ? 'Scanning…' : 'Build dry-run plan'}</button><button className="primary-action" onClick={() => void applyPlan()} disabled={!plan || planning || applying}>{applying ? 'Collecting…' : 'Apply exact plan'}</button></div>} />
+
+    <section className="retention-metrics">
+      <article className="panel"><span>SELECTED</span><strong>{plan ? formatBytes(plan.summary.recoverable_apparent_bytes) : '—'}</strong><small>{plan ? `${plan.summary.source_directories.toLocaleString()} directories · ${plan.summary.actions.toLocaleString()} actions` : 'build a dry-run'}</small></article>
+      <article className="panel"><span>PRESERVED</span><strong>{plan?.summary.preserved.toLocaleString() ?? '—'}</strong><small>{plan ? `${plan.summary.verified_successes.toLocaleString()} success seals verified` : 'no plan'}</small></article>
+      <article className="panel"><span>QUARANTINED</span><strong>{plan?.summary.quarantined.toLocaleString() ?? '—'}</strong><small>excluded from deletion</small></article>
+      <article className="panel"><span>ESTIMATED APPLY</span><strong>{plan ? formatDurationNs(plan.estimated_apply_seconds * 1_000_000_000) : '—'}</strong><small>automatic ceiling {formatDurationNs(policy.automation.maximum_estimated_seconds * 1_000_000_000)}</small></article>
+      <article className="panel"><span>LAST FREED</span><strong>{run ? formatBytes(run.filesystem_free_bytes_delta) : '—'}</strong><small>{run ? `${run.actions_completed.toLocaleString()} actions · ${formatDurationNs(run.duration_ns)}` : 'no apply recorded'}</small></article>
+    </section>
+
+    <section className="panel retention-policy-panel">
+      <header><div><h3>{policy.name}</h3><code>{policy.authority_path} · {policy.authority_sha256.slice(0, 16)}…</code></div><span className={`validation-state ${plan?.automatic_apply_eligible ? 'ready' : 'waiting'}`}>{plan ? plan.automatic_apply_eligible ? 'AUTO ELIGIBLE' : 'MANUAL REVIEW' : 'NO PLAN'}</span></header>
+      <div className="retention-flow">
+        <article><b>01</b><p><strong>QUEUE DRAINED</strong><small>{policy.automation.trigger}</small></p></article>
+        <article><b>02</b><p><strong>DRY-RUN</strong><small>seal + ledger + byte scan</small></p></article>
+        <article><b>03</b><p><strong>PROTECT</strong><small>holds + lane-import boundary</small></p></article>
+        <article><b>04</b><p><strong>COLLECT</strong><small>failure bundles + eligible scratch</small></p></article>
+        <article><b>05</b><p><strong>RECYCLE</strong><small>{policy.automation.worker_action} long-lived workers</small></p></article>
+      </div>
+      <div className="retention-contract-grid"><article><span>SUCCESS</span><strong>{policy.success.preserve_until_lane_imported ? 'PRESERVE UNTIL LANE RECEIPT' : 'POLICY CONTROLLED'}</strong><small>required: {policy.success.required_result_artifacts.join(' · ')}</small></article><article><span>FAILURES</span><strong>{policy.failure.retain_latest_evidence_bundle ? 'FINAL EVIDENCE BUNDLE' : 'PRESERVED WHOLE'}</strong><small>identical retries {policy.failure.collapse_identical_retries ? 'collapse' : 'remain whole'}</small></article><article><span>AUTOMATION</span><strong>{policy.automation.enabled ? policy.automation.mode.toUpperCase() : 'DISABLED'}</strong><small>always dry-run first · ≤{policy.automation.maximum_estimated_seconds}s</small></article></div>
+      <footer><code>{plan ? `${plan.path} · ${plan.plan_digest}` : 'No content-addressed plan yet'}</code><span>{message}</span></footer>
+    </section>
+
+    <section className="retention-evidence-grid">
+      <article className="panel"><header><h3>Protected evidence</h3><span>{plan?.summary.preserved ?? 0}</span></header><div className="retention-example-list">{plan?.preserved_examples.map(exampleRow)}{!plan?.preserved_examples.length && <div className="operational-empty"><strong>No sampled holds</strong></div>}</div></article>
+      <article className="panel"><header><h3>Quarantine</h3><span>{plan?.summary.quarantined ?? 0}</span></header><div className="retention-example-list">{plan?.quarantine_examples.map(exampleRow)}{!plan?.quarantine_examples.length && <div className="operational-empty"><strong>No quarantined paths</strong></div>}</div></article>
+    </section>
   </div>;
 }
 

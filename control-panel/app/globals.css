@@ -201,6 +201,8 @@ button { font: inherit; }
 .view-stack { display: flex; flex-direction: column; gap: 14px; }
 .view-intro { min-height: 46px; padding: 0 2px 7px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .view-intro h2 { margin: 0; font-size: 18px; font-weight: 590; letter-spacing: -.025em; }
+.view-intro-actions { display: flex; align-items: center; gap: 8px; }
+.under-construction { padding: 6px 8px; color: var(--amber); border: 1px solid rgba(240,182,87,.34); border-radius: 4px; background: rgba(240,182,87,.07); font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; white-space: nowrap; }
 .primary-action, .secondary-action, .danger-action { min-width: 120px; height: 36px; padding: 0 14px; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; }
 .primary-action { color: #081313; background: var(--cyan); border: 1px solid var(--cyan); }
 .secondary-action { color: #aab3c0; background: #141a24; border: 1px solid #2a3443; }
@@ -250,6 +252,13 @@ button { font: inherit; }
 .operational-validation-row > div { display: flex; flex-direction: column; gap: 3px; text-align: right; }
 .operational-validation-row > div b { color: #c4b8ff; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .operational-validation-row > div span { color: #657287; font: 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.operational-retention-row { min-height: 61px; padding: 9px 13px; display: grid; grid-template-columns: auto minmax(220px, 1fr) auto auto; gap: 14px; align-items: center; background: linear-gradient(90deg, rgba(71,215,208,.055), transparent 60%); }
+.operational-retention-row > p { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.operational-retention-row > p strong { color: #c4cbd8; font: 600 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.operational-retention-row > p small { color: var(--muted-2); font-size: 7px; }
+.operational-retention-row > div { display: flex; flex-direction: column; gap: 3px; text-align: right; }
+.operational-retention-row > div b { color: var(--cyan); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.operational-retention-row > div span { color: #657287; font: 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 .operational-batch-list { margin: 0; padding: 0; list-style: none; }
 .operational-batch-list li { min-height: 55px; padding: 8px 13px; display: grid; grid-template-columns: 28px 62px minmax(220px, 1fr) auto; gap: 9px; align-items: center; border-bottom: 1px solid #1e2936; }
 .operational-batch-list li:last-child { border-bottom: 0; }
@@ -1599,6 +1608,39 @@ button { font: inherit; }
 .empty-state.timing-empty { min-height: 180px; }
 .empty-state.timing-empty.eta { min-height: 245px; }
 
+/* Retention and garbage collection */
+.retention-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+.retention-metrics article { min-height: 92px; padding: 14px; display: flex; flex-direction: column; gap: 7px; }
+.retention-metrics span, .retention-contract-grid span { color: #677488; font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; }
+.retention-metrics strong { color: #c6d0da; font: 600 16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-metrics small, .retention-contract-grid small { color: var(--muted-2); font-size: 7px; }
+.retention-policy-panel { overflow: hidden; }
+.retention-policy-panel > header, .retention-evidence-grid > article > header { min-height: 52px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); }
+.retention-policy-panel > header > div { display: flex; flex-direction: column; gap: 5px; }
+.retention-policy-panel h3, .retention-evidence-grid h3 { margin: 0; color: #c7d0da; font-size: 10px; }
+.retention-policy-panel code, .retention-policy-panel footer code { color: #708095; font: 7px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.retention-flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--line-soft); gap: 1px; }
+.retention-flow article { min-height: 76px; padding: 12px; display: grid; grid-template-columns: 25px 1fr; align-items: center; gap: 8px; background: #101720; }
+.retention-flow article > b { display: grid; place-items: center; width: 24px; height: 24px; color: var(--cyan); border: 1px solid #2b5c61; border-radius: 4px; background: #102327; font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-flow p { margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.retention-flow strong { color: #b8c3cf; font: 650 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-flow small { color: var(--muted-2); font-size: 6px; }
+.retention-contract-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.retention-contract-grid article { min-height: 84px; padding: 14px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid var(--line-soft); }
+.retention-contract-grid article:last-child { border-right: 0; }
+.retention-contract-grid strong { color: #aebac8; font: 600 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-policy-panel > footer { min-height: 43px; padding: 9px 14px; display: flex; align-items: center; justify-content: space-between; gap: 15px; border-top: 1px solid var(--line-soft); background: #0d1219; }
+.retention-policy-panel > footer span { color: var(--cyan); font-size: 8px; }
+.retention-evidence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.retention-evidence-grid > article { overflow: hidden; }
+.retention-evidence-grid > article > header > span { color: var(--amber); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.retention-example-list { max-height: 320px; overflow-y: auto; }
+.retention-example-list > article { min-height: 48px; padding: 8px 13px; display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; border-bottom: 1px solid var(--line-soft); }
+.retention-example-list > article > span { color: #78879a; font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.retention-example-list p { min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.retention-example-list strong { overflow: hidden; color: #aeb9c6; font: 600 7px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.retention-example-list small { color: var(--muted-2); font-size: 7px; }
+
 /* Activity terminal */
 .terminal-panel { overflow: hidden; background: #0a0e15; }
 .terminal-toolbar { min-height: 42px; padding: 0 14px; display: grid; grid-template-columns: 80px 1fr auto; align-items: center; border-bottom: 1px solid var(--line); background: #111720; }
@@ -1616,6 +1658,8 @@ button { font: inherit; }
 .terminal-events p { margin: 0; color: #778397; }
 
 @media (max-width: 1050px) {
+  .retention-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .retention-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hdi-headline-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hdi-headline-metrics article:nth-child(3n) { border-right: 0; }
   .hdi-headline-metrics article:nth-child(-n+3) { border-bottom: 1px solid var(--line-soft); }
@@ -1692,6 +1736,11 @@ button { font: inherit; }
 }
 
 @media (max-width: 760px) {
+  .retention-metrics, .retention-contract-grid, .retention-evidence-grid { grid-template-columns: 1fr; }
+  .retention-flow { grid-template-columns: 1fr; }
+  .retention-policy-panel > footer, .view-intro-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .operational-retention-row { grid-template-columns: auto 1fr; }
+  .operational-retention-row > div { grid-column: 2; text-align: left; }
   .hdi-readiness-panel > header, .hdi-formula-panel > header, .hdi-repro-panel > header, .hdi-signal-panel > header, .hdi-treatment-panel > header, .hdi-generation-panel > header, .hdi-score-panel > header { align-items: flex-start; flex-direction: column; }
   .hdi-headline-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hdi-headline-metrics article:nth-child(3n) { border-right: 1px solid var(--line-soft); }
