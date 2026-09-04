@@ -1,0 +1,2470 @@
+schema_version = "fidb-machine-validation-batch/v1"
+id = "c-top10-cohort-001"
+kind = "validation-run"
+state = "materialized-disarmed"
+automatic_scheduling = true
+production_queue_mutation = false
+execute_target_binaries = false
+authority_path = "validation/machine-validation.toml"
+authority_sha256 = "acb44e70d919a00803760976bbc572b74a5e89c6626d53be5eff77f860c16817"
+materialization_digest = "054894dcbdec9a0ea07f5814692e0b1e119c37f86b74605ed809fed9df68fd3d"
+
+[summary]
+work_units = 222
+composite_programs = 444
+query_projections = 1332
+
+[randomization]
+algorithm = "sha256-ranked-v1"
+seed = "ed61d29b20488c89afe82dbd8e8c94b01f4cc3b01008f7e0618183212db4b221"
+fold_a = ["zstd@1.5.7", "xz@5.8.3", "nghttp2@1.70.0", "openssl@3.5.8", "readline@8.3"]
+fold_b = ["gmp@6.3.0", "lz4@1.10.0", "gettext@1.0", "sqlite@3.53.4", "pcre2@10.48"]
+
+[execution]
+input_strategy = "rebuild-from-reviewed-recipes"
+harness_mode = "whole-archive-link-map"
+truth_copy = "unstripped-with-link-map"
+query_copy = "stripped"
+primary_projections = ["correct-fold-exact-identity-withheld", "opposite-fold", "complete-owner-labelled-candidate-db"]
+
+[[work_unit]]
+position = 1
+id = "linux-x86-64-gcc-12:gcc-current-o2"
+route_id = "linux-x86-64-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 2
+id = "linux-x86-64-gcc-12:gcc-o0"
+route_id = "linux-x86-64-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 3
+id = "linux-x86-64-gcc-12:gcc-o3"
+route_id = "linux-x86-64-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 4
+id = "linux-x86-64-gcc-12:gcc-os"
+route_id = "linux-x86-64-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 5
+id = "linux-x86-64-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-x86-64-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 6
+id = "linux-x86-64-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-x86-64-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 7
+id = "linux-x86-64-gcc-13:gcc-current-o2"
+route_id = "linux-x86-64-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 8
+id = "linux-x86-64-gcc-13:gcc-o0"
+route_id = "linux-x86-64-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 9
+id = "linux-x86-64-gcc-13:gcc-o3"
+route_id = "linux-x86-64-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 10
+id = "linux-x86-64-gcc-13:gcc-os"
+route_id = "linux-x86-64-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 11
+id = "linux-x86-64-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-x86-64-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 12
+id = "linux-x86-64-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-x86-64-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 13
+id = "linux-x86-64-gcc:gcc-current-o2"
+route_id = "linux-x86-64-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 14
+id = "linux-x86-64-gcc:gcc-o0"
+route_id = "linux-x86-64-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 15
+id = "linux-x86-64-gcc:gcc-o3"
+route_id = "linux-x86-64-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 16
+id = "linux-x86-64-gcc:gcc-os"
+route_id = "linux-x86-64-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 17
+id = "linux-x86-64-gcc:gcc-o2-frame-omit"
+route_id = "linux-x86-64-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 18
+id = "linux-x86-64-gcc:gcc-o2-stack-strong"
+route_id = "linux-x86-64-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 19
+id = "linux-arm32-gcc-12:gcc-current-o2"
+route_id = "linux-arm32-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 20
+id = "linux-arm32-gcc-12:gcc-o0"
+route_id = "linux-arm32-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 21
+id = "linux-arm32-gcc-12:gcc-o3"
+route_id = "linux-arm32-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 22
+id = "linux-arm32-gcc-12:gcc-os"
+route_id = "linux-arm32-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 23
+id = "linux-arm32-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-arm32-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 24
+id = "linux-arm32-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-arm32-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 25
+id = "linux-arm32-gcc-13:gcc-current-o2"
+route_id = "linux-arm32-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 26
+id = "linux-arm32-gcc-13:gcc-o0"
+route_id = "linux-arm32-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 27
+id = "linux-arm32-gcc-13:gcc-o3"
+route_id = "linux-arm32-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 28
+id = "linux-arm32-gcc-13:gcc-os"
+route_id = "linux-arm32-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 29
+id = "linux-arm32-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-arm32-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 30
+id = "linux-arm32-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-arm32-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 31
+id = "linux-arm32-gcc:gcc-current-o2"
+route_id = "linux-arm32-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 32
+id = "linux-arm32-gcc:gcc-o0"
+route_id = "linux-arm32-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 33
+id = "linux-arm32-gcc:gcc-o3"
+route_id = "linux-arm32-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 34
+id = "linux-arm32-gcc:gcc-os"
+route_id = "linux-arm32-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 35
+id = "linux-arm32-gcc:gcc-o2-frame-omit"
+route_id = "linux-arm32-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 36
+id = "linux-arm32-gcc:gcc-o2-stack-strong"
+route_id = "linux-arm32-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 37
+id = "linux-aarch64-gcc-12:gcc-current-o2"
+route_id = "linux-aarch64-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 38
+id = "linux-aarch64-gcc-12:gcc-o0"
+route_id = "linux-aarch64-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 39
+id = "linux-aarch64-gcc-12:gcc-o3"
+route_id = "linux-aarch64-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 40
+id = "linux-aarch64-gcc-12:gcc-os"
+route_id = "linux-aarch64-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 41
+id = "linux-aarch64-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-aarch64-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 42
+id = "linux-aarch64-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-aarch64-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 43
+id = "linux-aarch64-gcc-13:gcc-current-o2"
+route_id = "linux-aarch64-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 44
+id = "linux-aarch64-gcc-13:gcc-o0"
+route_id = "linux-aarch64-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 45
+id = "linux-aarch64-gcc-13:gcc-o3"
+route_id = "linux-aarch64-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 46
+id = "linux-aarch64-gcc-13:gcc-os"
+route_id = "linux-aarch64-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 47
+id = "linux-aarch64-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-aarch64-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 48
+id = "linux-aarch64-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-aarch64-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 49
+id = "linux-aarch64-gcc:gcc-current-o2"
+route_id = "linux-aarch64-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 50
+id = "linux-aarch64-gcc:gcc-o0"
+route_id = "linux-aarch64-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 51
+id = "linux-aarch64-gcc:gcc-o3"
+route_id = "linux-aarch64-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 52
+id = "linux-aarch64-gcc:gcc-os"
+route_id = "linux-aarch64-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 53
+id = "linux-aarch64-gcc:gcc-o2-frame-omit"
+route_id = "linux-aarch64-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 54
+id = "linux-aarch64-gcc:gcc-o2-stack-strong"
+route_id = "linux-aarch64-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 55
+id = "linux-mips32-be-gcc-12:gcc-current-o2"
+route_id = "linux-mips32-be-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 56
+id = "linux-mips32-be-gcc-12:gcc-o0"
+route_id = "linux-mips32-be-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 57
+id = "linux-mips32-be-gcc-12:gcc-o3"
+route_id = "linux-mips32-be-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 58
+id = "linux-mips32-be-gcc-12:gcc-os"
+route_id = "linux-mips32-be-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 59
+id = "linux-mips32-be-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-mips32-be-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 60
+id = "linux-mips32-be-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-mips32-be-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 61
+id = "linux-mips32-be-gcc-13:gcc-current-o2"
+route_id = "linux-mips32-be-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 62
+id = "linux-mips32-be-gcc-13:gcc-o0"
+route_id = "linux-mips32-be-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 63
+id = "linux-mips32-be-gcc-13:gcc-o3"
+route_id = "linux-mips32-be-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 64
+id = "linux-mips32-be-gcc-13:gcc-os"
+route_id = "linux-mips32-be-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 65
+id = "linux-mips32-be-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-mips32-be-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 66
+id = "linux-mips32-be-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-mips32-be-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 67
+id = "linux-mips32-be-gcc:gcc-current-o2"
+route_id = "linux-mips32-be-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 68
+id = "linux-mips32-be-gcc:gcc-o0"
+route_id = "linux-mips32-be-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 69
+id = "linux-mips32-be-gcc:gcc-o3"
+route_id = "linux-mips32-be-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 70
+id = "linux-mips32-be-gcc:gcc-os"
+route_id = "linux-mips32-be-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 71
+id = "linux-mips32-be-gcc:gcc-o2-frame-omit"
+route_id = "linux-mips32-be-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 72
+id = "linux-mips32-be-gcc:gcc-o2-stack-strong"
+route_id = "linux-mips32-be-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 73
+id = "linux-mips32-le-gcc-12:gcc-current-o2"
+route_id = "linux-mips32-le-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 74
+id = "linux-mips32-le-gcc-12:gcc-o0"
+route_id = "linux-mips32-le-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 75
+id = "linux-mips32-le-gcc-12:gcc-o3"
+route_id = "linux-mips32-le-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 76
+id = "linux-mips32-le-gcc-12:gcc-os"
+route_id = "linux-mips32-le-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 77
+id = "linux-mips32-le-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-mips32-le-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 78
+id = "linux-mips32-le-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-mips32-le-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 79
+id = "linux-mips32-le-gcc-13:gcc-current-o2"
+route_id = "linux-mips32-le-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 80
+id = "linux-mips32-le-gcc-13:gcc-o0"
+route_id = "linux-mips32-le-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 81
+id = "linux-mips32-le-gcc-13:gcc-o3"
+route_id = "linux-mips32-le-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 82
+id = "linux-mips32-le-gcc-13:gcc-os"
+route_id = "linux-mips32-le-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 83
+id = "linux-mips32-le-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-mips32-le-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 84
+id = "linux-mips32-le-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-mips32-le-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 85
+id = "linux-mips32-le-gcc:gcc-current-o2"
+route_id = "linux-mips32-le-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 86
+id = "linux-mips32-le-gcc:gcc-o0"
+route_id = "linux-mips32-le-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 87
+id = "linux-mips32-le-gcc:gcc-o3"
+route_id = "linux-mips32-le-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 88
+id = "linux-mips32-le-gcc:gcc-os"
+route_id = "linux-mips32-le-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 89
+id = "linux-mips32-le-gcc:gcc-o2-frame-omit"
+route_id = "linux-mips32-le-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 90
+id = "linux-mips32-le-gcc:gcc-o2-stack-strong"
+route_id = "linux-mips32-le-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 91
+id = "linux-powerpc32-be-gcc-12:gcc-current-o2"
+route_id = "linux-powerpc32-be-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 92
+id = "linux-powerpc32-be-gcc-12:gcc-o0"
+route_id = "linux-powerpc32-be-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 93
+id = "linux-powerpc32-be-gcc-12:gcc-o3"
+route_id = "linux-powerpc32-be-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 94
+id = "linux-powerpc32-be-gcc-12:gcc-os"
+route_id = "linux-powerpc32-be-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 95
+id = "linux-powerpc32-be-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-powerpc32-be-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 96
+id = "linux-powerpc32-be-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-powerpc32-be-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 97
+id = "linux-powerpc32-be-gcc-13:gcc-current-o2"
+route_id = "linux-powerpc32-be-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 98
+id = "linux-powerpc32-be-gcc-13:gcc-o0"
+route_id = "linux-powerpc32-be-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 99
+id = "linux-powerpc32-be-gcc-13:gcc-o3"
+route_id = "linux-powerpc32-be-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 100
+id = "linux-powerpc32-be-gcc-13:gcc-os"
+route_id = "linux-powerpc32-be-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 101
+id = "linux-powerpc32-be-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-powerpc32-be-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 102
+id = "linux-powerpc32-be-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-powerpc32-be-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 103
+id = "linux-powerpc32-be-gcc:gcc-current-o2"
+route_id = "linux-powerpc32-be-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 104
+id = "linux-powerpc32-be-gcc:gcc-o0"
+route_id = "linux-powerpc32-be-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 105
+id = "linux-powerpc32-be-gcc:gcc-o3"
+route_id = "linux-powerpc32-be-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 106
+id = "linux-powerpc32-be-gcc:gcc-os"
+route_id = "linux-powerpc32-be-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 107
+id = "linux-powerpc32-be-gcc:gcc-o2-frame-omit"
+route_id = "linux-powerpc32-be-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 108
+id = "linux-powerpc32-be-gcc:gcc-o2-stack-strong"
+route_id = "linux-powerpc32-be-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 109
+id = "linux-sh32-gcc-12:gcc-current-o2"
+route_id = "linux-sh32-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 110
+id = "linux-sh32-gcc-12:gcc-o0"
+route_id = "linux-sh32-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 111
+id = "linux-sh32-gcc-12:gcc-o3"
+route_id = "linux-sh32-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 112
+id = "linux-sh32-gcc-12:gcc-os"
+route_id = "linux-sh32-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 113
+id = "linux-sh32-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-sh32-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 114
+id = "linux-sh32-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-sh32-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 115
+id = "linux-sh32-gcc-13:gcc-current-o2"
+route_id = "linux-sh32-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 116
+id = "linux-sh32-gcc-13:gcc-o0"
+route_id = "linux-sh32-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 117
+id = "linux-sh32-gcc-13:gcc-o3"
+route_id = "linux-sh32-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 118
+id = "linux-sh32-gcc-13:gcc-os"
+route_id = "linux-sh32-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 119
+id = "linux-sh32-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-sh32-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 120
+id = "linux-sh32-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-sh32-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 121
+id = "linux-sh32-gcc:gcc-current-o2"
+route_id = "linux-sh32-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 122
+id = "linux-sh32-gcc:gcc-o0"
+route_id = "linux-sh32-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 123
+id = "linux-sh32-gcc:gcc-o3"
+route_id = "linux-sh32-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 124
+id = "linux-sh32-gcc:gcc-os"
+route_id = "linux-sh32-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 125
+id = "linux-sh32-gcc:gcc-o2-frame-omit"
+route_id = "linux-sh32-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 126
+id = "linux-sh32-gcc:gcc-o2-stack-strong"
+route_id = "linux-sh32-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 127
+id = "linux-m68k-gcc-12:gcc-current-o2"
+route_id = "linux-m68k-gcc-12"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 128
+id = "linux-m68k-gcc-12:gcc-o0"
+route_id = "linux-m68k-gcc-12"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 129
+id = "linux-m68k-gcc-12:gcc-o3"
+route_id = "linux-m68k-gcc-12"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 130
+id = "linux-m68k-gcc-12:gcc-os"
+route_id = "linux-m68k-gcc-12"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 131
+id = "linux-m68k-gcc-12:gcc-o2-frame-omit"
+route_id = "linux-m68k-gcc-12"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 132
+id = "linux-m68k-gcc-12:gcc-o2-stack-strong"
+route_id = "linux-m68k-gcc-12"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 133
+id = "linux-m68k-gcc-13:gcc-current-o2"
+route_id = "linux-m68k-gcc-13"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 134
+id = "linux-m68k-gcc-13:gcc-o0"
+route_id = "linux-m68k-gcc-13"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 135
+id = "linux-m68k-gcc-13:gcc-o3"
+route_id = "linux-m68k-gcc-13"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 136
+id = "linux-m68k-gcc-13:gcc-os"
+route_id = "linux-m68k-gcc-13"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 137
+id = "linux-m68k-gcc-13:gcc-o2-frame-omit"
+route_id = "linux-m68k-gcc-13"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 138
+id = "linux-m68k-gcc-13:gcc-o2-stack-strong"
+route_id = "linux-m68k-gcc-13"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 139
+id = "linux-m68k-gcc:gcc-current-o2"
+route_id = "linux-m68k-gcc"
+profile_id = "gcc-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 140
+id = "linux-m68k-gcc:gcc-o0"
+route_id = "linux-m68k-gcc"
+profile_id = "gcc-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 141
+id = "linux-m68k-gcc:gcc-o3"
+route_id = "linux-m68k-gcc"
+profile_id = "gcc-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 142
+id = "linux-m68k-gcc:gcc-os"
+route_id = "linux-m68k-gcc"
+profile_id = "gcc-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 143
+id = "linux-m68k-gcc:gcc-o2-frame-omit"
+route_id = "linux-m68k-gcc"
+profile_id = "gcc-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 144
+id = "linux-m68k-gcc:gcc-o2-stack-strong"
+route_id = "linux-m68k-gcc"
+profile_id = "gcc-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 145
+id = "windows-x86-64-llvm-mingw-clang-15:clang-current-o2"
+route_id = "windows-x86-64-llvm-mingw-clang-15"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 146
+id = "windows-x86-64-llvm-mingw-clang-15:clang-o0"
+route_id = "windows-x86-64-llvm-mingw-clang-15"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 147
+id = "windows-x86-64-llvm-mingw-clang-15:clang-current-o3"
+route_id = "windows-x86-64-llvm-mingw-clang-15"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 148
+id = "windows-x86-64-llvm-mingw-clang-15:clang-current-os"
+route_id = "windows-x86-64-llvm-mingw-clang-15"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 149
+id = "windows-x86-64-llvm-mingw-clang-15:clang-o2-frame-omit"
+route_id = "windows-x86-64-llvm-mingw-clang-15"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 150
+id = "windows-x86-64-llvm-mingw-clang-15:clang-o2-stack-strong"
+route_id = "windows-x86-64-llvm-mingw-clang-15"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 151
+id = "windows-x86-64-llvm-mingw-clang-17:clang-current-o2"
+route_id = "windows-x86-64-llvm-mingw-clang-17"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 152
+id = "windows-x86-64-llvm-mingw-clang-17:clang-o0"
+route_id = "windows-x86-64-llvm-mingw-clang-17"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 153
+id = "windows-x86-64-llvm-mingw-clang-17:clang-current-o3"
+route_id = "windows-x86-64-llvm-mingw-clang-17"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 154
+id = "windows-x86-64-llvm-mingw-clang-17:clang-current-os"
+route_id = "windows-x86-64-llvm-mingw-clang-17"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 155
+id = "windows-x86-64-llvm-mingw-clang-17:clang-o2-frame-omit"
+route_id = "windows-x86-64-llvm-mingw-clang-17"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 156
+id = "windows-x86-64-llvm-mingw-clang-17:clang-o2-stack-strong"
+route_id = "windows-x86-64-llvm-mingw-clang-17"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 157
+id = "windows-x86-64-llvm-mingw-clang-19:clang-current-o2"
+route_id = "windows-x86-64-llvm-mingw-clang-19"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 158
+id = "windows-x86-64-llvm-mingw-clang-19:clang-o0"
+route_id = "windows-x86-64-llvm-mingw-clang-19"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 159
+id = "windows-x86-64-llvm-mingw-clang-19:clang-current-o3"
+route_id = "windows-x86-64-llvm-mingw-clang-19"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 160
+id = "windows-x86-64-llvm-mingw-clang-19:clang-current-os"
+route_id = "windows-x86-64-llvm-mingw-clang-19"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 161
+id = "windows-x86-64-llvm-mingw-clang-19:clang-o2-frame-omit"
+route_id = "windows-x86-64-llvm-mingw-clang-19"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 162
+id = "windows-x86-64-llvm-mingw-clang-19:clang-o2-stack-strong"
+route_id = "windows-x86-64-llvm-mingw-clang-19"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 163
+id = "windows-x86-64-llvm-mingw-clang-20:clang-current-o2"
+route_id = "windows-x86-64-llvm-mingw-clang-20"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 164
+id = "windows-x86-64-llvm-mingw-clang-20:clang-o0"
+route_id = "windows-x86-64-llvm-mingw-clang-20"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 165
+id = "windows-x86-64-llvm-mingw-clang-20:clang-current-o3"
+route_id = "windows-x86-64-llvm-mingw-clang-20"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 166
+id = "windows-x86-64-llvm-mingw-clang-20:clang-current-os"
+route_id = "windows-x86-64-llvm-mingw-clang-20"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 167
+id = "windows-x86-64-llvm-mingw-clang-20:clang-o2-frame-omit"
+route_id = "windows-x86-64-llvm-mingw-clang-20"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 168
+id = "windows-x86-64-llvm-mingw-clang-20:clang-o2-stack-strong"
+route_id = "windows-x86-64-llvm-mingw-clang-20"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 169
+id = "windows-x86-64-llvm-mingw:clang-current-o2"
+route_id = "windows-x86-64-llvm-mingw"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 170
+id = "windows-x86-64-llvm-mingw:clang-o0"
+route_id = "windows-x86-64-llvm-mingw"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 171
+id = "windows-x86-64-llvm-mingw:clang-current-o3"
+route_id = "windows-x86-64-llvm-mingw"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 172
+id = "windows-x86-64-llvm-mingw:clang-current-os"
+route_id = "windows-x86-64-llvm-mingw"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 173
+id = "windows-x86-64-llvm-mingw:clang-o2-frame-omit"
+route_id = "windows-x86-64-llvm-mingw"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 174
+id = "windows-x86-64-llvm-mingw:clang-o2-stack-strong"
+route_id = "windows-x86-64-llvm-mingw"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 175
+id = "android-arm64-ndk-r27d-clang-api21:clang-current-o2"
+route_id = "android-arm64-ndk-r27d-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 176
+id = "android-arm64-ndk-r27d-clang-api21:clang-o0"
+route_id = "android-arm64-ndk-r27d-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 177
+id = "android-arm64-ndk-r27d-clang-api21:clang-current-o3"
+route_id = "android-arm64-ndk-r27d-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 178
+id = "android-arm64-ndk-r27d-clang-api21:clang-current-os"
+route_id = "android-arm64-ndk-r27d-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 179
+id = "android-arm64-ndk-r27d-clang-api21:clang-o2-frame-omit"
+route_id = "android-arm64-ndk-r27d-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 180
+id = "android-arm64-ndk-r27d-clang-api21:clang-o2-stack-strong"
+route_id = "android-arm64-ndk-r27d-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 181
+id = "android-arm32-ndk-r27d-clang-api21:clang-current-o2"
+route_id = "android-arm32-ndk-r27d-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 182
+id = "android-arm32-ndk-r27d-clang-api21:clang-o0"
+route_id = "android-arm32-ndk-r27d-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 183
+id = "android-arm32-ndk-r27d-clang-api21:clang-current-o3"
+route_id = "android-arm32-ndk-r27d-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 184
+id = "android-arm32-ndk-r27d-clang-api21:clang-current-os"
+route_id = "android-arm32-ndk-r27d-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 185
+id = "android-arm32-ndk-r27d-clang-api21:clang-o2-frame-omit"
+route_id = "android-arm32-ndk-r27d-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 186
+id = "android-arm32-ndk-r27d-clang-api21:clang-o2-stack-strong"
+route_id = "android-arm32-ndk-r27d-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 187
+id = "android-x86-64-ndk-r27d-clang-api21:clang-current-o2"
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 188
+id = "android-x86-64-ndk-r27d-clang-api21:clang-o0"
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 189
+id = "android-x86-64-ndk-r27d-clang-api21:clang-current-o3"
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 190
+id = "android-x86-64-ndk-r27d-clang-api21:clang-current-os"
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 191
+id = "android-x86-64-ndk-r27d-clang-api21:clang-o2-frame-omit"
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 192
+id = "android-x86-64-ndk-r27d-clang-api21:clang-o2-stack-strong"
+route_id = "android-x86-64-ndk-r27d-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 193
+id = "android-x86-32-ndk-r27d-clang-api21:clang-current-o2"
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 194
+id = "android-x86-32-ndk-r27d-clang-api21:clang-o0"
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 195
+id = "android-x86-32-ndk-r27d-clang-api21:clang-current-o3"
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 196
+id = "android-x86-32-ndk-r27d-clang-api21:clang-current-os"
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 197
+id = "android-x86-32-ndk-r27d-clang-api21:clang-o2-frame-omit"
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 198
+id = "android-x86-32-ndk-r27d-clang-api21:clang-o2-stack-strong"
+route_id = "android-x86-32-ndk-r27d-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 199
+id = "android-arm64-ndk-r29-clang-api21:clang-current-o2"
+route_id = "android-arm64-ndk-r29-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 200
+id = "android-arm64-ndk-r29-clang-api21:clang-o0"
+route_id = "android-arm64-ndk-r29-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 201
+id = "android-arm64-ndk-r29-clang-api21:clang-current-o3"
+route_id = "android-arm64-ndk-r29-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 202
+id = "android-arm64-ndk-r29-clang-api21:clang-current-os"
+route_id = "android-arm64-ndk-r29-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 203
+id = "android-arm64-ndk-r29-clang-api21:clang-o2-frame-omit"
+route_id = "android-arm64-ndk-r29-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 204
+id = "android-arm64-ndk-r29-clang-api21:clang-o2-stack-strong"
+route_id = "android-arm64-ndk-r29-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 205
+id = "android-arm32-ndk-r29-clang-api21:clang-current-o2"
+route_id = "android-arm32-ndk-r29-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 206
+id = "android-arm32-ndk-r29-clang-api21:clang-o0"
+route_id = "android-arm32-ndk-r29-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 207
+id = "android-arm32-ndk-r29-clang-api21:clang-current-o3"
+route_id = "android-arm32-ndk-r29-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 208
+id = "android-arm32-ndk-r29-clang-api21:clang-current-os"
+route_id = "android-arm32-ndk-r29-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 209
+id = "android-arm32-ndk-r29-clang-api21:clang-o2-frame-omit"
+route_id = "android-arm32-ndk-r29-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 210
+id = "android-arm32-ndk-r29-clang-api21:clang-o2-stack-strong"
+route_id = "android-arm32-ndk-r29-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 211
+id = "android-x86-64-ndk-r29-clang-api21:clang-current-o2"
+route_id = "android-x86-64-ndk-r29-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 212
+id = "android-x86-64-ndk-r29-clang-api21:clang-o0"
+route_id = "android-x86-64-ndk-r29-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 213
+id = "android-x86-64-ndk-r29-clang-api21:clang-current-o3"
+route_id = "android-x86-64-ndk-r29-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 214
+id = "android-x86-64-ndk-r29-clang-api21:clang-current-os"
+route_id = "android-x86-64-ndk-r29-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 215
+id = "android-x86-64-ndk-r29-clang-api21:clang-o2-frame-omit"
+route_id = "android-x86-64-ndk-r29-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 216
+id = "android-x86-64-ndk-r29-clang-api21:clang-o2-stack-strong"
+route_id = "android-x86-64-ndk-r29-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 217
+id = "android-x86-32-ndk-r29-clang-api21:clang-current-o2"
+route_id = "android-x86-32-ndk-r29-clang-api21"
+profile_id = "clang-current-o2"
+treatment_id = "baseline_o2"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 218
+id = "android-x86-32-ndk-r29-clang-api21:clang-o0"
+route_id = "android-x86-32-ndk-r29-clang-api21"
+profile_id = "clang-o0"
+treatment_id = "optimization_o0"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 219
+id = "android-x86-32-ndk-r29-clang-api21:clang-current-o3"
+route_id = "android-x86-32-ndk-r29-clang-api21"
+profile_id = "clang-current-o3"
+treatment_id = "optimization_o3"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 220
+id = "android-x86-32-ndk-r29-clang-api21:clang-current-os"
+route_id = "android-x86-32-ndk-r29-clang-api21"
+profile_id = "clang-current-os"
+treatment_id = "optimization_os"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 221
+id = "android-x86-32-ndk-r29-clang-api21:clang-o2-frame-omit"
+route_id = "android-x86-32-ndk-r29-clang-api21"
+profile_id = "clang-o2-frame-omit"
+treatment_id = "frame_pointer_omitted"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"
+
+[[work_unit]]
+position = 222
+id = "android-x86-32-ndk-r29-clang-api21:clang-o2-stack-strong"
+route_id = "android-x86-32-ndk-r29-clang-api21"
+profile_id = "clang-o2-stack-strong"
+treatment_id = "stack_protector_strong"
+folds = ["A", "B"]
+composite_programs = 2
+query_projections = 6
+state = "planned-disarmed"

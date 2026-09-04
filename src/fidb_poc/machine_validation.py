@@ -655,6 +655,29 @@ def _toml_array(values: Iterable[str]) -> str:
     return "[" + ", ".join(_toml_string(value) for value in values) + "]"
 
 
+def _materialization_digest(status: Mapping[str, object]) -> str:
+    """Pin only immutable inputs to a validation batch.
+
+    The live status digest also includes scheduler and result state. Embedding
+    that digest in the manifest made writing the generated schedule invalidate
+    the manifest immediately.
+    """
+
+    pinned = {
+        "schema_version": VALIDATION_BATCH_SCHEMA,
+        "id": status["id"],
+        "authority_path": status["authority_path"],
+        "authority_sha256": status["authority_sha256"],
+        "authorities": status["authorities"],
+        "randomization": status["randomization"],
+        "batch": status["batch"],
+        "queries": status["queries"],
+        "width_identities": status["width_identities"],
+    }
+    canonical = json.dumps(pinned, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def _render_validation_batch(status: Mapping[str, object]) -> str:
     summary = status["summary"]
     randomization = status["randomization"]
@@ -668,7 +691,7 @@ def _render_validation_batch(status: Mapping[str, object]) -> str:
         "execute_target_binaries = false",
         f'authority_path = {_toml_string(str(status["authority_path"]))}',
         f'authority_sha256 = {_toml_string(str(status["authority_sha256"]))}',
-        f'status_digest = {_toml_string(str(status["status_digest"]))}',
+        f'materialization_digest = {_toml_string(_materialization_digest(status))}',
         "",
         "[summary]",
         f'work_units = {summary["work_units"]}',

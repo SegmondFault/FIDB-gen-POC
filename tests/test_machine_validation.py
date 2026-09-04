@@ -2,6 +2,7 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fidb_poc.machine_validation import (
     compile_machine_validation,
@@ -56,6 +57,7 @@ class MachineValidationTests(unittest.TestCase):
         self.assertEqual(manifest["state"], "materialized-disarmed")
         self.assertEqual(len(manifest["work_unit"]), 222)
         self.assertEqual(manifest["summary"]["composite_programs"], 444)
+        self.assertEqual(len(manifest["materialization_digest"]), 64)
         schedule = tomllib.loads(document["rendered_schedule"])
         self.assertEqual(schedule["state"], "scheduled-claim-blocked")
         self.assertTrue(schedule["trigger"][0]["automatic_scheduling"])
@@ -63,6 +65,26 @@ class MachineValidationTests(unittest.TestCase):
             schedule["trigger"][0]["claim_gate"],
             "first-run-canary-after-cohort-complete",
         )
+
+    def test_live_schedule_state_does_not_invalidate_materialized_manifest(self):
+        empty = compile_machine_validation(self.root, evidence_override={})
+        pairs = {
+            (row["route_id"], row["treatment_id"])
+            for row in empty["width_identities"]
+        }
+        evidence = {row["id"]: set(pairs) for row in empty["libraries"]}
+        with patch(
+            "fidb_poc.machine_validation._validation_schedule_state",
+            return_value="waiting-for-cohort",
+        ):
+            waiting = compile_validation_batch(self.root, evidence_override=evidence)
+        with patch(
+            "fidb_poc.machine_validation._validation_schedule_state",
+            return_value="scheduled-claim-blocked",
+        ):
+            scheduled = compile_validation_batch(self.root, evidence_override=evidence)
+
+        self.assertEqual(waiting["rendered_manifest"], scheduled["rendered_manifest"])
 
 
 if __name__ == "__main__":
