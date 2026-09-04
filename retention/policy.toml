@@ -6,6 +6,7 @@ runs = "artifacts/runs"
 failure_bundles = "artifacts/retention/failures"
 plans = "var/fidb-retention/plans"
 state = "var/fidb-retention/state.json"
+memory_audits = "var/fidb-retention/memory-audits"
 lane_import_receipts = "var/fidb-lanes/import-receipts"
 holds = "retention/holds.toml"
 
@@ -38,6 +39,11 @@ mode = "apply"
 dry_run_first = true
 maximum_estimated_seconds = 600
 worker_action = "recycle"
+
+[memory_cleanup]
+enabled = true
+audit_after_recycle = true
+post_recycle_rss_warning_mib = 512
 
 [limits]
 maximum_actions = 10000

@@ -53,21 +53,109 @@ RESULT_SCHEMA = "fidb-job-result/v1"
 JOB_TIMING_SCHEMA = "fidb-job-timing/v1"
 _JOB_ID = re.compile(r"job-[0-9a-f]{64}\Z")
 _RETENTION_RECYCLED_SESSION = "FIDB_RETENTION_RECYCLED_SESSION"
+_RETENTION_RECYCLED_WORKER = "FIDB_RETENTION_RECYCLED_WORKER"
+_RETENTION_PRE_RECYCLE_RSS = "FIDB_RETENTION_PRE_RECYCLE_RSS_BYTES"
+_RETENTION_PRE_RECYCLE_JVM = "FIDB_RETENTION_PRE_RECYCLE_JVM_STARTED"
 
 
 class QueueCliError(RuntimeError):
     """An operator-facing queue command could not be completed safely."""
 
 
-def _recycle_worker_process(session_id: str) -> None:
+def _self_rss_bytes() -> int:
+    """Read current resident memory without confusing it with peak RSS."""
+
+    try:
+        for line in Path("/proc/self/status").read_text(encoding="utf-8").splitlines():
+            if line.startswith("VmRSS:"):
+                fields = line.split()
+                if len(fields) == 3 and fields[2] == "kB":
+                    return int(fields[1]) * 1024
+    except (OSError, ValueError):
+        pass
+    return 0
+
+
+def _embedded_jvm_started() -> bool | None:
+    """Inspect already-imported pyghidra without importing or starting it."""
+
+    module = sys.modules.get("pyghidra")
+    if module is None:
+        return False
+    started = getattr(module, "started", None)
+    if not callable(started):
+        return None
+    try:
+        return bool(started())
+    except Exception:
+        return None
+
+
+def _recycle_worker_process(session_id: str, worker_id: str) -> None:
     """Replace this process once so imported JVM state is returned to the OS."""
 
     environment = os.environ.copy()
     environment[_RETENTION_RECYCLED_SESSION] = session_id
+    environment[_RETENTION_RECYCLED_WORKER] = worker_id
+    environment[_RETENTION_PRE_RECYCLE_RSS] = str(_self_rss_bytes())
+    jvm_started = _embedded_jvm_started()
+    environment[_RETENTION_PRE_RECYCLE_JVM] = (
+        "unknown" if jvm_started is None else str(jvm_started).lower()
+    )
     os.execve(sys.executable, [sys.executable, *sys.argv], environment)
 
 
-def _post_drain_maintenance(root: Path, state: Path, session_id: str) -> None:
+def _post_recycle_memory_audit(root: Path, worker_id: str) -> None:
+    """Verify memory release from the fresh side of an exec-based recycle."""
+
+    session_id = os.environ.get(_RETENTION_RECYCLED_SESSION)
+    if session_id is None:
+        return
+    handed_off_worker = os.environ.get(_RETENTION_RECYCLED_WORKER)
+    if handed_off_worker != worker_id:
+        print(
+            "warning: post-recycle memory audit worker identity mismatch",
+            file=sys.stderr,
+        )
+        return
+    before_text = os.environ.get(_RETENTION_PRE_RECYCLE_RSS, "")
+    if not before_text.isdigit():
+        print("warning: post-recycle memory audit lacks prior RSS", file=sys.stderr)
+        return
+    jvm_text = os.environ.get(_RETENTION_PRE_RECYCLE_JVM, "unknown")
+    before_jvm = {"true": True, "false": False}.get(jvm_text)
+    try:
+        from .retention import write_memory_cleanup_audit
+
+        report = write_memory_cleanup_audit(
+            root,
+            worker_id=worker_id,
+            session_id=session_id,
+            before_rss_bytes=int(before_text),
+            after_rss_bytes=_self_rss_bytes(),
+            before_jvm_started=before_jvm,
+            after_jvm_started=_embedded_jvm_started(),
+        )
+        print(
+            json.dumps(
+                {
+                    "event": "retention.memory-cleanup-audit",
+                    "session_id": session_id,
+                    "worker_id": worker_id,
+                    "state": report.get("state"),
+                    "reclaimed_rss_bytes": report.get("reclaimed_rss_bytes"),
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+    except (OSError, ValueError) as error:
+        print(f"warning: post-recycle memory audit failed: {error}", file=sys.stderr)
+
+
+def _post_drain_maintenance(
+    root: Path, state: Path, session_id: str, worker_id: str
+) -> None:
     """Run configured retention, then recycle a long-lived worker if requested."""
 
     from .retention import (
@@ -106,7 +194,7 @@ def _post_drain_maintenance(root: Path, state: Path, session_id: str) -> None:
         print(f"warning: post-drain retention failed safely: {error}", file=sys.stderr)
     finally:
         if policy.worker_action == "recycle":
-            _recycle_worker_process(session_id)
+            _recycle_worker_process(session_id, worker_id)
 
 
 def _maybe_post_drain_maintenance(
@@ -144,7 +232,7 @@ def _maybe_post_drain_maintenance(
                 "retention_session": retention_session,
             },
         )
-        _post_drain_maintenance(root, state, retention_session)
+        _post_drain_maintenance(root, state, retention_session, worker_id)
     return True
 
 
@@ -1138,6 +1226,7 @@ def _start_block(arguments: argparse.Namespace) -> int:
 def _run_worker(arguments: argparse.Namespace) -> int:
     root, state, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
+    _post_recycle_memory_audit(root, arguments.worker_id)
     config = QueueConfig.load(queue_path, root)
     if not config.armed:
         raise QueueCliError(f"queue is disarmed in {queue_path}; no build was started")

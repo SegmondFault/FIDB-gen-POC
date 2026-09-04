@@ -15,10 +15,15 @@ from fidb_poc.cell_runner import CellResolutionError, CellRunResult
 from fidb_poc.coordinator import Coordinator
 from fidb_poc.queue_cli import (
     QueueCliError,
+    _RETENTION_PRE_RECYCLE_JVM,
+    _RETENTION_PRE_RECYCLE_RSS,
     _RETENTION_RECYCLED_SESSION,
+    _RETENTION_RECYCLED_WORKER,
     _durably_publish,
     _maybe_post_drain_maintenance,
     _post_drain_maintenance,
+    _post_recycle_memory_audit,
+    _recycle_worker_process,
     _staging_root,
     _validate_cell_timing,
     main,
@@ -64,10 +69,10 @@ class QueueCommandTests(unittest.TestCase):
             patch.dict(os.environ, {}, clear=True),
         ):
             _post_drain_maintenance(
-                self.project_root, self.database, "batch-drained-42"
+                self.project_root, self.database, "batch-drained-42", "worker-1"
             )
 
-        recycle.assert_called_once_with("batch-drained-42")
+        recycle.assert_called_once_with("batch-drained-42", "worker-1")
 
     def test_post_drain_retention_is_once_per_worker_and_session(self) -> None:
         with (
@@ -81,7 +86,7 @@ class QueueCommandTests(unittest.TestCase):
             ),
         ):
             _post_drain_maintenance(
-                self.project_root, self.database, "batch-drained-42"
+                self.project_root, self.database, "batch-drained-42", "worker-1"
             )
 
         load_policy.assert_not_called()
@@ -100,10 +105,55 @@ class QueueCommandTests(unittest.TestCase):
             patch.dict(os.environ, {}, clear=True),
         ):
             _post_drain_maintenance(
-                self.project_root, self.database, "batch-drained-42"
+                self.project_root, self.database, "batch-drained-42", "worker-1"
             )
 
-        recycle.assert_called_once_with("batch-drained-42")
+        recycle.assert_called_once_with("batch-drained-42", "worker-1")
+
+    def test_worker_recycle_hands_memory_evidence_to_fresh_process(self) -> None:
+        with (
+            patch("fidb_poc.queue_cli._self_rss_bytes", return_value=734003200),
+            patch("fidb_poc.queue_cli._embedded_jvm_started", return_value=True),
+            patch("fidb_poc.queue_cli.os.execve") as execute,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            _recycle_worker_process("batch-drained-42", "worker-1")
+
+        environment = execute.call_args.args[2]
+        self.assertEqual(
+            environment[_RETENTION_RECYCLED_SESSION], "batch-drained-42"
+        )
+        self.assertEqual(environment[_RETENTION_RECYCLED_WORKER], "worker-1")
+        self.assertEqual(environment[_RETENTION_PRE_RECYCLE_RSS], "734003200")
+        self.assertEqual(environment[_RETENTION_PRE_RECYCLE_JVM], "true")
+
+    def test_fresh_worker_records_secondary_memory_audit(self) -> None:
+        environment = {
+            _RETENTION_RECYCLED_SESSION: "batch-drained-42",
+            _RETENTION_RECYCLED_WORKER: "worker-1",
+            _RETENTION_PRE_RECYCLE_RSS: "734003200",
+            _RETENTION_PRE_RECYCLE_JVM: "true",
+        }
+        with (
+            patch.dict(os.environ, environment, clear=True),
+            patch("fidb_poc.queue_cli._self_rss_bytes", return_value=67108864),
+            patch("fidb_poc.queue_cli._embedded_jvm_started", return_value=False),
+            patch(
+                "fidb_poc.retention.write_memory_cleanup_audit",
+                return_value={"state": "passed", "reclaimed_rss_bytes": 666894336},
+            ) as write_audit,
+        ):
+            _post_recycle_memory_audit(self.project_root, "worker-1")
+
+        write_audit.assert_called_once_with(
+            self.project_root,
+            worker_id="worker-1",
+            session_id="batch-drained-42",
+            before_rss_bytes=734003200,
+            after_rss_bytes=67108864,
+            before_jvm_started=True,
+            after_jvm_started=False,
+        )
 
     def test_terminal_maintenance_is_independent_of_claim_window(self) -> None:
         coordinator = type(
@@ -137,7 +187,7 @@ class QueueCommandTests(unittest.TestCase):
         self.assertTrue(handled)
         notify.assert_called_once()
         maintain.assert_called_once_with(
-            self.project_root, self.database, "batch-drained-42"
+            self.project_root, self.database, "batch-drained-42", "worker-1"
         )
 
     def test_terminal_maintenance_skips_status_after_notification(self) -> None:

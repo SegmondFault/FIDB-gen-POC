@@ -16,6 +16,7 @@ from fidb_poc.retention import (
     load_retention_policy,
     main,
     retention_status,
+    write_memory_cleanup_audit,
     write_retention_plan,
 )
 
@@ -288,6 +289,51 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(example["job_id"], job_id)
         self.assertNotIn("stage_evidence", example)
         self.assertNotIn("evidence_files", example)
+
+    def test_memory_cleanup_audits_are_aggregated_by_recycle_session(self) -> None:
+        first = write_memory_cleanup_audit(
+            self.root,
+            worker_id="worker-1",
+            session_id="batch-drained-42",
+            before_rss_bytes=2 * 1024**3,
+            after_rss_bytes=64 * 1024**2,
+            before_jvm_started=True,
+            after_jvm_started=False,
+        )
+        second = write_memory_cleanup_audit(
+            self.root,
+            worker_id="worker-2",
+            session_id="batch-drained-42",
+            before_rss_bytes=3 * 1024**3,
+            after_rss_bytes=96 * 1024**2,
+            before_jvm_started=True,
+            after_jvm_started=False,
+        )
+
+        status = retention_status(self.root)
+        memory = status["memory_cleanup"]["latest_session"]
+
+        self.assertEqual(first["state"], "passed")
+        self.assertEqual(second["state"], "passed")
+        self.assertEqual(memory["workers"], 2)
+        self.assertEqual(memory["passed"], 2)
+        self.assertEqual(memory["warnings"], 0)
+        self.assertEqual(memory["before_rss_bytes"], 5 * 1024**3)
+        self.assertEqual(memory["after_rss_bytes"], 160 * 1024**2)
+
+    def test_memory_cleanup_audit_warns_on_fresh_jvm_or_high_rss(self) -> None:
+        report = write_memory_cleanup_audit(
+            self.root,
+            worker_id="worker-1",
+            session_id="batch-drained-43",
+            before_rss_bytes=128 * 1024**2,
+            after_rss_bytes=700 * 1024**2,
+            before_jvm_started=False,
+            after_jvm_started=True,
+        )
+
+        self.assertEqual(report["state"], "warning")
+        self.assertEqual(len(report["reasons"]), 2)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ PLAN_SCHEMA = "fidb-retention-plan/v1"
 STATE_SCHEMA = "fidb-retention-state/v1"
 BUNDLE_SCHEMA = "fidb-failure-evidence/v1"
 RECEIPT_SCHEMA = "fidb-lane-import-receipt/v1"
+MEMORY_AUDIT_SCHEMA = "fidb-memory-cleanup-audit/v1"
 DEFAULT_POLICY = Path("retention/policy.toml")
 DEFAULT_LEDGER = Path("var/fidb-coordinator/ledger.sqlite3")
 _JOB_ID = re.compile(r"job-[0-9a-f]{64}\Z")
@@ -131,6 +132,7 @@ class RetentionPolicy:
     failure_bundles: Path
     plans: Path
     state: Path
+    memory_audits: Path
     lane_import_receipts: Path
     holds_path: Path
     preserve_until_lane_imported: bool
@@ -146,6 +148,9 @@ class RetentionPolicy:
     dry_run_first: bool
     maximum_estimated_seconds: int
     worker_action: str
+    memory_cleanup_enabled: bool
+    audit_after_recycle: bool
+    post_recycle_rss_warning_mib: int
     maximum_actions: int
     maximum_scan_files: int
     authority_sha256: str
@@ -161,6 +166,7 @@ class RetentionPolicy:
                 "failure_bundles": str(self.failure_bundles.relative_to(self.root)),
                 "plans": str(self.plans.relative_to(self.root)),
                 "state": str(self.state.relative_to(self.root)),
+                "memory_audits": str(self.memory_audits.relative_to(self.root)),
                 "lane_import_receipts": str(
                     self.lane_import_receipts.relative_to(self.root)
                 ),
@@ -185,6 +191,11 @@ class RetentionPolicy:
                 "maximum_estimated_seconds": self.maximum_estimated_seconds,
                 "worker_action": self.worker_action,
             },
+            "memory_cleanup": {
+                "enabled": self.memory_cleanup_enabled,
+                "audit_after_recycle": self.audit_after_recycle,
+                "post_recycle_rss_warning_mib": self.post_recycle_rss_warning_mib,
+            },
             "limits": {
                 "maximum_actions": self.maximum_actions,
                 "maximum_scan_files": self.maximum_scan_files,
@@ -208,6 +219,7 @@ def load_retention_policy(
             "success",
             "failure",
             "automation",
+            "memory_cleanup",
             "limits",
         },
         "retention policy",
@@ -218,10 +230,21 @@ def load_retention_policy(
     success = _table(document.get("success"), "retention success")
     failure = _table(document.get("failure"), "retention failure")
     automation = _table(document.get("automation"), "retention automation")
+    memory_cleanup = _table(
+        document.get("memory_cleanup"), "retention memory_cleanup"
+    )
     limits = _table(document.get("limits"), "retention limits")
     _only_keys(
         paths,
-        {"runs", "failure_bundles", "plans", "state", "lane_import_receipts", "holds"},
+        {
+            "runs",
+            "failure_bundles",
+            "plans",
+            "state",
+            "memory_audits",
+            "lane_import_receipts",
+            "holds",
+        },
         "retention paths",
     )
     _only_keys(
@@ -255,6 +278,11 @@ def load_retention_policy(
         },
         "retention automation",
     )
+    _only_keys(
+        memory_cleanup,
+        {"enabled", "audit_after_recycle", "post_recycle_rss_warning_mib"},
+        "retention memory_cleanup",
+    )
     _only_keys(limits, {"maximum_actions", "maximum_scan_files"}, "retention limits")
     trigger = _text(automation.get("trigger"), "retention automation trigger")
     mode = _text(automation.get("mode"), "retention automation mode")
@@ -283,6 +311,11 @@ def load_retention_policy(
         ),
         plans=_inside(root, _text(paths.get("plans"), "plans path"), "plans path"),
         state=_inside(root, _text(paths.get("state"), "state path"), "state path"),
+        memory_audits=_inside(
+            root,
+            _text(paths.get("memory_audits"), "memory audits path"),
+            "memory audits path",
+        ),
         lane_import_receipts=_inside(
             root,
             _text(paths.get("lane_import_receipts"), "lane receipts path"),
@@ -319,6 +352,17 @@ def load_retention_policy(
             "automation maximum_estimated_seconds",
         ),
         worker_action=worker_action,
+        memory_cleanup_enabled=_boolean(
+            memory_cleanup.get("enabled"), "memory_cleanup enabled"
+        ),
+        audit_after_recycle=_boolean(
+            memory_cleanup.get("audit_after_recycle"),
+            "memory_cleanup audit_after_recycle",
+        ),
+        post_recycle_rss_warning_mib=_positive(
+            memory_cleanup.get("post_recycle_rss_warning_mib"),
+            "memory_cleanup post_recycle_rss_warning_mib",
+        ),
         maximum_actions=_positive(
             limits.get("maximum_actions"), "limits maximum_actions"
         ),
@@ -1056,6 +1100,120 @@ def _atomic_json(path: Path, document: object) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def write_memory_cleanup_audit(
+    project_root: str | Path,
+    *,
+    worker_id: str,
+    session_id: str,
+    before_rss_bytes: int,
+    after_rss_bytes: int,
+    before_jvm_started: bool | None,
+    after_jvm_started: bool | None,
+    authority: str | Path = DEFAULT_POLICY,
+) -> dict[str, object]:
+    """Record the fresh-process check which follows a worker recycle."""
+
+    policy = load_retention_policy(project_root, authority)
+    worker = _text(worker_id, "memory audit worker_id")
+    session = _text(session_id, "memory audit session_id")
+    if before_rss_bytes < 0 or after_rss_bytes < 0:
+        raise ValueError("memory audit RSS values must be non-negative")
+    threshold = policy.post_recycle_rss_warning_mib * 1024 * 1024
+    reasons = []
+    if after_jvm_started is not False:
+        reasons.append("fresh worker JVM state could not be proven absent")
+    if after_rss_bytes > threshold:
+        reasons.append("fresh worker RSS exceeds the TOML warning threshold")
+    report = {
+        "schema_version": MEMORY_AUDIT_SCHEMA,
+        "state": "passed" if not reasons else "warning",
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "session_id": session,
+        "worker_id": worker,
+        "pid": os.getpid(),
+        "before": {
+            "rss_bytes": before_rss_bytes,
+            "embedded_jvm_started": before_jvm_started,
+        },
+        "after": {
+            "rss_bytes": after_rss_bytes,
+            "embedded_jvm_started": after_jvm_started,
+        },
+        "reclaimed_rss_bytes": max(0, before_rss_bytes - after_rss_bytes),
+        "post_recycle_rss_warning_bytes": threshold,
+        "reasons": reasons,
+    }
+    if not policy.memory_cleanup_enabled or not policy.audit_after_recycle:
+        return {**report, "state": "disabled"}
+    session_key = hashlib.sha256(session.encode("utf-8")).hexdigest()[:16]
+    worker_key = hashlib.sha256(worker.encode("utf-8")).hexdigest()[:16]
+    _atomic_json(policy.memory_audits / session_key / f"{worker_key}.json", report)
+    return report
+
+
+def _memory_cleanup_status(policy: RetentionPolicy) -> dict[str, object]:
+    result: dict[str, object] = {
+        "enabled": policy.memory_cleanup_enabled,
+        "audit_after_recycle": policy.audit_after_recycle,
+        "post_recycle_rss_warning_bytes": (
+            policy.post_recycle_rss_warning_mib * 1024 * 1024
+        ),
+        "latest_session": None,
+    }
+    if not policy.memory_audits.is_dir() or policy.memory_audits.is_symlink():
+        return result
+    session_dirs = [
+        path
+        for path in policy.memory_audits.iterdir()
+        if path.is_dir() and not path.is_symlink()
+    ]
+    if not session_dirs:
+        return result
+    latest = max(session_dirs, key=lambda path: path.stat().st_mtime_ns)
+    reports = []
+    unreadable = 0
+    for path in sorted(latest.glob("*.json"))[:64]:
+        if path.is_symlink() or not path.is_file():
+            unreadable += 1
+            continue
+        try:
+            report = _load_json(path, "memory cleanup audit")
+        except (OSError, ValueError):
+            unreadable += 1
+            continue
+        if report.get("schema_version") != MEMORY_AUDIT_SCHEMA:
+            unreadable += 1
+            continue
+        reports.append(report)
+    if not reports:
+        result["latest_session"] = {"unreadable_reports": unreadable}
+        return result
+    reports.sort(key=lambda item: str(item.get("worker_id", "")))
+
+    def audit_rss(item: Mapping[str, object], phase: str) -> int:
+        value = item.get(phase)
+        if not isinstance(value, dict):
+            return 0
+        rss = value.get("rss_bytes")
+        return rss if isinstance(rss, int) and not isinstance(rss, bool) else 0
+
+    result["latest_session"] = {
+        "session_id": reports[0].get("session_id"),
+        "recorded_at": max(str(item.get("recorded_at", "")) for item in reports),
+        "workers": len(reports),
+        "passed": sum(item.get("state") == "passed" for item in reports),
+        "warnings": sum(item.get("state") == "warning" for item in reports),
+        "unreadable_reports": unreadable,
+        "before_rss_bytes": sum(audit_rss(item, "before") for item in reports),
+        "after_rss_bytes": sum(audit_rss(item, "after") for item in reports),
+        "reclaimed_rss_bytes": sum(
+            int(item.get("reclaimed_rss_bytes", 0)) for item in reports
+        ),
+        "reports": reports[:10],
+    }
+    return result
+
+
 def write_retention_plan(plan: Mapping[str, object], project_root: str | Path) -> Path:
     root = Path(project_root).resolve()
     policy = load_retention_policy(root, str(plan["policy"]["authority_path"]))
@@ -1354,6 +1512,7 @@ def retention_status(
         "policy": policy.document(),
         "latest_plan": latest,
         "last_run": last_run,
+        "memory_cleanup": _memory_cleanup_status(policy),
     }
 
 
