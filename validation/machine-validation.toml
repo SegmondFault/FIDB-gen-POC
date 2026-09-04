@@ -67,7 +67,7 @@ input_strategy = "rebuild-from-reviewed-recipes"
 harness_mode = "whole-archive-link-map"
 execute_target_binaries = false
 truth_copy = "unstripped-with-link-map"
-query_copy = "stripped"
+query_copy = "debug-stripped-symbol-indexed"
 exact_inclusion_sanity = "bounded-canary-only"
 trigger = "after-complete-ten-library-cohort"
 

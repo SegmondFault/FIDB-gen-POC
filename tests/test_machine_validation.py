@@ -58,6 +58,10 @@ class MachineValidationTests(unittest.TestCase):
         self.assertEqual(len(manifest["work_unit"]), 222)
         self.assertEqual(manifest["summary"]["composite_programs"], 444)
         self.assertEqual(len(manifest["materialization_digest"]), 64)
+        self.assertEqual(
+            manifest["execution"]["query_copy"],
+            "debug-stripped-symbol-indexed",
+        )
         schedule = tomllib.loads(document["rendered_schedule"])
         self.assertEqual(schedule["state"], "scheduled-claim-blocked")
         self.assertTrue(schedule["trigger"][0]["automatic_scheduling"])

@@ -6,8 +6,8 @@ automatic_scheduling = true
 production_queue_mutation = false
 execute_target_binaries = false
 authority_path = "validation/machine-validation.toml"
-authority_sha256 = "acb44e70d919a00803760976bbc572b74a5e89c6626d53be5eff77f860c16817"
-materialization_digest = "054894dcbdec9a0ea07f5814692e0b1e119c37f86b74605ed809fed9df68fd3d"
+authority_sha256 = "a5dbce059c58d8f30d4bb6a70f2327d68fb9ad4862759b1c75811ecc2e062d2c"
+materialization_digest = "1e8beb58d24bc136d1c29a191c651cf9f648406755131d1969b15f7d5169f574"
 
 [summary]
 work_units = 222
@@ -24,7 +24,7 @@ fold_b = ["gmp@6.3.0", "lz4@1.10.0", "gettext@1.0", "sqlite@3.53.4", "pcre2@10.4
 input_strategy = "rebuild-from-reviewed-recipes"
 harness_mode = "whole-archive-link-map"
 truth_copy = "unstripped-with-link-map"
-query_copy = "stripped"
+query_copy = "debug-stripped-symbol-indexed"
 primary_projections = ["correct-fold-exact-identity-withheld", "opposite-fold", "complete-owner-labelled-candidate-db"]
 
 [[work_unit]]

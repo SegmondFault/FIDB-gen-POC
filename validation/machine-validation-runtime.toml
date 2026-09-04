@@ -1,0 +1,33 @@
+schema_version = "fidb-machine-validation-runtime/v1"
+validation_id = "c-top10-cohort-001"
+manifest = "plans/validation-materialized/c-top10-cohort-001/manifest.toml"
+schedule = "plans/validation-schedule.toml"
+output_root = "artifacts/validation-runs/c-top10-cohort-001"
+ledger = "var/fidb-coordinator/ledger.sqlite3"
+source_archive = "artifacts/width-runs/c-width-v1/full-20260902T120606Z-0da1396951e5/source-cache/openssl-3.5.8.tar.gz"
+openssl_width_report = "artifacts/width-runs/c-width-v1/full-20260902T120606Z-0da1396951e5/width-run.json"
+ghidra_headless = "/opt/ghidra/support/analyzeHeadless"
+
+[execution]
+workers = 4
+build_jobs_per_cell = 4
+jvm_initial_heap_mib = 256
+jvm_max_heap_mib = 6144
+jvm_active_processors = 4
+minimum_distinct_hashes = 5
+max_failure_rows = 20000
+checkpoint_every_units = 1
+retain_ghidra_projects_on_failure = true
+retain_ghidra_projects_on_success = false
+
+[canary]
+positions = [1, 145, 175]
+folds_by_position = ["1:B", "145:B", "175:A", "175:B"]
+minimum_distinct_hashes = 1
+require_formats = ["ELF", "PE/COFF"]
+
+[safety]
+execute_target_binaries = false
+require_production_queue_drained = true
+minimum_free_disk_gib = 100
+minimum_available_memory_gib = 24

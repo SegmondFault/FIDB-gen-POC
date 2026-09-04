@@ -234,18 +234,31 @@ def _machine_validation_main(argv: list[str]) -> int:
         ),
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("status", "reconcile", "materialize"):
+    for command in ("status", "reconcile", "materialize", "preflight", "start", "run", "_worker"):
         child = commands.add_parser(command)
         child.add_argument("--project-root", type=Path, default=Path.cwd())
-        child.add_argument(
-            "--authority",
-            type=Path,
-            default=Path("validation/machine-validation.toml"),
-        )
+        if command in {"status", "reconcile", "materialize"}:
+            child.add_argument(
+                "--authority",
+                type=Path,
+                default=Path("validation/machine-validation.toml"),
+            )
+        else:
+            child.add_argument(
+                "--runtime",
+                type=Path,
+                default=Path("validation/machine-validation-runtime.toml"),
+            )
         if command == "materialize":
             mode = child.add_mutually_exclusive_group()
             mode.add_argument("--write", action="store_true")
             mode.add_argument("--check", action="store_true")
+        if command in {"start", "run", "_worker"}:
+            child.add_argument("--mode", choices=("canary", "full"), required=True)
+        if command in {"run", "_worker"}:
+            child.add_argument("--run-id", required=True)
+        if command == "_worker":
+            child.add_argument("--positions", required=True)
     arguments = parser.parse_args(argv)
     try:
         from .machine_validation import (
@@ -255,11 +268,39 @@ def _machine_validation_main(argv: list[str]) -> int:
             reconcile_machine_validation,
             write_validation_batch,
         )
+        from .machine_validation_runner import (
+            _worker,
+            preflight,
+            run_validation,
+            runtime_status,
+            start_validation,
+        )
+
+        if arguments.command == "preflight":
+            document = preflight(arguments.project_root, arguments.runtime)
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0 if document["state"] == "ready" else 1
+        if arguments.command == "start":
+            document = start_validation(arguments.project_root, arguments.mode, arguments.runtime)
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
+        if arguments.command == "run":
+            document = run_validation(
+                arguments.project_root, arguments.mode, arguments.runtime, arguments.run_id
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0 if document["state"] == "measured-complete" else 1
+        if arguments.command == "_worker":
+            positions = [int(value) for value in arguments.positions.split(",") if value]
+            return _worker(
+                arguments.project_root, arguments.runtime, arguments.run_id, positions, arguments.mode
+            )
 
         if arguments.command == "status":
             document = compile_machine_validation(
                 arguments.project_root, arguments.authority
             )
+            document["run"] = runtime_status(arguments.project_root)
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "reconcile":
