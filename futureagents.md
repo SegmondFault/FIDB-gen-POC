@@ -2,7 +2,8 @@
 
 This repository controls expensive, evidence-producing work on the Linux host
 `reference-host`. Treat TOML as authority, SQLite as the durable coordinator ledger,
-and `artifacts/runs/` as immutable evidence. A green unit test or resolution
+and `artifacts/runs/` as evidence governed by the explicit retention boundary.
+A green unit test or resolution
 preflight is necessary, but a real end-to-end canary is the execution boundary.
 
 ## Authority chain
@@ -149,3 +150,27 @@ uv run python -m unittest discover -s tests
 Report the commit IDs, exact queue counts, schedule and timezone, worker-service
 count, preflight totals, canary scope/result, and any retained failed generation.
 Do not describe a queue as ready merely because its TOML parses.
+
+## Post-drain retention
+
+Read `RETENTION.md` before changing attempt cleanup. The authority is
+`retention/policy.toml`; holds are reviewed in `retention/holds.toml`. Never add
+an ad-hoc `rm` to a worker or nightly script.
+
+The order is fixed: terminal queue, content-addressed dry-run, bounded apply if
+eligible, then one worker recycle per drain-session ID. A deferred apply must
+not defer worker recycling: stale Ghidra JVM state was observed retaining about
+38 GiB across 20 idle workers. Recycling releases it without host-wide cache or
+swap manipulation.
+
+Successful attempt scratch is ineligible until the queue-to-lane importer has
+emitted a valid relationship-complete receipt. The importer is not implemented,
+so current successful attempt directories remain whole. Failed retries may be
+reduced only through a verified evidence bundle; different failure fingerprints,
+holds, symlinks and uncertain ownership remain quarantined.
+
+The first production dry-run selected 973 actions and 257,415,636,119 apparent
+bytes but estimated 1,041.553 seconds, above the 600-second automatic ceiling.
+It was therefore not applied. Do not raise that ceiling merely to clear the
+backlog; review the exact plan and perform the initial collection manually if
+the evidence set is acceptable.

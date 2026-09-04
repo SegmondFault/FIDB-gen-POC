@@ -69,6 +69,15 @@ digests in import provenance and failing closed if they cannot be verified.
 Until that importer exists, complete final attempt directories are durable
 evidence and must not be pruned merely to `.fidb`, `.fidbf` and a seal.
 
+After a relationship-complete import, the importer may emit
+`var/fidb-lanes/import-receipts/job-<sha256>.json` with schema
+`fidb-lane-import-receipt/v1`. The receipt must bind the exact job ID, published
+attempt-root path and cell-seal SHA-256, name the immutable lane generation, and
+set `relationship_complete` to true. The retention collector independently
+validates that binding before considering only the successful scratch paths
+listed in `retention/policy.toml`. A receipt is not permission to delete the
+packed FIDB, raw FIDBF, seal or imported lane generation.
+
 ## Preview and build a raw generation
 
 All examples run from the repository root. Registry inspection is read-only:

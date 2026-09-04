@@ -1,0 +1,90 @@
+# Retention and garbage collection
+
+Queue retention is controlled by `retention/policy.toml`; explicit preservation
+holds live in `retention/holds.toml`. SQLite remains the runtime ledger. A
+collector plan is a content-addressed statement of what was verified, what is
+protected, what is quarantined, and which exact directories may be removed.
+
+## Safety boundary
+
+The collector is always dry-run-first. A plan binds the policy digest, ledger
+generation and attempt history, action list, byte counts, preservation set and
+quarantine set. Apply requires the exact plan digest, recomputes the plan, and
+fails if the ledger, files or policy changed. It also refuses to apply while an
+attempt is leased or running. Symlinks and non-regular tree members are
+quarantined rather than followed.
+
+Successful final attempts remain whole until the future queue-to-lane importer
+emits a relationship-complete receipt bound to the job, attempt root and cell
+seal SHA-256. No such importer exists yet, so the current policy removes no
+successful attempt scratch. Even after a valid receipt, only the policy's
+attempt-relative `prune_after_receipt` paths are candidates; the FIDB, FIDBF,
+seal and lane evidence remain.
+
+For a failed job, the latest attempt becomes the representative evidence
+bundle. Earlier retries are included only when their normalized failure
+fingerprint is identical. A different fingerprint is quarantined and kept
+whole. The bundle is written and its selected files are re-hashed before source
+attempt directories are removed. Operator holds always win.
+
+## Commands
+
+All commands run from the project root. Status is read-only:
+
+```sh
+uv run fidb-poc retention status --project-root .
+```
+
+Create and inspect a durable dry-run:
+
+```sh
+uv run fidb-poc retention plan --project-root .
+```
+
+Apply only the exact current digest printed by the plan:
+
+```sh
+uv run fidb-poc retention apply --project-root . \
+  --plan-digest PLAN_SHA256
+```
+
+`fidb-poc retention auto` follows `[automation]` in the policy. Workers call
+the same operation after a terminal queue. The default automatic ceiling is
+600 seconds. Plans above it remain available for manual review and are not
+applied automatically.
+
+The control panel exposes the same status and guarded operations under
+**Operations → Retention**. The Matrix shows retention as the terminal campaign
+stage.
+
+## Worker memory
+
+Queue completion and process completion are different events. Long-lived
+workers may retain imported Ghidra classes and JVM heap after their last job.
+After post-drain retention has completed or safely deferred, each worker
+replaces itself once for that drain-session ID. This releases JVM memory while
+leaving a low-memory worker ready for a later queue. The session marker prevents
+an idle restart loop. Garbage collection never runs `drop_caches`, `swapoff` or
+another host-wide memory command.
+
+## First production dry-run
+
+On 2026-09-04 the initial read-only scan took 82.39 seconds. It verified 1,722
+successful attempts and selected 973 failure-bundle actions spanning 2,239
+attempt directories. The selected trees contained 257,415,636,119 apparent
+bytes. The conservative initial apply estimate was 1,041.553 seconds, so the
+600-second automatic ceiling correctly deferred this accumulated backlog. No
+file was removed. Incremental nightly plans are expected to be smaller, but
+their measured scan/apply records—not that expectation—control automation.
+
+## Rollback
+
+Set `enabled = false` and `worker_action = "none"` in
+`retention/policy.toml`, then restart workers, to disable post-drain behavior.
+Revert the retention commits to remove the feature without changing the queue
+ledger. Plans and bundles are additive ignored runtime evidence and can remain.
+
+An applied deletion cannot reconstruct disposable scratch. This is why success
+scratch is gated by a relationship-complete lane receipt and failure deletion
+is gated by a verified concise bundle. Preserve filesystem backups when whole
+failed build trees may later be required for research.

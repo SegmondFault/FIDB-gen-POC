@@ -688,6 +688,15 @@ Every real run still replaces the worker-managed extracted sources, builds, logs
 Ghidra state, current FIDBs and manifest. Paths outside those managed locations
 are not part of the cleanup.
 
+Durable queue attempts use the separate post-run retention system documented in
+[`RETENTION.md`](RETENTION.md). Its TOML policy always produces a verified,
+content-addressed dry-run before deletion. Successful attempts remain whole
+until a relationship-complete lane-import receipt exists; failed attempts are
+reduced only after concise evidence is bundled, with unlike retries and holds
+preserved. A terminal queue also recycles long-lived Ghidra workers once so JVM
+heap is returned to the OS. The control panel exposes planning, exact apply,
+protected evidence and quarantine under **Operations → Retention**.
+
 These directories are intentionally ignored and are not source deliverables. A
 source-only handoff must omit `work/`, `artifacts/libs/`, `.venv/`, `.idea/`,
 Python caches and notebook execution outputs. Prefer producing a handoff from a
