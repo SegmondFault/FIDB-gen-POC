@@ -20,6 +20,7 @@ from fidb_poc.pipeline import (
     find_pyghidra,
     ghidra_environment,
     _safe_member_path,
+    _validate_objects,
     execute,
     extract_source,
     java_identity,
@@ -77,6 +78,24 @@ class PipelineTests(unittest.TestCase):
             _missing_file_markers(description, ("ELF 64-bit LSB",)),
             ["ELF 64-bit LSB"],
         )
+
+    def test_coff_object_validation_uses_header_not_file_heuristics(self):
+        route = SimpleNamespace(
+            id="windows-x86-64-test",
+            binary_format="PE/COFF",
+            architecture="x86_64",
+            object_file_markers=("x86-64 COFF object file",),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            object_path = Path(temporary) / "ambiguous.o"
+            header = bytearray(20)
+            header[0:2] = (0x8664).to_bytes(2, "little")
+            header[2:4] = (10).to_bytes(2, "little")
+            object_path.write_bytes(header + b"RenderWare-like payload")
+            with patch("fidb_poc.pipeline.subprocess.run") as file_command:
+                _validate_objects([object_path], route, {})
+
+        file_command.assert_not_called()
 
     def test_xcrun_route_hashes_the_resolved_sdk_tool(self):
         with tempfile.TemporaryDirectory() as temporary:

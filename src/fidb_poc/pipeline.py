@@ -739,6 +739,26 @@ def _validate_objects(
     objects: list[Path], route: Route, environment: dict[str, str]
 ) -> None:
     for object_path in objects:
+        if route.binary_format == "PE/COFF":
+            data = object_path.read_bytes()[:20]
+            expected_machine = {"x86_64": 0x8664}.get(route.architecture)
+            machine = int.from_bytes(data[:2], "little") if len(data) >= 2 else -1
+            sections = int.from_bytes(data[2:4], "little") if len(data) >= 4 else 0
+            optional_header = (
+                int.from_bytes(data[16:18], "little") if len(data) >= 18 else -1
+            )
+            if (
+                expected_machine is None
+                or machine != expected_machine
+                or sections == 0
+                or optional_header != 0
+            ):
+                raise PipelineError(
+                    f"{object_path.name} does not match route {route.id}: "
+                    f"invalid COFF header (machine=0x{machine & 0xffff:04x}, "
+                    f"sections={sections}, optional_header={optional_header})"
+                )
+            continue
         result = subprocess.run(
             ["file", "--brief", str(object_path)],
             env=environment,
