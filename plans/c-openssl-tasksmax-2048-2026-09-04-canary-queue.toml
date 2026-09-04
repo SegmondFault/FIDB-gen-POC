@@ -1,0 +1,40 @@
+# One-cell qualification of a bounded service task ceiling. Keep disarmed in
+# Git; arming and execution are separate auditable operational transitions.
+schema_version = "fidb-queue/v1"
+name = "c-openssl-tasksmax-2048-2026-09-04-canary"
+
+[queue]
+armed = false
+max_workers = 1
+batch_order = ["c-openssl-tasksmax-2048-2026-09-04-canary"]
+poll_seconds = 1
+lease_seconds = 3600
+max_attempts = 1
+retry_backoff_seconds = 0
+retry_backoff_max_seconds = 0
+authority_failure_threshold = 1
+
+[schedule]
+enabled = false
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_claiming = "05:30"
+finish_started_batch = true
+
+[resources]
+min_available_memory_gib = 12
+min_free_disk_gib = 200
+max_load_per_cpu = 1.0
+max_temperature_c = 90
+
+[notifications]
+events = ["job-failed", "queue-drained", "resource-blocked"]
+outbox = "var/fidb-notifications/canary-events.jsonl"
+timeout_seconds = 10
+
+[[batch]]
+id = "c-openssl-tasksmax-2048-2026-09-04-canary"
+name = "OpenSSL Android ARM64 O0 · TasksMax 2048 qualification"
+plan = "plans/materialized/canaries/c-openssl-tasksmax-2048-2026-09-04.toml"
+executions = 1

@@ -1,0 +1,21 @@
+schema_version = "fidb-plan/v1"
+name = "c-openssl-tasksmax-2048-2026-09-04"
+
+[policy]
+max_cells = 1
+priority = "high"
+
+[coverage]
+factor_variants = []
+
+[queue]
+strategy = "recipe-then-variant"
+recipe_order = ["openssl@3.5.8"]
+
+[[matrix]]
+id = "openssl-android-arm64-o0-native-thread-bound"
+kind = "width-native"
+width_batch = "batches/c-openssl-android-gap.toml"
+recipes = ["openssl@3.5.8"]
+routes = ["android-arm64-ndk-r27d-clang-api21"]
+treatments = ["optimization_o0"]
