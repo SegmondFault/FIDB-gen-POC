@@ -12,6 +12,7 @@ from unittest.mock import patch
 from fidb_poc.pipeline import (
     BuildRecord,
     PipelineError,
+    _build_workspace_name,
     _populate_group,
     _missing_file_markers,
     _validate_population_report,
@@ -37,6 +38,33 @@ from fidb_poc.config import Library, load_configuration, select_configuration
 
 
 class PipelineTests(unittest.TestCase):
+    def test_windows_build_workspace_is_short_and_identity_stable(self):
+        configuration = load_configuration(
+            Path(__file__).resolve().parents[1] / "worker.toml",
+            request_override=("zlib",),
+        )
+        base_route = next(
+            item
+            for item in configuration.routes
+            if item.id == "linux-x86_64-gnu-gcc"
+        )
+        windows_route = SimpleNamespace(
+            **{
+                **base_route.__dict__,
+                "id": "windows-x86-64-llvm-mingw-clang-20",
+                "target_os": "windows",
+            }
+        )
+        treatment = configuration.treatments[0]
+        library = configuration.libraries[0]
+
+        first = _build_workspace_name(library, windows_route, treatment)
+        second = _build_workspace_name(library, windows_route, treatment)
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.startswith("zlib-"))
+        self.assertLessEqual(len(first), 21)
+
     def test_native_library_can_reuse_content_addressed_source_cache(self):
         payload = b"cached source archive"
         digest = hashlib.sha256(payload).hexdigest()

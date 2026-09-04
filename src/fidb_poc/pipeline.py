@@ -683,6 +683,17 @@ def _base_record(
     )
 
 
+def _build_workspace_name(library: Library, route: Route, treatment: Treatment) -> str:
+    cell_id = f"{library.identifier}-{route.id}-{treatment.id}"
+    if route.target_os != "windows":
+        return cell_id
+    # Autoconf probes for MinGW binaries may run through Wine/binfmt. Wine's
+    # working-directory bridge still has a much smaller practical path budget
+    # than Linux; long treatment names previously made probe results vary.
+    digest = hashlib.sha256(cell_id.encode("utf-8")).hexdigest()[:16]
+    return f"{library.name}-{digest}"
+
+
 def _extract_archive_objects(
     archive: Path,
     destination: Path,
@@ -860,7 +871,7 @@ def build_library(
         )
         return record, []
     cell_id = f"{library.identifier}-{route.id}-{treatment.id}"
-    build_root = work / "builds" / cell_id
+    build_root = work / "builds" / _build_workspace_name(library, route, treatment)
     _remove_generated_path(build_root)
     cell_source = copy_pristine_source(source_root, build_root / "source")
     objects_root = build_root / "objects"
