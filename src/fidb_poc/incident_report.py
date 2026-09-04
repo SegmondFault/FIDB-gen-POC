@@ -210,6 +210,11 @@ def _failure_rules(errors: list[str], classes: list[str]) -> list[dict[str, obje
             "Verify the content-addressed source cache and checksum pin; do not make every attempt fetch upstream.",
         ),
         (
+            "sqlite-write-contention",
+            ("database is locked", "database table is locked", "sqlite_busy"),
+            "Preserve the failed attempt, inspect concurrent coordinator writes and heartbeat timeout evidence, and do not requeue while other leases are live.",
+        ),
+        (
             "archive-boundary",
             ("symlink", "archive", "tarfile", "outside extraction"),
             "Inspect archive extraction and retained-object handling; accept only safe relative links and pinned archives.",
@@ -446,9 +451,15 @@ def compile_incident_report(
             }
         )
 
-    errors = [str(row["error"] or "") for row in failed_rows]
-    errors.extend(str(row["error"] or "") for row in recent_attempts)
-    errors.extend(str(row["error"] or "") for row in recent_stages)
+    current_job_ids = {str(row["job_id"]) for row in failed_rows}
+    current_errors = [str(row["error"] or "") for row in failed_rows]
+    current_errors.extend(
+        str(row["error"] or "")
+        for row in recent_stages
+        if str(row["job_id"]) in current_job_ids
+    )
+    historical_errors = [str(row["error"] or "") for row in recent_attempts]
+    historical_errors.extend(str(row["error"] or "") for row in recent_stages)
     class_names = list(classes)
     unit = inspect_worker_unit(root)
     report: dict[str, object] = {
@@ -501,7 +512,10 @@ def compile_incident_report(
             "recent_stage_failures": [dict(row) for row in recent_stages],
         },
         "recent_incident_events": [dict(row) for row in incident_events],
-        "matched_diagnostic_rules": _failure_rules(errors, class_names),
+        "diagnostic_rules": {
+            "current": _failure_rules(current_errors, class_names),
+            "recent_history": _failure_rules(historical_errors, class_names),
+        },
         "worker_unit": unit,
         "recovery": {
             "mutation_performed": False,

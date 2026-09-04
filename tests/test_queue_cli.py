@@ -520,7 +520,7 @@ finish_started_batch = true
         self.assertEqual(
             document["worker_unit"]["repository_limits"]["TasksMax"], "2048"
         )
-        rule_ids = {row["id"] for row in document["matched_diagnostic_rules"]}
+        rule_ids = {row["id"] for row in document["diagnostic_rules"]["current"]}
         self.assertIn("native-thread-task-ceiling", rule_ids)
         candidate = document["recovery"]["candidates"][0]
         self.assertTrue(candidate["ready"])

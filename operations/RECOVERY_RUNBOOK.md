@@ -91,6 +91,7 @@ authority changed.
 |---|---|---|
 | `unknown route`, queued identity mismatch, or `authority-resolution:*` | Canonical route/toolchain authority | Full `resolve-preflight`; compare queued material and qualification digests, executable paths, target, Ghidra language and compiler spec |
 | Download, connection or checksum failure | Source acquisition | Confirm the content-addressed source exists under `var/fidb-sources/downloads/` and matches its pin; do not add per-cell network fetching |
+| `database is locked`, `SQLITE_BUSY` or a lease-heartbeat lock failure | SQLite write contention | Preserve the attempt; inspect concurrent coordinator writers and timeout evidence; never requeue while other leases remain live |
 | Configure/CMake/Make failure isolated to one project | Fixed recipe adapter | Reproduce with the exact source, route and treatment; patch `adapters.py`, add focused tests and canary oldest compiler/target families |
 | Unsafe link or extraction-path rejection | Archive boundary | Preserve only safe relative archive links; never weaken containment for an upstream layout |
 | ELF/COFF/Mach-O or architecture mismatch | Artifact validation | Read binary headers; tool output strings are advisory and must not replace exact header validation |
