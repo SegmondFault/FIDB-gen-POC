@@ -31,6 +31,8 @@ from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_prof
 RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
+REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v2"
+QUERY_COPY_POLICY = "debug-stripped-symbol-indexed"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 
 
@@ -377,7 +379,7 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
             row = connection.execute("SELECT value FROM metadata WHERE key='input_digest'").fetchone()
             schema = connection.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
             count = connection.execute("SELECT COUNT(*) FROM reference_signature").fetchone()[0]
-            if row and row[0] == input_digest and schema and schema[0] == "fidb-machine-validation-reference-index/v2" and count > 0:
+            if row and row[0] == input_digest and schema and schema[0] == REFERENCE_INDEX_SCHEMA and count > 0:
                 return path
         except sqlite3.Error:
             pass
@@ -420,7 +422,7 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
                 inserted += len(batch)
             connection.commit()
         connection.execute("CREATE INDEX reference_signature_match ON reference_signature(target_os,binary_format,language,full_hash,specific_hash,additional_size,code_size)")
-        connection.execute("INSERT INTO metadata VALUES ('schema_version','fidb-machine-validation-reference-index/v2')")
+        connection.execute("INSERT INTO metadata VALUES ('schema_version',?)", (REFERENCE_INDEX_SCHEMA,))
         connection.execute("INSERT INTO metadata VALUES ('input_digest',?)", (input_digest,))
         connection.execute("INSERT INTO metadata VALUES ('rows',?)", (str(inserted),))
         connection.commit()
@@ -642,7 +644,15 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
     return 0
 
 
-def _aggregate(run_root: Path, validation_id: str, mode: str, expected_positions: set[int], minimum_hashes: int, max_failure_rows: int) -> dict[str, object]:
+def _aggregate(
+    run_root: Path,
+    validation_id: str,
+    mode: str,
+    expected_positions: set[int],
+    minimum_hashes: int,
+    max_failure_rows: int,
+    runtime: Mapping[str, object],
+) -> dict[str, object]:
     results = []
     for path in sorted((run_root / "units").glob("*/result.json")):
         row = json.loads(path.read_text(encoding="utf-8"))
@@ -668,6 +678,10 @@ def _aggregate(run_root: Path, validation_id: str, mode: str, expected_positions
         "schema_version": "fidb-machine-validation-canary/v1" if mode == "canary" else "fidb-machine-validation-report/v1",
         "validation_id": validation_id, "state": "measured-complete" if complete else "failed",
         "mode": mode, "finished_at": _now(),
+        "runtime_authority": runtime["authority_path"],
+        "runtime_authority_sha256": runtime["authority_sha256"],
+        "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+        "query_copy_policy": QUERY_COPY_POLICY,
         "confusion_matrix": {"unit": "owner-labelled-candidate-decision", **matrix},
         "failure_summary": {
             "collisions": sum(row["failure_type"] == "collision" for row in failures),
@@ -682,6 +696,55 @@ def _aggregate(run_root: Path, validation_id: str, mode: str, expected_positions
         },
     }
     return report
+
+
+def canary_gate_status(
+    project_root: str | Path,
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+) -> dict[str, object]:
+    """Return the latest canary compatible with the current runtime contract."""
+
+    root = Path(project_root).resolve()
+    runtime = load_runtime(root, runtime_path)
+    output_root = _inside(root, str(runtime["output_root"]), "validation output")
+    reports = sorted(
+        output_root.glob("*-canary/canary-report.json"),
+        key=lambda path: path.stat().st_mtime_ns,
+        reverse=True,
+    )
+    latest = None
+    for path in reports:
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if latest is None:
+            latest = {
+                "run_id": path.parent.name,
+                "report_path": str(path.relative_to(root)),
+                "state": document.get("state", "invalid"),
+            }
+        if (
+            document.get("state") == "measured-complete"
+            and document.get("runtime_authority_sha256")
+            == runtime["authority_sha256"]
+            and document.get("reference_index_schema") == REFERENCE_INDEX_SCHEMA
+            and document.get("query_copy_policy") == QUERY_COPY_POLICY
+        ):
+            return {
+                "ready": True,
+                "state": "passed",
+                "run_id": path.parent.name,
+                "report_path": str(path.relative_to(root)),
+                "runtime_authority_sha256": runtime["authority_sha256"],
+            }
+    return {
+        "ready": False,
+        "state": "not-run" if latest is None else "stale-or-failed",
+        "run_id": None if latest is None else latest["run_id"],
+        "report_path": None if latest is None else latest["report_path"],
+        "runtime_authority_sha256": runtime["authority_sha256"],
+    }
 
 
 def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME, run_id: str | None = None) -> dict[str, object]:
@@ -725,9 +788,12 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
     try:
         index = build_reference_index(root, evidence, output_root)
         if mode == "full":
-            canaries = sorted(output_root.glob("*-canary/canary-report.json"))
-            if not canaries or json.loads(canaries[-1].read_text(encoding="utf-8")).get("state") != "measured-complete":
-                raise ValueError("full machine validation requires a completed canary")
+            gate = canary_gate_status(root, runtime_path)
+            if not gate["ready"]:
+                raise ValueError(
+                    "full machine validation requires a completed canary for the "
+                    "current runtime and reference-index contract"
+                )
         pending = sorted(positions)
         worker_count = min(int(runtime["execution"]["workers"]), len(pending))
         shards = [pending[index::worker_count] for index in range(worker_count)]
@@ -756,7 +822,15 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             })
             time.sleep(5)
         minimum = int(runtime["canary" if mode == "canary" else "execution"]["minimum_distinct_hashes"])
-        report = _aggregate(run_root, str(runtime["validation_id"]), mode, positions, minimum, int(runtime["execution"]["max_failure_rows"]))
+        report = _aggregate(
+            run_root,
+            str(runtime["validation_id"]),
+            mode,
+            positions,
+            minimum,
+            int(runtime["execution"]["max_failure_rows"]),
+            runtime,
+        )
         report_path = run_root / ("canary-report.json" if mode == "canary" else "report.json")
         _atomic_json(report_path, report)
         _atomic_json(status_path, {
@@ -795,6 +869,8 @@ def runtime_status(project_root: str | Path, runtime_path: str | Path = DEFAULT_
 
 
 def start_validation(project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
+    if mode not in {"canary", "full"}:
+        raise ValueError("machine-validation mode must be canary or full")
     root = Path(project_root).resolve()
     pre = preflight(root, runtime_path)
     if pre["state"] != "ready":
@@ -802,11 +878,39 @@ def start_validation(project_root: str | Path, mode: str, runtime_path: str | Pa
     current = runtime_status(root, runtime_path)
     if current.get("state") in {"preparing-index", "running", "queued"}:
         raise ValueError("machine validation is already running")
+    if mode == "full" and not canary_gate_status(root, runtime_path)["ready"]:
+        raise ValueError(
+            "full machine validation requires a completed canary for the current "
+            "runtime and reference-index contract"
+        )
     run_id = f'{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}-{mode}'
     runtime = load_runtime(root, runtime_path)
     run_root = _run_root(root, runtime, run_id)
     run_root.mkdir(parents=True, exist_ok=True)
     log_path = run_root / "run.log"
+    status_path = run_root / "status.json"
+    output_root = _inside(root, str(runtime["output_root"]), "validation output")
+    output_root.mkdir(parents=True, exist_ok=True)
+    _atomic_json(
+        status_path,
+        {
+            "schema_version": RUN_STATUS_SCHEMA,
+            "validation_id": runtime["validation_id"],
+            "run_id": run_id,
+            "mode": mode,
+            "state": "queued",
+            "pid": None,
+            "started_at": _now(),
+            "finished_at": None,
+            "expected_work_units": 0,
+            "complete_work_units": 0,
+            "failed_work_units": 0,
+        },
+    )
+    _atomic_json(
+        output_root / "current.json",
+        {"run_id": run_id, "path": str(status_path.relative_to(root))},
+    )
     with log_path.open("ab", buffering=0) as log:
         process = subprocess.Popen(
             [sys.executable, "-m", "fidb_poc.cli", "machine-validation", "run",
@@ -814,4 +918,7 @@ def start_validation(project_root: str | Path, mode: str, runtime_path: str | Pa
             cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True, close_fds=True,
         )
+    queued = json.loads(status_path.read_text(encoding="utf-8"))
+    queued["pid"] = process.pid
+    _atomic_json(status_path, queued)
     return {"state": "queued", "run_id": run_id, "mode": mode, "pid": process.pid, "log_path": str(log_path.relative_to(root))}

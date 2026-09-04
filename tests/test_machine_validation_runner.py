@@ -3,8 +3,15 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from fidb_poc.machine_validation_runner import _query_index, load_runtime
+from fidb_poc.machine_validation_runner import (
+    QUERY_COPY_POLICY,
+    REFERENCE_INDEX_SCHEMA,
+    _query_index,
+    canary_gate_status,
+    load_runtime,
+)
 
 
 class MachineValidationRunnerTests(unittest.TestCase):
@@ -78,6 +85,53 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 index, query, "r1", "t1", "android", "ELF", True
             )
             self.assertEqual(wrong_platform, {})
+
+    def test_canary_gate_rejects_stale_runtime_and_accepts_exact_contract(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / "runs"
+            stale = output / "20260904T100000Z-canary" / "canary-report.json"
+            stale.parent.mkdir(parents=True)
+            stale.write_text(
+                json.dumps(
+                    {
+                        "state": "measured-complete",
+                        "runtime_authority_sha256": "old",
+                        "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+                        "query_copy_policy": QUERY_COPY_POLICY,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runtime = {
+                "output_root": "runs",
+                "authority_sha256": "current",
+            }
+            with patch(
+                "fidb_poc.machine_validation_runner.load_runtime",
+                return_value=runtime,
+            ):
+                rejected = canary_gate_status(root)
+                self.assertFalse(rejected["ready"])
+                self.assertEqual(rejected["state"], "stale-or-failed")
+
+                current = output / "20260904T110000Z-canary" / "canary-report.json"
+                current.parent.mkdir(parents=True)
+                current.write_text(
+                    json.dumps(
+                        {
+                            "state": "measured-complete",
+                            "runtime_authority_sha256": "current",
+                            "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+                            "query_copy_policy": QUERY_COPY_POLICY,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                accepted = canary_gate_status(root)
+
+            self.assertTrue(accepted["ready"])
+            self.assertEqual(accepted["run_id"], current.parent.name)
 
 
 if __name__ == "__main__":
