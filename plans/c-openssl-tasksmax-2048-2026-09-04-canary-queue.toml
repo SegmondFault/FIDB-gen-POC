@@ -4,7 +4,7 @@ schema_version = "fidb-queue/v1"
 name = "c-openssl-tasksmax-2048-2026-09-04-canary"
 
 [queue]
-armed = true
+armed = false
 max_workers = 1
 batch_order = ["c-openssl-tasksmax-2048-2026-09-04-canary"]
 poll_seconds = 1
