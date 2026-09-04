@@ -239,6 +239,82 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("--host=arm-linux-androideabi", commands[0])
         self.assertEqual(environment["ANDROID_NDK_ROOT"], str(ndk_root))
 
+    def test_freetype_adapter_disables_unpinned_optional_dependencies(self):
+        commands = build_commands(
+            "freetype-autoconf", route=route(), compiler_flags=("-Os",), jobs=6
+        )
+
+        self.assertIn("--with-zlib=no", commands[0])
+        self.assertIn("--with-harfbuzz=no", commands[0])
+        self.assertEqual(commands[1], ("make", "-j6", "all"))
+
+    def test_libtiff_adapter_disables_external_codec_dependencies(self):
+        commands = build_commands(
+            "libtiff-autoconf", route=route(), compiler_flags=("-O2",), jobs=5
+        )
+
+        self.assertIn("--disable-zlib", commands[0])
+        self.assertIn("--disable-jpeg", commands[0])
+        self.assertIn("--disable-zstd", commands[0])
+        self.assertEqual(
+            commands[1], ("make", "-j5", "-C", "libtiff", "libtiff.la")
+        )
+
+    def test_harfbuzz_cmake_adapter_pins_compilers_and_library_targets(self):
+        commands = build_commands(
+            "harfbuzz-cmake",
+            route=route(),
+            compiler_flags=("-O0", "-fPIC"),
+            jobs=8,
+        )
+        environment = build_environment(
+            "harfbuzz-cmake", route=route(), compiler_flags=("-O0", "-fPIC")
+        )
+
+        self.assertIn("-DCMAKE_SYSTEM_NAME=Linux", commands[0])
+        self.assertIn("-DCMAKE_C_COMPILER=/usr/bin/gcc", commands[0])
+        self.assertIn("-DCMAKE_CXX_COMPILER=/usr/bin/g++", commands[0])
+        self.assertIn("-DCMAKE_CXX_FLAGS=-O0 -fPIC", commands[0])
+        self.assertEqual(commands[1][0:7], (
+            "cmake", "--build", "fidb-build", "--parallel", "8", "--target", "harfbuzz"
+        ))
+        self.assertIn("harfbuzz-gpu", commands[1])
+        self.assertEqual(environment["CXX"], "/usr/bin/g++")
+
+    def test_cmake_adapter_maps_android_abi_without_host_execution(self):
+        ndk_root = Path("/reviewed/android-ndk-r29")
+        android = replace(
+            route(),
+            target_os="android",
+            architecture="i686",
+            compiler=(
+                str(
+                    ndk_root
+                    / "toolchains/llvm/prebuilt/linux-x86_64/bin"
+                    / "i686-linux-android21-clang"
+                ),
+            ),
+        )
+
+        commands = build_commands(
+            "brotli-cmake", route=android, compiler_flags=("-O2",), jobs=4
+        )
+
+        self.assertIn("-DCMAKE_SYSTEM_NAME=Android", commands[0])
+        self.assertIn("-DCMAKE_ANDROID_ARCH_ABI=x86", commands[0])
+        self.assertIn("-DCMAKE_SYSTEM_VERSION=21", commands[0])
+        self.assertIn("-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY", commands[0])
+
+    def test_libjpeg_adapter_uses_reproducible_portable_static_shape(self):
+        commands = build_commands(
+            "libjpeg-turbo-cmake", route=route(), compiler_flags=("-O3",), jobs=3
+        )
+
+        self.assertIn("-DENABLE_SHARED=OFF", commands[0])
+        self.assertIn("-DWITH_SIMD=OFF", commands[0])
+        self.assertIn("-DWITH_SYSTEM_ZLIB=OFF", commands[0])
+        self.assertEqual(commands[1][-2:], ("jpeg-static", "turbojpeg-static"))
+
     def test_fixed_make_adapters_keep_treatment_flags_and_platform(self):
         windows = replace(route(), target_os="windows")
 

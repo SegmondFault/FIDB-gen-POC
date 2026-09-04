@@ -914,7 +914,12 @@ def build_library(
         "native reviewed adapter has no patch phase",
         {"library": library.identifier, "patch_count": 0},
     )
-    if not any("configure" in command for command in commands):
+    def command_stage(command: tuple[str, ...]) -> str:
+        if "configure" in command or command[:2] == ("cmake", "-S"):
+            return "configure"
+        return "compile"
+
+    if not any(command_stage(command) == "configure" for command in commands):
         _skip(
             skipped,
             "configure",
@@ -922,7 +927,7 @@ def build_library(
             {"library": library.identifier, "adapter": detection.build_system},
         )
     for index, command in enumerate(commands, start=1):
-        stage = "configure" if "configure" in command else "compile"
+        stage = command_stage(command)
         with _timed(
             timing,
             stage,

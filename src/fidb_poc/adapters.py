@@ -21,6 +21,13 @@ class Detection:
 
 BUILD_MARKERS = {
     "openssl-configure": ("Configure",),
+    "harfbuzz-cmake": ("CMakeLists.txt", "src/hb.h"),
+    "brotli-cmake": ("CMakeLists.txt", "c/include/brotli/encode.h"),
+    "libjpeg-turbo-cmake": ("CMakeLists.txt", "src/jpeglib.h"),
+    "freetype-autoconf": ("configure", "include/freetype/freetype.h"),
+    "expat-autoconf": ("configure", "lib/expat.h"),
+    "libunistring-autoconf": ("configure", "lib/unistr.in.h"),
+    "libtiff-autoconf": ("configure", "libtiff/tiff.h"),
     "sqlite-autoconf": ("configure", "sqlite3.c", "sqlite3.h"),
     "xz-autoconf": ("configure", "src/liblzma/api/lzma.h"),
     "pcre2-autoconf": ("configure", "src/pcre2.h.in"),
@@ -220,7 +227,131 @@ AUTOCONF_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         # tables and headers which are prerequisites of the target library.
         ("all",),
     ),
+    "freetype-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--with-zlib=no",
+            "--with-bzip2=no",
+            "--with-png=no",
+            "--with-harfbuzz=no",
+            "--with-brotli=no",
+        ),
+        ("all",),
+    ),
+    "expat-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--without-xmlwf",
+            "--without-examples",
+            "--without-tests",
+            "--without-docbook",
+        ),
+        ("-C", "lib", "libexpat.la"),
+    ),
+    "libunistring-autoconf": (
+        ("--disable-shared", "--enable-static", "--disable-rpath"),
+        ("-C", "lib", "libunistring.la"),
+    ),
+    "libtiff-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-tools",
+            "--disable-tests",
+            "--disable-contrib",
+            "--disable-docs",
+            "--disable-zlib",
+            "--disable-libdeflate",
+            "--disable-jpeg",
+            "--disable-old-jpeg",
+            "--disable-jbig",
+            "--disable-lerc",
+            "--disable-lzma",
+            "--disable-zstd",
+            "--disable-webp",
+            "--disable-sphinx",
+        ),
+        ("-C", "libtiff", "libtiff.la"),
+    ),
 }
+
+
+CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "harfbuzz-cmake": (
+        (
+            "-DHB_BUILD_UTILS=OFF",
+            "-DHB_HAVE_CAIRO=OFF",
+            "-DHB_HAVE_FREETYPE=OFF",
+            "-DHB_HAVE_GRAPHITE2=OFF",
+            "-DHB_HAVE_GLIB=OFF",
+            "-DHB_HAVE_ICU=OFF",
+            "-DHB_HAVE_GOBJECT=OFF",
+            "-DHB_HAVE_INTROSPECTION=OFF",
+            "-DHB_BUILD_SUBSET=ON",
+            "-DHB_BUILD_RASTER=ON",
+            "-DHB_BUILD_VECTOR=ON",
+            "-DHB_BUILD_GPU=ON",
+        ),
+        (
+            "harfbuzz",
+            "harfbuzz-subset",
+            "harfbuzz-raster",
+            "harfbuzz-vector",
+            "harfbuzz-gpu",
+        ),
+    ),
+    "brotli-cmake": (
+        ("-DBROTLI_BUILD_TOOLS=OFF", "-DBROTLI_DISABLE_TESTS=ON"),
+        ("brotlicommon", "brotlidec", "brotlienc"),
+    ),
+    "libjpeg-turbo-cmake": (
+        (
+            "-DENABLE_SHARED=OFF",
+            "-DENABLE_STATIC=ON",
+            "-DWITH_SIMD=OFF",
+            "-DWITH_TOOLS=OFF",
+            "-DWITH_TESTS=OFF",
+            "-DWITH_TURBOJPEG=ON",
+            "-DWITH_SYSTEM_ZLIB=OFF",
+            "-DWITH_SYSTEM_SPNG=OFF",
+        ),
+        ("jpeg-static", "turbojpeg-static"),
+    ),
+}
+
+
+def _cmake_target_options(route: Route) -> tuple[str, ...]:
+    systems = {"linux": "Linux", "windows": "Windows", "android": "Android"}
+    system = systems.get(route.target_os)
+    if system is None:
+        raise AdapterError(
+            f"no reviewed CMake target for {route.target_os}/{route.architecture}"
+        )
+    options = [
+        f"-DCMAKE_SYSTEM_NAME={system}",
+        f"-DCMAKE_SYSTEM_PROCESSOR={route.architecture}",
+    ]
+    if route.target_os == "android":
+        abi = {
+            "aarch64": "arm64-v8a",
+            "arm": "armeabi-v7a",
+            "x86_64": "x86_64",
+            "i686": "x86",
+        }.get(route.architecture)
+        if abi is None:
+            raise AdapterError(
+                f"no reviewed Android CMake ABI for {route.architecture}"
+            )
+        options.extend(
+            (
+                f"-DCMAKE_ANDROID_NDK={_android_ndk_root(route)}",
+                f"-DCMAKE_ANDROID_ARCH_ABI={abi}",
+                "-DCMAKE_SYSTEM_VERSION=21",
+            )
+        )
+    return tuple(options)
 
 
 def build_commands(
@@ -328,6 +459,39 @@ def build_commands(
             )
         commands.append(("make", f"-j{jobs}", *make_targets))
         return tuple(commands)
+    if build_system in CMAKE_ADAPTERS:
+        project_options, targets = CMAKE_ADAPTERS[build_system]
+        return (
+            (
+                "cmake",
+                "-S",
+                ".",
+                "-B",
+                "fidb-build",
+                "-G",
+                "Ninja",
+                "-DBUILD_SHARED_LIBS=OFF",
+                "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+                "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+                f"-DCMAKE_C_COMPILER={compiler}",
+                f"-DCMAKE_CXX_COMPILER={_cxx_compiler(route)}",
+                f"-DCMAKE_AR={archiver}",
+                f"-DCMAKE_RANLIB={ranlib}",
+                f"-DCMAKE_C_FLAGS={flags}",
+                f"-DCMAKE_CXX_FLAGS={flags}",
+                *_cmake_target_options(route),
+                *project_options,
+            ),
+            (
+                "cmake",
+                "--build",
+                "fidb-build",
+                "--parallel",
+                str(jobs),
+                "--target",
+                *targets,
+            ),
+        )
     if build_system == "lz4-make":
         platform = ("TARGET_OS=Windows_NT",) if route.target_os == "windows" else ()
         return (
@@ -373,7 +537,7 @@ def build_environment(
     if build_system not in {
         "autoconf",
         "openssl-configure",
-    } and not build_system.endswith("-autoconf"):
+    } and not build_system.endswith("-autoconf") and build_system not in CMAKE_ADAPTERS:
         return {}
     environment = {
         "CC": tool_text(route.compiler),
@@ -381,6 +545,9 @@ def build_environment(
         "RANLIB": tool_text(route.ranlib),
         "CFLAGS": " ".join(compiler_flags),
     }
+    if build_system in CMAKE_ADAPTERS:
+        environment["CXX"] = _cxx_compiler(route)
+        environment["CXXFLAGS"] = " ".join(compiler_flags)
     if build_system == "gmp-autoconf":
         # GMP builds target-independent table/header generators during a cross
         # build. Its fallback can incorrectly reuse CC and then attempt to run
