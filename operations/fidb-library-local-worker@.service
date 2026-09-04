@@ -25,7 +25,11 @@ TimeoutStopSec=90
 CPUQuota=400%
 MemoryHigh=6G
 MemoryMax=8G
-TasksMax=512
+# Large OpenSSL archives reached roughly 470 live analysis threads and could
+# not create Ghidra's remaining native threads under the former 512-task cap.
+# MemoryMax remains the primary runaway bound; this ceiling leaves measured
+# headroom without making the service task-unlimited.
+TasksMax=1024
 
 [Install]
 WantedBy=default.target
