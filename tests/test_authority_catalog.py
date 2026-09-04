@@ -19,7 +19,11 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(validation["summary"]["exact_identities"], 222)
         self.assertEqual(validation["summary"]["composite_programs"], 444)
         self.assertEqual(validation["summary"]["query_projections"], 1_332)
-        self.assertFalse(validation["readiness"]["eligible"])
+        self.assertTrue(validation["readiness"]["eligible"])
+        self.assertTrue(validation["readiness"]["materializable"])
+        self.assertEqual(
+            validation["readiness"]["queue_state"], "waiting-for-cohort"
+        )
         self.assertEqual(validation["results"]["state"], "not-run")
         self.assertEqual(
             len(document["source_digests"]["machine_validations_sha256"]), 64
@@ -139,9 +143,10 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(campaign_b["unique_executions"], 5_094)
         self.assertEqual(campaign_b["replayed_executions"], 10_188)
-        self.assertEqual(len(document["width_studies"]), 1)
-        width_study = document["width_studies"][0]
-        self.assertEqual(width_study["id"], "batch-010")
+        self.assertEqual(len(document["width_studies"]), 2)
+        width_study = next(
+            row for row in document["width_studies"] if row["id"] == "batch-010"
+        )
         self.assertEqual(width_study["readiness"]["reviewed_recipe_families"], 10)
         self.assertEqual(width_study["readiness"]["source_evidence_families"], 10)
         self.assertEqual(width_study["readiness"]["queue_state"], "not-materialized")
@@ -163,19 +168,41 @@ class AuthorityCatalogTests(unittest.TestCase):
                 "definition-required": 0,
             },
         )
-        self.assertEqual(len(document["width_batches"]), 2)
-        width_batch = document["width_batches"][0]
-        self.assertEqual(width_batch["id"], "batch-020")
+        c20_study = next(
+            row for row in document["width_studies"] if row["id"] == "study-c20"
+        )
+        self.assertEqual(c20_study["readiness"]["source_evidence_families"], 20)
+        self.assertEqual(c20_study["readiness"]["missing_recipe_families"], 9)
+
+        self.assertEqual(len(document["width_batches"]), 3)
+        width_batch = next(
+            row for row in document["width_batches"] if row["id"] == "batch-020"
+        )
         self.assertEqual(width_batch["summary"]["total_executions"], 1_998)
         self.assertEqual(width_batch["readiness"]["source_pins"], 9)
         self.assertEqual(width_batch["readiness"]["recipe_ready_libraries"], 9)
         self.assertEqual(width_batch["readiness"]["blocked_executions"], 0)
         self.assertEqual(width_batch["readiness"]["materializable_executions"], 1_998)
-        android_gap = document["width_batches"][1]
-        self.assertEqual(android_gap["id"], "batch-020-android-gap")
+        android_gap = next(
+            row
+            for row in document["width_batches"]
+            if row["id"] == "batch-020-android-gap"
+        )
         self.assertEqual(android_gap["summary"]["total_executions"], 48)
         self.assertEqual(
             android_gap["readiness"]["queue_state"], "not-materialized-disarmed"
+        )
+        next_cohort = next(
+            row for row in document["width_batches"] if row["id"] == "batch-c11-20"
+        )
+        self.assertEqual(next_cohort["summary"]["libraries"], 10)
+        self.assertEqual(next_cohort["summary"]["total_executions"], 2_220)
+        self.assertEqual(next_cohort["readiness"]["source_pins"], 10)
+        self.assertEqual(next_cohort["readiness"]["recipe_ready_libraries"], 0)
+        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 2_220)
+        self.assertEqual(
+            next_cohort["readiness"]["queue_state"],
+            "not-materialized-disarmed",
         )
         time_plan = document["time_block_plan"]
         self.assertEqual(time_plan["state"], "draft-disarmed")
@@ -191,7 +218,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(materialized["summary"]["executions"], 2_046)
         self.assertEqual(materialized["readiness"]["verified_plans"], 5)
         self.assertEqual(materialized["readiness"]["registered_blocks"], 0)
-        self.assertTrue(materialized["readiness"]["queue_armed"])
+        self.assertFalse(materialized["readiness"]["queue_armed"])
         self.assertFalse(materialized["readiness"]["ready"])
         self.assertTrue(
             all(

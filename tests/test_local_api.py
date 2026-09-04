@@ -461,18 +461,31 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(len(document["toolchain_pack_catalog"]["packs"]), 31)
         self.assertEqual(len(document["toolchain_pack_catalog"]["inputs"]), 0)
         self.assertEqual(len(document["factors"]), 41)
-        self.assertEqual(document["width_studies"][0]["id"], "batch-010")
+        width_study = next(
+            row for row in document["width_studies"] if row["id"] == "batch-010"
+        )
         self.assertEqual(
-            document["width_studies"][0]["presets"][1]["metrics"]["build_cells"],
+            width_study["presets"][1]["metrics"]["build_cells"],
             180,
         )
-        self.assertEqual(document["width_batches"][0]["id"], "batch-020")
+        width_batch = next(
+            row for row in document["width_batches"] if row["id"] == "batch-020"
+        )
         self.assertEqual(
-            document["width_batches"][0]["summary"]["total_executions"],
+            width_batch["summary"]["total_executions"],
             1_998,
         )
         self.assertEqual(
-            document["width_batches"][0]["readiness"]["queue_state"],
+            width_batch["readiness"]["queue_state"],
+            "not-materialized-disarmed",
+        )
+        next_cohort = next(
+            row for row in document["width_batches"] if row["id"] == "batch-c11-20"
+        )
+        self.assertEqual(next_cohort["summary"]["total_executions"], 2_220)
+        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 2_220)
+        self.assertEqual(
+            next_cohort["readiness"]["queue_state"],
             "not-materialized-disarmed",
         )
         self.assertTrue(document["plans"])
