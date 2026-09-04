@@ -411,21 +411,48 @@ def _strip_tool(route) -> Path:
 
 def _link_composite(route, archives: list[Path], output: Path, truth_map: Path) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
-    if route.binary_format == "PE/COFF":
-        command = [
+    def command(support: list[Path]) -> list[str]:
+        if route.binary_format == "PE/COFF":
+            return [
             *route.compiler, "-shared", "-nostdlib", "-Wl,/force:unresolved",
             "-Wl,/force:multiple", "-Wl,--whole-archive", *map(str, archives),
             "-Wl,--no-whole-archive", "-o", str(output),
-        ]
-    else:
-        command = [
+            ]
+        return [
             *route.compiler, "-nostdlib", "-no-pie", "-Wl,-e,0",
             "-Wl,--allow-multiple-definition", "-Wl,--unresolved-symbols=ignore-all",
-            f"-Wl,-Map,{truth_map}", "-Wl,--whole-archive", *map(str, archives),
+            f"-Wl,-Map,{truth_map}", *map(str, support),
+            "-Wl,--whole-archive", *map(str, archives),
             "-Wl,--no-whole-archive", "-o", str(output),
         ]
-    result = subprocess.run(command, text=True, capture_output=True, timeout=900, check=False)
-    (output.parent / "link.log").write_text(result.stdout + result.stderr, encoding="utf-8")
+
+    result = subprocess.run(command([]), text=True, capture_output=True, timeout=900, check=False)
+    log = result.stdout + result.stderr
+    if (
+        result.returncode != 0
+        and route.binary_format == "ELF"
+        and "__stack_chk_fail_local" in result.stderr
+    ):
+        source = output.parent / "stack-chk-fail-local.S"
+        support = output.parent / "stack-chk-fail-local.o"
+        source.write_text(
+            ".text\n.globl __stack_chk_fail_local\n.hidden __stack_chk_fail_local\n"
+            ".type __stack_chk_fail_local, %function\n__stack_chk_fail_local:\n"
+            ".size __stack_chk_fail_local, .-__stack_chk_fail_local\n",
+            encoding="utf-8",
+        )
+        compiled = subprocess.run(
+            [*route.compiler, "-c", "-x", "assembler", str(source), "-o", str(support)],
+            text=True, capture_output=True, timeout=120, check=False,
+        )
+        log += "\n--- validation stack-check support ---\n" + compiled.stdout + compiled.stderr
+        if compiled.returncode == 0 and support.is_file():
+            output.unlink(missing_ok=True)
+            result = subprocess.run(
+                command([support]), text=True, capture_output=True, timeout=900, check=False
+            )
+            log += "\n--- validation composite retry ---\n" + result.stdout + result.stderr
+    (output.parent / "link.log").write_text(log, encoding="utf-8")
     if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
         raise RuntimeError(f"composite link failed for {route.id}: {result.stderr[-2000:]}")
     return output
@@ -1100,7 +1127,12 @@ def pause_validation(
     status = runtime_status(root, runtime_path)
     if status.get("state") == "paused":
         return status
-    if status.get("state") == "interrupted":
+    if status.get("state") == "interrupted" or (
+        status.get("state") == "failed"
+        and int(status.get("complete_work_units", 0))
+        < int(status.get("expected_work_units", 0))
+        and not _validation_process_active(status.get("pid"), str(status.get("run_id") or ""))
+    ):
         paused = {
             **status, "state": "paused", "paused_at": _now(),
             "pause_actor": actor, "worker_pids": [],

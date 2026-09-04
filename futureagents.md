@@ -323,3 +323,21 @@ The control panel polls `/api/v1/machine-validation/run`, not the full compiled
 authority endpoint. Keep that lightweight runtime path: compiling the complete
 2,220-input view measured roughly 2.2 seconds and is suitable for explicit or
 periodic authority refresh, not a five-second progress poll.
+
+Pause machine validation through its own control, not by restarting the API
+service. The parent stops each worker process group (including Ghidra), retains
+completed unit results and releases the runner lock. Resume keeps the same run
+ID and skips completed units. A failed unit's concise `result.json` moves into
+that unit's `attempts/` directory before retry, so repair does not erase the
+original evidence. The runtime status also changes a missing or zombie parent
+to `interrupted`; never trust a stored PID without checking its command and run
+identity.
+
+The first full C10 validation exposed a PowerPC/glibc harness edge in GCC 12 and
+13 stack-protector routes: forced `-nostdlib` composite links cannot leave the
+hidden `__stack_chk_fail_local` unresolved. The linker now retries only that
+failure class with a target-compiler-built, zero-sized, never-executed ELF
+function stub. Keep the stub outside `--whole-archive`, retain its source/object
+beside the fold evidence, and replay the exact failed archive sets when changing
+this behavior. Adding all of `libc_nonshared.a` is not equivalent: it pulled in
+`atexit.oS` and failed on hidden `__dso_handle`.

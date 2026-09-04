@@ -3,12 +3,14 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from fidb_poc.machine_validation_runner import (
     QUERY_COPY_POLICY,
     REFERENCE_INDEX_SCHEMA,
     _archive_failed_result,
+    _link_composite,
     _query_index,
     canary_gate_status,
     load_runtime,
@@ -237,6 +239,35 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(status["state"], "interrupted")
             self.assertEqual(status["worker_pids"], [])
 
+    def test_incomplete_stopped_failure_can_be_marked_paused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed"
+            run_root.mkdir(parents=True)
+            (root / "runs/current.json").write_text(
+                json.dumps({"run_id": "fixed", "path": "runs/fixed/status.json"}),
+                encoding="utf-8",
+            )
+            status_path = run_root / "status.json"
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "run_id": "fixed", "mode": "full", "state": "failed",
+                        "pid": 42, "expected_work_units": 10, "complete_work_units": 4,
+                        "failed_work_units": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("fidb_poc.machine_validation_runner.load_runtime", return_value={"output_root": "runs"}),
+                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=False),
+            ):
+                status = pause_validation(root, actor="test")
+            self.assertEqual(status["state"], "paused")
+            self.assertEqual(status["failed_work_units"], 1)
+            self.assertEqual(status["pause_actor"], "test")
+
     def test_failed_result_is_archived_before_retry(self):
         with tempfile.TemporaryDirectory() as temporary:
             result = Path(temporary) / "unit/result.json"
@@ -246,6 +277,42 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertFalse(result.exists())
             archived = result.parent / "attempts/result-001.json"
             self.assertEqual(json.loads(archived.read_text(encoding="utf-8"))["error"], "link")
+
+    def test_elf_composite_retries_hidden_stack_check_with_target_stub(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "library.a"
+            archive.write_bytes(b"archive")
+            output = root / "truth.elf"
+            calls = []
+
+            def run(command, **_kwargs):
+                calls.append(command)
+                if "-c" in command:
+                    Path(command[-1]).write_bytes(b"object")
+                    return Mock(returncode=0, stdout="", stderr="")
+                if len(calls) == 1:
+                    return Mock(
+                        returncode=1,
+                        stdout="",
+                        stderr="hidden symbol `__stack_chk_fail_local' isn't defined",
+                    )
+                output.write_bytes(b"\x7fELF")
+                return Mock(returncode=0, stdout="", stderr="")
+
+            route = SimpleNamespace(
+                id="linux-powerpc32-be-gcc-12",
+                binary_format="ELF",
+                compiler=("/toolchain/bin/powerpc-gcc",),
+            )
+            with patch("fidb_poc.machine_validation_runner.subprocess.run", side_effect=run):
+                linked = _link_composite(route, [archive], output, root / "link.map")
+
+            self.assertEqual(linked, output)
+            self.assertEqual(len(calls), 3)
+            self.assertIn(str(root / "stack-chk-fail-local.o"), calls[2])
+            self.assertIn("validation composite retry", (root / "link.log").read_text())
+
 
 
 if __name__ == "__main__":
