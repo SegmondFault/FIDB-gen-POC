@@ -38,11 +38,11 @@ resolver_id = "debian-sid"
 reason = "Homebrew's Maven formula points to a prebuilt binary distribution; acquisition requires the Debian source archive instead."
 
 [[rewrite]]
-id = "gnu-primary"
+id = "gnu-kernel-mirror"
 resolver_id = "homebrew"
 match_prefix = "https://ftpmirror.gnu.org/gnu/"
-replacement_prefix = "https://ftp.gnu.org/gnu/"
-reason = "Use GNU's deterministic primary archive host instead of its dynamic mirror redirector."
+replacement_prefix = "https://mirrors.kernel.org/gnu/"
+reason = "Use kernel.org's deterministic HTTPS GNU mirror because the dynamic redirector and GNU primary host are unreliable from the acquisition host; the registry checksum remains authoritative."
 
 [[rewrite]]
 id = "savannah-mirror"

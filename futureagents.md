@@ -531,8 +531,10 @@ Do not remove the source-preference or URL-rewrite evidence from the lock.
 Homebrew's Maven input is a binary distribution, while GNU/Savannah mirror
 redirectors and Apache `closer.lua` are unreliable for generic acquisition
 clients. The acquisition TOML selects Debian source for Maven and maps only
-those known dynamic endpoints to official direct archive endpoints; the lock
-and receipt retain both URLs.
+those known dynamic endpoints to stable direct archive endpoints. GNU payloads
+use the kernel.org GNU mirror after both the redirector and GNU primary host
+failed from `reference-host`; the registry SHA-256 remains authoritative. The lock
+and receipt retain both URLs and the rewrite identity.
 
 `opengl` is deliberately unresolved because it names a virtual API rather
 than a unique source tree. Resolving it requires an explicit candidate-screen

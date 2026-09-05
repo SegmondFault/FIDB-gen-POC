@@ -105,7 +105,10 @@ digest, resolver order, declared aliases, safety limits and default download
 concurrency. It also records candidate-specific source preferences and narrow
 URL rewrites. Maven is deliberately resolved from Debian because Homebrew's
 formula names a prebuilt binary archive. GNU, Savannah and Apache dynamic
-mirror selectors are rewritten to their official direct content endpoints.
+mirror selectors are rewritten to stable direct content endpoints. GNU
+archives use the kernel.org GNU mirror because both the redirector and GNU's
+primary host proved unreliable from this acquisition host; the registry's
+SHA-256 remains the byte authority.
 The tracked lock retains both the registry URL and effective download URL,
 along with the rewrite identity, exact registry snapshot digests, mapping kind,
 package identity, release, checksum and any upstream byte count. Re-running
