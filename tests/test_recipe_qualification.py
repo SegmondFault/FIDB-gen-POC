@@ -88,6 +88,22 @@ class RecipeQualificationTests(unittest.TestCase):
             self.assertEqual(first["results"][0]["artifact_validation"], "passed")
             self.assertNotIn("analysis_artifact_sha256", first["results"][0])
 
+    def test_failed_cells_remain_pending_without_losing_the_attempt(self) -> None:
+        report = {
+            "results": [
+                {"id": "cell-a", "status": "build_failed"},
+                {"id": "cell-b", "status": "built"},
+            ]
+        }
+        from fidb_poc.recipe_qualification import _summarize
+
+        _summarize(report, 3)
+        self.assertEqual(
+            report["summary"],
+            {"total": 3, "built": 1, "failed": 1, "remaining": 1},
+        )
+        self.assertIsNone(report["finished_at_utc"])
+
 
 if __name__ == "__main__":
     unittest.main()

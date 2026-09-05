@@ -319,15 +319,16 @@ def _load_report(path: Path, plan: dict[str, object]) -> dict[str, object]:
 
 def _summarize(report: dict[str, object], total: int) -> None:
     results = report["results"]
-    built = sum(row["status"] == "built" for row in results)
-    failed = len(results) - built
+    latest = {row["id"]: row for row in results}
+    built = sum(row["status"] == "built" for row in latest.values())
+    failed = len(latest) - built
     report["summary"] = {
         "total": total,
         "built": built,
         "failed": failed,
-        "remaining": total - len(results),
+        "remaining": total - len(latest),
     }
-    report["finished_at_utc"] = utc_now() if len(results) == total else None
+    report["finished_at_utc"] = utc_now() if built == total else None
 
 
 def run_recipe_qualification(
@@ -336,7 +337,7 @@ def run_recipe_qualification(
     plan = compile_recipe_qualification(root, path)
     evidence_path = root.resolve() / str(plan["evidence_path"])
     report = _load_report(evidence_path, plan)
-    completed = {row["id"] for row in report["results"]}
+    completed = {row["id"] for row in report["results"] if row["status"] == "built"}
     pending = [row for row in plan["cells"] if row["id"] not in completed]
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=int(plan["workers"])
