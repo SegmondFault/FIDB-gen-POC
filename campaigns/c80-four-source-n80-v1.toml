@@ -1,0 +1,308 @@
+schema_version = "fidb-campaign-programme/v1"
+id = "c80-four-source-n80-v1"
+label = "C80 · published four-source N80 programme"
+state = "planned-disarmed"
+language_id = "c"
+candidate_authority = "coverage/evidence/four-source-n80-v1.csv"
+candidate_authority_sha256 = "66e24e2a9b9606f34e5ef8e706569829441898f8cffc0ac33dbfdb4bcf13148b"
+candidate_population = 276
+candidate_cumulative_proxy_pct = 80.044856
+cohort_size = 10
+cohort_count = 28
+final_cohort_size = 6
+width_authority = "coverage/c-width-v2.toml"
+width_authority_sha256 = "228669026327dd6aee49af151167fa82e89dc3307bfdc795612682a73762d6f0"
+qualification_template = "qualification/c-cohort-template.toml"
+qualification_template_sha256 = "e2e151f217d7b94265000fff0ac96fdc3c2f8caade3bb307ed180b4cf70d8372"
+route_profiles_per_library = 37
+treatments_per_route = 6
+campaign_executions_per_library = 222
+qualification_routes_per_library = 16
+qualification_treatment_id = "baseline_o2"
+qualification_workers = 4
+qualification_build_jobs_per_cell = 4
+evidence_class = "published-priority-proxy"
+caveat = "These 276 rows are the published four-source N80 candidate frontier, not 276 proven reusable C-library families. Each row must pass canonical-family, reusable-native and C/C++-in-scope screening before source or recipe work can be admitted."
+
+[pipeline]
+stages = [
+  "candidate-screen",
+  "source-pin-cache",
+  "recipe-author",
+  "recipe-qualification",
+  "qualification-seal",
+  "time-model",
+  "queue-candidate",
+  "full-path-canary",
+  "campaign-execution",
+  "machine-validation",
+  "retention",
+]
+screening_policy = "Screen in popularity order. Exclusions retain their reason and are replenished from the next research rank before a cohort is frozen."
+source_policy = "Pin one exact stable release and source archive only after the candidate is accepted as an in-scope reusable C-family subject."
+recipe_policy = "Author and review a command-free fixed adapter plus dependency pins; source presence alone never means recipe-ready."
+qualification_policy = "Compile every accepted recipe at the target-family and oldest compiler-generation edge set; a current digest-bound seal is mandatory."
+queue_policy = "A sealed cohort may generate time-bounded chained queue chunks. Promotion produces a queue-eligible but disarmed candidate."
+canary_policy = "Exercise compilation, object validation, Ghidra analysis and publication before any campaign queue is armed."
+validation_policy = "Schedule deterministic single-hash machine validation after each ten newly completed accepted families; the final partial cohort requires an explicit TOML override."
+retention_policy = "Run dry-run-first retention and worker memory cleanup after every terminal execution or validation session."
+
+[[identity_aliases]]
+candidate_key = "sqlite3"
+subject_id = "sqlite"
+
+[[identity_aliases]]
+candidate_key = "xz-utils"
+subject_id = "xz"
+
+[[cohorts]]
+id = "c80-001-010"
+order = 1
+label = "C80 research ranks 1–10"
+candidate_rank_start = 1
+candidate_rank_end = 10
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-011-020"
+order = 2
+label = "C80 research ranks 11–20"
+candidate_rank_start = 11
+candidate_rank_end = 20
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-021-030"
+order = 3
+label = "C80 research ranks 21–30"
+candidate_rank_start = 21
+candidate_rank_end = 30
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-031-040"
+order = 4
+label = "C80 research ranks 31–40"
+candidate_rank_start = 31
+candidate_rank_end = 40
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-041-050"
+order = 5
+label = "C80 research ranks 41–50"
+candidate_rank_start = 41
+candidate_rank_end = 50
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-051-060"
+order = 6
+label = "C80 research ranks 51–60"
+candidate_rank_start = 51
+candidate_rank_end = 60
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-061-070"
+order = 7
+label = "C80 research ranks 61–70"
+candidate_rank_start = 61
+candidate_rank_end = 70
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-071-080"
+order = 8
+label = "C80 research ranks 71–80"
+candidate_rank_start = 71
+candidate_rank_end = 80
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-081-090"
+order = 9
+label = "C80 research ranks 81–90"
+candidate_rank_start = 81
+candidate_rank_end = 90
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-091-100"
+order = 10
+label = "C80 research ranks 91–100"
+candidate_rank_start = 91
+candidate_rank_end = 100
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-101-110"
+order = 11
+label = "C80 research ranks 101–110"
+candidate_rank_start = 101
+candidate_rank_end = 110
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-111-120"
+order = 12
+label = "C80 research ranks 111–120"
+candidate_rank_start = 111
+candidate_rank_end = 120
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-121-130"
+order = 13
+label = "C80 research ranks 121–130"
+candidate_rank_start = 121
+candidate_rank_end = 130
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-131-140"
+order = 14
+label = "C80 research ranks 131–140"
+candidate_rank_start = 131
+candidate_rank_end = 140
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-141-150"
+order = 15
+label = "C80 research ranks 141–150"
+candidate_rank_start = 141
+candidate_rank_end = 150
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-151-160"
+order = 16
+label = "C80 research ranks 151–160"
+candidate_rank_start = 151
+candidate_rank_end = 160
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-161-170"
+order = 17
+label = "C80 research ranks 161–170"
+candidate_rank_start = 161
+candidate_rank_end = 170
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-171-180"
+order = 18
+label = "C80 research ranks 171–180"
+candidate_rank_start = 171
+candidate_rank_end = 180
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-181-190"
+order = 19
+label = "C80 research ranks 181–190"
+candidate_rank_start = 181
+candidate_rank_end = 190
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-191-200"
+order = 20
+label = "C80 research ranks 191–200"
+candidate_rank_start = 191
+candidate_rank_end = 200
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-201-210"
+order = 21
+label = "C80 research ranks 201–210"
+candidate_rank_start = 201
+candidate_rank_end = 210
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-211-220"
+order = 22
+label = "C80 research ranks 211–220"
+candidate_rank_start = 211
+candidate_rank_end = 220
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-221-230"
+order = 23
+label = "C80 research ranks 221–230"
+candidate_rank_start = 221
+candidate_rank_end = 230
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-231-240"
+order = 24
+label = "C80 research ranks 231–240"
+candidate_rank_start = 231
+candidate_rank_end = 240
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-241-250"
+order = 25
+label = "C80 research ranks 241–250"
+candidate_rank_start = 241
+candidate_rank_end = 250
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-251-260"
+order = 26
+label = "C80 research ranks 251–260"
+candidate_rank_start = 251
+candidate_rank_end = 260
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-261-270"
+order = 27
+label = "C80 research ranks 261–270"
+candidate_rank_start = 261
+candidate_rank_end = 270
+capacity = 10
+state = "planned-disarmed"
+
+[[cohorts]]
+id = "c80-271-276"
+order = 28
+label = "C80 research ranks 271–276"
+candidate_rank_start = 271
+candidate_rank_end = 276
+capacity = 6
+state = "planned-disarmed"

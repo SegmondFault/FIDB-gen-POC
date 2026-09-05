@@ -38,6 +38,18 @@ MATRIX_KINDS = {
 }
 PRIORITIES = {"background", "normal", "high"}
 QUEUE_STRATEGIES = {"recipe-then-variant", "variant-then-recipe"}
+QUALIFICATION_GATE_FIELDS = {
+    "batch_id",
+    "batch_digest",
+    "authority_path",
+    "authority_sha256",
+    "pipeline_authority_path",
+    "pipeline_authority_sha256",
+    "input_digest",
+    "qualification_digest",
+    "evidence_path",
+    "evidence_sha256",
+}
 
 
 def _keys(row: dict[str, object], allowed: set[str], context: str) -> None:
@@ -68,7 +80,15 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
     document = tomllib.loads(plan_path.read_text(encoding="utf-8"))
     _keys(
         document,
-        {"schema_version", "name", "policy", "coverage", "queue", "matrix"},
+        {
+            "schema_version",
+            "name",
+            "policy",
+            "coverage",
+            "queue",
+            "qualification_gate",
+            "matrix",
+        },
         "plan",
     )
     if document.get("schema_version") != REQUEST_SCHEMA:
@@ -114,6 +134,44 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
     )
     if len(set(recipe_order)) != len(recipe_order):
         raise ValueError("plan queue recipe_order contains duplicates")
+
+    raw_qualification_gates = document.get("qualification_gate")
+    qualification_gates = []
+    if raw_qualification_gates is not None:
+        if not isinstance(raw_qualification_gates, list) or not raw_qualification_gates:
+            raise ValueError("plan qualification_gate must be a non-empty table array")
+        for index, gate in enumerate(raw_qualification_gates, start=1):
+            if not isinstance(gate, dict):
+                raise ValueError(f"plan qualification gate {index} must be a table")
+            _keys(gate, QUALIFICATION_GATE_FIELDS, f"plan qualification gate {index}")
+            missing = QUALIFICATION_GATE_FIELDS - set(gate)
+            if missing:
+                raise ValueError(
+                    f"plan qualification gate {index} is missing fields: {sorted(missing)}"
+                )
+            normalized_gate = {
+                field: _token(gate[field], f"plan qualification gate {index} {field}")
+                for field in QUALIFICATION_GATE_FIELDS
+            }
+            for field in (
+                "batch_digest",
+                "authority_sha256",
+                "pipeline_authority_sha256",
+                "input_digest",
+                "qualification_digest",
+                "evidence_sha256",
+            ):
+                value = normalized_gate[field]
+                if len(value) != 64 or any(
+                    character not in "0123456789abcdef" for character in value
+                ):
+                    raise ValueError(
+                        f"plan qualification gate {index} {field} must be a lowercase SHA-256"
+                    )
+            qualification_gates.append(normalized_gate)
+        ids = [row["batch_id"] for row in qualification_gates]
+        if len(ids) != len(set(ids)):
+            raise ValueError("plan qualification gates contain duplicate batch ids")
 
     matrices = document.get("matrix")
     if not isinstance(matrices, list) or not matrices:
@@ -222,7 +280,7 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
                 recipe for matrix in normalized for recipe in matrix["recipes"]
             )
         )
-    return {
+    result = {
         "schema_version": REQUEST_SCHEMA,
         "name": name,
         "policy": {"max_cells": max_cells, "priority": priority},
@@ -230,6 +288,9 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
         "queue": {"strategy": strategy, "recipe_order": recipe_order},
         "matrices": normalized,
     }
+    if raw_qualification_gates is not None:
+        result["qualification_gates"] = tuple(qualification_gates)
+    return result
 
 
 def _sensitivity_catalog(project_root: Path) -> tuple[list[dict[str, object]], str]:
@@ -812,7 +873,11 @@ def _native_cells_from_configuration(
 
 
 def _width_native_cells(
-    matrix: dict[str, object], project_root: Path
+    matrix: dict[str, object],
+    project_root: Path,
+    *,
+    _batch: dict[str, object] | None = None,
+    _catalog: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
     """Resolve compiler-generation routes through their pinned width batch."""
 
@@ -833,8 +898,10 @@ def _width_native_cells(
             "width-native matrix width_batch must stay inside project root"
         ) from error
 
-    catalog = load_toolchain_pack_catalog(project_root)
-    batch = load_width_batch(project_root, batch_path, _toolchain_catalog=catalog)
+    catalog = _catalog or load_toolchain_pack_catalog(project_root)
+    batch = _batch or load_width_batch(
+        project_root, batch_path, _toolchain_catalog=catalog
+    )
     batch_recipes = {
         str(row["recipe_id"]): row for row in batch["libraries"]  # type: ignore[index]
     }
@@ -1144,6 +1211,39 @@ def resolve_plan(
 ) -> dict[str, object]:
     root = Path(project_root).resolve()
     request = load_plan_request(request_path)
+    width_batches = {}
+    width_batches_by_authority = {}
+    width_catalog = None
+    for matrix in request["matrices"]:
+        if matrix["kind"] != "width-native":
+            continue
+        relative = Path(str(matrix["width_batch"]))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(
+                "width-native matrix width_batch must stay inside project root"
+            )
+        path = (root / relative).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as error:
+            raise ValueError(
+                "width-native matrix width_batch must stay inside project root"
+            ) from error
+        from .qualification_pipeline import validate_embedded_gates
+        from .toolchain_packs import load_toolchain_pack_catalog
+        from .width_batch import load_width_batch
+
+        if width_catalog is None:
+            width_catalog = load_toolchain_pack_catalog(root)
+        batch = load_width_batch(root, path, _toolchain_catalog=width_catalog)
+        width_batches[str(batch["id"])] = batch
+        width_batches_by_authority[str(matrix["width_batch"])] = batch
+    if width_batches:
+        validate_embedded_gates(
+            root,
+            list(width_batches.values()),
+            tuple(request.get("qualification_gates", ())),
+        )
     factors, factors_digest = _sensitivity_catalog(root)
     known_factors = {str(factor["id"]) for factor in factors}
     variants, variants_digest, coverage_summary = _factor_variants(
@@ -1179,7 +1279,14 @@ def resolve_plan(
             cells.extend(_native_cells(matrix, root))
             continue
         if matrix["kind"] == "width-native":
-            cells.extend(_width_native_cells(matrix, root))
+            cells.extend(
+                _width_native_cells(
+                    matrix,
+                    root,
+                    _batch=width_batches_by_authority[str(matrix["width_batch"])],
+                    _catalog=width_catalog,
+                )
+            )
             continue
         if matrix["kind"] == "archive-library":
             missing = set(matrix["toolchains"]) - set(toolchains_by_identity)
@@ -1270,6 +1377,8 @@ def resolve_plan(
         "cells": cells,
         "queue_preview": queue_preview,
     }
+    if "qualification_gates" in request:
+        body["qualification_gates"] = request["qualification_gates"]
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     return {
         **body,

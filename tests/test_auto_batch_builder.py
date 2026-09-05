@@ -97,9 +97,9 @@ class AutoBatchBuilderTests(unittest.TestCase):
             ],
         }
         source = tomllib.loads(
-            (
-                self.root / "plans/c-top10-nonapple-width-v2-queue-policy.toml"
-            ).read_text(encoding="utf-8")
+            (self.root / "plans/c-top10-nonapple-width-v2-queue-policy.toml").read_text(
+                encoding="utf-8"
+            )
         )
 
         payload = _render_queue(document, source)
@@ -113,6 +113,36 @@ class AutoBatchBuilderTests(unittest.TestCase):
         self.assertTrue(policy.schedule.finish_started_batch)
         self.assertTrue(policy.schedule.chain_batches)
         self.assertNotIn("hard_cutoff", queue["schedule"])
+
+    def test_generated_plan_carries_the_current_qualification_seal(self):
+        chunk = {
+            "id": "auto-test-chunk-001",
+            "executions": 6,
+            "groups": [
+                {
+                    "batch_authority": "batches/c-11-20-mega-width.toml",
+                    "recipe_id": "harfbuzz@14.4.0",
+                    "route_ids": ["linux-x86-64-gcc"],
+                    "treatment_ids": ["baseline_o2"],
+                }
+            ],
+        }
+        gate = {
+            "batch_id": "batch-c11-20",
+            "batch_digest": "a" * 64,
+            "authority_path": "qualification/c11-c20.toml",
+            "authority_sha256": "b" * 64,
+            "pipeline_authority_path": "qualification/pipeline.toml",
+            "pipeline_authority_sha256": "c" * 64,
+            "input_digest": "d" * 64,
+            "qualification_digest": "e" * 64,
+            "evidence_path": "qualification/evidence/c11-c20.json",
+            "evidence_sha256": "f" * 64,
+        }
+
+        plan = tomllib.loads(_render_plan(chunk, [gate]))
+
+        self.assertEqual(plan["qualification_gate"], [gate])
 
     def test_write_and_check_are_bounded_to_declared_generated_files(self):
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:

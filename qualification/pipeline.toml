@@ -1,0 +1,23 @@
+schema_version = "fidb-qualification-pipeline/v1"
+state = "enforced"
+qualification_directory = "qualification"
+
+[policy]
+require_current_seal_before_materialization = true
+embed_seal_in_generated_plans = true
+require_full_path_canary_after_materialization = true
+automatic_arming = false
+promotion_state = "queue-eligible-disarmed"
+
+# These immutable batches completed before the recipe-qualification gate became
+# mandatory. The digest pin prevents this exemption from applying to a changed
+# or newly authored batch.
+[[legacy_exemptions]]
+batch_id = "batch-020"
+batch_digest = "3076dc13bf62961ec5a06b7dcb30b9a4654eeb87a83fd91588f42883cf7eb349"
+reason = "C2-C10 completed and sealed before the formal recipe-qualification pipeline."
+
+[[legacy_exemptions]]
+batch_id = "batch-020-android-gap"
+batch_digest = "35ff5858e9d979ac473ac3882a62f48ac5fa9525dd0ab7b270af53e111622388"
+reason = "The OpenSSL Android gap completed and sealed before the formal recipe-qualification pipeline."

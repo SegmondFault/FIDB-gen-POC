@@ -9,6 +9,7 @@ import tomllib
 
 from .batch_time_model import compile_time_block_plan
 from .batch_materializer import load_materialization_manifest
+from .campaign_programme import compile_campaign_programme
 from .config import load_configuration
 from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
@@ -29,6 +30,7 @@ from .plan_request import (
     resolve_plan,
 )
 from .performance_profiles import load_performance_profiles
+from .qualification_pipeline import compile_qualification_pipeline
 from .recipe_generator import load_recipes as load_source_recipes
 from .target_registry import load_targets
 from .toolchain_registry import load_toolchains
@@ -36,7 +38,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v16"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v18"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -339,9 +341,7 @@ def _materialized_campaign_authority(root: Path) -> list[dict[str, object]]:
                 }
             )
             blocks.append(row)
-        plans_verified = all(
-            row["plan_integrity"] == "verified" for row in blocks
-        )
+        plans_verified = all(row["plan_integrity"] == "verified" for row in blocks)
         ready = plans_verified and all(row["queue_registered"] for row in blocks)
         registered_blocks = sum(bool(row["queue_registered"]) for row in blocks)
         campaigns.append(
@@ -659,6 +659,53 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     width_batches = _width_batch_authority(
         root, recipes, toolchain_pack_catalog, toolchain_inspections
     )
+    qualification_pipeline = compile_qualification_pipeline(
+        root, width_batches, validate_routes=False
+    )
+    qualification_by_batch = {
+        str(row["batch_id"]): row for row in qualification_pipeline["gates"]
+    }
+    qualified_width_batches = []
+    for batch in width_batches:
+        gate = qualification_by_batch[str(batch["id"])]
+        readiness = dict(batch["readiness"])
+        blockers = list(readiness["blockers"])
+        if not gate["satisfied"]:
+            blockers.extend(f"qualification: {blocker}" for blocker in gate["blockers"])
+        otherwise_ready = (
+            not readiness["recipe_blocked_libraries"]
+            and not readiness["toolchain_blocked_routes"]
+        )
+        readiness.update(
+            {
+                "qualification_state": gate["state"],
+                "qualification_satisfied": gate["satisfied"],
+                "queue_eligible_executions": (
+                    readiness["materializable_executions"]
+                    if otherwise_ready and gate["satisfied"]
+                    else 0
+                ),
+                "queue_state": (
+                    gate["promotion_state"]
+                    if otherwise_ready and gate["satisfied"]
+                    else f'qualification-{gate["state"]}'
+                ),
+                "blockers": blockers,
+            }
+        )
+        qualified_width_batches.append(
+            {**batch, "qualification": gate, "readiness": readiness}
+        )
+    width_batches = qualified_width_batches
+    campaign_programmes = [
+        compile_campaign_programme(
+            root,
+            path.relative_to(root),
+            width_batches=width_batches,
+            recipes=recipes,
+        )
+        for path in sorted((root / "campaigns").glob("*.toml"))
+    ]
     time_block_plan = compile_time_block_plan(root)
     materialized_campaigns = _materialized_campaign_authority(root)
     auto_batch_campaigns = _auto_batch_campaign_authority(root)
@@ -713,6 +760,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "coverage_universe": coverage_universe,
         "width_studies": width_studies,
         "width_batches": width_batches,
+        "campaign_programmes": campaign_programmes,
+        "qualification_pipeline": qualification_pipeline,
         "time_block_plan": time_block_plan,
         "materialized_campaigns": materialized_campaigns,
         "auto_batch_campaigns": auto_batch_campaigns,
@@ -744,6 +793,8 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "coverage_universe": "coverage/universe.toml",
             "width_studies": "coverage/*-width-study.toml",
             "width_batches": "batches/*.toml",
+            "campaign_programmes": "campaigns/*.toml + coverage/evidence/four-source-n80-v1.csv",
+            "qualification_pipeline": "qualification/pipeline.toml + qualification/*.toml",
             "time_block_plan": "performance/batch-planning.toml",
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
             "auto_batch_campaigns": "plans/auto-materialized/*/manifest.toml",
@@ -770,6 +821,19 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "width_batches_sha256": hashlib.sha256(
                 b"".join(path.read_bytes() for path in width_batch_paths)
+            ).hexdigest(),
+            "campaign_programmes_sha256": hashlib.sha256(
+                b"".join(
+                    (root / str(row["authorities"]["programme"])).read_bytes()
+                    + (root / str(row["authorities"]["candidates"])).read_bytes()
+                    for row in campaign_programmes
+                )
+            ).hexdigest(),
+            "qualification_pipeline_sha256": hashlib.sha256(
+                b"".join(
+                    path.read_bytes()
+                    for path in sorted((root / "qualification").glob("*.toml"))
+                )
             ).hexdigest(),
             "batch_planning_sha256": hashlib.sha256(
                 (root / "performance/batch-planning.toml").read_bytes()
@@ -800,7 +864,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 (root / "validation/noisy-hashes.toml").read_bytes()
                 + b"".join(
                     path.read_bytes()
-                    for path in sorted((root / "validation/noisy-hash-decisions").glob("*.toml"))
+                    for path in sorted(
+                        (root / "validation/noisy-hash-decisions").glob("*.toml")
+                    )
                 )
             ).hexdigest(),
             "hash_discrimination_sha256": hashlib.sha256(

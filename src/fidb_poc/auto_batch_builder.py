@@ -23,6 +23,7 @@ from .batch_materializer import (
 )
 from .batch_time_model import DEFAULT_MODEL_PATH, compile_time_block_plan
 from .plan_request import queue_identity_digest
+from .qualification_pipeline import require_qualification_gates
 from .width_batch import load_width_batch
 
 AUTO_BATCH_SCHEMA = "fidb-auto-batch-campaign/v1"
@@ -172,7 +173,32 @@ def _matrix_groups(
     return list(grouped.values())
 
 
-def _render_plan(chunk: dict[str, object]) -> str:
+def _append_qualification_gates(
+    lines: list[str], qualification_gates: list[dict[str, object]]
+) -> None:
+    for gate in qualification_gates:
+        lines.extend(
+            [
+                "",
+                "[[qualification_gate]]",
+                f"batch_id = {_toml_value(gate['batch_id'])}",
+                f"batch_digest = {_toml_value(gate['batch_digest'])}",
+                f"authority_path = {_toml_value(gate['authority_path'])}",
+                f"authority_sha256 = {_toml_value(gate['authority_sha256'])}",
+                f"pipeline_authority_path = {_toml_value(gate['pipeline_authority_path'])}",
+                f"pipeline_authority_sha256 = {_toml_value(gate['pipeline_authority_sha256'])}",
+                f"input_digest = {_toml_value(gate['input_digest'])}",
+                f"qualification_digest = {_toml_value(gate['qualification_digest'])}",
+                f"evidence_path = {_toml_value(gate['evidence_path'])}",
+                f"evidence_sha256 = {_toml_value(gate['evidence_sha256'])}",
+            ]
+        )
+
+
+def _render_plan(
+    chunk: dict[str, object],
+    qualification_gates: list[dict[str, object]] | None = None,
+) -> str:
     groups = chunk["groups"]
     recipe_order = list(
         dict.fromkeys(str(group["recipe_id"]) for group in groups)  # type: ignore[union-attr]
@@ -193,6 +219,7 @@ def _render_plan(chunk: dict[str, object]) -> str:
         'strategy = "recipe-then-variant"',
         f"recipe_order = {_toml_value(recipe_order)}",
     ]
+    _append_qualification_gates(lines, qualification_gates or [])
     for index, group in enumerate(groups, start=1):  # type: ignore[arg-type]
         lines.extend(
             [
@@ -209,7 +236,11 @@ def _render_plan(chunk: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _render_validation_plan(campaign_id: str, chunks: list[dict[str, object]]) -> str:
+def _render_validation_plan(
+    campaign_id: str,
+    chunks: list[dict[str, object]],
+    qualification_gates: list[dict[str, object]] | None = None,
+) -> str:
     """Render every final matrix once so authority resolution is shared."""
 
     executions = sum(int(chunk["executions"]) for chunk in chunks)
@@ -236,6 +267,7 @@ def _render_validation_plan(campaign_id: str, chunks: list[dict[str, object]]) -
         'strategy = "recipe-then-variant"',
         f"recipe_order = {_toml_value(recipe_order)}",
     ]
+    _append_qualification_gates(lines, qualification_gates or [])
     for chunk in chunks:
         for index, group in enumerate(chunk["groups"], start=1):  # type: ignore[arg-type]
             lines.extend(
@@ -352,6 +384,23 @@ def _render_manifest(document: dict[str, object]) -> str:
     lines.extend(["", "[summary]"])
     for name, value in summary.items():  # type: ignore[union-attr]
         lines.append(f"{name} = {_toml_value(value)}")
+    for gate in document.get("qualification_gates", []):
+        lines.extend(
+            [
+                "",
+                "[[qualification_gates]]",
+                f"batch_id = {_toml_value(gate['batch_id'])}",
+                f"batch_digest = {_toml_value(gate['batch_digest'])}",
+                f"authority_path = {_toml_value(gate['authority_path'])}",
+                f"authority_sha256 = {_toml_value(gate['authority_sha256'])}",
+                f"pipeline_authority_path = {_toml_value(gate['pipeline_authority_path'])}",
+                f"pipeline_authority_sha256 = {_toml_value(gate['pipeline_authority_sha256'])}",
+                f"input_digest = {_toml_value(gate['input_digest'])}",
+                f"qualification_digest = {_toml_value(gate['qualification_digest'])}",
+                f"evidence_path = {_toml_value(gate['evidence_path'])}",
+                f"evidence_sha256 = {_toml_value(gate['evidence_sha256'])}",
+            ]
+        )
     for chunk in document["chunks"]:  # type: ignore[index]
         lines.extend(
             [
@@ -399,6 +448,21 @@ def compile_auto_batches(
         root, model_path, performance_profile=performance_profile
     )
     bundles = _route_bundles(root, time_plan)
+    batch_authorities = list(
+        dict.fromkeys(str(bundle["batch_authority"]) for bundle in bundles)
+    )
+    batches = {
+        authority: load_width_batch(root, root / authority)
+        for authority in batch_authorities
+    }
+    qualification_gates = require_qualification_gates(root, list(batches.values()))
+    qualification_by_batch = {
+        str(gate["batch_id"]): gate for gate in qualification_gates
+    }
+    qualification_by_authority = {
+        authority: qualification_by_batch.get(str(batch["id"]))
+        for authority, batch in batches.items()
+    }
     packed = _pack_route_bundles(
         bundles,
         target_hours=target_minutes / 60,
@@ -429,7 +493,14 @@ def compile_auto_batches(
             "groups": groups,
         }
         relative_plan = directory / f"chunk-{position:03d}.toml"
-        payload = _render_plan(chunk)
+        chunk_gates = [
+            qualification_by_authority[authority]
+            for authority in dict.fromkeys(
+                str(group["batch_authority"]) for group in groups
+            )
+            if qualification_by_authority[authority] is not None
+        ]
+        payload = _render_plan(chunk, chunk_gates)
         chunk.update(
             {
                 "plan": str(relative_plan),
@@ -439,7 +510,9 @@ def compile_auto_batches(
         chunks.append(chunk)
         rendered[str(relative_plan)] = payload
 
-    validation_payload = _render_validation_plan(campaign_id, chunks)
+    validation_payload = _render_validation_plan(
+        campaign_id, chunks, qualification_gates
+    )
     resolved = _resolve_rendered_plan(
         root, f"{campaign_id}-validation.toml", validation_payload
     )
@@ -512,6 +585,8 @@ def compile_auto_batches(
         },
         "chunks": chunks,
     }
+    if qualification_gates:
+        body["qualification_gates"] = qualification_gates
     canonical = json.dumps(
         body, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode("utf-8")

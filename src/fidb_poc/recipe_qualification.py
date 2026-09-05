@@ -13,15 +13,24 @@ import subprocess
 import sys
 import tomllib
 
-from .authority_catalog import authority_catalog
 from .c_width import compile_c_width, materialize_width_configuration
 from .config import Configuration, select_configuration
 from .source_packs import MANAGED_SOURCE_DOWNLOADS
 from .staged_backend import execute_build_stage
 from .timing import utc_now
+from .width_batch import load_width_batch, project_width_batch_readiness
 
 AUTHORITY_SCHEMA = "fidb-recipe-qualification/v1"
-REPORT_SCHEMA = "fidb-recipe-qualification-report/v1"
+REPORT_SCHEMA = "fidb-recipe-qualification-report/v2"
+STATUS_SCHEMA = "fidb-recipe-qualification-status/v1"
+SEAL_SCHEMA = "fidb-recipe-qualification-seal/v1"
+QUALIFICATION_IMPLEMENTATION_PATHS = (
+    Path("worker.toml"),
+    Path("src/fidb_poc/adapters.py"),
+    Path("src/fidb_poc/config.py"),
+    Path("src/fidb_poc/source_build.py"),
+    Path("src/fidb_poc/staged_backend.py"),
+)
 _FIELDS = {
     "schema_version",
     "id",
@@ -108,38 +117,96 @@ def load_recipe_qualification(root: Path, path: Path) -> dict[str, object]:
     }
 
 
+def _reviewed_recipes(root: Path) -> list[dict[str, object]]:
+    rows = []
+    for path in sorted((root / "recipes").glob("*.toml")):
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+        rows.append(
+            {
+                "id": f'{document["name"]}@{document["version"]}',
+                "kind": "native",
+                "url": document["url"],
+                "sha256": document["sha256"],
+                "authority_path": str(path.relative_to(root)),
+            }
+        )
+    return rows
+
+
 def _batch(root: Path, batch_id: str) -> dict[str, object]:
-    matches = [
-        row for row in authority_catalog(root)["width_batches"] if row["id"] == batch_id
-    ]
+    matches = []
+    for path in sorted((root / "batches").glob("*.toml")):
+        batch = load_width_batch(root, path)
+        if batch["id"] == batch_id:
+            matches.append(batch)
     if len(matches) != 1:
         raise ValueError(f"unknown reviewed width batch: {batch_id}")
-    return matches[0]
+    return project_width_batch_readiness(matches[0], _reviewed_recipes(root))
+
+
+def _input_authorities(
+    root: Path, batch: dict[str, object]
+) -> tuple[list[dict[str, str]], str]:
+    recipe_paths = {
+        str(row["id"]): root / str(row["authority_path"])
+        for row in _reviewed_recipes(root)
+    }
+    paths = list(QUALIFICATION_IMPLEMENTATION_PATHS)
+    for library in batch["libraries"]:  # type: ignore[index]
+        recipe_id = str(library["recipe_id"])
+        if recipe_id not in recipe_paths:
+            raise ValueError(f"qualification lacks reviewed recipe {recipe_id}")
+        paths.append(recipe_paths[recipe_id].relative_to(root))
+    rows = []
+    for relative in sorted(set(paths), key=str):
+        path = root / relative
+        if not path.is_file():
+            raise ValueError(f"qualification input authority is missing: {relative}")
+        rows.append({"path": str(relative), "sha256": _sha256(path)})
+    return rows, _canonical_digest(rows)
+
+
+def _canonical_digest(value: object) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _cell_id(recipe_id: str, route_id: str, treatment_id: str) -> str:
     return f"{recipe_id}/{route_id}/{treatment_id}"
 
 
-def compile_recipe_qualification(root: Path, path: Path) -> dict[str, object]:
+def compile_recipe_qualification(
+    root: Path,
+    path: Path,
+    *,
+    _batch_projection: dict[str, object] | None = None,
+    validate_routes: bool = True,
+) -> dict[str, object]:
     root = root.expanduser().resolve()
     authority = load_recipe_qualification(root, path.expanduser().resolve())
-    batch = _batch(root, str(authority["batch_id"]))
-    width = compile_c_width(root, str(authority["width_authority"]))
-    available_routes = {
-        str(row["id"]): row
-        for row in width["routes"]
-        if row["toolchain_state"] == "qualified"
-    }
-    unknown = sorted(set(authority["route_ids"]) - available_routes.keys())
-    if unknown:
-        raise ValueError(
-            f"qualification routes are not qualified width routes: {unknown}"
-        )
+    batch = _batch_projection or _batch(root, str(authority["batch_id"]))
+    if batch["id"] != authority["batch_id"]:
+        raise ValueError("qualification batch projection selects a different batch")
+    width = None
+    if validate_routes:
+        width = compile_c_width(root, str(authority["width_authority"]))
+        available_routes = {
+            str(row["id"]): row
+            for row in width["routes"]
+            if row["toolchain_state"] == "qualified"
+        }
+        unknown = sorted(set(authority["route_ids"]) - available_routes.keys())
+        if unknown:
+            raise ValueError(
+                f"qualification routes are not qualified width routes: {unknown}"
+            )
     if batch["readiness"]["recipe_blocked_libraries"]:
         raise ValueError("qualification batch contains unresolved recipes")
     if batch["authorities"]["width"] != f"coverage/{authority['width_authority']}.toml":
         raise ValueError("qualification width does not match its batch")
+    input_authorities, input_digest = _input_authorities(root, batch)
 
     cells = [
         {
@@ -161,7 +228,13 @@ def compile_recipe_qualification(root: Path, path: Path) -> dict[str, object]:
         **authority,
         "evidence_path": str(evidence_path.relative_to(root)),
         "batch_digest": batch["batch_digest"],
-        "width_route_profile_digest": width["route_profile_digest"],
+        "width_route_profile_digest": (
+            width["route_profile_digest"]
+            if width is not None
+            else batch["authorities"]["width_route_profile_digest"]
+        ),
+        "input_authorities": input_authorities,
+        "input_digest": input_digest,
         "summary": {
             "libraries": len(batch["libraries"]),
             "routes": len(authority["route_ids"]),
@@ -287,6 +360,7 @@ def _new_report(plan: dict[str, object]) -> dict[str, object]:
         "batch_id": plan["batch_id"],
         "batch_digest": plan["batch_digest"],
         "width_route_profile_digest": plan["width_route_profile_digest"],
+        "input_digest": plan["input_digest"],
         "started_at_utc": utc_now(),
         "finished_at_utc": None,
         "summary": {
@@ -299,7 +373,25 @@ def _new_report(plan: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _load_report(path: Path, plan: dict[str, object]) -> dict[str, object]:
+def _archive_stale_report(path: Path, plan: dict[str, object]) -> Path:
+    digest = _sha256(path)
+    directory = path.parent / "history" / str(plan["id"])
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / f"{digest}.json"
+    suffix = 1
+    while destination.exists():
+        destination = directory / f"{digest}-{suffix}.json"
+        suffix += 1
+    path.replace(destination)
+    return destination
+
+
+def _load_report(
+    path: Path,
+    plan: dict[str, object],
+    *,
+    restart_stale: bool = False,
+) -> dict[str, object]:
     if not path.is_file():
         return _new_report(plan)
     report = json.loads(path.read_text(encoding="utf-8"))
@@ -309,15 +401,52 @@ def _load_report(path: Path, plan: dict[str, object]) -> dict[str, object]:
         "authority_sha256": plan["authority_sha256"],
         "batch_digest": plan["batch_digest"],
         "width_route_profile_digest": plan["width_route_profile_digest"],
+        "input_digest": plan["input_digest"],
     }
     if any(report.get(field) != value for field, value in expected.items()):
+        if restart_stale:
+            archived = _archive_stale_report(path, plan)
+            print(f"archived stale qualification evidence: {archived}", flush=True)
+            return _new_report(plan)
         raise ValueError(
-            "existing qualification report does not match current authority"
+            "existing qualification report does not match current authority; "
+            "rerun with --restart-stale to archive it and begin a new generation"
         )
     return report
 
 
-def _summarize(report: dict[str, object], total: int) -> None:
+def _seal_body(plan: dict[str, object], report: dict[str, object]) -> dict[str, object]:
+    latest = {str(row["id"]): row for row in report["results"]}
+    results = []
+    for cell in sorted(plan["cells"], key=lambda row: str(row["id"])):
+        row = latest[str(cell["id"])]
+        results.append(
+            {
+                "id": row["id"],
+                "compiler_sha256": row.get("compiler_sha256", ""),
+                "compiler_version": row.get("compiler_version", ""),
+                "archive_count": row.get("archive_count", 0),
+                "archive_sha256": row.get("archive_sha256", []),
+                "object_count": row.get("object_count", 0),
+                "object_set_sha256": row.get("object_set_sha256", ""),
+                "artifact_validation": row.get("artifact_validation", ""),
+            }
+        )
+    return {
+        "schema_version": SEAL_SCHEMA,
+        "qualification_id": plan["id"],
+        "authority_sha256": plan["authority_sha256"],
+        "batch_id": plan["batch_id"],
+        "batch_digest": plan["batch_digest"],
+        "width_route_profile_digest": plan["width_route_profile_digest"],
+        "input_digest": plan["input_digest"],
+        "results": results,
+    }
+
+
+def _summarize(
+    report: dict[str, object], total: int, plan: dict[str, object] | None = None
+) -> None:
     results = report["results"]
     latest = {row["id"]: row for row in results}
     built = sum(row["status"] == "built" for row in latest.values())
@@ -329,14 +458,161 @@ def _summarize(report: dict[str, object], total: int) -> None:
         "remaining": total - len(latest),
     }
     report["finished_at_utc"] = utc_now() if built == total else None
+    report.pop("seal", None)
+    if built == total and plan is not None:
+        body = _seal_body(plan, report)
+        report["seal"] = {
+            "schema_version": SEAL_SCHEMA,
+            "qualified_at_utc": report["finished_at_utc"],
+            "qualification_digest": _canonical_digest(body),
+        }
+
+
+def recipe_qualification_status(
+    root: Path,
+    path: Path,
+    *,
+    _plan: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Return a fail-closed, read-only qualification lifecycle projection."""
+
+    root = root.expanduser().resolve()
+    plan = _plan or compile_recipe_qualification(root, path)
+    evidence_path = root / str(plan["evidence_path"])
+    base = {
+        "schema_version": STATUS_SCHEMA,
+        "qualification_id": plan["id"],
+        "batch_id": plan["batch_id"],
+        "authority_path": plan["authority_path"],
+        "authority_sha256": plan["authority_sha256"],
+        "batch_digest": plan["batch_digest"],
+        "width_route_profile_digest": plan["width_route_profile_digest"],
+        "input_digest": plan["input_digest"],
+        "evidence_path": plan["evidence_path"],
+        "summary": {
+            "total": len(plan["cells"]),
+            "built": 0,
+            "failed": 0,
+            "remaining": len(plan["cells"]),
+        },
+        "satisfied": False,
+        "qualification_digest": None,
+        "evidence_sha256": None,
+        "blockers": [],
+    }
+    if not evidence_path.is_file():
+        return {
+            **base,
+            "state": "required",
+            "blockers": ["qualification has not been executed"],
+        }
+    try:
+        report = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return {
+            **base,
+            "state": "invalid",
+            "blockers": [f"qualification evidence is unreadable: {error}"],
+        }
+    expected = {
+        "schema_version": REPORT_SCHEMA,
+        "qualification_id": plan["id"],
+        "authority_sha256": plan["authority_sha256"],
+        "batch_id": plan["batch_id"],
+        "batch_digest": plan["batch_digest"],
+        "width_route_profile_digest": plan["width_route_profile_digest"],
+        "input_digest": plan["input_digest"],
+    }
+    drift = [field for field, value in expected.items() if report.get(field) != value]
+    evidence_sha256 = _sha256(evidence_path)
+    if drift:
+        return {
+            **base,
+            "state": "stale",
+            "evidence_sha256": evidence_sha256,
+            "blockers": [
+                "qualification evidence does not match current " + ", ".join(drift)
+            ],
+        }
+    results = report.get("results", [])
+    if not isinstance(results, list):
+        return {
+            **base,
+            "state": "invalid",
+            "evidence_sha256": evidence_sha256,
+            "blockers": ["qualification results must be an array"],
+        }
+    latest = {str(row.get("id")): row for row in results if isinstance(row, dict)}
+    expected_ids = {str(row["id"]) for row in plan["cells"]}
+    built = sum(
+        latest.get(cell_id, {}).get("status") == "built"
+        and latest.get(cell_id, {}).get("artifact_validation") == "passed"
+        for cell_id in expected_ids
+    )
+    attempted = sum(cell_id in latest for cell_id in expected_ids)
+    failed = attempted - built
+    summary = {
+        "total": len(expected_ids),
+        "built": built,
+        "failed": failed,
+        "remaining": len(expected_ids) - attempted,
+    }
+    if set(latest) - expected_ids:
+        return {
+            **base,
+            "state": "invalid",
+            "summary": summary,
+            "evidence_sha256": evidence_sha256,
+            "blockers": ["qualification evidence contains unexpected cell identities"],
+        }
+    seal = report.get("seal")
+    expected_seal = (
+        _canonical_digest(_seal_body(plan, report))
+        if built == len(expected_ids)
+        else None
+    )
+    sealed = (
+        isinstance(seal, dict)
+        and seal.get("schema_version") == SEAL_SCHEMA
+        and seal.get("qualification_digest") == expected_seal
+        and report.get("finished_at_utc") is not None
+    )
+    if built == len(expected_ids) and failed == 0 and sealed:
+        return {
+            **base,
+            "state": "qualified",
+            "summary": summary,
+            "satisfied": True,
+            "qualification_digest": expected_seal,
+            "evidence_sha256": evidence_sha256,
+            "blockers": [],
+        }
+    blockers = []
+    if failed:
+        blockers.append(f"{failed} qualification cells failed")
+    if summary["remaining"]:
+        blockers.append(f'{summary["remaining"]} qualification cells remain')
+    if built == len(expected_ids) and not sealed:
+        blockers.append("complete results lack a valid qualification seal")
+    return {
+        **base,
+        "state": "failed" if failed else "incomplete",
+        "summary": summary,
+        "evidence_sha256": evidence_sha256,
+        "blockers": blockers,
+    }
 
 
 def run_recipe_qualification(
-    root: Path, path: Path, *, verbose: bool = False
+    root: Path,
+    path: Path,
+    *,
+    verbose: bool = False,
+    restart_stale: bool = False,
 ) -> dict[str, object]:
     plan = compile_recipe_qualification(root, path)
     evidence_path = root.resolve() / str(plan["evidence_path"])
-    report = _load_report(evidence_path, plan)
+    report = _load_report(evidence_path, plan, restart_stale=restart_stale)
     completed = {row["id"] for row in report["results"] if row["status"] == "built"}
     pending = [row for row in plan["cells"] if row["id"] not in completed]
     with concurrent.futures.ThreadPoolExecutor(
@@ -350,7 +626,7 @@ def run_recipe_qualification(
             row = future.result()
             report["results"].append(row)
             report["results"].sort(key=lambda item: str(item["id"]))
-            _summarize(report, len(plan["cells"]))
+            _summarize(report, len(plan["cells"]), plan)
             _atomic_json(evidence_path, report)
             print(f"{row['status']}: {row['id']}", flush=True)
     return report
@@ -364,24 +640,47 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--execute", action="store_true")
     parser.add_argument(
+        "--status", action="store_true", help="show the current sealed gate state"
+    )
+    parser.add_argument(
         "--cells", action="store_true", help="include every exact canary cell"
     )
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--restart-stale",
+        action="store_true",
+        help="archive mismatched evidence before starting a new generation",
+    )
     arguments = parser.parse_args(argv)
     root = arguments.project_root.resolve()
     authority = arguments.authority
     if not authority.is_absolute():
         authority = root / authority
     try:
+        if arguments.execute and arguments.status:
+            raise ValueError("--execute and --status are mutually exclusive")
+        if arguments.restart_stale and not arguments.execute:
+            raise ValueError("--restart-stale requires --execute")
         document = (
-            run_recipe_qualification(root, authority, verbose=arguments.verbose)
+            run_recipe_qualification(
+                root,
+                authority,
+                verbose=arguments.verbose,
+                restart_stale=arguments.restart_stale,
+            )
             if arguments.execute
-            else compile_recipe_qualification(root, authority)
+            else (
+                recipe_qualification_status(root, authority)
+                if arguments.status
+                else compile_recipe_qualification(root, authority)
+            )
         )
         if not arguments.cells:
             document = {key: value for key, value in document.items() if key != "cells"}
         print(json.dumps(document, indent=2, sort_keys=True))
         if arguments.execute and document["summary"]["failed"]:
+            return 1
+        if arguments.status and not document["satisfied"]:
             return 1
         return 0
     except (OSError, ValueError) as error:

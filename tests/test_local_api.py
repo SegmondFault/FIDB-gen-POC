@@ -63,10 +63,12 @@ class LocalApiTests(unittest.TestCase):
         for name in (
             "batches",
             "benchmarks",
+            "campaigns",
             "coverage",
             "lanes",
             "performance",
             "plans",
+            "qualification",
             "recipes",
             "retention",
             "sensitivity",
@@ -450,10 +452,13 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v16")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v18")
+        self.assertEqual(
+            document["campaign_programmes"][0]["summary"]["candidate_population"], 276
+        )
         self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
-        self.assertEqual(len(document["recipes"]), 24)
+        self.assertEqual(len(document["recipes"]), 30)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)
@@ -477,7 +482,7 @@ class LocalApiTests(unittest.TestCase):
         )
         self.assertEqual(
             width_batch["readiness"]["queue_state"],
-            "not-materialized-disarmed",
+            "qualification-historical-exempt",
         )
         next_cohort = next(
             row for row in document["width_batches"] if row["id"] == "batch-c11-20"
@@ -487,7 +492,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(next_cohort["readiness"]["blocked_executions"], 2_220)
         self.assertEqual(
             next_cohort["readiness"]["queue_state"],
-            "not-materialized-disarmed",
+            "qualification-blocked",
         )
         self.assertTrue(document["plans"])
 
@@ -535,9 +540,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["run"]["state"], "not-started")
         self.assertFalse(document["canary_gate"]["ready"])
 
-        status, live, _ = self.request(
-            "GET", "/api/v1/machine-validation/run"
-        )
+        status, live, _ = self.request("GET", "/api/v1/machine-validation/run")
         self.assertEqual(status, 200)
         self.assertEqual(live["run"]["state"], "not-started")
         self.assertFalse(live["canary_gate"]["ready"])
@@ -570,9 +573,7 @@ class LocalApiTests(unittest.TestCase):
             "POST", "/api/v1/machine-validation/start", {"mode": "unsafe"}
         )
         self.assertEqual(status, 400)
-        self.assertEqual(
-            document["error"]["code"], "invalid-machine-validation-mode"
-        )
+        self.assertEqual(document["error"]["code"], "invalid-machine-validation-mode")
 
         paused = {"state": "pausing", "run_id": "fixed-full", "mode": "full"}
         with patch(
@@ -617,9 +618,7 @@ class LocalApiTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(document, compiled)
-        compile_observatory.assert_called_once_with(
-            self.root, selected_run="c10:run-1"
-        )
+        compile_observatory.assert_called_once_with(self.root, selected_run="c10:run-1")
 
         status, document, _ = self.request(
             "GET", "/api/v1/validation-observatory?run_id=a&run_id=b"

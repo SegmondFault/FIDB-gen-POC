@@ -12,7 +12,15 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v16")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v18")
+        self.assertEqual(len(document["campaign_programmes"]), 1)
+        programme = document["campaign_programmes"][0]
+        self.assertEqual(programme["summary"]["candidate_population"], 276)
+        self.assertEqual(programme["summary"]["cohorts"], 28)
+        self.assertEqual(programme["summary"]["planned_campaign_executions"], 61_272)
+        self.assertEqual(
+            len(document["source_digests"]["campaign_programmes_sha256"]), 64
+        )
         self.assertEqual(len(document["machine_validations"]), 1)
         validation = document["machine_validations"][0]
         self.assertEqual(validation["batch_kind"], "validation-run")
@@ -66,7 +74,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             len(document["source_digests"]["performance_profiles_sha256"]), 64
         )
-        self.assertEqual(len(document["recipes"]), 24)
+        self.assertEqual(len(document["recipes"]), 30)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(
@@ -150,7 +158,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(campaign_b["unique_executions"], 5_094)
         self.assertEqual(campaign_b["replayed_executions"], 10_188)
-        self.assertEqual(len(document["width_studies"]), 2)
+        self.assertEqual(len(document["width_studies"]), 3)
         width_study = next(
             row for row in document["width_studies"] if row["id"] == "batch-010"
         )
@@ -181,7 +189,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(c20_study["readiness"]["source_evidence_families"], 20)
         self.assertEqual(c20_study["readiness"]["missing_recipe_families"], 0)
 
-        self.assertEqual(len(document["width_batches"]), 3)
+        self.assertEqual(len(document["width_batches"]), 4)
         width_batch = next(
             row for row in document["width_batches"] if row["id"] == "batch-020"
         )
@@ -197,7 +205,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(android_gap["summary"]["total_executions"], 48)
         self.assertEqual(
-            android_gap["readiness"]["queue_state"], "not-materialized-disarmed"
+            android_gap["readiness"]["queue_state"], "historical-sealed"
         )
         next_cohort = next(
             row for row in document["width_batches"] if row["id"] == "batch-c11-20"
@@ -209,7 +217,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(next_cohort["readiness"]["blocked_executions"], 0)
         self.assertEqual(
             next_cohort["readiness"]["queue_state"],
-            "not-materialized-disarmed",
+            "qualification-stale",
         )
         time_plan = document["time_block_plan"]
         self.assertEqual(time_plan["state"], "draft-disarmed")

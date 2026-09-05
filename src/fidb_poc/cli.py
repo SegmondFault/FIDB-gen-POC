@@ -235,8 +235,17 @@ def _machine_validation_main(argv: list[str]) -> int:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     for command in (
-        "status", "reconcile", "materialize", "preflight", "start", "pause",
-        "resume", "run", "analyze-hashes", "scheduled-hashes", "_worker",
+        "status",
+        "reconcile",
+        "materialize",
+        "preflight",
+        "start",
+        "pause",
+        "resume",
+        "run",
+        "analyze-hashes",
+        "scheduled-hashes",
+        "_worker",
     ):
         child = commands.add_parser(command)
         child.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -293,11 +302,15 @@ def _machine_validation_main(argv: list[str]) -> int:
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0 if document["state"] == "ready" else 1
         if arguments.command == "start":
-            document = start_validation(arguments.project_root, arguments.mode, arguments.runtime)
+            document = start_validation(
+                arguments.project_root, arguments.mode, arguments.runtime
+            )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "pause":
-            document = pause_validation(arguments.project_root, arguments.runtime, actor="cli")
+            document = pause_validation(
+                arguments.project_root, arguments.runtime, actor="cli"
+            )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "resume":
@@ -306,7 +319,10 @@ def _machine_validation_main(argv: list[str]) -> int:
             return 0
         if arguments.command == "run":
             document = run_validation(
-                arguments.project_root, arguments.mode, arguments.runtime, arguments.run_id
+                arguments.project_root,
+                arguments.mode,
+                arguments.runtime,
+                arguments.run_id,
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0 if document["state"] == "measured-complete" else 1
@@ -326,9 +342,15 @@ def _machine_validation_main(argv: list[str]) -> int:
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "_worker":
-            positions = [int(value) for value in arguments.positions.split(",") if value]
+            positions = [
+                int(value) for value in arguments.positions.split(",") if value
+            ]
             return _worker(
-                arguments.project_root, arguments.runtime, arguments.run_id, positions, arguments.mode
+                arguments.project_root,
+                arguments.runtime,
+                arguments.run_id,
+                positions,
+                arguments.mode,
             )
 
         if arguments.command == "status":
@@ -627,6 +649,37 @@ def _compile_width_batch_main(argv: list[str]) -> int:
         ]
         if len(matches) != 1:
             raise ValueError(f"unknown reviewed width batch: {arguments.batch}")
+        print(json.dumps(matches[0], indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
+def _campaign_programme_main(argv: list[str]) -> int:
+    result = argparse.ArgumentParser(
+        prog="fidb-poc campaign-programme",
+        description="Validate and inspect a disarmed research-to-build programme.",
+    )
+    result.add_argument("--project-root", type=Path, default=Path.cwd())
+    result.add_argument(
+        "--programme",
+        type=Path,
+        default=Path("campaigns/c80-four-source-n80-v1.toml"),
+    )
+    arguments = result.parse_args(argv)
+    try:
+        from .authority_catalog import authority_catalog
+
+        catalog = authority_catalog(arguments.project_root)
+        requested = str(arguments.programme)
+        matches = [
+            row
+            for row in catalog["campaign_programmes"]
+            if row["authorities"]["programme"] == requested or row["id"] == requested
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"unknown campaign programme: {requested}")
         print(json.dumps(matches[0], indent=2, sort_keys=True))
         return 0
     except (OSError, ValueError) as error:
@@ -1093,10 +1146,16 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_main(tokens[1:])
     if tokens and tokens[0] == "compile-width-batch":
         return _compile_width_batch_main(tokens[1:])
+    if tokens and tokens[0] == "campaign-programme":
+        return _campaign_programme_main(tokens[1:])
     if tokens and tokens[0] == "qualify-recipes":
         from .recipe_qualification import main as qualification_main
 
         return qualification_main(tokens[1:])
+    if tokens and tokens[0] == "qualification":
+        from .qualification_pipeline import main as qualification_pipeline_main
+
+        return qualification_pipeline_main(tokens[1:])
     if tokens and tokens[0] == "performance":
         return _performance_main(tokens[1:])
     if tokens and tokens[0] == "plan-time-blocks":

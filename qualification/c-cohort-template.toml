@@ -1,0 +1,35 @@
+schema_version = "fidb-recipe-qualification-template/v1"
+id = "c-target-generation-edges-v1"
+state = "template-disarmed"
+language_id = "c"
+treatment_id = "baseline_o2"
+workers = 4
+build_jobs_per_cell = 4
+expected_routes_per_library = 16
+purpose = "Qualify every accepted C-family recipe at one route per target class and the oldest compiler-generation edges before queue promotion."
+
+[gate]
+require_all_selected_libraries = true
+require_all_cells_built = true
+seal_input_authorities = true
+archive_stale_evidence = true
+automatic_arming = false
+
+route_ids = [
+  "linux-x86-64-gcc",
+  "linux-arm32-gcc",
+  "linux-aarch64-gcc",
+  "linux-mips32-be-gcc",
+  "linux-mips32-le-gcc",
+  "linux-powerpc32-be-gcc",
+  "linux-sh32-gcc",
+  "linux-m68k-gcc",
+  "windows-x86-64-llvm-mingw",
+  "android-arm64-ndk-r29-clang-api21",
+  "android-arm32-ndk-r29-clang-api21",
+  "android-x86-64-ndk-r29-clang-api21",
+  "android-x86-32-ndk-r29-clang-api21",
+  "linux-x86-64-gcc-12",
+  "windows-x86-64-llvm-mingw-clang-15",
+  "android-arm64-ndk-r27d-clang-api21",
+]

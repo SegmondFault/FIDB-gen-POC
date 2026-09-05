@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from fidb_poc.recipe_qualification import (
     compile_recipe_qualification,
+    recipe_qualification_status,
     run_recipe_qualification,
 )
 
@@ -80,6 +81,7 @@ class RecipeQualificationTests(unittest.TestCase):
             ):
                 first = run_recipe_qualification(self.root, authority)
                 second = run_recipe_qualification(self.root, authority)
+                status = recipe_qualification_status(self.root, authority, _plan=plan)
             self.assertEqual(
                 first["summary"], {"total": 1, "built": 1, "failed": 0, "remaining": 0}
             )
@@ -87,6 +89,19 @@ class RecipeQualificationTests(unittest.TestCase):
             self.assertEqual(execute.call_count, 1)
             self.assertEqual(first["results"][0]["artifact_validation"], "passed")
             self.assertNotIn("analysis_artifact_sha256", first["results"][0])
+            self.assertEqual(
+                first["seal"]["schema_version"], "fidb-recipe-qualification-seal/v1"
+            )
+            self.assertEqual(status["state"], "qualified")
+            self.assertTrue(status["satisfied"])
+            self.assertEqual(
+                status["qualification_digest"], first["seal"]["qualification_digest"]
+            )
+
+            stale_plan = {**plan, "input_digest": "f" * 64}
+            stale = recipe_qualification_status(self.root, authority, _plan=stale_plan)
+            self.assertEqual(stale["state"], "stale")
+            self.assertFalse(stale["satisfied"])
 
     def test_failed_cells_remain_pending_without_losing_the_attempt(self) -> None:
         report = {

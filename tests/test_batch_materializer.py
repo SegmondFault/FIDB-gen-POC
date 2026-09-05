@@ -87,6 +87,16 @@ class BatchMaterializerTests(unittest.TestCase):
         self.assertEqual(result["state"], "materialized-disarmed")
         self.assertNotIn("rendered_plans", result)
 
+    def test_materialization_fails_closed_when_qualification_is_not_satisfied(self):
+        with patch(
+            "fidb_poc.batch_materializer.require_qualification_gates",
+            side_effect=ValueError(
+                "campaign materialization blocked by qualification: batch-next=stale"
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "blocked by qualification"):
+                compile_materialization(self.root)
+
 
 if __name__ == "__main__":
     unittest.main()
