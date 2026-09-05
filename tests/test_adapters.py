@@ -276,6 +276,9 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("-DCMAKE_C_COMPILER=/usr/bin/gcc", commands[0])
         self.assertIn("-DCMAKE_CXX_COMPILER=/usr/bin/g++", commands[0])
         self.assertIn("-DCMAKE_CXX_FLAGS=-O0 -fPIC", commands[0])
+        self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_PNG=ON", commands[0])
+        self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON", commands[0])
+        self.assertIn("-DHB_BUILD_GPU_DEMO=OFF", commands[0])
         self.assertEqual(commands[1][0:7], (
             "cmake", "--build", "fidb-build", "--parallel", "8", "--target", "harfbuzz"
         ))

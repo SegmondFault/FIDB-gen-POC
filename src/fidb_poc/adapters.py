@@ -358,10 +358,13 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "-DHB_HAVE_ICU=OFF",
             "-DHB_HAVE_GOBJECT=OFF",
             "-DHB_HAVE_INTROSPECTION=OFF",
+            "-DCMAKE_DISABLE_FIND_PACKAGE_PNG=ON",
+            "-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON",
             "-DHB_BUILD_SUBSET=ON",
             "-DHB_BUILD_RASTER=ON",
             "-DHB_BUILD_VECTOR=ON",
             "-DHB_BUILD_GPU=ON",
+            "-DHB_BUILD_GPU_DEMO=OFF",
         ),
         (
             "harfbuzz",
