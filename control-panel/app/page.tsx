@@ -20,6 +20,7 @@ import {
   type WidthBatch,
   type WidthCompilation,
   type WidthStudy,
+  type CampaignProgramme,
   type HashTypeAnalysis,
   type HashDiscriminationStatus,
   type NoisyHashRow,
@@ -318,13 +319,13 @@ export default function Home() {
       id: batch.id,
       name: batch.name,
       status: batch.readiness.blockers.length ? 'Blocked' : 'Defined',
-      progress: `${ready} / ${batch.summary.libraries} libraries recipe-ready`,
+      progress: `${ready} / ${batch.summary.libraries} recipes · qualification ${batch.qualification.state.replaceAll('-', ' ')}`,
       percent: Math.round((ready / batch.summary.libraries) * 100),
       worker: '—',
       route: `${batch.summary.route_profiles} routes × ${batch.summary.executable_treatments} treatments`,
       eta: estimatedHours === undefined ? '—' : `≈${estimatedHours.toFixed(1)}h`,
       tier: 'W+',
-      note: `${batch.authority_path} · ${batch.summary.total_executions.toLocaleString()} exact executions · disarmed`,
+      note: `${batch.authority_path} · ${batch.summary.total_executions.toLocaleString()} exact executions · ${batch.qualification.promotion_state.replaceAll('-', ' ')}`,
     };
   });
   const materializedBatchRows: BatchRow[] = (factory.authority?.materialized_campaigns ?? [])
@@ -1209,6 +1210,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
   const noisyHashes = factory.noisyHashes;
   const hashDiscrimination = authority?.hash_discrimination;
   const retention = factory.retention;
+  const qualificationPipeline = authority?.qualification_pipeline;
   const selectedLanguage = coverageUniverse?.languages.find(language => language.id === selectedLanguageId);
   const languageProfiles = (coverageUniverse?.profiles ?? []).filter(profile => profile.language_id === selectedLanguageId);
   const inventoryCells = authority?.plans.flatMap(plan => (
@@ -1805,10 +1807,14 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
 
       <LanguageScopeSelector languages={coverageUniverse?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
+      {selectedLanguageId === 'c' && authority?.campaign_programmes.map(programme => (
+        <CampaignProgrammePanel key={programme.id} programme={programme} />
+      ))}
+
       <section className="panel operational-matrix-index" aria-label="Operational matrix build order">
         <header>
           <h3>Operational matrix</h3>
-          <div className="operational-matrix-counts"><span><b>{builtWidthRows.length}</b> built subjects</span><span><b>{scheduledBatchRows.length}</b> ordered batches</span><span><b>{unscheduledRecipes.length}</b> buildable / unscheduled</span><span><b>{missingRecipeFamilies.length}</b> recipe gaps</span><span><b>{missingToolchainRequirements.length}</b> toolchain gaps</span></div>
+          <div className="operational-matrix-counts"><span><b>{builtWidthRows.length}</b> built subjects</span><span><b>{scheduledBatchRows.length}</b> ordered batches</span><span><b>{qualificationPipeline ? `${qualificationPipeline.summary.satisfied}/${qualificationPipeline.summary.batches}` : '—'}</b> qualification gates</span><span><b>{unscheduledRecipes.length}</b> buildable / unscheduled</span><span><b>{missingRecipeFamilies.length}</b> recipe gaps</span><span><b>{missingToolchainRequirements.length}</b> toolchain gaps</span></div>
         </header>
 
         <section className="operational-matrix-band built-band">
@@ -1831,8 +1837,19 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </ol>
         </section>
 
+        {qualificationPipeline && <section className="operational-matrix-band qualification-band">
+          <div className="operational-band-title"><b>03</b><span><strong>Campaign qualification</strong><small>Real compilation-only gate between reviewed recipes and queue-eligible campaign blocks.</small></span><em>{qualificationPipeline.summary.qualified} qualified · {qualificationPipeline.summary.blocked} blocked · enforced</em></div>
+          <div className="operational-qualification-list">
+            {qualificationPipeline.gates.map(gate => {
+              const tone = gate.state === 'qualified' ? 'ready' : gate.state === 'historical-exempt' ? 'complete' : 'blocked';
+              const label = gate.state === 'historical-exempt' ? 'HISTORICAL SEAL' : gate.state.replaceAll('-', ' ').toUpperCase();
+              return <article key={gate.batch_id}><span className={`operational-state ${tone}`}>{label}</span><p><strong>{gate.batch_id}</strong><small>{gate.authority_path ?? gate.reason ?? 'qualification authority required'}{gate.blockers.length ? ` · ${gate.blockers.join(' · ')}` : ''}</small></p><div><b>{gate.summary.total ? `${gate.summary.built}/${gate.summary.total}` : '—'}</b><span>compile cells</span></div><div><b>{gate.satisfied ? gate.promotion_state.replaceAll('-', ' ') : 'campaign blocked'}</b><span>promotion</span></div></article>;
+            })}
+          </div>
+        </section>}
+
         {machineValidation && <section className="operational-matrix-band validation-band">
-          <div className="operational-band-title"><b>03</b><span><strong>Validation and hash discrimination</strong><small>Machine cohorts measure controlled width; held-out binaries test the corpus; HDI learns how strongly each compatible hash distinguishes provenance.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} cohort · {ecologicalValidation?.summary.completed_cases ?? 0} ecological · HDI {hashDiscrimination?.summary.scored_signatures ?? '—'}</em></div>
+          <div className="operational-band-title"><b>04</b><span><strong>Validation and hash discrimination</strong><small>Machine cohorts measure controlled width; held-out binaries test the corpus; HDI learns how strongly each compatible hash distinguishes provenance.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} cohort · {ecologicalValidation?.summary.completed_cases ?? 0} ecological · HDI {hashDiscrimination?.summary.scored_signatures ?? '—'}</em></div>
           <div className="operational-validation-stack">
             <div className="operational-validation-row"><span className={`operational-state ${machineValidation.run.state === 'complete' ? 'ready' : ['queued', 'preparing-index', 'running', 'pausing', 'paused', 'interrupted'].includes(machineValidation.run.state) ? 'next' : machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{['queued', 'preparing-index', 'running', 'pausing'].includes(machineValidation.run.state) ? machineValidation.run.state.replaceAll('-', ' ').toUpperCase() : ['paused', 'interrupted'].includes(machineValidation.run.state) ? 'PAUSED · RESUMABLE' : machineValidation.run.state === 'complete' ? 'MEASURED' : machineValidation.run.state === 'failed' && (machineValidation.run.expected_work_units ?? 0) > machineValidation.run.complete_work_units ? 'RETRY · RESUMABLE' : machineValidation.readiness.eligible ? 'READY TO RUN' : 'WAITING'}</span><p><strong>Machine validation · {machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · fixed RNG seed · {machineValidation.summary.composite_programs} composites</small></p><div><b>{machineValidation.run.expected_work_units ? `${machineValidation.run.complete_work_units}/${machineValidation.run.expected_work_units}` : machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>{machineValidation.run.expected_work_units ? 'run units' : 'libraries to gate'}</span></div><div><b>{machineValidation.canary_gate.ready ? 'PASS' : `≈${machineValidation.planning.central_wall_hours.toFixed(0)}h`}</b><span>{machineValidation.canary_gate.ready ? 'canary gate' : 'planning wall'}</span></div></div>
             <div className="operational-validation-row"><span className={`operational-state ${ecologicalValidation?.corpus.materialized_generations ? 'ready' : 'blocked'}`}>{ecologicalValidation?.corpus.materialized_generations ? 'CORPUS READY' : 'NO CORPUS'}</span><p><strong>Ecological validation · held-out binaries</strong><small>{ecologicalValidation?.summary.imported_cases ?? 0} imports · {ecologicalValidation?.aggregate.measured_cases ?? 0} measured · entire compatible lane corpus · never execute imports</small></p><div><b>{ecologicalValidation?.aggregate.failure_summary.collisions ?? 0}</b><span>collisions</span></div><div><b>{ecologicalValidation?.aggregate.failure_summary.misses ?? 0}</b><span>misses</span></div></div>
@@ -1841,13 +1858,13 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
         </section>}
 
         <section className="operational-matrix-band retention-band">
-          <div className="operational-band-title"><b>04</b><span><strong>Retention & garbage collection</strong><small>Terminal queue or validation → verified dry-run → bounded collection → worker recycle → memory audit.</small></span><em>{retention?.latest_plan ? `${retention.latest_plan.summary.actions.toLocaleString()} actions · ${formatBytes(retention.latest_plan.summary.recoverable_apparent_bytes)}` : 'awaiting dry-run'}</em></div>
+          <div className="operational-band-title"><b>05</b><span><strong>Retention & garbage collection</strong><small>Terminal queue or validation → verified dry-run → bounded collection → worker recycle → memory audit.</small></span><em>{retention?.latest_plan ? `${retention.latest_plan.summary.actions.toLocaleString()} actions · ${formatBytes(retention.latest_plan.summary.recoverable_apparent_bytes)}` : 'awaiting dry-run'}</em></div>
           <div className="operational-retention-row"><span className={`operational-state ${retention?.latest_plan?.automatic_apply_eligible ? 'ready' : 'blocked'}`}>{retention?.latest_plan ? retention.latest_plan.automatic_apply_eligible ? 'AUTO ELIGIBLE' : 'MANUAL REVIEW' : 'NOT PLANNED'}</span><p><strong>{retention?.policy.authority_path ?? 'retention/policy.toml'}</strong><small>{retention?.latest_plan ? `${retention.latest_plan.summary.verified_successes.toLocaleString()} seals verified · ${retention.latest_plan.summary.preserved.toLocaleString()} protected · ${retention.latest_plan.summary.quarantined.toLocaleString()} quarantined` : 'content-addressed plan required before deletion'}</small></p><div><b>{retention?.latest_plan ? formatDurationNs(retention.latest_plan.estimated_apply_seconds * 1_000_000_000) : '—'}</b><span>estimated apply</span></div><div><b>{retention?.memory_cleanup.latest_session?.workers ? `${retention.memory_cleanup.latest_session.passed ?? 0}/${retention.memory_cleanup.latest_session.workers}` : '—'}</b><span>memory audits pass</span></div></div>
         </section>
 
         <div className="operational-gap-grid">
           <section className="operational-matrix-band unscheduled-band">
-            <div className="operational-band-title"><b>05</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
+            <div className="operational-band-title"><b>06</b><span><strong>Buildable but unscheduled</strong><small>A reviewed recipe and source-capable route exist, but no active queue batch selects them.</small></span><em>{unscheduledRecipes.length}</em></div>
             <div className="operational-compact-list">
               {unscheduledRecipes.map(recipe => <article key={recipe.id}><span className="operational-state ready">READY</span><p><strong>{recipe.name} {recipe.version}</strong><small>{recipe.adapter} · {recipe.coverage}</small></p></article>)}
               {!unscheduledRecipes.length && <div className="operational-empty"><strong>No reviewed recipe is stranded</strong><small>Every currently buildable top-ten subject is represented in the active queue.</small></div>}
@@ -1855,7 +1872,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </section>
 
           <section className="operational-matrix-band recipe-gap-band">
-            <div className="operational-band-title"><b>06</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
+            <div className="operational-band-title"><b>07</b><span><strong>No recipe yet</strong><small>Ranked family and source evidence exist, but no reviewed build recipe does.</small></span><em>{missingRecipeFamilies.length}</em></div>
             <div className="operational-compact-list">
               {missingRecipeFamilies.map(family => <article key={family.id}><span className="operational-state gap">RECIPE GAP</span><p><strong>#{family.rank} {family.label}</strong><small>{family.source_state} · {family.selection_evidence}</small></p></article>)}
               {!missingRecipeFamilies.length && <div className="operational-empty"><strong>Top-ten recipe set complete</strong><small>The broader C-family census is not promoted into this executable matrix until its family rows and source evidence are registered.</small></div>}
@@ -1863,7 +1880,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
           </section>
 
           <section className="operational-matrix-band toolchain-gap-band">
-            <div className="operational-band-title"><b>07</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
+            <div className="operational-band-title"><b>08</b><span><strong>No executable toolchain yet</strong><small>Target/compiler demand exists, but neither an installed native route nor a source-capable cross route is registered.</small></span><em>{missingToolchainRequirements.length}</em></div>
             <div className="operational-compact-list">
               {missingToolchainRequirements.map(requirement => <article key={requirement.id}><span className="operational-state gap">{requirement.route_state.replaceAll('-', ' ')}</span><p><strong>{requirement.target_label} · {requirement.compiler_label}</strong><small>#{requirement.order} · {requirement.acquisition} · {requirement.worker_class}</small></p></article>)}
               {!missingToolchainRequirements.length && <div className="operational-empty"><strong>No toolchain gaps in the selected width</strong><small>Every demanded target/compiler pair has an executable route authority.</small></div>}
@@ -2313,6 +2330,53 @@ function AttemptTimingRow({ attempt, now }: { attempt: CoordinatorAttempt; now: 
   return <div><span className={`timing-result ${attempt.state}`}>{attempt.attempt_number > 1 ? `retry ${attempt.attempt_number}` : attempt.state}</span><p><strong>{attempt.job_id.slice(0, 12)}</strong><small>{attempt.worker_id} · {formatStartedAt(attempt.started_at)}{attempt.queue_wait_duration_ns !== undefined && attempt.queue_wait_duration_ns !== null ? ` · waited ${formatDurationNs(attempt.queue_wait_duration_ns)}` : ''}</small></p><b>{formatDurationNs(elapsedNs(attempt.started_at, now, attempt.ended_at))}</b></div>;
 }
 
+function CampaignProgrammePanel({ programme }: { programme: CampaignProgramme }) {
+  const summary = programme.summary;
+  const stageLabel = (stage: string) => stage.replaceAll('-', ' ').toUpperCase();
+  const stageTone = (stage: string) => stage === 'queue-candidate'
+    ? 'ready'
+    : stage === 'candidate-screen'
+      ? 'cold'
+      : 'warning';
+  const funnel = [
+    ['Research frontier', summary.candidate_population, 'published candidates'],
+    ['C screen', summary.screened_candidates, 'accepted subjects'],
+    ['Source pin', summary.source_pinned_candidates, 'reviewed releases'],
+    ['Source cache', summary.source_cached_candidates, 'verified archives'],
+    ['Recipe', summary.recipe_ready_candidates, 'reviewed adapters'],
+    ['Qualification', summary.qualification_satisfied_candidates, 'sealed subjects'],
+  ] as const;
+  return <section className="panel c80-programme-panel">
+    <div className="c80-programme-head"><div><span>C80 PROGRAMME · FOUR-SOURCE N80</span><h3>{programme.label}</h3></div><div><strong>{programme.candidate_cumulative_proxy_pct.toFixed(6)}%</strong><small>cumulative popularity proxy</small></div><div><strong>{summary.cohorts}</strong><small>10-wide cohorts · final {summary.final_cohort_size}</small></div><div><strong>{summary.planned_campaign_executions.toLocaleString()}</strong><small>planned width executions</small></div><span className="operational-state blocked">RESEARCH PROXY · DISARMED</span></div>
+    <div className="c80-funnel" aria-label="C80 planning funnel">
+      {funnel.map(([label, value, detail], index) => <Fragment key={label}><article><span>{label}</span><strong>{value.toLocaleString()}<small> / {summary.candidate_population}</small></strong><em>{detail}</em></article>{index < funnel.length - 1 && <i>→</i>}</Fragment>)}
+    </div>
+    <div className="c80-workload-strip"><span><b>{programme.route_profiles_per_library}</b> routes</span><span><b>{programme.treatments_per_route}</b> treatments</span><span><b>{programme.campaign_executions_per_library}</b> cells / accepted library</span><span><b>{programme.qualification_routes_per_library}</b> qualification edges / library</span><span><b>{summary.planned_qualification_cells.toLocaleString()}</b> maximum qualification cells</span></div>
+    <div className="c80-cohort-ledger">
+      <header><span>Cohort / research ranks</span><span>Screened</span><span>Source / cache</span><span>Recipes</span><span>Qualification</span><span>Current gate</span><span></span></header>
+      {programme.cohorts.map(cohort => <details key={cohort.id}>
+        <summary><div><strong>{String(cohort.order).padStart(2, '0')} · {cohort.id}</strong><small>ranks {cohort.candidate_rank_start}–{cohort.candidate_rank_end} · {cohort.candidates.slice(0, 3).map(row => row.display_name).join(', ')}{cohort.capacity > 3 ? '…' : ''}</small></div><b>{cohort.counts.screened}/{cohort.capacity}</b><b>{cohort.counts.source_pinned}/{cohort.counts.source_cached}</b><b>{cohort.counts.recipe_ready}/{cohort.capacity}</b><b>{cohort.counts.qualification_satisfied}/{cohort.capacity}</b><span className={`evidence-badge ${stageTone(cohort.stage)}`}>{stageLabel(cohort.stage)}</span><em>EXPAND</em></summary>
+        <section><header><span>Rank / candidate</span><span>Research</span><span>C screen</span><span>Source</span><span>Recipe</span><span>Qualification</span><span>Next gate</span></header>{cohort.candidates.map(candidate => <article key={candidate.rank}><div><b>#{candidate.rank} {candidate.display_name}</b><small>{candidate.subject_id !== candidate.canonical_key ? `${candidate.canonical_key} → ${candidate.subject_id}` : candidate.canonical_key}</small></div><span>{candidate.source_breadth}/4 sources<br /><small>{candidate.popularity_proxy_share_pct.toFixed(3)}%</small></span><span className={candidate.screened ? 'pass' : 'pending'}>{candidate.screened ? 'SCREENED' : 'REQUIRED'}</span><span className={candidate.source_cached ? 'pass' : 'pending'}>{candidate.source_cached ? 'VERIFIED' : candidate.source_pinned ? 'PINNED' : 'NOT PINNED'}</span><span className={candidate.recipe_ready ? 'pass' : 'pending'}>{candidate.recipe_ready ? 'REVIEWED' : 'REQUIRED'}</span><span className={candidate.qualification_satisfied ? 'pass' : 'pending'}>{candidate.qualification_satisfied ? candidate.qualification_state.toUpperCase() : candidate.width_batch_bound ? candidate.qualification_state.toUpperCase() : 'NOT DEFINED'}</span><strong>{stageLabel(candidate.stage)}</strong></article>)}</section>
+      </details>)}
+    </div>
+    <footer><code>{programme.authorities.programme}</code><span>Candidate ranking ≠ accepted C-library cohort. Exclusions retain reasons and pull the next research rank before a cohort freezes.</span></footer>
+  </section>;
+}
+
+function QualificationPipelinePanel({ factory }: { factory: FactoryApiState }) {
+  const pipeline = factory.authority?.qualification_pipeline;
+  if (!pipeline) return null;
+  return <section className="panel qualification-pipeline-panel">
+    <div className="panel-header"><h3>Campaign qualification pipeline</h3><span className={`evidence-badge ${pipeline.summary.blocked ? 'warning' : 'ready'}`}>{pipeline.state.toUpperCase()} · {pipeline.summary.satisfied}/{pipeline.summary.batches} GATES</span></div>
+    <div className="qualification-chain" aria-label="Campaign qualification stages"><span><b>01</b><strong>Resolve</strong><small>all exact cells</small></span><i>→</i><span><b>02</b><strong>Compile qualify</strong><small>target + generation edges</small></span><i>→</i><span><b>03</b><strong>Seal</strong><small>input-bound evidence</small></span><i>→</i><span><b>04</b><strong>Build queue</strong><small>short chunks, disarmed</small></span><i>→</i><span><b>05</b><strong>Full-path canary</strong><small>compile + Ghidra + publish</small></span><i>→</i><span><b>06</b><strong>Admit</strong><small>explicit operator arm</small></span></div>
+    <div className="qualification-gate-ledger">
+      <header><span>Width batch</span><span>Compilation coverage</span><span>Authority / evidence</span><span>Promotion</span></header>
+      {pipeline.gates.map(gate => <article key={gate.batch_id}><div><strong>{gate.batch_id}</strong><small>{gate.state.replaceAll('-', ' ')}</small></div><div><strong>{gate.summary.total ? `${gate.summary.built}/${gate.summary.total}` : 'legacy'}</strong><small>{gate.summary.failed} failed · {gate.summary.remaining} remaining</small></div><div><code>{gate.authority_path ?? 'historical digest exemption'}</code><small>{gate.evidence_path ?? gate.reason ?? 'no qualification evidence'}</small></div><span className={`evidence-badge ${gate.satisfied ? 'ready' : 'warning'}`}>{gate.satisfied ? gate.promotion_state.replaceAll('-', ' ') : 'blocked'}</span></article>)}
+    </div>
+    <footer><code>fidb-poc qualification status --project-root .</code><span>Passing qualification unlocks the auto-batch queue builder; the generated campaign remains disarmed until the canary and explicit operator admission.</span></footer>
+  </section>;
+}
+
 function TimeBlockPlanPanel({ factory }: { factory: FactoryApiState }) {
   const plan = factory.authority?.time_block_plan;
   if (!plan) return null;
@@ -2372,6 +2436,7 @@ function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live, factor
   });
   return <div className="view-stack">
     <ViewIntro kicker="BATCH OPERATIONS" title="Batches" action={<button className="primary-action" onClick={onNewBatch}>Open matrix draft</button>} />
+    <QualificationPipelinePanel factory={factory} />
     <TimeBlockPlanPanel factory={factory} />
     <section className="panel data-panel">
       <div className="filterbar"><button className="filter active">All <span>{batches.length}</span></button><button className="filter">Defined <span>{batchStatusCounts('Defined')}</span></button><button className="filter">Running <span>{batchStatusCounts('Running')}</span></button><button className="filter">Blocked <span>{batchStatusCounts('Blocked')}</span></button><button className="filter">Queued <span>{batchStatusCounts('Queued')}</span></button><button className="filter">Complete <span>{batchStatusCounts('Complete')}</span></button><div className="filter-search">⌕&nbsp; Filter batches</div></div>

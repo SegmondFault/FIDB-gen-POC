@@ -1123,6 +1123,7 @@ export type WidthBatch = {
   queue_policy: string;
   authority_path: string;
   authority_sha256: string;
+  qualification: QualificationGate;
   authorities: {
     source_pack: string;
     source_pack_sha256: string;
@@ -1164,17 +1165,142 @@ export type WidthBatch = {
     toolchain_blocked_routes: number;
     materializable_executions: number;
     blocked_executions: number;
-    queue_state: 'not-materialized-disarmed';
+    qualification_state: string;
+    qualification_satisfied: boolean;
+    queue_eligible_executions: number;
+    queue_state: string;
     blockers: string[];
   };
 };
 
+export type QualificationGate = {
+  batch_id: string;
+  batch_digest: string;
+  state: 'qualified' | 'required' | 'incomplete' | 'failed' | 'stale' | 'invalid' | 'blocked' | 'authority-required' | 'historical-exempt' | 'legacy-exemption-stale' | string;
+  satisfied: boolean;
+  promotion_state: 'queue-eligible-disarmed' | 'historical-sealed' | 'blocked' | string;
+  authority_path: string | null;
+  authority_sha256?: string;
+  pipeline_authority_path?: string;
+  pipeline_authority_sha256?: string;
+  input_digest?: string;
+  qualification_digest: string | null;
+  evidence_path: string | null;
+  evidence_sha256: string | null;
+  summary: {
+    total: number;
+    built: number;
+    failed: number;
+    remaining: number;
+  };
+  blockers: string[];
+  reason?: string;
+};
+
+export type QualificationPipeline = {
+  schema_version: 'fidb-qualification-pipeline-status/v1';
+  state: 'enforced';
+  authority_path: string;
+  authority_sha256: string;
+  policy: {
+    require_current_seal_before_materialization: boolean;
+    embed_seal_in_generated_plans: boolean;
+    require_full_path_canary_after_materialization: boolean;
+    automatic_arming: boolean;
+    promotion_state: 'queue-eligible-disarmed';
+  };
+  summary: {
+    batches: number;
+    satisfied: number;
+    blocked: number;
+    qualified: number;
+    historical_exempt: number;
+  };
+  gates: QualificationGate[];
+};
+
+export type CampaignProgrammeCandidate = {
+  rank: number;
+  canonical_key: string;
+  display_name: string;
+  subject_id: string;
+  source_breadth: number;
+  popularity_proxy_share_pct: number;
+  cumulative_popularity_proxy_pct: number;
+  screened: boolean;
+  source_pinned: boolean;
+  source_cached: boolean;
+  recipe_ready: boolean;
+  width_batch_bound: boolean;
+  width_batch_id: string | null;
+  qualification_state: string;
+  qualification_satisfied: boolean;
+  stage: string;
+};
+
+export type CampaignProgrammeCohort = {
+  id: string;
+  order: number;
+  label: string;
+  candidate_rank_start: number;
+  candidate_rank_end: number;
+  capacity: number;
+  state: 'planned-disarmed';
+  stage: string;
+  counts: {
+    screened: number;
+    source_pinned: number;
+    source_cached: number;
+    recipe_ready: number;
+    width_batch_bound: number;
+    qualification_satisfied: number;
+  };
+  planned_qualification_cells: number;
+  planned_campaign_executions: number;
+  candidates: CampaignProgrammeCandidate[];
+};
+
+export type CampaignProgramme = {
+  schema_version: 'fidb-campaign-programme-status/v1';
+  id: string;
+  label: string;
+  state: 'planned-disarmed';
+  language_id: 'c';
+  evidence_class: string;
+  caveat: string;
+  candidate_cumulative_proxy_pct: number;
+  cohort_size: number;
+  route_profiles_per_library: number;
+  treatments_per_route: number;
+  campaign_executions_per_library: number;
+  qualification_routes_per_library: number;
+  authorities: Record<string, string>;
+  pipeline: { stages: string[] } & Record<string, string | string[]>;
+  summary: {
+    candidate_population: number;
+    cohorts: number;
+    full_cohorts: number;
+    final_cohort_size: number;
+    screened_candidates: number;
+    source_pinned_candidates: number;
+    source_cached_candidates: number;
+    recipe_ready_candidates: number;
+    qualification_satisfied_candidates: number;
+    planned_qualification_cells: number;
+    planned_campaign_executions: number;
+  };
+  stage_counts: Record<string, number>;
+  cohorts: CampaignProgrammeCohort[];
+};
+
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v16';
+  schema_version: 'fidb-authority-catalog/v18';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
   width_batches: WidthBatch[];
+  campaign_programmes: CampaignProgramme[];
+  qualification_pipeline: QualificationPipeline;
   time_block_plan: TimeBlockPlan;
   materialized_campaigns: MaterializedCampaign[];
   auto_batch_campaigns: AutoBatchCampaign[];
@@ -2019,6 +2145,7 @@ export type AutoBatchCampaign = {
   performance_profile: string;
   queue: string;
   campaign_digest: string;
+  qualification_gates?: QualificationGate[];
   authority_path: string;
   authority_sha256: string;
   queue_integrity: 'verified-disarmed' | 'drifted';
@@ -2079,6 +2206,7 @@ export type MaterializedCampaign = {
   performance_profile: string;
   output_directory: string;
   materialization_digest: string;
+  qualification_gates?: QualificationGate[];
   authority_path: string;
   authority_sha256: string;
   summary: {
