@@ -326,7 +326,7 @@ no code changes):
 
 - `fidb-poc --plan` correctly expands `worker.toml` x `recipes/*.toml` ->
   2 cells (zlib, bzip2), no build.
-- `fidb-poc --library zlib --route linux-x86_64-gnu-gcc --fresh` ran a
+- `fidb-poc --library zlib@1.3.1 --route linux-x86_64-gnu-gcc --fresh` ran a
   real build: download, sha256-verify, `configure --static`, full `make`,
   `ar rc libz.a` -- all real, all correct. Failed only at the Ghidra
   `[ghidra] generating candidate FIDBs` step (`analyzeHeadless` not

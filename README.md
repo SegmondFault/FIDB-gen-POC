@@ -116,8 +116,9 @@ GHIDRA_HEADLESS=/opt/ghidra/support/analyzeHeadless \
     --profile smoke
 ```
 
-With no `--library`, the worker uses the name-only request queue in `worker.toml`
-and builds both libraries. To build only zlib, add `--library zlib`. A successful
+With no `--library`, the worker uses the reviewed requests in `worker.toml`
+and builds both libraries. To build the original zlib release, add
+`--library zlib@1.3.1`. A successful
 two-library run ends with:
 
 ```text
@@ -178,7 +179,8 @@ uv run fidb-poc source pull c-top10-v1 --project-root .
 
 Verified bytes are stored content-addressed under the ignored
 `var/fidb-sources/downloads/` cache. See [`sources/README.md`](sources/README.md)
-for the extension and trust model.
+for the C20/C30 preparation packs, offline verified-import command, extension
+process and trust model.
 
 ## Continuous machine validation
 

@@ -41,7 +41,7 @@ class LivePipelineSmokeTests(unittest.TestCase):
                 repository / "ghidra_scripts", project_root / "ghidra_scripts"
             )
             configuration = load_configuration(
-                project_root / "worker.toml", request_override=("zlib",)
+                project_root / "worker.toml", request_override=("zlib@1.3.1",)
             )
             configuration = select_configuration(
                 configuration,

@@ -268,6 +268,32 @@ staged offline cache. Run target-family/oldest-generation compilation canaries
 for all ten before materialisation. Never mark the C11–C20 batch ready merely
 to make it appear in the scheduler.
 
+The repeatable authority for that gate is `qualification/c11-c20.toml` and the
+command is `fidb-poc qualify-recipes qualification/c11-c20.toml`. It is a real
+compilation command—never run it as a read-only status check. It uses four
+workers, one O2 treatment and 16 target/generation edge routes (160 cells), and
+does not invoke Ghidra. A stopped early diagnostic on 2026-09-05 retained four
+failed HarfBuzz attempts in this checkout's ignored `qualification/evidence/`;
+host PNG discovery was then disabled in the fixed adapter. Those attempts are
+diagnostic evidence, not a completed qualification, and the authority has not
+been rerun.
+
+## C21–C30 staging
+
+`coverage/c-top30-width-study.toml`, `sources/c-top30-v1.toml`, and
+`batches/c-21-30-mega-width.toml` preserve ranks 21–30 as a disarmed 2,220-cell
+projection. All ten primary archives are locally checksum-verified. The cache
+is ignored local state, so another clone must use `source pull` or the reviewed
+`source import` boundary; do not commit archive bytes.
+
+Six recipes are authored but unit-tested only: zlib 1.3.2, libffi, libxml2,
+libuv, OpenJPEG and Opus. libidn2, ICU, libgcrypt and GnuTLS are deliberately
+recipe-blocked pending pinned dependency graphs or host-tool staging. The batch
+must remain outside `plans/priority-queue.toml` until all ten recipes exist and
+the same target-family/oldest-generation qualification is run and reviewed.
+Never infer qualification from the projection's `materializable_executions`;
+that field currently means only source/recipe/toolchain resolution.
+
 ## Rollback
 
 Stop new claims with `queue pause`, commit `armed=false`, synchronize it, and let

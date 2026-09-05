@@ -102,6 +102,31 @@ qualification boundary. `batch-c11-20` therefore stays outside the priority
 queue. Before materialization, repeat the target-class and oldest-generation
 canaries and record their exact archive/object results here.
 
+Preparation for C21–C30 is intentionally split by build risk. Six primary
+archives currently have command-free recipes and fixed command-shape tests:
+
+| Recipe | Fixed adapter | Retained archive |
+| --- | --- | --- |
+| zlib 1.3.2 | `autoconf` | `libz.a` |
+| libffi 3.8.0 | `libffi-autoconf` | `libffi.a` |
+| libxml2 2.15.3 | `libxml2-autoconf` | `libxml2.a` |
+| libuv 1.52.1 | `libuv-cmake` | `libuv.a` |
+| OpenJPEG 2.5.4 | `openjpeg-cmake` | `libopenjp2.a` |
+| Opus 1.6.1 | `opus-cmake` | `libopus.a` |
+
+None has crossed the compilation-qualification boundary. The remaining four
+must not be represented as recipe-ready until these fixed stages are designed:
+
+- libidn2: route-matched libunistring dependency build and isolated prefix;
+- ICU: native host tools/data generation followed by the target C/C++ build;
+- libgcrypt: route-matched libgpg-error dependency and generated target files;
+- GnuTLS: a fully pinned minimal dependency closure (including Nettle,
+  libtasn1, GMP and libunistring) with optional integrations disabled.
+
+Do not substitute host development packages for those inputs. Their pins,
+build order and target/host distinction must be represented in TOML and fixed
+adapters before the C21–C30 qualification authority is added.
+
 To review pins without executing a build:
 
 ```sh

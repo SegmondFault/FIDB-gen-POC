@@ -44,7 +44,7 @@ Example invocation:
 ```bash
 GHIDRA_HEADLESS=/opt/ghidra/support/analyzeHeadless \
 uv run fidb-poc \
-  --library zlib \
+  --library zlib@1.3.1 \
   --route linux-x86_64-gnu-gcc \
   --profile smoke
 ```

@@ -130,7 +130,7 @@ class PipelineTests(unittest.TestCase):
     def test_windows_build_workspace_is_short_and_identity_stable(self):
         configuration = load_configuration(
             Path(__file__).resolve().parents[1] / "worker.toml",
-            request_override=("zlib",),
+            request_override=("zlib@1.3.1",),
         )
         base_route = next(
             item
@@ -289,7 +289,7 @@ class PipelineTests(unittest.TestCase):
     def test_compiler_identity_runs_in_an_isolated_directory(self):
         root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            root / "worker.toml", request_override=("zlib",)
+            root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         route = next(
             row for row in configuration.routes if row.id == "linux-x86_64-gnu-gcc"
@@ -334,7 +334,7 @@ class PipelineTests(unittest.TestCase):
     def test_plan_lists_selected_cells_without_running_tools(self):
         root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            root / "worker.toml", request_override=("zlib",)
+            root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         configuration = select_configuration(
             configuration,
@@ -403,7 +403,7 @@ class PipelineTests(unittest.TestCase):
     def test_population_report_must_reconcile_before_completion(self):
         root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            root / "worker.toml", request_override=("zlib",)
+            root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         library = configuration.libraries[0]
         group_id = "linux-x86_64-gnu-gcc-baseline_o2"
@@ -565,7 +565,7 @@ class PipelineTests(unittest.TestCase):
     def test_population_schema_failure_cleans_partial_fidbs(self):
         source_root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            source_root / "worker.toml", request_override=("zlib",)
+            source_root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         configuration = select_configuration(
             configuration,
@@ -612,7 +612,7 @@ class PipelineTests(unittest.TestCase):
         """
         source_root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            source_root / "worker.toml", request_override=("zlib",)
+            source_root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         configuration = select_configuration(
             configuration,
@@ -694,7 +694,7 @@ class PipelineTests(unittest.TestCase):
     def test_execute_rejects_symlinked_generated_root(self):
         source_root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            source_root / "worker.toml", request_override=("zlib",)
+            source_root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         configuration = select_configuration(
             configuration,
@@ -719,7 +719,7 @@ class PipelineTests(unittest.TestCase):
     def test_execute_writes_manifest_then_raises_for_failed_cell(self):
         source_root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            source_root / "worker.toml", request_override=("zlib",)
+            source_root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         configuration = select_configuration(
             configuration,

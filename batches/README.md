@@ -40,13 +40,33 @@ The following cohort is already visible as a separate disarmed planning layer:
 - all ten source archives are locally cached and checksum-verified;
 - the projection retains the same 37 routes and six treatments, for 2,220
   potential executions; and
-- it remains outside the active queue while its ten fixed recipes and
-  compilation canaries are absent.
+- it remains outside the active queue while its ten fixed recipes await the
+  repeatable compilation qualification recorded in `qualification/c11-c20.toml`.
 
 Inspect that boundary with:
 
 ```sh
 uv run fidb-poc compile-width-batch batch-c11-20 --project-root .
+```
+
+Ranks 21–30 are prepared as a second, independent planning layer:
+
+- `c-21-30-mega-width.toml` binds the ten ranked identities in
+  `sources/c-top30-v1.toml` to the same 37 routes and six treatments;
+- all ten primary archives are checksum-verified in the local source cache
+  (62,150,283 bytes total);
+- zlib 1.3.2, libffi, libxml2, libuv, OpenJPEG and Opus have command-free
+  recipes and fixed adapter unit checks, but no compilation qualification;
+- libidn2, ICU, libgcrypt and GnuTLS remain explicitly recipe-blocked while
+  their dependency/host-tool build graphs are designed; and
+- the batch is absent from `plans/priority-queue.toml` and cannot start work.
+
+The read-only projection therefore reports 6/10 recipe-ready and 1,332/2,220
+recipe-resolved cells. Those numbers mean “recipe and toolchain authority can
+resolve,” not “qualified for campaign execution.” Inspect it with:
+
+```sh
+uv run fidb-poc compile-width-batch batch-c21-30 --project-root .
 ```
 
 ## Time-aware block projection
