@@ -6,6 +6,11 @@ kept separate from `plans/priority-queue.toml` until every selected source has a
 matching reviewed native recipe and an operator deliberately materializes the
 work. Materialization and arming remain separate decisions.
 
+Long-range cohort structure lives separately in
+`campaigns/c80-four-source-n80-v1.toml`. It records all 276 published C80
+research candidates as 28 disarmed screening/planning cohorts without creating
+276 source pins, recipes or queue entries. See `campaigns/README.md`.
+
 The next top-ten campaign has two disarmed segments so completed OpenSSL work
 is not repeated:
 
@@ -177,6 +182,11 @@ and all six treatments. Treatments are never separated across chunks. The
 default 60-minute target and 85-minute central ceiling produce 23 chunks for
 the current 2,046-cell campaign; 22 estimate at 60–63 minutes and the final
 tail at 34 minutes. Their +40% planning bounds remain below 89 minutes.
+
+The builder fails closed unless every referenced width batch has a current
+qualification seal (or an explicit digest-pinned historical exemption). It
+embeds those gates in each generated plan and manifest. Passing the gate makes
+the output queue-eligible, not armed.
 
 ```sh
 # Read-only compilation and exact aggregate authority resolution

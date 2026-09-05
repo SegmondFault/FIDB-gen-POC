@@ -235,6 +235,37 @@ a separate, small commit. Before leaving a scheduled run unattended, verify the
 queue is armed and unpaused, exact resolution passes, resource gates pass, and
 all 20 configured worker services are active.
 
+## C80 programme and mandatory cohort gate
+
+The long-range programme is
+`campaigns/c80-four-source-n80-v1.toml`. It freezes the published four-source
+N80 research ranks 1–276 into 28 disarmed cohorts. Do not confuse these ranks
+with the separate screened `sources/c-top30-v1.toml` calibration ranking, and
+do not call every research row a C library. The programme may be inspected
+with `fidb-poc campaign-programme --project-root .`; that command is read-only.
+
+For every future cohort, follow this order:
+
+1. screen candidate identity and retain exclusion/alias reasons;
+2. add and verify exact source pins;
+3. author command-free fixed recipes and dependency pins;
+4. instantiate the 16-route O2 edge set from
+   `qualification/c-cohort-template.toml` as a cohort-specific authority;
+5. inspect `fidb-poc qualification status --project-root .`;
+6. execute that exact qualification and require its current seal;
+7. build the measured time projection and generate a disarmed short-chunk
+   queue candidate;
+8. verify the embedded seal and exact cell identities;
+9. run the full-path compilation/Ghidra/publication canary; and
+10. admit/arm separately, then retain terminal evidence and recycle workers.
+
+`fidb-poc auto-batches` and the batch materializer reject unsealed cohort
+authorities. A seal unlocks only queue candidate generation. It does not edit
+`plans/priority-queue.toml`, synchronize the ledger, start workers or arm the
+queue. If evidence is stale, preserve it and use the explicit `--restart-stale`
+path; never delete or rewrite it. The complete rationale and rollback boundary
+are in `campaigns/README.md` and `qualification/README.md`.
+
 ## C11–C20 staging
 
 `coverage/c-top20-width-study.toml` and `sources/c-top20-v1.toml` preserve the

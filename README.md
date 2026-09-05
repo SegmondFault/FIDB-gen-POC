@@ -287,6 +287,32 @@ disarmed under `plans/auto-materialized/`; the reviewed active copy is
 input. Chunks are manually triggerable one at a time outside the timer and chain
 during 00:00–05:30 without cutting off a started chunk.
 
+### Published C80 programme
+
+[`campaigns/c80-four-source-n80-v1.toml`](campaigns/c80-four-source-n80-v1.toml)
+draws the complete published four-source N80 frontier into the software: 276
+research-ranked candidates, 27 cohorts of ten and one final cohort of six. The
+terminal candidate reaches 80.044856% cumulative popularity proxy. With the
+current 37-route × six-treatment width this represents at most 61,272 campaign
+executions plus 4,416 compilation-only qualification cells if every candidate
+passes screening.
+
+This is a disarmed planning authority, not 276 fabricated recipes or downloads.
+The control panel overlays current screen, source/cache, recipe, width-batch and
+qualification state on each candidate, while keeping the present top-30
+calibration ranking distinct from the four-source research rank. Inspect it
+without changing runtime state:
+
+```sh
+uv run fidb-poc campaign-programme --project-root .
+```
+
+The canonical per-cohort funnel is candidate screen → release pin/cache →
+recipe authoring → compilation qualification/seal → measured short-chunk queue
+candidate → full-path canary → explicit admission → execution → validation →
+retention. See [`campaigns/README.md`](campaigns/README.md) and
+[`qualification/README.md`](qualification/README.md).
+
 ### Portable performance profiles
 
 [`performance/profiles.toml`](performance/profiles.toml) keeps cell concurrency,
@@ -602,6 +628,12 @@ default so the queue and its actionable gaps remain readable at a glance. The
 control panel requests a bounded, compact snapshot projection for display;
 the complete attempts, timing payloads and job authorities remain in the
 SQLite ledger and evidence files.
+
+Above that near-term operational index, the C Matrix shows the complete C80
+programme as a compact funnel and 28 collapsed cohort rows. Each expanded row
+shows the exact research candidates and earliest unmet gate. Research rank,
+screened-family status, recipe readiness and queue admission remain separate;
+none of the long-range rows can start work.
 
 The panel can submit its generated TOML to a resolve-only endpoint, then save a
 successfully resolved request under `plans/drafts/`. Updates use the previous
