@@ -956,10 +956,9 @@ def pull_acquisition(
         / MANAGED_RECEIPTS
         / f"{acquisition_id}.{before['authority']['lock_sha256']}.toml"
     )
-    created_utc, receipt_records, prior_failures = _existing_receipt(
+    created_utc, receipt_records, historical_failures = _existing_receipt(
         receipt, str(before["authority"]["lock_sha256"])
     )
-    failures.extend(prior_failures)
     started_utc = _now()
     for row in before["candidates"]:
         if row["cache"]["state"] != "verified-cached":
@@ -991,7 +990,7 @@ def pull_acquisition(
             receipt,
             _render_receipt(
                 status,
-                failures,
+                [*historical_failures, *failures],
                 list(receipt_records.values()),
                 created_utc,
             ),
