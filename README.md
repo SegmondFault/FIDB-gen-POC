@@ -199,7 +199,10 @@ Once all cohort libraries are complete it automatically materialises a separate
 real validation remains claim-blocked for a post-cohort canary. Normal cohorts
 contain ten libraries; a final 2--9-library remainder requires an explicit,
 justified TOML override. See [`validation/README.md`](validation/README.md) for
-the split, TP/FP/TN/FN report and collision/miss evidence contract.
+the split and the threshold-free, single-signature TP/FP/TN/FN evidence
+contract. Sealed composites can be reanalysed without compilation or Ghidra;
+every TP, FP and FN observation is retained in a run-local SQLite database,
+while TN remains exactly reproducible from stored denominators.
 
 The split RNG is not process-random. Its checked-in `randomization.seed` is a
 32-byte hexadecimal authority and `sha256-ranked-v1` deterministically ranks
@@ -719,9 +722,10 @@ pending work park before full queue resolution and wake through a lightweight
 TOML-controlled ledger check.
 
 Measured-complete machine-validation runs enter the same dry-run-first system
-under a separate scope. The collector verifies and hashes the retained report,
-unit results, truth maps, query signatures and composite binaries, then selects
-only per-worker build/Ghidra scratch. Failed or incomplete validation runs stay
+under a separate scope. The collector verifies and hashes the retained
+single-hash report and evidence database, unit results, truth maps, query
+signatures and composite binaries, then selects only per-worker build/Ghidra
+scratch. Failed or incomplete validation runs stay
 quarantined. Automatic validation retention is controlled by the
 `machine-validation-complete` trigger in `retention/policy.toml`; its outcome is
 recorded beside the run in `retention.json`.

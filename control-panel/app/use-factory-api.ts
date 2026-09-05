@@ -1241,6 +1241,19 @@ export type MachineValidationCanaryGate = {
   runtime_authority_sha256: string;
 };
 
+export type MachineHashSummary = {
+  scope: string;
+  signature: string;
+  true_positives: number;
+  false_positives: number;
+  false_negatives: number;
+  distinct_correct_owners: number;
+  distinct_incorrect_owners: number;
+  distinct_reference_owners: number;
+  distinct_routes: number;
+  distinct_treatments: number;
+};
+
 export type MachineValidationLive = {
   run: MachineValidationRun;
   canary_gate: MachineValidationCanaryGate;
@@ -1341,7 +1354,7 @@ export type MachineValidation = {
     report_path: string | null;
     detail?: string;
     confusion_matrix: {
-      unit: 'owner-labelled-candidate-decision';
+      unit: 'complete-fid-signature-owner-assertion';
       true_positives: number | null;
       false_positives: number | null;
       true_negatives: number | null;
@@ -1349,6 +1362,19 @@ export type MachineValidation = {
     };
     failure_summary: { collisions: number; misses: number };
     failures: MachineValidationFailure[];
+    hash_evidence?: {
+      database_path: string;
+      database_sha256: string;
+      distinct_signatures: number;
+      noisy_signatures: number;
+      multi_owner_signatures: number;
+      missed_signatures: number;
+      query_signature_observations: number;
+      unattributed_query_signatures: number;
+      fold_results: number;
+      top_noisy: MachineHashSummary[];
+      top_low_information: MachineHashSummary[];
+    };
   };
 };
 
@@ -1545,6 +1571,7 @@ export type NoisyHashStatus = {
     reviewed_shared: number;
     cleared: number;
     reports_scanned: number;
+    evidence_databases_scanned: number;
   };
   hashes: NoisyHashRow[];
 };

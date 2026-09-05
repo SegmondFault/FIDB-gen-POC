@@ -323,6 +323,16 @@ hash-level confusion analysis, and the retained evidence is required to repair
 that analysis without recompilation or another Ghidra run. Failed validation
 runs are quarantined, not opportunistically cleaned.
 
+The canonical C10 scientific result is `hash-report.json`, not the older
+`report.json`. The latter accepted a whole library after five distinct matches;
+that confused the operator's blocks-of-five design with a detection threshold.
+Never resurrect that threshold. Run
+`fidb-poc machine-validation analyze-hashes --run-id <sealed-full-run>` to
+classify complete FID signatures against exact route/treatment references.
+`hash-evidence.sqlite3` is the durable source for noisy-hash and low-information
+analysis. TP/FP/FN observations are explicit; TN is reconstructed from
+`unit_result.query_distinct_signatures * five withheld owners - FP`.
+
 The first production dry-run selected 973 actions and 257,415,636,119 apparent
 bytes but estimated 1,041.553 seconds, above the 600-second automatic ceiling.
 It was therefore not applied. Do not raise that ceiling merely to clear the
@@ -369,3 +379,13 @@ function stub. Keep the stub outside `--whole-archive`, retain its source/object
 beside the fold evidence, and replay the exact failed archive sets when changing
 this behavior. Adding all of `libc_nonshared.a` is not equivalent: it pulled in
 `atexit.oS` and failed on hidden `__dso_handle`.
+
+The corrected hash analysis is separately admitted by
+`validation/machine-validation-hash-schedule.toml`. Its 2026-09-05 afternoon
+window is 13:30–17:30 Europe/Luxembourg and its recurring window is
+00:00–05:30. Starting inside a window is the only clock gate; a started pass
+finishes. It consumes retained JSONL and SQLite evidence and does not invoke
+compilers or Ghidra. The checked-in user service and timers are named
+`fidb-machine-validation-hash-analysis.service`,
+`fidb-machine-validation-hash-analysis-afternoon.timer`, and
+`fidb-machine-validation-hash-analysis-nightly.timer`.

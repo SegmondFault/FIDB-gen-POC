@@ -46,18 +46,37 @@ record a non-empty justification, and list 2--9 pinned libraries. The same
 seeded ranking makes a balanced split; an odd final cohort differs by one
 library between folds. This exception is explicit and visible in the GUI.
 
-Completed validation reports publish an explicit TP/FP/TN/FN decision matrix.
-They also retain a row-level failure ledger for every false positive/collision
-and false negative/miss, including the exact library, function, route, compiler,
-treatment, signature, candidate owner and evidence locator. The GUI shows the
-totals first and keeps this ledger expandable for diagnosis.
+Completed validation reports use one complete FID signature paired with one
+library owner as the atomic assertion. There is no five-match or other
+library-acceptance threshold. For each exact route and treatment, signatures
+from the five libraries present in the composite define the positive
+population; query signatures checked against the five withheld libraries define
+the negative population:
+
+- TP: an expected exact signature is present in the composite query;
+- FN: an expected exact signature is absent from the composite query;
+- FP: a query signature also exists under an opposite-fold library owner;
+- TN: a query signature does not exist under an opposite-fold owner.
+
+Sharing among libraries in the same composite fold is retained as multi-owner
+ambiguity and is not called false. The canonical `hash-report.json` gives the
+matrix and bounded leading rows. `hash-evidence.sqlite3` retains every TP, FP
+and FN observation by route, treatment, fold, owner and complete signature;
+TN is exactly reproducible from each fold's query-signature count and withheld
+owner count. This avoids materialising millions of negative non-matches without
+changing the denominator.
+
+The earlier `report.json` remains immutable historical evidence of the
+superseded five-signature library-level experiment. It is not an input to the
+hash-discrimination ledger.
 
 The first run rebuilds the reviewed recipes into two forced-inclusion static
 composites for each exact width identity. It does not assume old per-library
 archives were retained. Target programs are inspected and analysed but never
-executed. The primary queries test the correct fold with the exact identity
-withheld, the opposite fold, and the complete owner-labelled candidate index.
-An exact-inclusion canary verifies the pipeline separately.
+executed. The canonical classifier compares the composite with the same exact
+route/treatment signature sets for present and opposite-fold owners. The
+canary qualifies archive reconstruction, composite linking, object formats,
+Ghidra extraction and reference-index compatibility separately.
 
 Execution settings live in `machine-validation-runtime.toml`. Preflight checks
 all 2,220 signature inputs, the 2,046 retained archives, the 174 reconstructable
@@ -78,6 +97,8 @@ before retrying it:
 ```sh
 uv run fidb-poc machine-validation pause --project-root .
 uv run fidb-poc machine-validation resume --project-root .
+uv run fidb-poc machine-validation analyze-hashes --project-root . \
+  --run-id 20260904T152653Z-full
 ```
 
 The control panel exposes the same two bounded API operations. An active status
@@ -100,12 +121,31 @@ The TOML authority is `retention/policy.toml`. It always creates a
 content-addressed dry-run first and applies only when the estimate is within the
 reviewed bound.
 
-Validation retention verifies the status/report completion contract and hashes
-the preserved unit results, truth maps, query signatures and composite
-binaries. It may remove only direct-child `worker-*` scratch directories.
+Validation retention verifies the status/report completion contract, the
+single-hash evidence database digest, and the preserved unit results, truth
+maps, query signatures and composite binaries. It may remove only direct-child
+`worker-*` scratch directories.
 Incomplete and failed runs remain quarantined whole. `units/`, the cohort
 reference index and terminal reports remain available for threshold-free
 per-hash reanalysis.
+
+## Scheduled single-hash analysis
+
+`machine-validation-hash-schedule.toml` admits the corrected analysis during a
+one-off 13:30–17:30 Europe/Luxembourg window on 2026-09-05 and during the normal
+00:00–05:30 nightly window. A started pass finishes after the admission window
+closes. The scheduler selects only the latest sealed full run lacking a current
+hash report; it never starts compilation or Ghidra and exits successfully when
+nothing is pending:
+
+```sh
+uv run fidb-poc machine-validation scheduled-hashes --project-root .
+```
+
+The systemd service and two timers in `operations/` call that command. A
+successful scheduled pass immediately invokes validation-scoped retention, so
+worker build/Ghidra scratch is considered only after the hash database and its
+digest are durable.
 
 Formal ecological validation comes later, after the intended dataset and lane
 generation are frozen. It uses held-out real binaries in tag-only/shadow mode

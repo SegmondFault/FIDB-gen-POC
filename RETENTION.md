@@ -30,15 +30,16 @@ attempt directories are removed. Operator holds always win.
 Machine-validation runs use the same collector with a separate
 `machine-validation` scope. A run is eligible only when `status.json` and the
 terminal report agree that every expected work unit completed with no execution
-failure. The collector hashes every unit result, truth map, exported query
-signature file and retained composite binary. Those files, the report and the
-run logs remain in place. Only TOML-selected direct-child `worker-*` directories
+failure. A full run must also bind the digest of its complete single-hash
+evidence database. The collector hashes that database, every unit result, truth
+map, exported query signature file and retained composite binary. Those files,
+the report and the run logs remain in place. Only TOML-selected direct-child `worker-*` directories
 are disposable; they contain reconstructed build trees and per-process Ghidra
 state. Failed, interrupted, incomplete or structurally inconsistent validation
 runs are quarantined whole.
 
-This boundary deliberately preserves the inputs needed to replace the mistaken
-five-signature library threshold with exhaustive per-hash analysis. Do not add
+This boundary preserves both the inputs and results of the threshold-free
+per-hash analysis. Do not add
 `units/`, `reference-index.sqlite3`, reports, truth maps, query signatures or
 composite binaries to validation scratch without a newer, verified downstream
 receipt.

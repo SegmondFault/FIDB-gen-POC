@@ -140,8 +140,21 @@ install -m 0644 operations/fidb-coordinator-api.service "$HOME/.config/systemd/u
 install -m 0644 operations/fidb-control-panel.service "$HOME/.config/systemd/user/"
 install -m 0644 operations/fidb-library-local-worker@.service "$HOME/.config/systemd/user/"
 install -m 0644 operations/fidb-library-local-workers.target "$HOME/.config/systemd/user/"
+install -m 0644 operations/fidb-machine-validation-hash-analysis.service "$HOME/.config/systemd/user/"
+install -m 0644 operations/fidb-machine-validation-hash-analysis-afternoon.timer "$HOME/.config/systemd/user/"
+install -m 0644 operations/fidb-machine-validation-hash-analysis-nightly.timer "$HOME/.config/systemd/user/"
 install -m 0600 operations/library-local-worker.env.example "$HOME/.config/fidb-factory/library-local-worker.env"
 systemctl --user daemon-reload
+```
+
+The hash-analysis timers admit only the latest complete full validation run
+without a current single-hash report. The one-off timer fires at 13:30 on
+2026-09-05; the recurring timer fires at 00:00. The service rechecks the
+TOML-defined window and exits without work outside it. Enable both timers with:
+
+```sh
+systemctl --user enable --now fidb-machine-validation-hash-analysis-afternoon.timer
+systemctl --user enable --now fidb-machine-validation-hash-analysis-nightly.timer
 ```
 
 Review the copied environment file.  The API reuses it rather than introducing

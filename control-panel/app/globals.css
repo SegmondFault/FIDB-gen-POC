@@ -298,6 +298,12 @@ button { font: inherit; }
 
 /* Continuous machine validation */
 .machine-validation-view { min-width: 0; }
+.validation-hash-evidence-strip { display: grid; grid-template-columns: repeat(5, minmax(0, .8fr)) minmax(180px, 1.8fr); border-top: 1px solid var(--line-soft); background: #0d141c; }
+.validation-hash-evidence-strip article { min-width: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--line-soft); }
+.validation-hash-evidence-strip article:last-child { border-right: 0; }
+.validation-hash-evidence-strip span { color: var(--muted-2); font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
+.validation-hash-evidence-strip strong { color: #d7e0e8; font: 600 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.validation-hash-evidence-strip code { overflow-wrap: anywhere; color: #78b8b5; font: 7px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .validation-status-panel, .validation-flow-panel, .validation-fold-panel, .validation-contract-panel, .validation-results-panel { overflow: hidden; }
 .validation-status-panel > header, .validation-flow-panel > header, .validation-fold-panel > header, .validation-contract-panel > header, .validation-results-panel > header { min-height: 40px; padding: 7px 11px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line-soft); background: #101720; }
 .validation-status-panel > header h3, .validation-flow-panel > header h3, .validation-fold-panel > header h3, .validation-contract-panel > header h3, .validation-results-panel > header h3 { margin: 0; color: #c7cfda; font-size: 10px; }
