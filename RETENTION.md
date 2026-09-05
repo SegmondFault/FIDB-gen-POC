@@ -27,6 +27,22 @@ fingerprint is identical. A different fingerprint is quarantined and kept
 whole. The bundle is written and its selected files are re-hashed before source
 attempt directories are removed. Operator holds always win.
 
+Machine-validation runs use the same collector with a separate
+`machine-validation` scope. A run is eligible only when `status.json` and the
+terminal report agree that every expected work unit completed with no execution
+failure. The collector hashes every unit result, truth map, exported query
+signature file and retained composite binary. Those files, the report and the
+run logs remain in place. Only TOML-selected direct-child `worker-*` directories
+are disposable; they contain reconstructed build trees and per-process Ghidra
+state. Failed, interrupted, incomplete or structurally inconsistent validation
+runs are quarantined whole.
+
+This boundary deliberately preserves the inputs needed to replace the mistaken
+five-signature library threshold with exhaustive per-hash analysis. Do not add
+`units/`, `reference-index.sqlite3`, reports, truth maps, query signatures or
+composite binaries to validation scratch without a newer, verified downstream
+receipt.
+
 ## Commands
 
 All commands run from the project root. Status is read-only:
@@ -53,6 +69,13 @@ the same operation after a terminal queue, including when the last admitted
 block drains after the claim window has closed. The default automatic ceiling
 is 600 seconds. Plans above it remain available for manual review and are not
 applied automatically.
+
+A measured-complete machine-validation runner invokes the same operation with
+trigger `machine-validation-complete` and scope `machine-validation`. The
+terminal report is durable before the runner lock is released. Cleanup failure
+is recorded as `failed-safely` in the run's `retention.json` and cannot change a
+successful scientific report into a failed run. The queue-drained trigger keeps
+the broader `all` scope.
 
 The control panel exposes the same status and guarded operations under
 **Operations → Retention**. The Matrix shows retention as the terminal campaign
@@ -98,6 +121,8 @@ their measured scan/apply records—not that expectation—control automation.
 
 Set `enabled = false` and `worker_action = "none"` in
 `retention/policy.toml`, then restart workers, to disable post-drain behavior.
+Set `validation.automatic_after_terminal_run = false` to keep validation
+retention available only through a manual dry-run and exact apply.
 Revert the retention commits to remove the feature without changing the queue
 ledger. Plans and bundles are additive ignored runtime evidence and can remain.
 

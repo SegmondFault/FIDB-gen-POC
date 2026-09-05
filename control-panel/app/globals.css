@@ -1664,7 +1664,7 @@ button { font: inherit; }
 .retention-flow p { margin: 0; display: flex; flex-direction: column; gap: 5px; }
 .retention-flow strong { color: #b8c3cf; font: 650 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .retention-flow small { color: var(--muted-2); font-size: 6px; }
-.retention-contract-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.retention-contract-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .retention-contract-grid article { min-height: 84px; padding: 14px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid var(--line-soft); }
 .retention-contract-grid article:last-child { border-right: 0; }
 .retention-contract-grid strong { color: #aebac8; font: 600 9px ui-monospace, SFMono-Regular, Menlo, monospace; }

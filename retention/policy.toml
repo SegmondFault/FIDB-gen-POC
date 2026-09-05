@@ -3,6 +3,7 @@ name = "nightly-safe-retention"
 
 [paths]
 runs = "artifacts/runs"
+validation_runs = "artifacts/validation-runs"
 failure_bundles = "artifacts/retention/failures"
 plans = "var/fidb-retention/plans"
 state = "var/fidb-retention/state.json"
@@ -32,9 +33,16 @@ evidence_globs = [
 ]
 max_evidence_file_bytes = 67108864
 
+[validation]
+enabled = true
+automatic_after_terminal_run = true
+scratch_globs = ["worker-*"]
+required_fold_artifacts = ["truth-map.json", "query-signatures.jsonl"]
+preserve_composite_binaries = true
+
 [automation]
 enabled = true
-trigger = "queue-drained"
+triggers = ["queue-drained", "machine-validation-complete"]
 mode = "apply"
 dry_run_first = true
 maximum_estimated_seconds = 600

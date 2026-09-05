@@ -129,6 +129,7 @@ class RetentionPolicy:
     source_path: Path
     name: str
     runs: Path
+    validation_runs: Path
     failure_bundles: Path
     plans: Path
     state: Path
@@ -142,8 +143,13 @@ class RetentionPolicy:
     collapse_identical_retries: bool
     evidence_globs: tuple[str, ...]
     max_evidence_file_bytes: int
+    validation_enabled: bool
+    validation_automatic_after_terminal_run: bool
+    validation_scratch_globs: tuple[str, ...]
+    validation_required_fold_artifacts: tuple[str, ...]
+    validation_preserve_composite_binaries: bool
     automation_enabled: bool
-    automation_trigger: str
+    automation_triggers: tuple[str, ...]
     automation_mode: str
     dry_run_first: bool
     maximum_estimated_seconds: int
@@ -165,6 +171,7 @@ class RetentionPolicy:
             "authority_sha256": self.authority_sha256,
             "paths": {
                 "runs": str(self.runs.relative_to(self.root)),
+                "validation_runs": str(self.validation_runs.relative_to(self.root)),
                 "failure_bundles": str(self.failure_bundles.relative_to(self.root)),
                 "plans": str(self.plans.relative_to(self.root)),
                 "state": str(self.state.relative_to(self.root)),
@@ -185,9 +192,18 @@ class RetentionPolicy:
                 "evidence_globs": list(self.evidence_globs),
                 "max_evidence_file_bytes": self.max_evidence_file_bytes,
             },
+            "validation": {
+                "enabled": self.validation_enabled,
+                "automatic_after_terminal_run": self.validation_automatic_after_terminal_run,
+                "scratch_globs": list(self.validation_scratch_globs),
+                "required_fold_artifacts": list(
+                    self.validation_required_fold_artifacts
+                ),
+                "preserve_composite_binaries": self.validation_preserve_composite_binaries,
+            },
             "automation": {
                 "enabled": self.automation_enabled,
-                "trigger": self.automation_trigger,
+                "triggers": list(self.automation_triggers),
                 "mode": self.automation_mode,
                 "dry_run_first": self.dry_run_first,
                 "maximum_estimated_seconds": self.maximum_estimated_seconds,
@@ -222,6 +238,7 @@ def load_retention_policy(
             "paths",
             "success",
             "failure",
+            "validation",
             "automation",
             "memory_cleanup",
             "limits",
@@ -233,15 +250,15 @@ def load_retention_policy(
     paths = _table(document.get("paths"), "retention paths")
     success = _table(document.get("success"), "retention success")
     failure = _table(document.get("failure"), "retention failure")
+    validation = _table(document.get("validation"), "retention validation")
     automation = _table(document.get("automation"), "retention automation")
-    memory_cleanup = _table(
-        document.get("memory_cleanup"), "retention memory_cleanup"
-    )
+    memory_cleanup = _table(document.get("memory_cleanup"), "retention memory_cleanup")
     limits = _table(document.get("limits"), "retention limits")
     _only_keys(
         paths,
         {
             "runs",
+            "validation_runs",
             "failure_bundles",
             "plans",
             "state",
@@ -271,10 +288,21 @@ def load_retention_policy(
         "retention failure",
     )
     _only_keys(
+        validation,
+        {
+            "enabled",
+            "automatic_after_terminal_run",
+            "scratch_globs",
+            "required_fold_artifacts",
+            "preserve_composite_binaries",
+        },
+        "retention validation",
+    )
+    _only_keys(
         automation,
         {
             "enabled",
-            "trigger",
+            "triggers",
             "mode",
             "dry_run_first",
             "maximum_estimated_seconds",
@@ -294,11 +322,13 @@ def load_retention_policy(
         "retention memory_cleanup",
     )
     _only_keys(limits, {"maximum_actions", "maximum_scan_files"}, "retention limits")
-    trigger = _text(automation.get("trigger"), "retention automation trigger")
+    triggers = _strings(automation.get("triggers"), "retention automation triggers")
     mode = _text(automation.get("mode"), "retention automation mode")
     worker_action = _text(automation.get("worker_action"), "retention worker action")
-    if trigger != "queue-drained":
-        raise ValueError("retention automation trigger must be queue-drained")
+    if set(triggers) != {"queue-drained", "machine-validation-complete"}:
+        raise ValueError(
+            "retention automation triggers must cover queue drain and machine validation"
+        )
     if mode not in {"plan", "apply"}:
         raise ValueError("retention automation mode must be plan or apply")
     if worker_action not in {"none", "recycle"}:
@@ -309,11 +339,41 @@ def load_retention_policy(
     if any(Path(item).is_absolute() or ".." in Path(item).parts for item in prune):
         raise ValueError("success prune paths must be safe attempt-relative paths")
     globs = _strings(failure.get("evidence_globs"), "failure evidence_globs")
+    validation_scratch_globs = _strings(
+        validation.get("scratch_globs"), "validation scratch_globs"
+    )
+    if any(
+        Path(item).is_absolute()
+        or ".." in Path(item).parts
+        or len(Path(item).parts) != 1
+        for item in validation_scratch_globs
+    ):
+        raise ValueError(
+            "validation scratch_globs must select direct children of a run"
+        )
+    validation_required_fold_artifacts = _strings(
+        validation.get("required_fold_artifacts"),
+        "validation required_fold_artifacts",
+    )
+    if any(
+        Path(item).is_absolute()
+        or ".." in Path(item).parts
+        or len(Path(item).parts) != 1
+        for item in validation_required_fold_artifacts
+    ):
+        raise ValueError(
+            "validation required_fold_artifacts must be fold-local filenames"
+        )
     return RetentionPolicy(
         root=root,
         source_path=source,
         name=_text(document.get("name"), "retention policy name"),
         runs=_inside(root, _text(paths.get("runs"), "runs path"), "runs path"),
+        validation_runs=_inside(
+            root,
+            _text(paths.get("validation_runs"), "validation runs path"),
+            "validation runs path",
+        ),
         failure_bundles=_inside(
             root,
             _text(paths.get("failure_bundles"), "failure bundles path"),
@@ -353,8 +413,21 @@ def load_retention_policy(
         max_evidence_file_bytes=_positive(
             failure.get("max_evidence_file_bytes"), "failure max_evidence_file_bytes"
         ),
+        validation_enabled=_boolean(
+            validation.get("enabled"), "validation retention enabled"
+        ),
+        validation_automatic_after_terminal_run=_boolean(
+            validation.get("automatic_after_terminal_run"),
+            "validation automatic_after_terminal_run",
+        ),
+        validation_scratch_globs=validation_scratch_globs,
+        validation_required_fold_artifacts=validation_required_fold_artifacts,
+        validation_preserve_composite_binaries=_boolean(
+            validation.get("preserve_composite_binaries"),
+            "validation preserve_composite_binaries",
+        ),
         automation_enabled=_boolean(automation.get("enabled"), "automation enabled"),
-        automation_trigger=trigger,
+        automation_triggers=triggers,
         automation_mode=mode,
         dry_run_first=True,
         maximum_estimated_seconds=_positive(
@@ -733,11 +806,277 @@ def current_retention_session(
         connection.close()
 
 
+def _validation_evidence_record(
+    policy: RetentionPolicy, run_root: Path
+) -> dict[str, object]:
+    """Verify the retained evidence needed after disposable worker state is gone."""
+
+    status_path = _safe_regular(
+        policy.root, run_root / "status.json", "validation status"
+    )
+    status = _load_json(status_path, "validation status")
+    if (
+        status.get("schema_version") != "fidb-machine-validation-run-status/v1"
+        or status.get("state") != "complete"
+    ):
+        raise RetentionError("validation status is not terminal-complete")
+    mode = status.get("mode")
+    if mode not in {"canary", "full"}:
+        raise RetentionError("validation status has an unsupported mode")
+    expected_units = status.get("expected_work_units")
+    complete_units = status.get("complete_work_units")
+    failed_units = status.get("failed_work_units")
+    if (
+        type(expected_units) is not int
+        or expected_units < 1
+        or complete_units != expected_units
+        or failed_units != 0
+    ):
+        raise RetentionError(
+            "validation status does not prove every work unit complete"
+        )
+    report_value = status.get("report_path")
+    if not isinstance(report_value, str):
+        raise RetentionError("validation status has no report path")
+    report_path = _safe_regular(
+        policy.root, Path(report_value), "validation terminal report"
+    )
+    try:
+        report_path.relative_to(run_root)
+    except ValueError as error:
+        raise RetentionError("validation report escapes its run root") from error
+    report = _load_json(report_path, "validation terminal report")
+    expected_schema = (
+        "fidb-machine-validation-canary/v1"
+        if mode == "canary"
+        else "fidb-machine-validation-report/v1"
+    )
+    metrics = report.get("metrics")
+    if (
+        report.get("schema_version") != expected_schema
+        or report.get("state") != "measured-complete"
+        or report.get("validation_id") != status.get("validation_id")
+        or not isinstance(metrics, dict)
+        or metrics.get("expected_work_units") != expected_units
+        or metrics.get("complete_work_units") != expected_units
+        or metrics.get("failed_work_units") != 0
+    ):
+        raise RetentionError("validation report does not bind a complete run")
+
+    evidence = hashlib.sha256()
+    evidence_bytes = 0
+    evidence_files = 0
+
+    def retain(path: Path, label: str) -> None:
+        nonlocal evidence_bytes, evidence_files
+        regular = _safe_regular(policy.root, path, label)
+        try:
+            relative = regular.relative_to(run_root).as_posix()
+        except ValueError as error:
+            raise RetentionError(f"{label} escapes its validation run") from error
+        size = regular.stat().st_size
+        evidence.update(relative.encode("utf-8"))
+        evidence.update(b"\0")
+        evidence.update(_sha256(regular).encode("ascii"))
+        evidence.update(b"\0")
+        evidence.update(str(size).encode("ascii"))
+        evidence.update(b"\n")
+        evidence_bytes += size
+        evidence_files += 1
+
+    retain(status_path, "validation status")
+    retain(report_path, "validation terminal report")
+    result_paths = sorted((run_root / "units").glob("*/result.json"))
+    if len(result_paths) != expected_units:
+        raise RetentionError(
+            f"validation run has {len(result_paths)} results, expected {expected_units}"
+        )
+    positions: set[int] = set()
+    fold_count = 0
+    for result_path in result_paths:
+        result = _load_json(
+            _safe_regular(policy.root, result_path, "validation unit result"),
+            "validation unit result",
+        )
+        position = result.get("position")
+        folds = result.get("folds")
+        if (
+            result.get("schema_version") != "fidb-machine-validation-unit/v1"
+            or result.get("state") != "complete"
+            or result.get("mode") != mode
+            or type(position) is not int
+            or position in positions
+            or not isinstance(folds, list)
+            or not folds
+        ):
+            raise RetentionError(f"validation unit result is incomplete: {result_path}")
+        positions.add(position)
+        retain(result_path, "validation unit result")
+        for fold in folds:
+            if not isinstance(fold, dict) or fold.get("fold") not in {"A", "B"}:
+                raise RetentionError(
+                    f"validation unit has invalid fold evidence: {result_path}"
+                )
+            fold_root = result_path.parent / f'fold-{fold["fold"]}'
+            if not fold_root.is_dir() or fold_root.is_symlink():
+                raise RetentionError(
+                    f"validation fold directory is unavailable: {fold_root}"
+                )
+            for name in policy.validation_required_fold_artifacts:
+                retain(fold_root / name, f"validation fold artifact {name}")
+            if policy.validation_preserve_composite_binaries:
+                for stem in ("truth", "query"):
+                    matches = [
+                        path
+                        for suffix in ("elf", "dll")
+                        if (path := fold_root / f"{stem}.{suffix}").is_file()
+                    ]
+                    if len(matches) != 1:
+                        raise RetentionError(
+                            f"validation fold has no unique {stem} composite: {fold_root}"
+                        )
+                    retain(matches[0], f"validation {stem} composite")
+            fold_count += 1
+    if len(positions) != expected_units:
+        raise RetentionError("validation result positions are not unique and complete")
+    return {
+        "validation_id": str(status["validation_id"]),
+        "run_id": str(status.get("run_id") or run_root.name),
+        "mode": str(mode),
+        "report_path": _relative(policy.root, report_path),
+        "report_sha256": _sha256(report_path),
+        "expected_work_units": expected_units,
+        "folds": fold_count,
+        "retained_evidence_files": evidence_files,
+        "retained_evidence_bytes": evidence_bytes,
+        "retained_evidence_sha256": evidence.hexdigest(),
+    }
+
+
+def _validation_retention_records(
+    policy: RetentionPolicy,
+) -> tuple[
+    list[dict[str, object]], list[dict[str, object]], list[dict[str, object]], int
+]:
+    actions: list[dict[str, object]] = []
+    preserved: list[dict[str, object]] = []
+    quarantined: list[dict[str, object]] = []
+    verified = 0
+    if not policy.validation_enabled or not policy.validation_runs.exists():
+        return actions, preserved, quarantined, verified
+    for cohort in sorted(policy.validation_runs.iterdir()):
+        if not cohort.is_dir() or cohort.is_symlink():
+            quarantined.append(
+                {
+                    "kind": "validation-cohort",
+                    "path": _relative(policy.root, cohort),
+                    "reason": "validation cohort is not a regular directory",
+                }
+            )
+            continue
+        for run_root in sorted(cohort.iterdir()):
+            if not run_root.is_dir() or run_root.is_symlink():
+                continue
+            try:
+                record = _validation_evidence_record(policy, run_root)
+            except (OSError, RetentionError) as error:
+                quarantined.append(
+                    {
+                        "kind": "validation-run",
+                        "path": _relative(policy.root, run_root),
+                        "reason": str(error),
+                    }
+                )
+                continue
+            verified += 1
+            preserved.append(
+                {
+                    "kind": "validation-evidence",
+                    "path": _relative(policy.root, run_root / "units"),
+                    "run_id": record["run_id"],
+                    "reason": "terminal report, composites and signature evidence retained",
+                    "evidence_sha256": record["retained_evidence_sha256"],
+                }
+            )
+            scratch: list[Path] = []
+            seen: set[Path] = set()
+            unsafe = None
+            for pattern in policy.validation_scratch_globs:
+                for path in sorted(run_root.glob(pattern)):
+                    resolved = path.resolve()
+                    if path.is_symlink() or path.parent != run_root:
+                        unsafe = f"validation scratch target is unsafe: {path}"
+                        break
+                    # Worker logs intentionally share the worker-* prefix and
+                    # are retained as compact run evidence. Scratch selectors
+                    # operate on directories only.
+                    if not path.is_dir():
+                        continue
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        scratch.append(path)
+                if unsafe:
+                    break
+            if unsafe:
+                quarantined.append(
+                    {
+                        "kind": "validation-scratch",
+                        "path": _relative(policy.root, run_root),
+                        "reason": unsafe,
+                    }
+                )
+                continue
+            if not scratch:
+                continue
+            stats = {
+                field: 0
+                for field in (
+                    "files",
+                    "directories",
+                    "apparent_bytes",
+                    "allocated_bytes",
+                )
+            }
+            try:
+                for path in scratch:
+                    current = _attempt_stats(path, policy.maximum_scan_files)
+                    for field in stats:
+                        stats[field] += current[field]
+            except RetentionError as error:
+                quarantined.append(
+                    {
+                        "kind": "validation-scratch",
+                        "path": _relative(policy.root, run_root),
+                        "reason": str(error),
+                    }
+                )
+                continue
+            actions.append(
+                {
+                    "kind": "prune-validation-scratch",
+                    **record,
+                    "paths": [_relative(policy.root, path) for path in scratch],
+                    **stats,
+                }
+            )
+    return actions, preserved, quarantined, verified
+
+
 def compile_retention_plan(
     project_root: str | Path,
     ledger: str | Path = DEFAULT_LEDGER,
     authority: str | Path = DEFAULT_POLICY,
+    *,
+    scope: str = "all",
+    trigger: str = "manual",
+    session_id: str | None = None,
 ) -> dict[str, object]:
+    if scope not in {"all", "production", "machine-validation"}:
+        raise ValueError(
+            "retention scope must be all, production or machine-validation"
+        )
+    if trigger not in {"manual", "queue-drained", "machine-validation-complete"}:
+        raise ValueError("retention trigger is unsupported")
     started = time.monotonic_ns()
     generated_at = datetime.now(timezone.utc).isoformat()
     policy = load_retention_policy(project_root, authority)
@@ -746,19 +1085,27 @@ def compile_retention_plan(
     preserved: list[dict[str, object]] = []
     quarantined: list[dict[str, object]] = []
     verified_successes = 0
+    verified_validation_runs = 0
+    production_enabled = scope in {"all", "production"}
+    validation_enabled = scope in {"all", "machine-validation"}
     connection = _open_ledger(policy.root, ledger)
     try:
         ledger_fingerprint = _ledger_fingerprint(connection)
-        session_id = _latest_session(connection)
-        jobs = {
-            str(row["job_id"]): row
-            for row in connection.execute("SELECT * FROM jobs ORDER BY job_id")
-        }
+        effective_session_id = session_id or _latest_session(connection)
+        jobs = (
+            {
+                str(row["job_id"]): row
+                for row in connection.execute("SELECT * FROM jobs ORDER BY job_id")
+            }
+            if production_enabled
+            else {}
+        )
         attempts_by_job: dict[str, list[sqlite3.Row]] = {}
-        for row in connection.execute(
-            "SELECT * FROM attempts ORDER BY job_id, attempt_number, attempt_id"
-        ):
-            attempts_by_job.setdefault(str(row["job_id"]), []).append(row)
+        if production_enabled:
+            for row in connection.execute(
+                "SELECT * FROM attempts ORDER BY job_id, attempt_number, attempt_id"
+            ):
+                attempts_by_job.setdefault(str(row["job_id"]), []).append(row)
 
         for job_id, job in jobs.items():
             if str(job["state"]) != "complete":
@@ -1023,7 +1370,7 @@ def compile_retention_plan(
             )
 
         staging_root = policy.runs / "staging"
-        if staging_root.is_dir():
+        if production_enabled and staging_root.is_dir():
             for path in staging_root.iterdir():
                 if not path.is_dir() or path.is_symlink():
                     quarantined.append(
@@ -1049,6 +1396,17 @@ def compile_retention_plan(
     finally:
         connection.close()
 
+    if validation_enabled:
+        (
+            validation_actions,
+            validation_preserved,
+            validation_quarantined,
+            verified_validation_runs,
+        ) = _validation_retention_records(policy)
+        actions.extend(validation_actions)
+        preserved.extend(validation_preserved)
+        quarantined.extend(validation_quarantined)
+
     if len(actions) > policy.maximum_actions:
         raise RetentionError(
             f"retention plan exceeds maximum_actions={policy.maximum_actions}"
@@ -1061,6 +1419,20 @@ def compile_retention_plan(
         ),
         "success_scratch_prunes": sum(
             row["kind"] == "prune-success-scratch" for row in actions
+        ),
+        "verified_validation_runs": verified_validation_runs,
+        "validation_scratch_prunes": sum(
+            row["kind"] == "prune-validation-scratch" for row in actions
+        ),
+        "validation_source_directories": sum(
+            len(row["paths"])
+            for row in actions
+            if row["kind"] == "prune-validation-scratch"
+        ),
+        "validation_recoverable_apparent_bytes": sum(
+            int(row["apparent_bytes"])
+            for row in actions
+            if row["kind"] == "prune-validation-scratch"
         ),
         "source_directories": sum(
             len(row["paths"] if "paths" in row else row["source_paths"])
@@ -1079,7 +1451,9 @@ def compile_retention_plan(
         "schema_version": PLAN_SCHEMA,
         "policy": policy.document(),
         "ledger": ledger_fingerprint,
-        "session_id": session_id,
+        "scope": scope,
+        "trigger": trigger,
+        "session_id": effective_session_id,
         "actions": actions,
         "preserved": preserved,
         "quarantined": quarantined,
@@ -1247,6 +1621,8 @@ def write_retention_plan(plan: Mapping[str, object], project_root: str | Path) -
             "plan_digest": digest,
             "path": _relative(root, path),
             "generated_at": plan["generated_at"],
+            "scope": plan["scope"],
+            "trigger": plan["trigger"],
         },
     )
     return path
@@ -1259,6 +1635,8 @@ def _saved_plan_digest(plan: Mapping[str, object]) -> str:
             "schema_version",
             "policy",
             "ledger",
+            "scope",
+            "trigger",
             "session_id",
             "actions",
             "preserved",
@@ -1304,6 +1682,14 @@ def _assert_apply_idle(connection: sqlite3.Connection) -> None:
     if int(queued["n"]) and int(state["armed"]) and not int(state["paused"]):
         raise RetentionError(
             "retention apply requires a terminal queue, or an explicitly paused/disarmed queue"
+        )
+
+
+def _assert_validation_idle(policy: RetentionPolicy) -> None:
+    locks = sorted(policy.validation_runs.glob("*/.runner.lock"))
+    if locks:
+        raise RetentionError(
+            "validation scratch apply requires no active machine-validation runner"
         )
 
 
@@ -1411,7 +1797,20 @@ def apply_retention_plan(
             _assert_apply_idle(connection)
         finally:
             connection.close()
-        current = compile_retention_plan(policy.root, ledger, authority)
+        if any(
+            isinstance(action, dict)
+            and action.get("kind") == "prune-validation-scratch"
+            for action in saved.get("actions", [])
+        ):
+            _assert_validation_idle(policy)
+        current = compile_retention_plan(
+            policy.root,
+            ledger,
+            authority,
+            scope=str(saved.get("scope", "all")),
+            trigger=str(saved.get("trigger", "manual")),
+            session_id=str(saved["session_id"]),
+        )
         if current["plan_digest"] != plan_digest:
             raise RetentionError(
                 f"retention plan is stale; current digest is {current['plan_digest']}"
@@ -1440,6 +1839,15 @@ def apply_retention_plan(
                         "success scratch action lacks a verified lane receipt"
                     )
                 paths = action["paths"]
+            elif kind == "prune-validation-scratch":
+                if (
+                    action.get("report_sha256") is None
+                    or action.get("retained_evidence_sha256") is None
+                ):
+                    raise RetentionError(
+                        "validation scratch action lacks verified retained evidence"
+                    )
+                paths = action["paths"]
             else:
                 raise RetentionError(f"unsupported retention action: {kind}")
             for path in paths:
@@ -1447,7 +1855,17 @@ def apply_retention_plan(
                 for field in removed:
                     removed[field] += stats[field]
             completed_actions.append(
-                {"kind": kind, "job_id": action["job_id"], "paths": list(paths)}
+                {
+                    key: value
+                    for key, value in {
+                        "kind": kind,
+                        "job_id": action.get("job_id"),
+                        "run_id": action.get("run_id"),
+                        "validation_id": action.get("validation_id"),
+                        "paths": list(paths),
+                    }.items()
+                    if value is not None
+                }
             )
         duration = time.monotonic_ns() - started
         after = shutil.disk_usage(policy.root).free
@@ -1457,6 +1875,8 @@ def apply_retention_plan(
             "mode": "apply",
             "plan_digest": plan_digest,
             "session_id": saved["session_id"],
+            "scope": saved["scope"],
+            "trigger": saved["trigger"],
             "started_at": started_at,
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "duration_ns": duration,
@@ -1494,6 +1914,8 @@ def retention_status(
                         for key in (
                             "kind",
                             "job_id",
+                            "run_id",
+                            "validation_id",
                             "bundle_path",
                             "source_paths",
                             "paths",
@@ -1518,9 +1940,7 @@ def retention_status(
     if policy.state.is_file():
         stored = _load_json(policy.state, "retention state")
         last_run = {
-            key: value
-            for key, value in stored.items()
-            if key != "completed_actions"
+            key: value for key, value in stored.items() if key != "completed_actions"
         }
         last_run["completed_action_examples"] = list(
             stored.get("completed_actions", [])
@@ -1538,25 +1958,45 @@ def automatic_retention(
     project_root: str | Path,
     ledger: str | Path = DEFAULT_LEDGER,
     authority: str | Path = DEFAULT_POLICY,
+    *,
+    trigger: str = "queue-drained",
+    session_id: str | None = None,
 ) -> dict[str, object]:
     policy = load_retention_policy(project_root, authority)
+    if trigger not in policy.automation_triggers:
+        raise RetentionError(f"retention trigger is not enabled: {trigger}")
+    scope = "machine-validation" if trigger == "machine-validation-complete" else "all"
     if not policy.automation_enabled:
         return {
             "state": "disabled",
-            "session_id": current_retention_session(project_root, ledger),
+            "session_id": session_id or current_retention_session(project_root, ledger),
+            "scope": scope,
+            "trigger": trigger,
             "worker_action": "none",
         }
     with collector_lock(policy, blocking=False) as acquired:
         if not acquired:
             return {
                 "state": "collector-busy",
-                "session_id": current_retention_session(project_root, ledger),
+                "session_id": session_id
+                or current_retention_session(project_root, ledger),
+                "scope": scope,
+                "trigger": trigger,
                 "worker_action": policy.worker_action,
             }
-        plan = compile_retention_plan(policy.root, ledger, authority)
+        plan = compile_retention_plan(
+            policy.root,
+            ledger,
+            authority,
+            scope=scope,
+            trigger=trigger,
+            session_id=session_id,
+        )
         path = write_retention_plan(plan, policy.root)
     result: dict[str, object] = {
         "state": "planned",
+        "scope": scope,
+        "trigger": trigger,
         "session_id": plan["session_id"],
         "plan_digest": plan["plan_digest"],
         "plan_path": _relative(policy.root, path),
@@ -1588,10 +2028,15 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "status", parents=[common], help="show policy, latest plan and last apply"
     )
-    commands.add_parser(
+    plan = commands.add_parser(
         "plan",
         parents=[common],
         help="write a non-destructive content-addressed plan",
+    )
+    plan.add_argument(
+        "--scope",
+        choices=("all", "production", "machine-validation"),
+        default="all",
     )
     apply = commands.add_parser(
         "apply", parents=[common], help="apply one exact current plan"
@@ -1610,7 +2055,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             document = retention_status(arguments.project_root, arguments.policy)
         elif arguments.command == "plan":
             document = compile_retention_plan(
-                arguments.project_root, arguments.state, arguments.policy
+                arguments.project_root,
+                arguments.state,
+                arguments.policy,
+                scope=arguments.scope,
             )
             path = write_retention_plan(document, arguments.project_root)
             document = {

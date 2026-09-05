@@ -1695,6 +1695,10 @@ export type RetentionPlanSummary = {
   actions: number;
   failure_bundles: number;
   success_scratch_prunes: number;
+  verified_validation_runs: number;
+  validation_scratch_prunes: number;
+  validation_source_directories: number;
+  validation_recoverable_apparent_bytes: number;
   source_directories: number;
   recoverable_apparent_bytes: number;
   recoverable_allocated_bytes: number;
@@ -1721,9 +1725,16 @@ export type RetentionStatus = {
       evidence_globs: string[];
       max_evidence_file_bytes: number;
     };
+    validation: {
+      enabled: boolean;
+      automatic_after_terminal_run: boolean;
+      scratch_globs: string[];
+      required_fold_artifacts: string[];
+      preserve_composite_binaries: boolean;
+    };
     automation: {
       enabled: boolean;
-      trigger: string;
+      triggers: string[];
       mode: string;
       dry_run_first: boolean;
       maximum_estimated_seconds: number;
@@ -1742,6 +1753,8 @@ export type RetentionStatus = {
     plan_digest: string;
     path: string;
     generated_at: string;
+    scope: string;
+    trigger: string;
     summary: RetentionPlanSummary;
     scan_duration_ns: number;
     estimated_apply_seconds: number;
@@ -1755,6 +1768,8 @@ export type RetentionStatus = {
     mode: string;
     plan_digest: string;
     session_id: string;
+    scope: string;
+    trigger: string;
     started_at: string;
     completed_at: string;
     duration_ns: number;

@@ -12,6 +12,7 @@ from unittest.mock import patch
 from fidb_poc.retention import (
     RetentionError,
     apply_retention_plan,
+    automatic_retention,
     compile_retention_plan,
     load_retention_policy,
     main,
@@ -169,6 +170,74 @@ class RetentionTests(unittest.TestCase):
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "bytes": path.stat().st_size,
         }
+
+    def add_complete_validation_run(self, run_id: str = "validation-full") -> Path:
+        run = self.root / "artifacts/validation-runs/cohort-001" / run_id
+        unit = run / "units/001-route-baseline"
+        folds = []
+        for name in ("A", "B"):
+            fold = unit / f"fold-{name}"
+            fold.mkdir(parents=True)
+            (fold / "truth-map.json").write_text(
+                json.dumps({"fold": name, "owners": [f"library-{name}"]}),
+                encoding="utf-8",
+            )
+            (fold / "query-signatures.jsonl").write_text(
+                json.dumps({"full_hash": name, "specific_hash": name}) + "\n",
+                encoding="utf-8",
+            )
+            (fold / "truth.elf").write_bytes(b"truth" + name.encode())
+            (fold / "query.elf").write_bytes(b"query" + name.encode())
+            folds.append({"fold": name})
+        (unit / "result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "fidb-machine-validation-unit/v1",
+                    "state": "complete",
+                    "mode": "full",
+                    "position": 1,
+                    "folds": folds,
+                }
+            ),
+            encoding="utf-8",
+        )
+        report = run / "report.json"
+        report.write_text(
+            json.dumps(
+                {
+                    "schema_version": "fidb-machine-validation-report/v1",
+                    "validation_id": "cohort-001",
+                    "state": "measured-complete",
+                    "metrics": {
+                        "expected_work_units": 1,
+                        "complete_work_units": 1,
+                        "failed_work_units": 0,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (run / "status.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "fidb-machine-validation-run-status/v1",
+                    "validation_id": "cohort-001",
+                    "run_id": run_id,
+                    "mode": "full",
+                    "state": "complete",
+                    "expected_work_units": 1,
+                    "complete_work_units": 1,
+                    "failed_work_units": 0,
+                    "report_path": str(report.relative_to(self.root)),
+                }
+            ),
+            encoding="utf-8",
+        )
+        worker = run / "worker-1234"
+        worker.mkdir()
+        (worker / "disposable.bin").write_bytes(b"scratch" * 100)
+        (run / "worker-01.log").write_text("retained worker log\n", encoding="utf-8")
+        return run
 
     def test_success_is_verified_but_preserved_until_lane_receipt(self) -> None:
         job_id, attempt, _result = self.add_success(1)
@@ -334,6 +403,67 @@ class RetentionTests(unittest.TestCase):
 
         self.assertEqual(report["state"], "warning")
         self.assertEqual(len(report["reasons"]), 2)
+
+    def test_validation_plan_preserves_hash_evidence_and_selects_only_worker_scratch(
+        self,
+    ) -> None:
+        run = self.add_complete_validation_run()
+
+        plan = compile_retention_plan(
+            self.root,
+            scope="machine-validation",
+            trigger="machine-validation-complete",
+            session_id="machine-validation-validation-full",
+        )
+
+        self.assertEqual(plan["scope"], "machine-validation")
+        self.assertEqual(plan["summary"]["verified_validation_runs"], 1)
+        self.assertEqual(plan["summary"]["validation_scratch_prunes"], 1)
+        self.assertEqual(plan["summary"]["validation_source_directories"], 1)
+        action = plan["actions"][0]
+        self.assertEqual(action["kind"], "prune-validation-scratch")
+        self.assertEqual(action["run_id"], "validation-full")
+        self.assertEqual(
+            action["paths"], [str((run / "worker-1234").relative_to(self.root))]
+        )
+        self.assertGreater(action["retained_evidence_files"], 0)
+
+        write_retention_plan(plan, self.root)
+        apply_retention_plan(self.root, plan["plan_digest"])
+
+        self.assertFalse((run / "worker-1234").exists())
+        self.assertTrue((run / "worker-01.log").is_file())
+        self.assertTrue((run / "report.json").is_file())
+        self.assertTrue(
+            (run / "units/001-route-baseline/fold-A/query-signatures.jsonl").is_file()
+        )
+        self.assertTrue((run / "units/001-route-baseline/fold-A/query.elf").is_file())
+
+    def test_incomplete_validation_run_is_quarantined_without_action(self) -> None:
+        run = self.add_complete_validation_run("validation-failed")
+        status = json.loads((run / "status.json").read_text(encoding="utf-8"))
+        status["state"] = "failed"
+        (run / "status.json").write_text(json.dumps(status), encoding="utf-8")
+
+        plan = compile_retention_plan(self.root, scope="machine-validation")
+
+        self.assertEqual(plan["summary"]["verified_validation_runs"], 0)
+        self.assertEqual(plan["summary"]["validation_scratch_prunes"], 0)
+        self.assertEqual(plan["quarantined"][0]["kind"], "validation-run")
+        self.assertTrue((run / "worker-1234/disposable.bin").is_file())
+
+    def test_machine_validation_automatic_retention_is_scoped(self) -> None:
+        run = self.add_complete_validation_run("validation-auto")
+        result = automatic_retention(
+            self.root,
+            trigger="machine-validation-complete",
+            session_id="machine-validation-validation-auto",
+        )
+
+        self.assertEqual(result["state"], "complete")
+        self.assertEqual(result["scope"], "machine-validation")
+        self.assertEqual(result["trigger"], "machine-validation-complete")
+        self.assertFalse((run / "worker-1234").exists())
 
 
 if __name__ == "__main__":
