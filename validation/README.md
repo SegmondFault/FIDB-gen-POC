@@ -132,7 +132,7 @@ per-hash reanalysis.
 ## Scheduled single-hash analysis
 
 `machine-validation-hash-schedule.toml` admits the corrected analysis during a
-one-off 13:45–17:00 Europe/Luxembourg window on 2026-09-05 and during the normal
+one-off 13:45–18:15 Europe/Luxembourg window on 2026-09-05 and during the normal
 00:00–05:30 nightly window. A started pass finishes after the admission window
 closes. The scheduler selects only the latest sealed full run lacking a current
 hash report; it never starts compilation or Ghidra and exits successfully when

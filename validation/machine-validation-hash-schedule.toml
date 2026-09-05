@@ -9,7 +9,7 @@ id = "c10-reanalysis-2026-09-05-afternoon"
 kind = "once"
 date = "2026-09-05"
 start = "13:45"
-stop_admitting = "17:00"
+stop_admitting = "18:15"
 enabled = true
 
 [[window]]
