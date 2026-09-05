@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libuv"
+version = "1.52.1"
+url = "https://dist.libuv.org/dist/v1.52.1/libuv-v1.52.1.tar.gz"
+sha256 = "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7"
+source_directory = "libuv-v1.52.1"
+project_markers = ["CMakeLists.txt", "include/uv.h"]
+allowed_build_systems = ["libuv-cmake", "cmake"]
+preferred_build_system = "libuv-cmake"
+static_archives = ["libuv.a"]

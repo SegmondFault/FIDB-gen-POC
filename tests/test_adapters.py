@@ -261,6 +261,39 @@ class AdapterTests(unittest.TestCase):
             commands[1], ("make", "-j5", "-C", "libtiff", "libtiff.la")
         )
 
+    def test_new_autoconf_adapters_are_static_and_dependency_bounded(self):
+        libffi = build_commands(
+            "libffi-autoconf", route=route(), compiler_flags=("-O2",), jobs=4
+        )
+        libxml2 = build_commands(
+            "libxml2-autoconf", route=route(), compiler_flags=("-Os",), jobs=3
+        )
+
+        self.assertIn("--disable-multi-os-directory", libffi[0])
+        self.assertEqual(libffi[1], ("make", "-j4", "all"))
+        self.assertIn("--without-iconv", libxml2[0])
+        self.assertIn("--without-icu", libxml2[0])
+        self.assertIn("--without-zlib", libxml2[0])
+        self.assertEqual(libxml2[1], ("make", "-j3", "libxml2.la"))
+
+    def test_new_cmake_adapters_select_only_static_library_targets(self):
+        libuv = build_commands(
+            "libuv-cmake", route=route(), compiler_flags=("-O2",), jobs=4
+        )
+        openjpeg = build_commands(
+            "openjpeg-cmake", route=route(), compiler_flags=("-O2",), jobs=4
+        )
+        opus = build_commands(
+            "opus-cmake", route=route(), compiler_flags=("-O2",), jobs=4
+        )
+
+        self.assertIn("-DLIBUV_BUILD_SHARED=OFF", libuv[0])
+        self.assertEqual(libuv[1][-1], "uv_a")
+        self.assertIn("-DBUILD_CODEC=OFF", openjpeg[0])
+        self.assertEqual(openjpeg[1][-1], "openjp2")
+        self.assertIn("-DOPUS_STACK_PROTECTOR=OFF", opus[0])
+        self.assertEqual(opus[1][-1], "opus")
+
     def test_harfbuzz_cmake_adapter_pins_compilers_and_library_targets(self):
         commands = build_commands(
             "harfbuzz-cmake",

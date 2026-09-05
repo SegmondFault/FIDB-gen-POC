@@ -117,7 +117,7 @@ class ConfigurationTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         document = tomllib.loads((root / "worker.toml").read_text())
         self.assertEqual(
-            document["requested_libraries"], ["zlib", "bzip2@1.0.7"]
+            document["requested_libraries"], ["zlib@1.3.1", "bzip2@1.0.7"]
         )
         self.assertNotIn("url", document)
         self.assertNotIn("sources", document)
@@ -133,7 +133,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_command_line_request_override_resolves_one_recipe(self):
         root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
-            root / "worker.toml", request_override=("zlib",)
+            root / "worker.toml", request_override=("zlib@1.3.1",)
         )
         self.assertEqual(
             [row.identifier for row in configuration.libraries],
@@ -210,6 +210,25 @@ class ConfigurationTests(unittest.TestCase):
         }
 
         for source in source_pack["source"]:
+            if source["id"] not in authored:
+                continue
+            configuration = load_configuration(
+                root / "worker.toml",
+                request_override=(f'{source["id"]}@{source["version"]}',),
+            )
+            recipe = configuration.libraries[0]
+            self.assertEqual(recipe.url, source["url"])
+            self.assertEqual(recipe.sha256, source["sha256"])
+            self.assertEqual(recipe.source_directory, source["source_directory"])
+
+    def test_dependency_free_c21_c30_recipe_pins_match_the_source_pack(self):
+        root = Path(__file__).resolve().parents[1]
+        source_pack = tomllib.loads(
+            (root / "sources/c-top30-v1.toml").read_text(encoding="utf-8")
+        )
+        authored = {"zlib", "libffi", "libxml2", "libuv", "openjpeg", "opus"}
+
+        for source in source_pack["source"][20:]:
             if source["id"] not in authored:
                 continue
             configuration = load_configuration(

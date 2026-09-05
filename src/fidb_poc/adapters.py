@@ -30,6 +30,11 @@ BUILD_MARKERS = {
     "expat-autoconf": ("configure", "lib/expat.h"),
     "libunistring-autoconf": ("configure", "lib/unistr.in.h"),
     "libtiff-autoconf": ("configure", "libtiff/tiff.h"),
+    "libffi-autoconf": ("configure", "include/ffi.h.in"),
+    "libxml2-autoconf": ("configure", "include/libxml/parser.h"),
+    "libuv-cmake": ("CMakeLists.txt", "include/uv.h"),
+    "openjpeg-cmake": ("CMakeLists.txt", "src/lib/openjp2/openjpeg.h"),
+    "opus-cmake": ("CMakeLists.txt", "include/opus.h"),
     "sqlite-autoconf": ("configure", "sqlite3.c", "sqlite3.h"),
     "xz-autoconf": ("configure", "src/liblzma/api/lzma.h"),
     "pcre2-autoconf": ("configure", "src/pcre2.h.in"),
@@ -344,6 +349,32 @@ AUTOCONF_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ),
         ("-C", "libtiff", "libtiff.la"),
     ),
+    "libffi-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-docs",
+            "--disable-multi-os-directory",
+        ),
+        ("all",),
+    ),
+    "libxml2-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--without-python",
+            "--without-iconv",
+            "--without-icu",
+            "--without-zlib",
+            "--without-lzma",
+            "--without-readline",
+            "--without-history",
+            "--without-modules",
+            "--without-http",
+            "--without-docs",
+        ),
+        ("libxml2.la",),
+    ),
 }
 
 
@@ -401,6 +432,37 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "-DCMAKE_STATIC_LIBRARY_PREFIX=lib",
         ),
         ("png_static",),
+    ),
+    "libuv-cmake": (
+        (
+            "-DLIBUV_BUILD_SHARED=OFF",
+            "-DLIBUV_BUILD_TESTS=OFF",
+            "-DLIBUV_BUILD_BENCH=OFF",
+            "-DBUILD_TESTING=OFF",
+        ),
+        ("uv_a",),
+    ),
+    "openjpeg-cmake": (
+        (
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DBUILD_STATIC_LIBS=ON",
+            "-DBUILD_CODEC=OFF",
+            "-DBUILD_JPIP=OFF",
+            "-DBUILD_VIEWER=OFF",
+            "-DBUILD_JAVA=OFF",
+            "-DBUILD_TESTING=OFF",
+            "-DBUILD_DOC=OFF",
+        ),
+        ("openjp2",),
+    ),
+    "opus-cmake": (
+        (
+            "-DOPUS_BUILD_SHARED_LIBRARY=OFF",
+            "-DOPUS_BUILD_TESTING=OFF",
+            "-DOPUS_BUILD_PROGRAMS=OFF",
+            "-DOPUS_STACK_PROTECTOR=OFF",
+        ),
+        ("opus",),
     ),
 }
 
