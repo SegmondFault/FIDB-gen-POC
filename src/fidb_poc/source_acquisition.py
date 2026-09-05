@@ -32,7 +32,7 @@ LOCK_SCHEMA = "fidb-source-acquisition-lock/v1"
 SNAPSHOT_STATE_SCHEMA = "fidb-source-metadata-state/v1"
 STATUS_SCHEMA = "fidb-source-acquisition-status/v1"
 RECEIPT_SCHEMA = "fidb-source-acquisition-receipt/v1"
-RESOLUTION_ALGORITHM = "ordered-exact-or-declared-alias-v1"
+RESOLUTION_ALGORITHM = "ordered-source-preference-and-mirror-v2"
 
 MANAGED_METADATA = Path("var/fidb-sources/metadata")
 MANAGED_RECEIPTS = Path("var/fidb-sources/acquisition")
@@ -51,10 +51,20 @@ _CONFIG_FIELDS = {
     "download_workers",
     "resolver",
     "alias",
+    "preference",
+    "rewrite",
     "unresolved",
 }
 _RESOLVER_FIELDS = {"id", "kind", "priority", "url"}
 _ALIAS_FIELDS = {"resolver_id", "candidate_key", "registry_key", "reason"}
+_PREFERENCE_FIELDS = {"candidate_key", "resolver_id", "reason"}
+_REWRITE_FIELDS = {
+    "id",
+    "resolver_id",
+    "match_prefix",
+    "replacement_prefix",
+    "reason",
+}
 _UNRESOLVED_FIELDS = {"candidate_key", "classification", "reason"}
 _LOCK_FIELDS = {
     "schema_version",
@@ -79,7 +89,9 @@ _LOCK_PIN_FIELDS = _LOCK_COMMON_FIELDS | {
     "match_kind",
     "version",
     "release_page",
+    "registry_url",
     "url",
+    "url_rewrite_id",
     "sha256",
     "download_bytes",
     "filename",
@@ -229,6 +241,35 @@ def load_acquisition(root: Path, acquisition_id: str) -> dict[str, object]:
         if not str(row["classification"]).strip() or not str(row["reason"]).strip():
             raise ValueError("source unresolved declarations must be explained")
         unresolved.add(key)
+    preferences: set[str] = set()
+    for row in document["preference"]:
+        _fields(row, _PREFERENCE_FIELDS, "source resolver preference")
+        key = str(row["candidate_key"])
+        if key in preferences or str(row["resolver_id"]) not in resolver_ids:
+            raise ValueError(
+                "source resolver preferences must be unique and registered"
+            )
+        if not key or not str(row["reason"]).strip():
+            raise ValueError("source resolver preferences must be explained")
+        preferences.add(key)
+    rewrite_ids: set[str] = set()
+    for row in document["rewrite"]:
+        _fields(row, _REWRITE_FIELDS, "source URL rewrite")
+        rewrite_id = str(row["id"])
+        if (
+            _TOKEN.fullmatch(rewrite_id) is None
+            or rewrite_id in rewrite_ids
+            or str(row["resolver_id"]) not in resolver_ids
+        ):
+            raise ValueError("source URL rewrite ids must be unique and registered")
+        _https(row["match_prefix"], f"source URL rewrite {rewrite_id} match")
+        _https(
+            row["replacement_prefix"],
+            f"source URL rewrite {rewrite_id} replacement",
+        )
+        if not str(row["reason"]).strip():
+            raise ValueError("source URL rewrites must be explained")
+        rewrite_ids.add(rewrite_id)
     return {
         **document,
         "catalog_path": str(path),
@@ -540,7 +581,9 @@ def _render_lock(document: dict[str, object]) -> str:
             "match_kind",
             "version",
             "release_page",
+            "registry_url",
             "url",
+            "url_rewrite_id",
             "sha256",
             "download_bytes",
             "filename",
@@ -562,6 +605,11 @@ def resolve_acquisition(root: Path, acquisition_id: str) -> dict[str, object]:
         (str(row["resolver_id"]), str(row["candidate_key"])): row
         for row in acquisition["alias"]
     }
+    preferences = {
+        str(row["candidate_key"]): str(row["resolver_id"])
+        for row in acquisition["preference"]
+    }
+    rewrites = list(acquisition["rewrite"])
     declared_unresolved = {
         str(row["candidate_key"]): row for row in acquisition["unresolved"]
     }
@@ -580,7 +628,11 @@ def resolve_acquisition(root: Path, acquisition_id: str) -> dict[str, object]:
         key = str(candidate["candidate_key"])
         selected: dict[str, object] | None = None
         selection_reason = ""
-        for resolver in acquisition["resolver"]:
+        resolvers = list(acquisition["resolver"])
+        preferred = preferences.get(key)
+        if preferred:
+            resolvers.sort(key=lambda row: str(row["id"]) != preferred)
+        for resolver in resolvers:
             resolver_id = str(resolver["id"])
             alias = aliases.get((resolver_id, key))
             registry_key = str(alias["registry_key"]) if alias else key
@@ -599,12 +651,37 @@ def resolve_acquisition(root: Path, acquisition_id: str) -> dict[str, object]:
                     match_kind = "registry-alias"
                 else:
                     match_kind = "exact"
+                registry_url = str(record["url"])
+                matching_rewrites = [
+                    row
+                    for row in rewrites
+                    if row["resolver_id"] == resolver_id
+                    and registry_url.startswith(str(row["match_prefix"]))
+                ]
+                if len(matching_rewrites) > 1:
+                    selection_reason = (
+                        f"ambiguous URL rewrite for {resolver_id}:{registry_key}"
+                    )
+                    break
+                if matching_rewrites:
+                    rewrite = matching_rewrites[0]
+                    source_url = (
+                        str(rewrite["replacement_prefix"])
+                        + registry_url[len(str(rewrite["match_prefix"])) :]
+                    )
+                    rewrite_id = str(rewrite["id"])
+                else:
+                    source_url = registry_url
+                    rewrite_id = "none"
                 selected = {
                     **candidate,
                     **{k: v for k, v in record.items() if k != "metadata_alias"},
                     "status": "pinned",
                     "resolver_id": resolver_id,
                     "match_kind": match_kind,
+                    "registry_url": registry_url,
+                    "url": source_url,
+                    "url_rewrite_id": rewrite_id,
                 }
                 break
         if selected is None:
@@ -886,7 +963,9 @@ def _render_receipt(
             "resolver_id",
             "registry_key",
             "version",
+            "registry_url",
             "url",
+            "url_rewrite_id",
             "sha256",
             "bytes",
             "cache_path",
@@ -971,7 +1050,9 @@ def pull_acquisition(
             "resolver_id": row["resolver_id"],
             "registry_key": row["registry_key"],
             "version": row["version"],
+            "registry_url": row["registry_url"],
             "url": row["url"],
+            "url_rewrite_id": row["url_rewrite_id"],
             "sha256": row["sha256"],
             "bytes": int(row["cache"]["bytes"]),
             "cache_path": row["cache"]["path"],
@@ -1042,7 +1123,9 @@ def pull_acquisition(
                     "resolver_id": row["resolver_id"],
                     "registry_key": row["registry_key"],
                     "version": row["version"],
+                    "registry_url": row["registry_url"],
                     "url": row["url"],
+                    "url_rewrite_id": row["url_rewrite_id"],
                     "sha256": row["sha256"],
                     "bytes": result.bytes,
                     "cache_path": str(result.path),

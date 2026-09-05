@@ -36,6 +36,18 @@ class SourceAcquisitionTests(unittest.TestCase):
             ],
             [(62, "opengl")],
         )
+        by_id = {row["candidate_key"]: row for row in lock["candidate"]}
+        self.assertEqual(by_id["maven"]["resolver_id"], "debian-sid")
+        self.assertNotIn("-bin.", by_id["maven"]["url"])
+        self.assertEqual(by_id["automake"]["url_rewrite_id"], "gnu-primary")
+        self.assertEqual(
+            by_id["automake"]["registry_url"],
+            "https://ftpmirror.gnu.org/gnu/automake/automake-1.18.1.tar.xz",
+        )
+        self.assertEqual(
+            by_id["automake"]["url"],
+            "https://ftp.gnu.org/gnu/automake/automake-1.18.1.tar.xz",
+        )
 
     def test_homebrew_resolver_accepts_checksummed_archives_and_aliases_only(self):
         digest = hashlib.sha256(b"alpha").hexdigest()

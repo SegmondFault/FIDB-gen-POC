@@ -32,6 +32,32 @@ candidate_key = "stb"
 registry_key = "libstb"
 reason = "Debian's source package for the upstream stb headers is named libstb."
 
+[[preference]]
+candidate_key = "maven"
+resolver_id = "debian-sid"
+reason = "Homebrew's Maven formula points to a prebuilt binary distribution; acquisition requires the Debian source archive instead."
+
+[[rewrite]]
+id = "gnu-primary"
+resolver_id = "homebrew"
+match_prefix = "https://ftpmirror.gnu.org/gnu/"
+replacement_prefix = "https://ftp.gnu.org/gnu/"
+reason = "Use GNU's deterministic primary archive host instead of its dynamic mirror redirector."
+
+[[rewrite]]
+id = "savannah-mirror"
+resolver_id = "homebrew"
+match_prefix = "https://download.savannah.nongnu.org/releases/"
+replacement_prefix = "https://download-mirror.savannah.nongnu.org/releases/"
+reason = "Use Savannah's direct mirror endpoint because the load-balanced endpoint is unreachable from the acquisition host."
+
+[[rewrite]]
+id = "apache-dlcdn"
+resolver_id = "homebrew"
+match_prefix = "https://www.apache.org/dyn/closer.lua?path="
+replacement_prefix = "https://dlcdn.apache.org/"
+reason = "Use Apache's direct content endpoint; closer.lua returns an HTML mirror-selection page to generic clients."
+
 [[unresolved]]
 candidate_key = "opengl"
 classification = "virtual-system-interface"

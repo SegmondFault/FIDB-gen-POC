@@ -102,19 +102,23 @@ Run the lifecycle explicitly:
 The tracked policy is
 `sources/acquisition/c80-four-source-n80-v1.toml`. It fixes the candidate CSV
 digest, resolver order, declared aliases, safety limits and default download
-concurrency. The tracked lock records the exact registry snapshot digests,
-mapping kind, package identity, release, URL, checksum and any upstream byte
-count. Re-running `resolve` against the same snapshots must reproduce the same
-lock bytes.
+concurrency. It also records candidate-specific source preferences and narrow
+URL rewrites. Maven is deliberately resolved from Debian because Homebrew's
+formula names a prebuilt binary archive. GNU, Savannah and Apache dynamic
+mirror selectors are rewritten to their official direct content endpoints.
+The tracked lock retains both the registry URL and effective download URL,
+along with the rewrite identity, exact registry snapshot digests, mapping kind,
+package identity, release, checksum and any upstream byte count. Re-running
+`resolve` against the same snapshots must reproduce the same lock bytes.
 
 The local pull registry is
 `var/fidb-sources/acquisition/c80-four-source-n80-v1.<LOCK_SHA256>.toml`. Each
 `[[source]]` row records candidate rank, resolver and registry identity,
-version, URL, checksum, observed bytes, cache path, outcome, first observation,
-download time where known and latest verification time. `[[failure]]` rows are
-retained with their timestamp and error class. Including the lock digest in
-the filename preserves the history when a future metadata refresh creates a
-new lock.
+version, registry URL, effective URL, rewrite identity, checksum, observed
+bytes, cache path, outcome, first observation, download time where known and
+latest verification time. `[[failure]]` rows are retained with their timestamp
+and error class. Including the lock digest in the filename preserves the
+history when a future metadata refresh creates a new lock.
 
 The current lock resolves 252 candidates through checksum-bearing Homebrew
 source archives and 23 through Debian's checksum-and-size-bearing source

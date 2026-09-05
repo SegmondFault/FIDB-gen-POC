@@ -527,6 +527,13 @@ run `pull`. The tracked lock is scientific input authority; the ignored
 per-lock TOML acquisition registry is host evidence. A cached candidate is
 still not screened, recipe-ready, qualified or admitted.
 
+Do not remove the source-preference or URL-rewrite evidence from the lock.
+Homebrew's Maven input is a binary distribution, while GNU/Savannah mirror
+redirectors and Apache `closer.lua` are unreliable for generic acquisition
+clients. The acquisition TOML selects Debian source for Maven and maps only
+those known dynamic endpoints to official direct archive endpoints; the lock
+and receipt retain both URLs.
+
 `opengl` is deliberately unresolved because it names a virtual API rather
 than a unique source tree. Resolving it requires an explicit candidate-screen
 decision about the implementation; silently substituting Mesa changes the
