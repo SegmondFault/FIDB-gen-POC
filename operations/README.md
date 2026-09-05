@@ -148,7 +148,7 @@ systemctl --user daemon-reload
 ```
 
 The hash-analysis timers admit only the latest complete full validation run
-without a current single-hash report. The one-off timer fires at 13:30 on
+without a current single-hash report. The one-off timer fires at 13:45 on
 2026-09-05; the recurring timer fires at 00:00. The service rechecks the
 TOML-defined window and exits without work outside it. Enable both timers with:
 

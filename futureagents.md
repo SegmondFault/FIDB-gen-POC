@@ -408,7 +408,7 @@ this behavior. Adding all of `libc_nonshared.a` is not equivalent: it pulled in
 
 The corrected hash analysis is separately admitted by
 `validation/machine-validation-hash-schedule.toml`. Its 2026-09-05 afternoon
-window is 13:30–17:30 Europe/Luxembourg and its recurring window is
+window is 13:45–17:00 Europe/Luxembourg and its recurring window is
 00:00–05:30. Starting inside a window is the only clock gate; a started pass
 finishes. It consumes retained JSONL and SQLite evidence and does not invoke
 compilers or Ghidra. The checked-in user service and timers are named
