@@ -828,6 +828,22 @@ def acquisition_status(
         projected.append({**row, "cache": cache})
     pinned = sum(row["status"] == "pinned" for row in projected)
     cached = sum(row["cache"]["state"] == "verified-cached" for row in projected)
+    pinned_digests = {
+        str(row["sha256"]) for row in projected if row["status"] == "pinned"
+    }
+    cached_by_digest = {
+        str(row["sha256"]): int(row["cache"].get("bytes") or 0)
+        for row in projected
+        if row["status"] == "pinned" and row["cache"]["state"] == "verified-cached"
+    }
+    known_by_digest: dict[str, int] = {}
+    for row in projected:
+        if row["status"] != "pinned":
+            continue
+        digest = str(row["sha256"])
+        known_by_digest[digest] = max(
+            known_by_digest.get(digest, 0), int(row.get("download_bytes", 0))
+        )
     return {
         "schema_version": STATUS_SCHEMA,
         "operation": "status",
@@ -844,12 +860,16 @@ def acquisition_status(
             "verified_cached": cached,
             "missing_or_broken": pinned - cached,
             "unresolved": len(projected) - pinned,
+            "unique_pinned_payloads": len(pinned_digests),
+            "duplicate_pin_references": pinned - len(pinned_digests),
             "known_download_bytes": sum(
                 int(row.get("download_bytes", 0)) for row in projected
             ),
+            "unique_known_download_bytes": sum(known_by_digest.values()),
             "observed_cached_bytes": sum(
                 int(row["cache"].get("bytes") or 0) for row in projected
             ),
+            "unique_observed_cached_bytes": sum(cached_by_digest.values()),
             "ready": cached == pinned,
         },
         "candidates": projected,
@@ -952,7 +972,11 @@ def _render_receipt(
         f'verified_cached = {_toml(summary["verified_cached"])}',
         f'missing_or_broken = {_toml(summary["missing_or_broken"])}',
         f'unresolved = {_toml(summary["unresolved"])}',
+        f'unique_pinned_payloads = {_toml(summary["unique_pinned_payloads"])}',
+        f'duplicate_pin_references = {_toml(summary["duplicate_pin_references"])}',
         f'observed_cached_bytes = {_toml(summary["observed_cached_bytes"])}',
+        f"unique_observed_cached_bytes = "
+        f'{_toml(summary["unique_observed_cached_bytes"])}',
         "",
     ]
     for row in sorted(records, key=lambda item: int(item["rank"])):
@@ -1158,6 +1182,12 @@ def pull_acquisition(
                     - len(receipt_records),
                     "observed_cached_bytes": sum(
                         int(item["bytes"]) for item in receipt_records.values()
+                    ),
+                    "unique_observed_cached_bytes": sum(
+                        {
+                            str(item["sha256"]): int(item["bytes"])
+                            for item in receipt_records.values()
+                        }.values()
                     ),
                 },
             }

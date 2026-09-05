@@ -122,7 +122,11 @@ history when a future metadata refresh creates a new lock.
 
 The current lock resolves 252 candidates through checksum-bearing Homebrew
 source archives and 23 through Debian's checksum-and-size-bearing source
-index. Rank 62, `opengl`, remains visibly unresolved: OpenGL is an API/system
+index. Those 275 candidate references address 272 unique payload digests:
+zlib/minizip, libnghttp2/nghttp2 and fftw3/fftw each deliberately share one
+archive. Status and receipt summaries expose both candidate-reference bytes
+and unique on-disk payload bytes so storage estimates do not count those
+archives twice. Rank 62, `opengl`, remains visibly unresolved: OpenGL is an API/system
 interface rather than one canonical source distribution. Candidate screening
 must select a concrete implementation such as Mesa if that row is retained;
 the resolver must not make that scientific choice implicitly.

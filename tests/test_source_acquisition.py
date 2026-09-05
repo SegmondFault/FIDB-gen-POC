@@ -28,6 +28,10 @@ class SourceAcquisitionTests(unittest.TestCase):
         self.assertEqual(
             sum(row["status"] == "pinned" for row in lock["candidate"]), 275
         )
+        pinned_digests = {
+            row["sha256"] for row in lock["candidate"] if row["status"] == "pinned"
+        }
+        self.assertEqual(len(pinned_digests), 272)
         self.assertEqual(
             [
                 (row["rank"], row["candidate_key"])
@@ -121,6 +125,9 @@ Checksums-Sha256:
         )
 
         self.assertEqual(status["summary"]["pinned"], 0)
+        self.assertEqual(status["summary"]["unique_pinned_payloads"], 0)
+        self.assertEqual(status["summary"]["duplicate_pin_references"], 0)
+        self.assertEqual(status["summary"]["unique_observed_cached_bytes"], 0)
         self.assertEqual(status["summary"]["unresolved"], 1)
         self.assertEqual(status["candidates"][0]["cache"]["state"], "not-pinned")
 
