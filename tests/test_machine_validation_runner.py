@@ -25,9 +25,11 @@ from fidb_poc.machine_validation_hashes import (
     ANALYSIS_ENGINE,
     DECISION_UNIT,
     _classify_fold,
+    _compile_hash_type_analysis,
     _create_evidence,
     _load_unit_reference,
     _window_open,
+    load_hash_method,
     load_hash_schedule,
 )
 
@@ -157,6 +159,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     ("lang", "linux", "ELF", "04", "d", 0, 40, "one", "r", "t", "one-miss", "one.jsonl"),
                     ("lang", "linux", "ELF", "05", "e", 0, 50, "two", "r", "t", "two-miss", "two.jsonl"),
                     ("lang", "linux", "ELF", "02", "b", 0, 20, "three", "r", "t", "wrong-owner", "three.jsonl"),
+                    ("lang", "linux", "ELF", "01", "z", 0, 99, "three", "r", "t", "full-only-peer", "three.jsonl"),
                 ],
             )
             reference.commit()
@@ -238,12 +241,31 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     "SELECT outcome, COUNT(*) FROM hash_observation GROUP BY outcome"
                 ).fetchall()
             )
+            _classify_fold(
+                output,
+                reference,
+                position=1,
+                route_id="r",
+                treatment_id="t",
+                target_os="linux",
+                binary_format="ELF",
+                fold="B",
+                present=["three"],
+                cohort=["one", "two", "three"],
+                query_path=query,
+                query_relative="query.jsonl",
+                reference_table="unit_reference",
+            )
+            hash_types = {
+                row["hash_type"]: row
+                for row in _compile_hash_type_analysis(output, top_limit=10)
+            }
             output.close()
             reference.close()
 
             self.assertEqual(DECISION_UNIT, "complete-fid-signature-owner-assertion")
             self.assertEqual(ANALYSIS_ENGINE, "unit-local-reference-v1")
-            self.assertEqual(loaded, 4)
+            self.assertEqual(loaded, 5)
             self.assertEqual(result["true_positives"], 1)
             self.assertEqual(result["false_positives"], 1)
             self.assertEqual(result["true_negatives"], 2)
@@ -251,6 +273,16 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(result["unattributed_query_signatures"], 2)
             self.assertEqual(
                 outcomes, {"fn": 2, "fp": 1, "tp": 1, "unattributed": 2}
+            )
+            self.assertEqual(hash_types["full"]["multi_owner_values"], 1)
+            self.assertEqual(hash_types["specific"]["multi_owner_values"], 0)
+            self.assertEqual(hash_types["complete"]["multi_owner_values"], 0)
+            self.assertEqual(
+                hash_types["full"]["complete_disambiguated_owner_signatures"], 2
+            )
+            self.assertEqual(
+                hash_types["full"]["top_ambiguous"][0]["owners"],
+                ["one", "three"],
             )
 
     def test_hash_analysis_windows_are_toml_controlled(self):
@@ -268,6 +300,17 @@ class MachineValidationRunnerTests(unittest.TestCase):
             _window_open(schedule, overnight), (True, "normal-overnight")
         )
         self.assertEqual(_window_open(schedule, closed), (False, None))
+
+    def test_single_hash_method_is_versioned_and_safe(self):
+        method = load_hash_method(self.root)
+
+        self.assertEqual(method["id"], "single-hash-ground-truth-v1")
+        self.assertEqual(
+            set(method["component"]), {"full", "specific", "complete"}
+        )
+        self.assertEqual(method["classification"]["library_acceptance_threshold"], "none")
+        self.assertFalse(method["safety"]["start_jvms"])
+        self.assertEqual(len(method["authority_sha256"]), 64)
 
     def test_canary_gate_rejects_stale_runtime_and_accepts_exact_contract(self):
         with tempfile.TemporaryDirectory() as temporary:

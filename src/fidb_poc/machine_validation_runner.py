@@ -392,13 +392,19 @@ def resolve_hash_analysis_evidence(
     runtime = load_runtime(root, runtime_path)
     manifest = _manifest(root, runtime)
     randomization = manifest.get("randomization", {})
-    cohort = {
-        str(owner)
-        for fold in ("fold_a", "fold_b")
-        for owner in randomization.get(fold, [])
-    }
-    if len(cohort) != 10:
-        raise ValueError("machine-validation manifest does not freeze ten owners")
+    fold_a = [str(owner) for owner in randomization.get("fold_a", [])]
+    fold_b = [str(owner) for owner in randomization.get("fold_b", [])]
+    if (
+        not fold_a
+        or not fold_b
+        or len(set(fold_a)) != len(fold_a)
+        or len(set(fold_b)) != len(fold_b)
+        or set(fold_a) & set(fold_b)
+    ):
+        raise ValueError(
+            "machine-validation manifest must freeze two non-empty disjoint folds"
+        )
+    cohort = set(fold_a) | set(fold_b)
     expected = {
         (owner, str(unit["route_id"]), str(unit["treatment_id"]))
         for owner in cohort

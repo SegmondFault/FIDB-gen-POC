@@ -26,6 +26,8 @@ HASH_EVIDENCE_SCHEMA = "fidb-machine-validation-hash-evidence/v1"
 DECISION_UNIT = "complete-fid-signature-owner-assertion"
 HASH_SCHEDULE_SCHEMA = "fidb-machine-validation-hash-schedule/v1"
 DEFAULT_HASH_SCHEDULE = Path("validation/machine-validation-hash-schedule.toml")
+HASH_METHOD_SCHEMA = "fidb-machine-validation-hash-method/v1"
+DEFAULT_HASH_METHOD = Path("validation/machine-validation-hash-method.toml")
 ANALYSIS_ENGINE = "unit-local-reference-v1"
 
 
@@ -79,7 +81,13 @@ def _scope(target_os: str, binary_format: str, language: str) -> str:
     return f"{target_os}|{binary_format}|{language}"
 
 
-def _create_evidence(path: Path, source_run_id: str, source_digest: str) -> sqlite3.Connection:
+def _create_evidence(
+    path: Path,
+    source_run_id: str,
+    source_digest: str,
+    method_id: str = "single-hash-ground-truth-v1",
+    method_digest: str = "test-authority",
+) -> sqlite3.Connection:
     connection = sqlite3.connect(path)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
@@ -145,6 +153,85 @@ def _create_evidence(path: Path, source_run_id: str, source_digest: str) -> sqli
                 code_size
             )
         ) WITHOUT ROWID;
+        CREATE TABLE hash_signature_owner(
+            scope TEXT NOT NULL,
+            language TEXT NOT NULL,
+            full_hash TEXT NOT NULL,
+            specific_hash TEXT NOT NULL,
+            additional_size INTEGER NOT NULL,
+            code_size INTEGER NOT NULL,
+            owner TEXT NOT NULL,
+            reference_observations INTEGER NOT NULL,
+            recovered_observations INTEGER NOT NULL,
+            missed_observations INTEGER NOT NULL,
+            PRIMARY KEY(
+                scope, language, full_hash, specific_hash, additional_size,
+                code_size, owner
+            )
+        ) WITHOUT ROWID;
+        CREATE TABLE hash_type_summary(
+            hash_type TEXT PRIMARY KEY CHECK(
+                hash_type IN ('full','specific','complete')
+            ),
+            distinct_values INTEGER NOT NULL,
+            singleton_values INTEGER NOT NULL,
+            multi_owner_values INTEGER NOT NULL,
+            multi_owner_fraction REAL NOT NULL,
+            owner_links INTEGER NOT NULL,
+            ambiguous_owner_links INTEGER NOT NULL,
+            complete_disambiguated_owner_signatures INTEGER NOT NULL,
+            reference_observations INTEGER NOT NULL,
+            exact_false_positive_observations INTEGER NOT NULL,
+            maximum_distinct_owners INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE hash_component_distribution(
+            hash_type TEXT NOT NULL,
+            distinct_owners INTEGER NOT NULL,
+            distinct_values INTEGER NOT NULL,
+            fraction_of_values REAL NOT NULL,
+            PRIMARY KEY(hash_type, distinct_owners)
+        ) WITHOUT ROWID;
+        CREATE TABLE hash_component_noise(
+            hash_type TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            language TEXT NOT NULL,
+            component_value TEXT NOT NULL,
+            distinct_owners INTEGER NOT NULL,
+            reference_observations INTEGER NOT NULL,
+            exact_signature_variants INTEGER NOT NULL,
+            exact_false_positive_observations INTEGER NOT NULL,
+            PRIMARY KEY(hash_type, scope, language, component_value)
+        ) WITHOUT ROWID;
+        CREATE INDEX hash_component_noise_rank
+            ON hash_component_noise(
+                hash_type, distinct_owners DESC,
+                exact_false_positive_observations DESC,
+                reference_observations DESC
+            );
+        CREATE TABLE hash_component_owner(
+            hash_type TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            language TEXT NOT NULL,
+            component_value TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            reference_observations INTEGER NOT NULL,
+            missed_observations INTEGER NOT NULL,
+            exact_false_positive_observations INTEGER NOT NULL,
+            PRIMARY KEY(
+                hash_type, scope, language, component_value, owner
+            )
+        ) WITHOUT ROWID;
+        CREATE TABLE hash_component_library(
+            hash_type TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            distinct_values INTEGER NOT NULL,
+            multi_owner_values INTEGER NOT NULL,
+            ambiguous_fraction REAL NOT NULL,
+            reference_observations INTEGER NOT NULL,
+            missed_observations INTEGER NOT NULL,
+            exact_false_positive_observations INTEGER NOT NULL,
+            PRIMARY KEY(hash_type, owner)
+        ) WITHOUT ROWID;
         """
     )
     connection.executemany(
@@ -154,6 +241,8 @@ def _create_evidence(path: Path, source_run_id: str, source_digest: str) -> sqli
             ("source_run_id", source_run_id),
             ("source_digest", source_digest),
             ("decision_unit", DECISION_UNIT),
+            ("method_id", method_id),
+            ("method_sha256", method_digest),
             ("state", "building"),
         ),
     )
@@ -471,11 +560,425 @@ def _summary_rows(connection: sqlite3.Connection, *, noisy: bool, limit: int) ->
     ]
 
 
+def _component_expression(hash_type: str, alias: str) -> str:
+    if hash_type == "full":
+        return f"{alias}.full_hash"
+    if hash_type == "specific":
+        return f"{alias}.specific_hash"
+    if hash_type == "complete":
+        return (
+            f"{alias}.full_hash || ':' || {alias}.specific_hash || ':' || "
+            f"{alias}.additional_size || ':' || {alias}.code_size"
+        )
+    raise ValueError(f"unsupported hash type: {hash_type}")
+
+
+def _compile_hash_type_analysis(
+    connection: sqlite3.Connection,
+    *,
+    top_limit: int = 250,
+) -> list[dict[str, object]]:
+    """Materialise bounded full/specific/complete discrimination evidence."""
+
+    connection.execute(
+        """
+        INSERT INTO hash_signature_owner
+        SELECT scope, language, full_hash, specific_hash, additional_size,
+               code_size, owner, COUNT(*), SUM(outcome='tp'), SUM(outcome='fn')
+        FROM hash_observation
+        WHERE outcome IN ('tp','fn') AND owner != ''
+        GROUP BY scope, language, full_hash, specific_hash, additional_size,
+                 code_size, owner
+        """
+    )
+    connection.execute(
+        """
+        CREATE TEMP TABLE exact_population AS
+        SELECT scope, language, full_hash, specific_hash, additional_size,
+               code_size, COUNT(DISTINCT owner) AS distinct_owners
+        FROM hash_signature_owner
+        GROUP BY scope, language, full_hash, specific_hash, additional_size,
+                 code_size
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX exact_population_identity ON exact_population(
+            scope, language, full_hash, specific_hash, additional_size,
+            code_size
+        )
+        """
+    )
+    analysis = []
+    for hash_type in ("full", "specific", "complete"):
+        owner_value = _component_expression(hash_type, "source")
+        fp_value = _component_expression(hash_type, "observation")
+        connection.execute("DROP TABLE IF EXISTS temp.component_owner_population")
+        connection.execute("DROP TABLE IF EXISTS temp.component_population")
+        connection.execute("DROP TABLE IF EXISTS temp.component_fp")
+        connection.execute(
+            f"""
+            CREATE TEMP TABLE component_owner_population AS
+            SELECT source.scope, source.language, {owner_value} AS component_value,
+                   source.owner,
+                   SUM(source.reference_observations) AS reference_observations,
+                   SUM(source.missed_observations) AS missed_observations
+            FROM hash_signature_owner AS source
+            GROUP BY source.scope, source.language, component_value, source.owner
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX component_owner_population_identity
+            ON component_owner_population(
+                scope, language, component_value, owner
+            )
+            """
+        )
+        connection.execute(
+            f"""
+            CREATE TEMP TABLE component_population AS
+            SELECT source.scope, source.language, {owner_value} AS component_value,
+                   COUNT(DISTINCT source.owner) AS distinct_owners,
+                   SUM(source.reference_observations) AS reference_observations,
+                   COUNT(DISTINCT (
+                       source.full_hash || ':' || source.specific_hash || ':' ||
+                       source.additional_size || ':' || source.code_size
+                   )) AS exact_signature_variants
+            FROM hash_signature_owner AS source
+            GROUP BY source.scope, source.language, component_value
+            """
+        )
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX component_population_identity
+            ON component_population(scope, language, component_value)
+            """
+        )
+        connection.execute(
+            f"""
+            CREATE TEMP TABLE component_fp AS
+            SELECT observation.scope, observation.language,
+                   {fp_value} AS component_value, observation.owner,
+                   COUNT(*) AS observations
+            FROM hash_observation AS observation
+            WHERE observation.outcome='fp'
+            GROUP BY observation.scope, observation.language, component_value,
+                     observation.owner
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX component_fp_identity ON component_fp(
+                scope, language, component_value, owner
+            )
+            """
+        )
+        population = connection.execute(
+            """
+            SELECT COUNT(*), SUM(distinct_owners=1), SUM(distinct_owners>1),
+                   SUM(distinct_owners),
+                   SUM(CASE WHEN distinct_owners>1 THEN distinct_owners ELSE 0 END),
+                   SUM(reference_observations), MAX(distinct_owners)
+            FROM component_population
+            """
+        ).fetchone()
+        distinct_values = int(population[0] or 0)
+        singleton_values = int(population[1] or 0)
+        multi_owner_values = int(population[2] or 0)
+        owner_links = int(population[3] or 0)
+        ambiguous_owner_links = int(population[4] or 0)
+        reference_observations = int(population[5] or 0)
+        maximum_owners = int(population[6] or 0)
+        exact_false_positives = int(
+            connection.execute(
+                "SELECT COALESCE(SUM(observations),0) FROM component_fp"
+            ).fetchone()[0]
+        )
+        component_join = _component_expression(hash_type, "signature")
+        disambiguated = int(
+            connection.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM hash_signature_owner AS signature
+                JOIN component_population AS component
+                  ON component.scope=signature.scope
+                 AND component.language=signature.language
+                 AND component.component_value={component_join}
+                 AND component.distinct_owners>1
+                JOIN exact_population AS exact
+                  ON exact.scope=signature.scope
+                 AND exact.language=signature.language
+                 AND exact.full_hash=signature.full_hash
+                 AND exact.specific_hash=signature.specific_hash
+                 AND exact.additional_size=signature.additional_size
+                 AND exact.code_size=signature.code_size
+                 AND exact.distinct_owners=1
+                """
+            ).fetchone()[0]
+        )
+        connection.execute(
+            "INSERT INTO hash_type_summary VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                hash_type,
+                distinct_values,
+                singleton_values,
+                multi_owner_values,
+                multi_owner_values / distinct_values if distinct_values else 0.0,
+                owner_links,
+                ambiguous_owner_links,
+                disambiguated,
+                reference_observations,
+                exact_false_positives,
+                maximum_owners,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO hash_component_distribution
+            SELECT ?, distinct_owners, COUNT(*),
+                   CAST(COUNT(*) AS REAL) / ?
+            FROM component_population
+            GROUP BY distinct_owners
+            """,
+            (hash_type, distinct_values or 1),
+        )
+        connection.execute(
+            """
+            INSERT INTO hash_component_noise
+            SELECT ?, population.scope, population.language,
+                   population.component_value, population.distinct_owners,
+                   population.reference_observations,
+                   population.exact_signature_variants,
+                   COALESCE(SUM(component_fp.observations),0)
+            FROM component_population AS population
+            LEFT JOIN component_fp
+              ON component_fp.scope=population.scope
+             AND component_fp.language=population.language
+             AND component_fp.component_value=population.component_value
+            WHERE population.distinct_owners>1
+            GROUP BY population.scope, population.language,
+                     population.component_value
+            """,
+            (hash_type,),
+        )
+        connection.execute(
+            """
+            INSERT INTO hash_component_owner
+            SELECT ?, owners.scope, owners.language, owners.component_value,
+                   owners.owner, owners.reference_observations,
+                   owners.missed_observations,
+                   COALESCE(component_fp.observations,0)
+            FROM component_owner_population AS owners
+            JOIN component_population AS population
+              ON population.scope=owners.scope
+             AND population.language=owners.language
+             AND population.component_value=owners.component_value
+             AND population.distinct_owners>1
+            LEFT JOIN component_fp
+              ON component_fp.scope=owners.scope
+             AND component_fp.language=owners.language
+             AND component_fp.component_value=owners.component_value
+             AND component_fp.owner=owners.owner
+            """,
+            (hash_type,),
+        )
+        connection.execute(
+            """
+            INSERT INTO hash_component_library
+            SELECT ?, owners.owner, COUNT(*),
+                   SUM(population.distinct_owners>1),
+                   CAST(SUM(population.distinct_owners>1) AS REAL) / COUNT(*),
+                   SUM(owners.reference_observations),
+                   SUM(owners.missed_observations),
+                   COALESCE(SUM(component_fp.observations),0)
+            FROM component_owner_population AS owners
+            JOIN component_population AS population
+              ON population.scope=owners.scope
+             AND population.language=owners.language
+             AND population.component_value=owners.component_value
+            LEFT JOIN component_fp
+              ON component_fp.scope=owners.scope
+             AND component_fp.language=owners.language
+             AND component_fp.component_value=owners.component_value
+             AND component_fp.owner=owners.owner
+            GROUP BY owners.owner
+            """,
+            (hash_type,),
+        )
+        distribution = [
+            {
+                "distinct_owners": int(row[0]),
+                "distinct_values": int(row[1]),
+                "fraction_of_values": float(row[2]),
+            }
+            for row in connection.execute(
+                """
+                SELECT distinct_owners, distinct_values, fraction_of_values
+                FROM hash_component_distribution
+                WHERE hash_type=? ORDER BY distinct_owners
+                """,
+                (hash_type,),
+            )
+        ]
+        noisy_rows = []
+        for row in connection.execute(
+            """
+            SELECT scope, language, component_value, distinct_owners,
+                   reference_observations, exact_signature_variants,
+                   exact_false_positive_observations
+            FROM hash_component_noise
+            WHERE hash_type=?
+            ORDER BY distinct_owners DESC,
+                     exact_false_positive_observations DESC,
+                     reference_observations DESC, component_value
+            LIMIT ?
+            """,
+            (hash_type, top_limit),
+        ):
+            scope, language, value = str(row[0]), str(row[1]), str(row[2])
+            owners = [
+                str(owner[0])
+                for owner in connection.execute(
+                    """
+                    SELECT owner FROM hash_component_owner
+                    WHERE hash_type=? AND scope=? AND language=?
+                      AND component_value=? ORDER BY owner
+                    """,
+                    (hash_type, scope, language, value),
+                )
+            ]
+            noisy_rows.append(
+                {
+                    "scope": scope,
+                    "language": language,
+                    "value": value,
+                    "distinct_owners": int(row[3]),
+                    "reference_observations": int(row[4]),
+                    "exact_signature_variants": int(row[5]),
+                    "exact_false_positive_observations": int(row[6]),
+                    "owners": owners,
+                }
+            )
+        libraries = [
+            {
+                "owner": str(row[0]),
+                "distinct_values": int(row[1]),
+                "multi_owner_values": int(row[2]),
+                "ambiguous_fraction": float(row[3]),
+                "reference_observations": int(row[4]),
+                "missed_observations": int(row[5]),
+                "exact_false_positive_observations": int(row[6]),
+            }
+            for row in connection.execute(
+                """
+                SELECT owner, distinct_values, multi_owner_values,
+                       ambiguous_fraction, reference_observations,
+                       missed_observations,
+                       exact_false_positive_observations
+                FROM hash_component_library
+                WHERE hash_type=?
+                ORDER BY ambiguous_fraction DESC, multi_owner_values DESC,
+                         owner
+                """,
+                (hash_type,),
+            )
+        ]
+        analysis.append(
+            {
+                "hash_type": hash_type,
+                "distinct_values": distinct_values,
+                "singleton_values": singleton_values,
+                "multi_owner_values": multi_owner_values,
+                "multi_owner_fraction": (
+                    multi_owner_values / distinct_values if distinct_values else 0.0
+                ),
+                "owner_links": owner_links,
+                "ambiguous_owner_links": ambiguous_owner_links,
+                "complete_disambiguated_owner_signatures": disambiguated,
+                "reference_observations": reference_observations,
+                "exact_false_positive_observations": exact_false_positives,
+                "maximum_distinct_owners": maximum_owners,
+                "distribution": distribution,
+                "top_ambiguous": noisy_rows,
+                "libraries": libraries,
+            }
+        )
+    connection.execute("DROP TABLE exact_population")
+    connection.execute("DROP TABLE component_owner_population")
+    connection.execute("DROP TABLE component_population")
+    connection.execute("DROP TABLE component_fp")
+    return analysis
+
+
+def load_hash_method(
+    project_root: str | Path,
+    authority: str | Path = DEFAULT_HASH_METHOD,
+) -> dict[str, object]:
+    """Load the versioned scientific authority for single-hash analysis."""
+
+    root = Path(project_root).expanduser().resolve()
+    path = (root / authority).resolve()
+    if path != root and root not in path.parents:
+        raise ValueError("hash-analysis method authority escapes the project root")
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    expected_sections = {
+        "schema_version",
+        "id",
+        "label",
+        "identity",
+        "classification",
+        "component",
+        "population",
+        "reporting",
+        "reproducibility",
+        "safety",
+    }
+    if set(document) != expected_sections or document.get("schema_version") != HASH_METHOD_SCHEMA:
+        raise ValueError("hash-analysis method has unsupported fields or schema")
+    components = document.get("component", {})
+    if set(components) != {"full", "specific", "complete"}:
+        raise ValueError("hash-analysis method must define all three hash types")
+    expected_fields = {
+        "full": ["full_hash"],
+        "specific": ["specific_hash"],
+        "complete": [
+            "full_hash",
+            "specific_hash",
+            "specific_hash_additional_size",
+            "code_unit_size",
+        ],
+    }
+    if any(components[name].get("fields") != fields for name, fields in expected_fields.items()):
+        raise ValueError("hash-analysis component identity is unsupported")
+    if (
+        document["classification"].get("decision_unit") != DECISION_UNIT
+        or document["classification"].get("library_acceptance_threshold") != "none"
+        or document["reproducibility"].get("randomness") != "none"
+        or document["safety"] != {
+            "execute_target_binaries": False,
+            "start_compilers": False,
+            "start_jvms": False,
+            "mutate_production_queue": False,
+        }
+    ):
+        raise ValueError("hash-analysis method violates the supported safety contract")
+    top_limit = int(document["reporting"].get("top_ambiguous_per_hash_type", 0))
+    if top_limit < 1 or top_limit > 10_000:
+        raise ValueError("hash-analysis reporting bound is invalid")
+    return {
+        **document,
+        "authority_path": str(path.relative_to(root)),
+        "authority_sha256": _sha256(path),
+    }
+
+
 def analyze_hashes(
     project_root: str | Path,
     run_id: str,
     *,
     runtime_path: str | Path = "validation/machine-validation-runtime.toml",
+    method_path: str | Path = DEFAULT_HASH_METHOD,
 ) -> dict[str, object]:
     """Create a reproducible single-hash report from one sealed validation run."""
 
@@ -487,6 +990,7 @@ def analyze_hashes(
     analysis_started_ns = time.monotonic_ns()
     root = Path(project_root).expanduser().resolve()
     runtime = load_runtime(root, runtime_path)
+    method = load_hash_method(root, method_path)
     resolution_started_ns = time.monotonic_ns()
     evidence = resolve_hash_analysis_evidence(root, runtime_path)
     resolution_wall_ns = time.monotonic_ns() - resolution_started_ns
@@ -509,6 +1013,7 @@ def analyze_hashes(
         raise ValueError("source validation report is unavailable")
     source_digest = hashlib.sha256()
     source_digest.update(_sha256(source_report).encode("ascii"))
+    source_digest.update(str(method["authority_sha256"]).encode("ascii"))
     reference_path = output_root / "reference-index.sqlite3"
     if not reference_path.is_file():
         raise ValueError("machine-validation reference index is unavailable")
@@ -575,7 +1080,13 @@ def analyze_hashes(
         Path(f"{partial}-shm"),
     ):
         stale.unlink(missing_ok=True)
-    output = _create_evidence(partial, run_id, source_digest_hex)
+    output = _create_evidence(
+        partial,
+        run_id,
+        source_digest_hex,
+        str(method["id"]),
+        str(method["authority_sha256"]),
+    )
     reference = sqlite3.connect(f"file:{reference_path}?mode=ro", uri=True)
     try:
         reference.execute("PRAGMA temp_store=MEMORY")
@@ -641,6 +1152,12 @@ def analyze_hashes(
                      additional_size, code_size
             """
         )
+        population_started_ns = time.monotonic_ns()
+        hash_type_analysis = _compile_hash_type_analysis(
+            output,
+            top_limit=int(method["reporting"]["top_ambiguous_per_hash_type"]),
+        )
+        population_wall_ns = time.monotonic_ns() - population_started_ns
         output.execute("UPDATE metadata SET value='complete' WHERE key='state'")
         output.commit()
         output.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -683,6 +1200,12 @@ def analyze_hashes(
         "state": "measured-complete",
         "finished_at": _now(),
         "source_evidence_sha256": source_digest_hex,
+        "method_authority": {
+            "id": method["id"],
+            "path": method["authority_path"],
+            "sha256": method["authority_sha256"],
+            "algorithm_id": method["reproducibility"]["algorithm_id"],
+        },
         "decision_contract": {
             "unit": DECISION_UNIT,
             "positive_population": "exact signatures belonging to libraries present in the composite fold",
@@ -712,6 +1235,7 @@ def analyze_hashes(
             "top_noisy": top_noisy,
             "top_low_information": top_low_information,
         },
+        "hash_type_analysis": hash_type_analysis,
         "failures": [
             {
                 "failure_type": "collision",
@@ -742,6 +1266,7 @@ def analyze_hashes(
             "exact_reference_rows_loaded": reference_rows,
             "evidence_resolution_wall_time_ns": resolution_wall_ns,
             "classification_wall_time_ns": classification_wall_ns,
+            "population_analysis_wall_time_ns": population_wall_ns,
             "total_wall_time_ns": time.monotonic_ns() - analysis_started_ns,
         },
     }

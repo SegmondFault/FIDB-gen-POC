@@ -1,0 +1,61 @@
+schema_version = "fidb-machine-validation-hash-method/v1"
+id = "single-hash-ground-truth-v1"
+label = "Single-hash machine-validation evidence"
+
+[identity]
+compatibility_scope = ["target_os", "binary_format", "ghidra_language_id"]
+owner_unit = "library-release"
+complete_signature = [
+  "full_hash",
+  "specific_hash",
+  "specific_hash_additional_size",
+  "code_unit_size",
+]
+
+[classification]
+decision_unit = "complete-fid-signature-owner-assertion"
+positive_population = "exact-signatures-owned-by-present-fold-libraries"
+negative_population = "query-signatures-crossed-with-opposite-fold-libraries"
+same_fold_sharing = "multi-owner-ambiguity-not-false-positive"
+library_acceptance_threshold = "none"
+
+[component.full]
+fields = ["full_hash"]
+
+[component.specific]
+fields = ["specific_hash"]
+
+[component.complete]
+fields = [
+  "full_hash",
+  "specific_hash",
+  "specific_hash_additional_size",
+  "code_unit_size",
+]
+
+[population]
+primary_prevalence_denominator = "distinct-library-release-owners"
+build_prevalence_role = "diagnostic-width-sensitive"
+raw_occurrence_role = "diagnostic-not-independent"
+retain_singletons = true
+retain_multi_owner_components = true
+compare_complete_disambiguation = true
+
+[reporting]
+top_ambiguous_per_hash_type = 250
+retain_per_library_summary = true
+retain_owner_provenance = true
+
+[reproducibility]
+algorithm_id = "fidb-single-hash-ground-truth-v1"
+randomness = "none"
+ordering = "hash-type-scope-language-component-owner"
+authority_digest = "sha256"
+source_evidence_digest = "sha256"
+write_policy = "immutable-per-source-run"
+
+[safety]
+execute_target_binaries = false
+start_compilers = false
+start_jvms = false
+mutate_production_queue = false
