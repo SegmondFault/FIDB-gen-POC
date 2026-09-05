@@ -10,7 +10,6 @@ from typing import Mapping
 
 from .machine_validation_hashes import HASH_REPORT_SCHEMA
 
-
 VALIDATION_OBSERVATORY_SCHEMA = "fidb-validation-observatory/v1"
 DEFAULT_REPORT_GLOB = "artifacts/validation-runs/*/*/hash-report.json"
 
@@ -112,6 +111,8 @@ def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
                     document.get("source_evidence_sha256") or ""
                 ),
                 "method_authority": document.get("method_authority"),
+                "corpus_index": document.get("corpus_index"),
+                "gpu_comparison": document.get("gpu_comparison"),
                 "decision_contract": document.get("decision_contract"),
                 "confusion_matrix": matrix,
                 "rates": _rates(matrix),

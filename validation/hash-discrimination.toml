@@ -21,6 +21,7 @@ noisy_hash_authority = "validation/noisy-hashes.toml"
 lane_registry = "lanes/registry.toml"
 lane_database_root = "var/fidb-lanes"
 generation_root = "artifacts/hash-discrimination"
+corpus_index_authority = "validation/corpus-hash-index.toml"
 
 [identity]
 analyst_term = "hash"

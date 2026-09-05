@@ -905,8 +905,29 @@ def _validation_evidence_record(
                 "validation hash evidence database escapes its run root"
             ) from error
         if _sha256(database_path) != hash_evidence.get("database_sha256"):
-            raise RetentionError("validation hash evidence digest does not match report")
+            raise RetentionError(
+                "validation hash evidence digest does not match report"
+            )
         retain(database_path, "validation hash evidence database")
+        gpu = report.get("gpu_comparison")
+        if isinstance(gpu, dict):
+            gpu_report_value = gpu.get("report_path")
+            if not isinstance(gpu_report_value, str):
+                raise RetentionError(
+                    "validation hash report has no GPU comparison evidence"
+                )
+            gpu_report_path = _safe_regular(
+                policy.root,
+                Path(gpu_report_value),
+                "validation GPU comparison report",
+            )
+            try:
+                gpu_report_path.relative_to(run_root)
+            except ValueError as error:
+                raise RetentionError(
+                    "validation GPU comparison report escapes its run root"
+                ) from error
+            retain(gpu_report_path, "validation GPU comparison report")
     result_paths = sorted((run_root / "units").glob("*/result.json"))
     if len(result_paths) != expected_units:
         raise RetentionError(

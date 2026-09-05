@@ -20,7 +20,6 @@ import tomllib
 from typing import Iterable, Mapping
 from zoneinfo import ZoneInfo
 
-
 HASH_REPORT_SCHEMA = "fidb-machine-validation-hash-report/v1"
 HASH_EVIDENCE_SCHEMA = "fidb-machine-validation-hash-evidence/v1"
 DECISION_UNIT = "complete-fid-signature-owner-assertion"
@@ -91,8 +90,7 @@ def _create_evidence(
     connection = sqlite3.connect(path)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
-    connection.executescript(
-        """
+    connection.executescript("""
         CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE unit_result(
             position INTEGER NOT NULL,
@@ -232,8 +230,7 @@ def _create_evidence(
             exact_false_positive_observations INTEGER NOT NULL,
             PRIMARY KEY(hash_type, owner)
         ) WITHOUT ROWID;
-        """
-    )
+        """)
     connection.executemany(
         "INSERT INTO metadata VALUES (?,?)",
         (
@@ -252,8 +249,7 @@ def _create_evidence(
 
 def _load_query(connection: sqlite3.Connection, query_path: Path) -> int:
     connection.execute("DROP TABLE IF EXISTS temp.query_signature")
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TEMP TABLE query_signature(
             address TEXT NOT NULL,
             function_name TEXT NOT NULL,
@@ -266,8 +262,7 @@ def _load_query(connection: sqlite3.Connection, query_path: Path) -> int:
                 language, full_hash, specific_hash, additional_size, code_size
             )
         ) WITHOUT ROWID
-        """
-    )
+        """)
     connection.executemany(
         "INSERT OR IGNORE INTO query_signature VALUES (?,?,?,?,?,?,?)",
         _signature_rows(query_path),
@@ -285,8 +280,7 @@ def _load_unit_reference(
     """Load one exact execution identity once for both validation folds."""
 
     connection.execute("DROP TABLE IF EXISTS temp.unit_reference")
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TEMP TABLE unit_reference(
             language TEXT NOT NULL,
             full_hash TEXT NOT NULL,
@@ -301,8 +295,7 @@ def _load_unit_reference(
                 code_size, owner
             )
         ) WITHOUT ROWID
-        """
-    )
+        """)
     for owner in cohort:
         item = signatures[(owner, route_id, treatment_id)]
         path = Path(item["path"])
@@ -365,8 +358,9 @@ def _classify_fold(
         ((owner, int(owner in present_set)) for owner in cohort),
     )
     identity_filter = (
-        "" if reference_table == "unit_reference" else
-        """reference.target_os=? AND reference.binary_format=?
+        ""
+        if reference_table == "unit_reference"
+        else """reference.target_os=? AND reference.binary_format=?
          AND reference.route_id=? AND reference.treatment_id=? AND"""
     )
     match_sql = f"""
@@ -393,7 +387,19 @@ def _classify_fold(
     matched_query: set[tuple[str, str, str, int, int]] = set()
     observation_rows = []
     for row in reference.execute(match_sql, parameters):
-        address, query_name, language, full_hash, specific_hash, additional, size, owner, corpus_name, evidence_path, is_present = row
+        (
+            address,
+            query_name,
+            language,
+            full_hash,
+            specific_hash,
+            additional,
+            size,
+            owner,
+            corpus_name,
+            evidence_path,
+            is_present,
+        ) = row
         if is_present:
             tp += 1
             matched_query.add(
@@ -410,9 +416,19 @@ def _classify_fold(
         observation_rows.append(
             (
                 _scope(target_os, binary_format, str(language)),
-                str(language), str(full_hash), str(specific_hash), int(additional),
-                int(size), "tp" if is_present else "fp", str(owner), route_id,
-                treatment_id, fold, str(address), str(query_name), str(corpus_name),
+                str(language),
+                str(full_hash),
+                str(specific_hash),
+                int(additional),
+                int(size),
+                "tp" if is_present else "fp",
+                str(owner),
+                route_id,
+                treatment_id,
+                fold,
+                str(address),
+                str(query_name),
+                str(corpus_name),
                 str(evidence_path),
             )
         )
@@ -429,26 +445,41 @@ def _classify_fold(
         )
     unattributed_count = 0
     observation_rows = []
-    for row in reference.execute(
-        """
+    for row in reference.execute("""
         SELECT address, function_name, language, full_hash, specific_hash,
                additional_size, code_size
         FROM query_signature
-        """
-    ):
-        address, function_name, language, full_hash, specific_hash, additional, size = row
+        """):
+        address, function_name, language, full_hash, specific_hash, additional, size = (
+            row
+        )
         identity = (
-            str(language), str(full_hash), str(specific_hash), int(additional), int(size)
+            str(language),
+            str(full_hash),
+            str(specific_hash),
+            int(additional),
+            int(size),
         )
         if identity in matched_query:
             continue
         unattributed_count += 1
         observation_rows.append(
             (
-                _scope(target_os, binary_format, str(language)), str(language),
-                str(full_hash), str(specific_hash), int(additional), int(size),
-                "unattributed", "", route_id, treatment_id, fold,
-                str(address), str(function_name), "", query_relative,
+                _scope(target_os, binary_format, str(language)),
+                str(language),
+                str(full_hash),
+                str(specific_hash),
+                int(additional),
+                int(size),
+                "unattributed",
+                "",
+                route_id,
+                treatment_id,
+                fold,
+                str(address),
+                str(function_name),
+                "",
+                query_relative,
             )
         )
         if len(observation_rows) >= 5000:
@@ -479,16 +510,33 @@ def _classify_fold(
     miss_count = 0
     observation_rows = []
     for (
-        language, full_hash, specific_hash, additional, size, owner,
-        corpus_name, evidence_path,
+        language,
+        full_hash,
+        specific_hash,
+        additional,
+        size,
+        owner,
+        corpus_name,
+        evidence_path,
     ) in reference.execute(miss_sql, parameters):
         miss_count += 1
         observation_rows.append(
             (
-                _scope(target_os, binary_format, str(language)), str(language),
-                str(full_hash), str(specific_hash), int(additional), int(size),
-                "fn", str(owner), route_id, treatment_id, fold, "", "",
-                str(corpus_name), str(evidence_path),
+                _scope(target_os, binary_format, str(language)),
+                str(language),
+                str(full_hash),
+                str(specific_hash),
+                int(additional),
+                int(size),
+                "fn",
+                str(owner),
+                route_id,
+                treatment_id,
+                fold,
+                "",
+                "",
+                str(corpus_name),
+                str(evidence_path),
             )
         )
         if len(observation_rows) >= 5000:
@@ -514,8 +562,17 @@ def _classify_fold(
     output.execute(
         "INSERT OR REPLACE INTO unit_result VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (
-            position, route_id, treatment_id, fold, query_relative,
-            query_sha256 or _sha256(query_path), query_count, tp, fp, tn, miss_count,
+            position,
+            route_id,
+            treatment_id,
+            fold,
+            query_relative,
+            query_sha256 or _sha256(query_path),
+            query_count,
+            tp,
+            fp,
+            tn,
+            miss_count,
             result["unattributed_query_signatures"],
         ),
     )
@@ -526,7 +583,9 @@ def _signature_text(row: sqlite3.Row) -> str:
     return f"{row['full_hash']}:{row['specific_hash']}:{row['additional_size']}:{row['code_size']}"
 
 
-def _summary_rows(connection: sqlite3.Connection, *, noisy: bool, limit: int) -> list[dict[str, object]]:
+def _summary_rows(
+    connection: sqlite3.Connection, *, noisy: bool, limit: int
+) -> list[dict[str, object]]:
     where = (
         "false_positives > 0"
         if noisy
@@ -580,8 +639,7 @@ def _compile_hash_type_analysis(
 ) -> list[dict[str, object]]:
     """Materialise bounded full/specific/complete discrimination evidence."""
 
-    connection.execute(
-        """
+    connection.execute("""
         INSERT INTO hash_signature_owner
         SELECT scope, language, full_hash, specific_hash, additional_size,
                code_size, owner, COUNT(*), SUM(outcome='tp'), SUM(outcome='fn')
@@ -589,26 +647,21 @@ def _compile_hash_type_analysis(
         WHERE outcome IN ('tp','fn') AND owner != ''
         GROUP BY scope, language, full_hash, specific_hash, additional_size,
                  code_size, owner
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE TEMP TABLE exact_population AS
         SELECT scope, language, full_hash, specific_hash, additional_size,
                code_size, COUNT(DISTINCT owner) AS distinct_owners
         FROM hash_signature_owner
         GROUP BY scope, language, full_hash, specific_hash, additional_size,
                  code_size
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE INDEX exact_population_identity ON exact_population(
             scope, language, full_hash, specific_hash, additional_size,
             code_size
         )
-        """
-    )
+        """)
     analysis = []
     for hash_type in ("full", "specific", "complete"):
         owner_value = _component_expression(hash_type, "source")
@@ -616,8 +669,7 @@ def _compile_hash_type_analysis(
         connection.execute("DROP TABLE IF EXISTS temp.component_owner_population")
         connection.execute("DROP TABLE IF EXISTS temp.component_population")
         connection.execute("DROP TABLE IF EXISTS temp.component_fp")
-        connection.execute(
-            f"""
+        connection.execute(f"""
             CREATE TEMP TABLE component_owner_population AS
             SELECT source.scope, source.language, {owner_value} AS component_value,
                    source.owner,
@@ -625,18 +677,14 @@ def _compile_hash_type_analysis(
                    SUM(source.missed_observations) AS missed_observations
             FROM hash_signature_owner AS source
             GROUP BY source.scope, source.language, component_value, source.owner
-            """
-        )
-        connection.execute(
-            """
+            """)
+        connection.execute("""
             CREATE INDEX component_owner_population_identity
             ON component_owner_population(
                 scope, language, component_value, owner
             )
-            """
-        )
-        connection.execute(
-            f"""
+            """)
+        connection.execute(f"""
             CREATE TEMP TABLE component_population AS
             SELECT source.scope, source.language, {owner_value} AS component_value,
                    COUNT(DISTINCT source.owner) AS distinct_owners,
@@ -647,16 +695,12 @@ def _compile_hash_type_analysis(
                    )) AS exact_signature_variants
             FROM hash_signature_owner AS source
             GROUP BY source.scope, source.language, component_value
-            """
-        )
-        connection.execute(
-            """
+            """)
+        connection.execute("""
             CREATE UNIQUE INDEX component_population_identity
             ON component_population(scope, language, component_value)
-            """
-        )
-        connection.execute(
-            f"""
+            """)
+        connection.execute(f"""
             CREATE TEMP TABLE component_fp AS
             SELECT observation.scope, observation.language,
                    {fp_value} AS component_value, observation.owner,
@@ -665,24 +709,19 @@ def _compile_hash_type_analysis(
             WHERE observation.outcome='fp'
             GROUP BY observation.scope, observation.language, component_value,
                      observation.owner
-            """
-        )
-        connection.execute(
-            """
+            """)
+        connection.execute("""
             CREATE INDEX component_fp_identity ON component_fp(
                 scope, language, component_value, owner
             )
-            """
-        )
-        population = connection.execute(
-            """
+            """)
+        population = connection.execute("""
             SELECT COUNT(*), SUM(distinct_owners=1), SUM(distinct_owners>1),
                    SUM(distinct_owners),
                    SUM(CASE WHEN distinct_owners>1 THEN distinct_owners ELSE 0 END),
                    SUM(reference_observations), MAX(distinct_owners)
             FROM component_population
-            """
-        ).fetchone()
+            """).fetchone()
         distinct_values = int(population[0] or 0)
         singleton_values = int(population[1] or 0)
         multi_owner_values = int(population[2] or 0)
@@ -696,9 +735,7 @@ def _compile_hash_type_analysis(
             ).fetchone()[0]
         )
         component_join = _component_expression(hash_type, "signature")
-        disambiguated = int(
-            connection.execute(
-                f"""
+        disambiguated = int(connection.execute(f"""
                 SELECT COUNT(*)
                 FROM hash_signature_owner AS signature
                 JOIN component_population AS component
@@ -714,9 +751,7 @@ def _compile_hash_type_analysis(
                  AND exact.additional_size=signature.additional_size
                  AND exact.code_size=signature.code_size
                  AND exact.distinct_owners=1
-                """
-            ).fetchone()[0]
-        )
+                """).fetchone()[0])
         connection.execute(
             "INSERT INTO hash_type_summary VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
@@ -934,7 +969,10 @@ def load_hash_method(
         "reproducibility",
         "safety",
     }
-    if set(document) != expected_sections or document.get("schema_version") != HASH_METHOD_SCHEMA:
+    if (
+        set(document) != expected_sections
+        or document.get("schema_version") != HASH_METHOD_SCHEMA
+    ):
         raise ValueError("hash-analysis method has unsupported fields or schema")
     components = document.get("component", {})
     if set(components) != {"full", "specific", "complete"}:
@@ -949,13 +987,17 @@ def load_hash_method(
             "code_unit_size",
         ],
     }
-    if any(components[name].get("fields") != fields for name, fields in expected_fields.items()):
+    if any(
+        components[name].get("fields") != fields
+        for name, fields in expected_fields.items()
+    ):
         raise ValueError("hash-analysis component identity is unsupported")
     if (
         document["classification"].get("decision_unit") != DECISION_UNIT
         or document["classification"].get("library_acceptance_threshold") != "none"
         or document["reproducibility"].get("randomness") != "none"
-        or document["safety"] != {
+        or document["safety"]
+        != {
             "execute_target_binaries": False,
             "start_compilers": False,
             "start_jvms": False,
@@ -986,11 +1028,17 @@ def analyze_hashes(
         load_runtime,
         resolve_hash_analysis_evidence,
     )
+    from .corpus_hash_index import (
+        load_corpus_hash_authority,
+        update_corpus_hash_index,
+    )
+    from .hash_gpu_trial import run_gpu_comparison
 
     analysis_started_ns = time.monotonic_ns()
     root = Path(project_root).expanduser().resolve()
     runtime = load_runtime(root, runtime_path)
     method = load_hash_method(root, method_path)
+    corpus_authority = load_corpus_hash_authority(root)
     resolution_started_ns = time.monotonic_ns()
     evidence = resolve_hash_analysis_evidence(root, runtime_path)
     resolution_wall_ns = time.monotonic_ns() - resolution_started_ns
@@ -1017,9 +1065,7 @@ def analyze_hashes(
     reference_path = output_root / "reference-index.sqlite3"
     if not reference_path.is_file():
         raise ValueError("machine-validation reference index is unavailable")
-    reference_metadata = sqlite3.connect(
-        f"file:{reference_path}?mode=ro", uri=True
-    )
+    reference_metadata = sqlite3.connect(f"file:{reference_path}?mode=ro", uri=True)
     reference_values: dict[str, str] = {}
     try:
         for key, value in reference_metadata.execute(
@@ -1069,6 +1115,8 @@ def analyze_hashes(
                 and existing.get("state") == "measured-complete"
                 and existing.get("source_evidence_sha256") == source_digest_hex
                 and existing.get("performance", {}).get("engine") == ANALYSIS_ENGINE
+                and existing.get("corpus_index", {}).get("authority_sha256")
+                == corpus_authority["authority_sha256"]
             ):
                 return existing
         except (OSError, ValueError, json.JSONDecodeError):
@@ -1114,7 +1162,9 @@ def analyze_hashes(
             for fold_result in result["folds"]:
                 fold = str(fold_result["fold"])
                 fold_root = result_path.parent / f"fold-{fold}"
-                truth = json.loads((fold_root / "truth-map.json").read_text(encoding="utf-8"))
+                truth = json.loads(
+                    (fold_root / "truth-map.json").read_text(encoding="utf-8")
+                )
                 present = [str(owner) for owner in truth["owners"]]
                 query_path = fold_root / "query-signatures.jsonl"
                 _classify_fold(
@@ -1136,8 +1186,7 @@ def analyze_hashes(
                 expected_folds += 1
             output.commit()
         classification_wall_ns = time.monotonic_ns() - classification_started_ns
-        output.execute(
-            """
+        output.execute("""
             INSERT INTO hash_summary
             SELECT scope, language, full_hash, specific_hash, additional_size,
                    code_size,
@@ -1150,8 +1199,7 @@ def analyze_hashes(
             FROM hash_observation
             GROUP BY scope, language, full_hash, specific_hash,
                      additional_size, code_size
-            """
-        )
+            """)
         population_started_ns = time.monotonic_ns()
         hash_type_analysis = _compile_hash_type_analysis(
             output,
@@ -1161,31 +1209,40 @@ def analyze_hashes(
         output.execute("UPDATE metadata SET value='complete' WHERE key='state'")
         output.commit()
         output.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        matrix_row = output.execute(
-            """
+        matrix_row = output.execute("""
             SELECT SUM(true_positives), SUM(false_positives),
                    SUM(true_negatives), SUM(false_negatives),
                    SUM(query_distinct_signatures),
                    SUM(unattributed_query_signatures), COUNT(*)
             FROM unit_result
-            """
-        ).fetchone()
-        counts = output.execute(
-            """
+            """).fetchone()
+        counts = output.execute("""
             SELECT COUNT(*),
                    SUM(false_positives > 0),
                    SUM(distinct_reference_owners > 1),
                    SUM(false_negatives > 0),
                    SUM(unattributed_observations > 0)
             FROM hash_summary
-            """
-        ).fetchone()
+            """).fetchone()
         top_noisy = _summary_rows(output, noisy=True, limit=500)
         top_low_information = _summary_rows(output, noisy=False, limit=500)
     finally:
         reference.close()
         output.close()
     partial.replace(database_path)
+    corpus_result = update_corpus_hash_index(
+        root,
+        database_path,
+        validation_id=str(runtime["validation_id"]),
+        run_id=run_id,
+    )
+    gpu_report_path = run_root / "gpu-comparison.json"
+    gpu_comparison = run_gpu_comparison(
+        root,
+        corpus_result=corpus_result,
+        output_path=gpu_report_path.relative_to(root),
+        authority=corpus_authority,
+    )
     matrix = {
         "unit": DECISION_UNIT,
         "true_positives": int(matrix_row[0] or 0),
@@ -1223,7 +1280,7 @@ def analyze_hashes(
         },
         "hash_evidence": {
             "database_path": str(database_path.relative_to(root)),
-            "database_sha256": _sha256(database_path),
+            "database_sha256": corpus_result["source_database_sha256"],
             "distinct_signatures": int(counts[0] or 0),
             "noisy_signatures": int(counts[1] or 0),
             "multi_owner_signatures": int(counts[2] or 0),
@@ -1236,14 +1293,35 @@ def analyze_hashes(
             "top_low_information": top_low_information,
         },
         "hash_type_analysis": hash_type_analysis,
+        "corpus_index": {
+            **corpus_result,
+            "authority_sha256": corpus_authority["authority_sha256"],
+        },
+        "gpu_comparison": {
+            "state": gpu_comparison["state"],
+            "scope": gpu_comparison["scope"],
+            "report_path": str(gpu_report_path.relative_to(root)),
+            "candidate_backend": gpu_comparison["candidate_backend"],
+            "publish_from": gpu_comparison["publish_from"],
+            "mismatches": gpu_comparison.get("mismatches"),
+            "performance": gpu_comparison.get("performance"),
+        },
         "failures": [
             {
                 "failure_type": "collision",
                 "library_id": str(row["scope"]),
                 "function_id": "",
-                "route_id": "multiple" if int(row["distinct_routes"]) > 1 else "one-route",
-                "compiler_id": "multiple" if int(row["distinct_routes"]) > 1 else "one-route",
-                "treatment_id": "multiple" if int(row["distinct_treatments"]) > 1 else "one-treatment",
+                "route_id": (
+                    "multiple" if int(row["distinct_routes"]) > 1 else "one-route"
+                ),
+                "compiler_id": (
+                    "multiple" if int(row["distinct_routes"]) > 1 else "one-route"
+                ),
+                "treatment_id": (
+                    "multiple"
+                    if int(row["distinct_treatments"]) > 1
+                    else "one-treatment"
+                ),
                 "signature": str(row["signature"]),
                 "candidate_owner": f'{int(row["distinct_incorrect_owners"])} opposite-fold owner(s)',
                 "evidence_path": str(database_path.relative_to(root)),
@@ -1267,6 +1345,9 @@ def analyze_hashes(
             "evidence_resolution_wall_time_ns": resolution_wall_ns,
             "classification_wall_time_ns": classification_wall_ns,
             "population_analysis_wall_time_ns": population_wall_ns,
+            "gpu_trial_wall_time_ns": gpu_comparison.get("performance", {}).get(
+                "total_trial_wall_time_ns"
+            ),
             "total_wall_time_ns": time.monotonic_ns() - analysis_started_ns,
         },
     }
@@ -1306,13 +1387,22 @@ def load_hash_schedule(
     if path != root and root not in path.parents:
         raise ValueError("hash-analysis schedule escapes the project root")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if set(document) != {
-        "schema_version", "timezone", "source_run_policy", "runtime",
-        "finish_started", "window",
-    } or document.get("schema_version") != HASH_SCHEDULE_SCHEMA:
+    if (
+        set(document)
+        != {
+            "schema_version",
+            "timezone",
+            "source_run_policy",
+            "runtime",
+            "finish_started",
+            "window",
+        }
+        or document.get("schema_version") != HASH_SCHEDULE_SCHEMA
+    ):
         raise ValueError("hash-analysis schedule has unsupported fields or schema")
     if (
-        document["source_run_policy"] != "latest-complete-full-without-current-hash-report"
+        document["source_run_policy"]
+        != "latest-complete-full-without-current-hash-report"
         or document["finish_started"] is not True
         or not isinstance(document["window"], list)
         or not document["window"]
@@ -1340,7 +1430,9 @@ def load_hash_schedule(
     }
 
 
-def _window_open(schedule: Mapping[str, object], now: datetime) -> tuple[bool, str | None]:
+def _window_open(
+    schedule: Mapping[str, object], now: datetime
+) -> tuple[bool, str | None]:
     local = now.astimezone(ZoneInfo(str(schedule["timezone"])))
     minute = local.hour * 60 + local.minute
     weekday = local.strftime("%a").lower()
@@ -1353,7 +1445,9 @@ def _window_open(schedule: Mapping[str, object], now: datetime) -> tuple[bool, s
             continue
         start = _clock_minutes(str(window["start"]))
         stop = _clock_minutes(str(window["stop_admitting"]))
-        open_now = start <= minute < stop if start < stop else minute >= start or minute < stop
+        open_now = (
+            start <= minute < stop if start < stop else minute >= start or minute < stop
+        )
         if open_now:
             return True, str(window["id"])
     return False, None
@@ -1367,10 +1461,12 @@ def scheduled_hash_analysis(
 ) -> dict[str, object]:
     """Run the newest pending hash analysis only inside a reviewed window."""
 
+    from .corpus_hash_index import load_corpus_hash_authority
     from .machine_validation_runner import _post_validation_retention, load_runtime
 
     root = Path(project_root).expanduser().resolve()
     schedule = load_hash_schedule(root, schedule_path)
+    corpus_authority = load_corpus_hash_authority(root)
     instant = now or datetime.now(timezone.utc)
     open_now, window_id = _window_open(schedule, instant)
     if not open_now:
@@ -1409,6 +1505,8 @@ def scheduled_hash_analysis(
             if (
                 report.get("schema_version") == HASH_REPORT_SCHEMA
                 and report.get("state") == "measured-complete"
+                and report.get("corpus_index", {}).get("authority_sha256")
+                == corpus_authority["authority_sha256"]
             ):
                 return {
                     "state": "nothing-pending",
@@ -1434,16 +1532,18 @@ def scheduled_hash_analysis(
             status_path.parent.name,
             runtime_path=str(schedule["runtime"]),
         )
-        retention = _post_validation_retention(
-            root, runtime, status_path.parent.name
-        )
+        retention = _post_validation_retention(root, runtime, status_path.parent.name)
         _atomic_json(status_path.parent / "retention.json", retention)
         final_status = json.loads(status_path.read_text(encoding="utf-8"))
         final_status["retention"] = {
             key: retention.get(key)
             for key in (
-                "state", "trigger", "scope", "plan_digest",
-                "estimated_apply_seconds", "error",
+                "state",
+                "trigger",
+                "scope",
+                "plan_digest",
+                "estimated_apply_seconds",
+                "error",
             )
             if retention.get(key) is not None
         }

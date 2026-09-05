@@ -1313,6 +1313,24 @@ export type ValidationObservatoryRun = {
     sha256: string;
     algorithm_id?: string;
   } | null;
+  corpus_index?: {
+    state: string;
+    ordinal: number;
+    generation_digest: string;
+    owners: number;
+    signatures: number;
+    database_path: string;
+    authority_sha256: string;
+  } | null;
+  gpu_comparison?: {
+    state: string;
+    scope: string;
+    report_path: string;
+    candidate_backend: string;
+    publish_from: string;
+    mismatches: number | null;
+    performance?: Record<string, number | null>;
+  } | null;
   confusion_matrix: {
     unit?: string;
     true_positives: number;
@@ -1830,6 +1848,25 @@ export type HashDiscriminationStatus = {
     state: string;
     status_digest: string;
     summary: NoisyHashStatus['summary'];
+  };
+  corpus_index: {
+    schema_version: 'fidb-corpus-hash-index/v1';
+    state: 'not-built' | 'empty' | 'ready';
+    database_path: string;
+    database_sha256?: string;
+    database_bytes?: number;
+    authority_sha256: string;
+    generation?: {
+      ordinal: number;
+      generation_digest: string;
+      owners: number;
+      signatures: number;
+      query_observations: number;
+      true_positives: number;
+      false_positives: number;
+      true_negatives: number;
+      false_negatives: number;
+    } | null;
   };
 };
 

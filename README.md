@@ -241,6 +241,9 @@ exists. Decisions never rewrite published evidence; `quarantine` is a
 forward-admission contract until the lane builder consumes it. See
 [`HASH_DISCRIMINATION.md`](HASH_DISCRIMINATION.md) for the model boundary and
 [`validation/README.md`](validation/README.md) for operational authorities.
+Beginning with C10, sealed per-batch evidence is also admitted once into a
+digest-pinned incremental corpus sidecar; optional WGPU execution is measured
+against, but cannot replace, the canonical CPU result.
 
 The disarmed next-run campaign is split between
 [`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml) and

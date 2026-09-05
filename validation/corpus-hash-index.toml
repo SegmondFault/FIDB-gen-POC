@@ -1,0 +1,48 @@
+schema_version = "fidb-corpus-hash-index-authority/v1"
+id = "c-corpus-hash-index-v1"
+label = "Incremental C corpus hash evidence"
+database = "artifacts/hash-discrimination/corpus-index-v1.sqlite3"
+
+[identity]
+owner_unit = "library-release"
+signature_key = [
+  "compatibility_scope",
+  "ghidra_language_id",
+  "full_hash",
+  "specific_hash",
+  "specific_hash_additional_size",
+  "code_unit_size",
+]
+require_disjoint_batch_owners = true
+
+[incremental]
+ingestion_unit = "sealed-machine-validation-run"
+update = "delta-only"
+unchanged_signatures = "do-not-touch"
+true_negatives = "derive-arithmetically"
+retain_source_observations = true
+idempotency_key = "source-evidence-sha256"
+full_rebuild_audit_every_batches = 10
+
+[generation]
+write_policy = "append-only-ledger-with-rebuildable-current-cache"
+snapshot_boundary = "each-admitted-batch"
+digest = "sha256-previous-generation-authority-source-and-counts"
+
+[acceleration]
+mode = "compare"
+canonical_backend = "cpu-sqlite"
+candidate_backend = "gpu-wgpu-packed-probe-v1"
+publish_from = "canonical-only"
+candidate_failure = "record-and-continue"
+require_exact_equivalence = true
+key_words_u32 = 7
+workgroup_size = 256
+max_records_per_shard = 50000000
+
+[safety]
+mutate_lane_databases = false
+mutate_source_validation = false
+automatic_filtering = false
+permit_in_place_schema_migration = false
+rebuild_from_retained_evidence = true

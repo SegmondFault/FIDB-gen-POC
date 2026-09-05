@@ -196,6 +196,48 @@ The current noisy-hash ledger is retained as collision triage and an auditable
 manual disposition layer. It becomes one input to Hash Discrimination; it is
 not treated as the score model or as a blacklist.
 
+## Incremental corpus evidence
+
+`validation/corpus-hash-index.toml` is the authority for the cumulative
+cross-batch evidence index. C10 is generation one. Every later sealed cohort
+is admitted exactly once by its source-evidence digest and contributes only its
+new signature, owner and query observations. Unchanged signatures are not
+rescanned.
+
+The index stores append-only batch, signature-owner and signature-batch facts.
+Its mutable `signature_state` table is only a rebuildable current-generation
+cache. When a new owner is attached to a signature, historical query counts for
+that same signature supply the old-query/new-owner false-positive contribution;
+new queries are likewise checked against the signature's existing owners. No
+unrelated signature is touched. Cross-generation true negatives are derived
+from the eligible query-owner population minus observed matches and are never
+materialised as non-match rows.
+
+For `B` similarly sized cohorts, rebuilding at every milestone reads
+`1 + 2 + ... + B` cohorts, or quadratic repeated input. Delta ingestion reads
+each cohort once. Its residual work is proportional to new signature/query
+rows plus genuinely shared signature-owner relationships. Exceptionally common
+hashes can still have large owner sets; those are real evidence and may be held
+as postings rather than expanded into every owner-to-owner pair.
+
+The corpus index is a derived sidecar under `artifacts/hash-discrimination/`.
+It never alters a published lane database or a per-run validation database. A
+schema or authority change publishes a new sidecar and rebuilds it from retained
+evidence instead of migrating either immutable source in place. Each generation
+pins its preceding generation digest, authority digest, source-evidence digest
+and cumulative counts.
+
+The optional `gpu` dependency adds a WGPU packed-key candidate. C10 compares
+its seven-`u32` complete-signature lookup result exactly with the packed CPU
+result and records device, buffer, packing, CPU-probe and GPU end-to-end timing.
+CPU/SQLite remains publication authority. Missing GPU support, candidate
+failure or any mismatch is evidence about the experiment and cannot change the
+canonical result. Install the comparison dependency with:
+
+```sh
+uv sync --extra gpu
+```
+
 ## Present implementation boundary
 
 Before the first complete ten-library corpus, the system may expose the

@@ -49,6 +49,21 @@ The raw SQLite database is evidence and interchange state, not a native Ghidra
 ledgers do not retain every Ghidra FID function relationship needed to prove a
 faithful reconstruction. No lane pack is active or approved for analyst use.
 
+## Evolving hash discrimination does not migrate a lane
+
+Hash-discrimination measurements change whenever another cohort is admitted.
+They therefore live in the derived corpus sidecar governed by
+`validation/corpus-hash-index.toml`, not in the immutable lane schema. The
+sidecar points back to retained occurrence evidence and records append-only
+generation digests. Rebuilding or replacing that derived index cannot change a
+published lane generation.
+
+If a future distribution needs embedded HDI/noise values, define a new lane
+database schema and publish a new immutable lane generation. Do not run an
+in-place `ALTER TABLE` over an existing v1 file. Keeping measurements in a
+versioned overlay is preferred because a score generation can change much more
+often than its underlying signature corpus.
+
 ## Future queue-to-lane importer
 
 The queue-to-lane database importer is not yet implemented. Its authoritative

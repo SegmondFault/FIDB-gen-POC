@@ -12,6 +12,7 @@ from .ecological_validation import compile_ecological_validation
 from .lane_inventory import detect_lane_inventory
 from .machine_validation import compile_machine_validation
 from .noisy_hashes import compile_noisy_hashes
+from .corpus_hash_index import inspect_corpus_hash_index
 
 HASH_DISCRIMINATION_SCHEMA = "fidb-hash-discrimination/v1"
 HASH_DISCRIMINATION_STATUS_SCHEMA = "fidb-hash-discrimination-status/v1"
@@ -45,6 +46,7 @@ _SECTIONS = {
         "lane_registry",
         "lane_database_root",
         "generation_root",
+        "corpus_index_authority",
     },
     "identity": {
         "analyst_term",
@@ -306,6 +308,7 @@ def compile_hash_discrimination(
     _ecological_validation: Mapping[str, object] | None = None,
     _noisy_hashes: Mapping[str, object] | None = None,
     _lane_inventory: Mapping[str, object] | None = None,
+    _corpus_hash_index: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     config = load_hash_discrimination_authority(root, authority)
@@ -332,6 +335,13 @@ def compile_hash_discrimination(
         dict(_lane_inventory)
         if _lane_inventory is not None
         else detect_lane_inventory(root)
+    )
+    corpus_index = (
+        dict(_corpus_hash_index)
+        if _corpus_hash_index is not None
+        else inspect_corpus_hash_index(
+            root, str(config["sources"]["corpus_index_authority"])
+        )
     )
 
     complete_libraries = int(machine["summary"]["complete_libraries"])
@@ -452,6 +462,7 @@ def compile_hash_discrimination(
             "status_digest": noisy["status_digest"],
             "summary": noisy["summary"],
         },
+        "corpus_index": corpus_index,
     }
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     return {**body, "status_digest": hashlib.sha256(canonical).hexdigest()}

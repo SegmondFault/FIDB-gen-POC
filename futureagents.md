@@ -416,6 +416,22 @@ compilers or Ghidra. The checked-in user service and timers are named
 `fidb-machine-validation-hash-analysis-afternoon.timer`, and
 `fidb-machine-validation-hash-analysis-nightly.timer`.
 
+C10 must also become generation one of the incremental corpus hash index before
+its corrected report is published. The authority is
+`validation/corpus-hash-index.toml`; the derived sidecar is
+`artifacts/hash-discrimination/corpus-index-v1.sqlite3`. Do not add evolving
+noise values to an immutable lane database and do not migrate a published lane
+or validation database in place. A schema/authority change gets a new sidecar
+path and a deterministic rebuild from retained evidence. Batch ingestion is
+digest-idempotent and owners must be disjoint between cohort generations.
+
+The C10 pass also runs the optional `gpu-wgpu-packed-probe-v1` candidate against
+the canonical CPU packed lookup. CPU remains authoritative. Preserve
+`gpu-comparison.json`, investigate any mismatch, and never treat a fast result
+as accepted unless all returned indices are identical. The `gpu` extra must be
+installed on GPU workers; absence or driver failure is recorded without
+invalidating CPU truth.
+
 Do not rerun the 41 GiB C10 composite/Ghidra workload to correct the old
 five-match methodology. The sealed run already retains all 444
 `query-signatures.jsonl` fold exports. `analyze-hashes` uses the lightweight

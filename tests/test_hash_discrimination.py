@@ -54,6 +54,12 @@ class HashDiscriminationTests(unittest.TestCase):
                     "compact_unique_signatures": 80 if corpus else 0,
                 }
             },
+            _corpus_hash_index={
+                "schema_version": "fidb-corpus-hash-index/v1",
+                "state": "not-built",
+                "database_path": "artifacts/hash-discrimination/corpus-index-v1.sqlite3",
+                "authority_sha256": "b" * 64,
+            },
         )
 
     def test_dormant_status_exposes_formula_and_never_invents_scores(self):

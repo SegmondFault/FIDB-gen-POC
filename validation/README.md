@@ -151,6 +151,19 @@ terminal report records evidence-resolution, classification and total wall
 time as well as zero compiler/JVM launches. A new composite build is neither
 required nor desirable merely to replace the superseded five-match report.
 
+Before publishing the C10 report, the pass transactionally admits its sealed
+hash evidence as generation one of the cumulative index governed by
+`corpus-hash-index.toml`. Later disjoint cohorts update only signature keys
+present in their delta. Historical query counts and existing owner postings
+account for newly possible cross-cohort matches; TN remains arithmetic. The
+index is a rebuildable sidecar and neither lane databases nor immutable
+per-run evidence are migrated.
+
+When the optional `gpu` extra is installed, the same pass compares a packed
+WGPU exact-signature probe with its packed CPU result. The comparison report is
+written beside `hash-report.json`. It includes complete device and wall-time
+measurements, but it never grants the GPU result publication authority.
+
 `machine-validation-hash-method.toml` is the versioned scientific authority.
 It removes cohort-size assumptions from the analyser, defines the compatible
 scope and complete FID identity, fixes the absence of a library-level match

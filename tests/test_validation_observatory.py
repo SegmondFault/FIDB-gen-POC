@@ -23,6 +23,23 @@ class ValidationObservatoryTests(unittest.TestCase):
                         "id": "single-hash-ground-truth-v1",
                         "sha256": "method",
                     },
+                    "corpus_index": {
+                        "state": "ingested",
+                        "ordinal": 1 if cohort == "c10" else 2,
+                        "generation_digest": f"generation-{cohort}",
+                        "owners": 10 if cohort == "c10" else 20,
+                        "signatures": 12,
+                        "database_path": "artifacts/hash-discrimination/corpus-index-v1.sqlite3",
+                        "authority_sha256": "corpus-method",
+                    },
+                    "gpu_comparison": {
+                        "state": "equivalent",
+                        "scope": "packed-complete-signature-exact-probe",
+                        "report_path": "gpu-comparison.json",
+                        "candidate_backend": "gpu-wgpu-packed-probe-v1",
+                        "publish_from": "canonical-only",
+                        "mismatches": 0,
+                    },
                     "confusion_matrix": {
                         "true_positives": 8,
                         "false_positives": 2,
@@ -78,6 +95,8 @@ class ValidationObservatoryTests(unittest.TestCase):
             self.assertEqual(result["latest_run_key"], "c20:run-2")
             self.assertEqual(result["selected"]["run_id"], "run-2")
             self.assertEqual(result["selected"]["rates"]["false_positive_rate"], 0.1)
+            self.assertEqual(result["selected"]["corpus_index"]["ordinal"], 2)
+            self.assertEqual(result["selected"]["gpu_comparison"]["mismatches"], 0)
             self.assertEqual(
                 result["selected"]["hash_type_analysis"][0]["top_ambiguous"][0]["value"],
                 "01",
