@@ -602,6 +602,31 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["schema_version"], "fidb-noisy-hash-status/v1")
         self.assertEqual(document["summary"]["observed_hashes"], 0)
 
+    def test_validation_observatory_selects_one_read_only_run(self):
+        compiled = {
+            "schema_version": "fidb-validation-observatory/v1",
+            "selected_run_key": "c10:run-1",
+        }
+        with patch(
+            "fidb_poc.local_api.compile_validation_observatory",
+            return_value=compiled,
+        ) as compile_observatory:
+            status, document, _ = self.request(
+                "GET", "/api/v1/validation-observatory?run_id=c10:run-1"
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(document, compiled)
+        compile_observatory.assert_called_once_with(
+            self.root, selected_run="c10:run-1"
+        )
+
+        status, document, _ = self.request(
+            "GET", "/api/v1/validation-observatory?run_id=a&run_id=b"
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(document["error"]["code"], "invalid-query")
+
     def test_hash_discrimination_status_endpoint_is_read_only(self):
         status, document, _ = self.request("GET", "/api/v1/hash-discrimination")
         self.assertEqual(status, 200)

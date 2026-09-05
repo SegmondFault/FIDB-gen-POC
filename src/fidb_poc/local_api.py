@@ -54,6 +54,7 @@ from .retention import (
     retention_status,
     write_retention_plan,
 )
+from .validation_observatory import compile_validation_observatory
 
 API_SCHEMA = "fidb-local-api/v1"
 DEFAULT_BIND = "127.0.0.1"
@@ -80,6 +81,7 @@ _GET_PATHS = {
     "/api/v1/ecological-validation",
     "/api/v1/machine-validation",
     "/api/v1/machine-validation/run",
+    "/api/v1/validation-observatory",
     "/api/v1/hash-discrimination",
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
@@ -774,6 +776,25 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         self.api_server.config.project_root
                     ),
                 },
+                origin=origin,
+            )
+            return
+
+        if path == "/api/v1/validation-observatory":
+            if set(query) - {"run_id"} or any(
+                len(values) != 1 for values in query.values()
+            ):
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "validation observatory accepts one optional run_id",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                compile_validation_observatory(
+                    self.api_server.config.project_root,
+                    selected_run=query.get("run_id", [None])[0],
+                ),
                 origin=origin,
             )
             return
