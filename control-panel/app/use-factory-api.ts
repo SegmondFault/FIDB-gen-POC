@@ -1255,6 +1255,120 @@ export type MachineHashSummary = {
   distinct_treatments: number;
 };
 
+export type HashComponentDistribution = {
+  distinct_owners: number;
+  distinct_values: number;
+  fraction_of_values: number;
+};
+
+export type HashComponentAmbiguity = {
+  scope: string;
+  language: string;
+  value: string;
+  distinct_owners: number;
+  reference_observations: number;
+  exact_signature_variants: number;
+  exact_false_positive_observations: number;
+  owners: string[];
+};
+
+export type HashComponentLibrary = {
+  owner: string;
+  distinct_values: number;
+  multi_owner_values: number;
+  ambiguous_fraction: number;
+  reference_observations: number;
+  missed_observations: number;
+  exact_false_positive_observations: number;
+};
+
+export type HashTypeAnalysis = {
+  hash_type: 'full' | 'specific' | 'complete';
+  distinct_values: number;
+  singleton_values: number;
+  multi_owner_values: number;
+  multi_owner_fraction: number;
+  owner_links: number;
+  ambiguous_owner_links: number;
+  complete_disambiguated_owner_signatures: number;
+  reference_observations: number;
+  exact_false_positive_observations: number;
+  maximum_distinct_owners: number;
+  distribution?: HashComponentDistribution[];
+  top_ambiguous?: HashComponentAmbiguity[];
+  libraries?: HashComponentLibrary[];
+};
+
+export type ValidationObservatoryRun = {
+  key: string;
+  validation_id: string;
+  run_id: string;
+  finished_at: string;
+  report_path: string;
+  report_sha256: string;
+  source_evidence_sha256: string;
+  method_authority?: {
+    id: string;
+    path?: string;
+    sha256: string;
+    algorithm_id?: string;
+  } | null;
+  confusion_matrix: {
+    unit?: string;
+    true_positives: number;
+    false_positives: number;
+    true_negatives: number;
+    false_negatives: number;
+  };
+  rates: {
+    true_positive_rate: number | null;
+    false_positive_rate: number | null;
+    true_negative_rate: number | null;
+    false_negative_rate: number | null;
+    precision: number | null;
+  };
+  hash_evidence: Partial<{
+    database_path: string;
+    database_sha256: string;
+    distinct_signatures: number;
+    noisy_signatures: number;
+    multi_owner_signatures: number;
+    missed_signatures: number;
+    unattributed_signatures: number;
+    query_signature_observations: number;
+    unattributed_query_signatures: number;
+    fold_results: number;
+    top_noisy: MachineHashSummary[];
+    top_low_information: MachineHashSummary[];
+  }>;
+  hash_types: HashTypeAnalysis[];
+  performance?: Record<string, number | string>;
+};
+
+export type ValidationObservatory = {
+  schema_version: 'fidb-validation-observatory/v1';
+  generated_at: string;
+  state: 'ready' | 'awaiting-evidence';
+  summary: {
+    measured_runs: number;
+    validation_cohorts: number;
+    method_versions: string[];
+  };
+  latest_run_key: string | null;
+  selected_run_key: string | null;
+  selection_found: boolean;
+  runs: ValidationObservatoryRun[];
+  trends: Array<{
+    hash_type: HashTypeAnalysis['hash_type'];
+    points: Array<HashTypeAnalysis & { run_key: string; run_id: string; finished_at: string }>;
+  }>;
+  selected: (ValidationObservatoryRun & {
+    hash_type_analysis: HashTypeAnalysis[];
+    failures: MachineValidationFailure[];
+    decision_contract?: Record<string, string>;
+  }) | null;
+};
+
 export type MachineValidationLive = {
   run: MachineValidationRun;
   canary_gate: MachineValidationCanaryGate;
@@ -2070,6 +2184,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [laneInventory, setLaneInventory] = useState<LaneInventory | null>(null);
   const [ecologicalValidation, setEcologicalValidation] = useState<EcologicalValidation | null>(null);
   const [noisyHashes, setNoisyHashes] = useState<NoisyHashStatus | null>(null);
+  const [validationObservatory, setValidationObservatory] = useState<ValidationObservatory | null>(null);
   const [retention, setRetention] = useState<RetentionStatus | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
@@ -2082,6 +2197,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const refreshInFlight = useRef(false);
   const eventCursor = useRef(0);
   const eventHistory = useRef<CoordinatorEvent[]>([]);
+  const selectedValidationRun = useRef<string | null>(null);
   const capabilityCache = useRef<FactoryCapabilities | null>(null);
   const authorityCache = useRef<FactoryAuthority | null>(null);
   const lastCapabilityRead = useRef(0);
@@ -2154,11 +2270,12 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult] = await Promise.all([
+        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult] = await Promise.all([
           json<FactoryCapabilities>('capabilities'),
           json<FactoryAuthority>('authority'),
           json<LaneInventory>('lane-inventory'),
           json<RetentionStatus>('retention'),
+          json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
         ]);
         capabilityCache.current = capabilityResult;
         authorityCache.current = authorityResult;
@@ -2170,12 +2287,14 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setEcologicalValidation(authorityResult.ecological_validation);
         setNoisyHashes(authorityResult.noisy_hashes);
         setRetention(retentionResult);
+        setValidationObservatory(observatoryResult);
       } else {
-        const [machineResult, ecologicalResult, noisyResult, retentionResult] = await Promise.all([
+        const [machineResult, ecologicalResult, noisyResult, retentionResult, observatoryResult] = await Promise.all([
           json<MachineValidationLive>('machine-validation/run'),
           json<EcologicalValidation>('ecological-validation'),
           json<NoisyHashStatus>('noisy-hashes'),
           json<RetentionStatus>('retention'),
+          json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
         ]);
         setMachineValidation(current => current ? {
           ...current,
@@ -2185,6 +2304,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setEcologicalValidation(ecologicalResult);
         setNoisyHashes(noisyResult);
         setRetention(retentionResult);
+        setValidationObservatory(observatoryResult);
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
@@ -2280,15 +2400,32 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   );
 
   const refreshValidation = useCallback(async () => {
-    const [machineResult, ecologicalResult, noisyResult] = await Promise.all([
+    const [machineResult, ecologicalResult, noisyResult, observatoryResult] = await Promise.all([
       json<MachineValidation>('machine-validation'),
       json<EcologicalValidation>('ecological-validation'),
       json<NoisyHashStatus>('noisy-hashes'),
+      json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
     ]);
     setMachineValidation(machineResult);
     setEcologicalValidation(ecologicalResult);
     setNoisyHashes(noisyResult);
+    setValidationObservatory(observatoryResult);
     setError(null);
+  }, []);
+
+  const selectValidationRun = useCallback(async (runKey: string) => {
+    try {
+      const result = await json<ValidationObservatory>(
+        `validation-observatory?run_id=${encodeURIComponent(runKey)}`,
+      );
+      selectedValidationRun.current = runKey;
+      setValidationObservatory(result);
+      setError(null);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Validation run unavailable';
+      setError(message);
+      throw caught;
+    }
   }, []);
 
   const runMachineValidation = useCallback(async (mode: 'canary' | 'full') => {
@@ -2440,6 +2577,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     laneInventory,
     ecologicalValidation,
     noisyHashes,
+    validationObservatory,
     retention,
     events,
     timings,
@@ -2465,6 +2603,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     importEcological,
     runEcological,
     runMachineValidation,
+    selectValidationRun,
     pauseMachineValidation: () => controlMachineValidation('pause'),
     resumeMachineValidation: () => controlMachineValidation('resume'),
     decideNoisyHash,

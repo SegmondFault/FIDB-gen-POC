@@ -20,6 +20,7 @@ import {
   type WidthBatch,
   type WidthCompilation,
   type WidthStudy,
+  type HashTypeAnalysis,
   type HashDiscriminationStatus,
   type NoisyHashRow,
 } from './use-factory-api';
@@ -1021,10 +1022,81 @@ function HashFormulaPanel({ hdi }: { hdi: HashDiscriminationStatus }) {
   </section>;
 }
 
+function observedPercent(value: number | null | undefined) {
+  return value === null || value === undefined ? '—' : `${(value * 100).toFixed(3)}%`;
+}
+
+function HashPopulationTail({ rows }: { rows: HashTypeAnalysis[] }) {
+  const width = 720;
+  const height = 190;
+  const left = 38;
+  const right = 18;
+  const top = 18;
+  const bottom = 34;
+  const distributions = rows.flatMap(row => row.distribution ?? []);
+  const maximumOwners = Math.max(1, ...distributions.map(row => row.distinct_owners));
+  const maximumLogValues = Math.max(1, ...distributions.map(row => Math.log10(row.distinct_values + 1)));
+  const x = (owners: number) => left + ((owners - 1) / Math.max(1, maximumOwners - 1)) * (width - left - right);
+  const y = (values: number) => top + (1 - Math.log10(values + 1) / maximumLogValues) * (height - top - bottom);
+  const colors = { full: '#4ad7da', specific: '#b2a6ef', complete: '#65d68b' } as const;
+  return <div className="hash-tail-chart">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Hash component library-prevalence distribution">
+      <line x1={left} x2={width - right} y1={height - bottom} y2={height - bottom} />
+      <line x1={left} x2={left} y1={top} y2={height - bottom} />
+      {rows.map(row => {
+        const points = (row.distribution ?? []).map(point => `${x(point.distinct_owners)},${y(point.distinct_values)}`).join(' ');
+        return <g key={row.hash_type}>
+          <polyline points={points} fill="none" stroke={colors[row.hash_type]} strokeWidth="2" />
+          {(row.distribution ?? []).map(point => <circle key={`${row.hash_type}-${point.distinct_owners}`} cx={x(point.distinct_owners)} cy={y(point.distinct_values)} r="2.5" fill={colors[row.hash_type]} />)}
+        </g>;
+      })}
+      <text x={left} y={height - 10}>1 owner</text>
+      <text x={width - right} y={height - 10} textAnchor="end">{maximumOwners} owners</text>
+      <text x="9" y={top + 5}>more values</text>
+    </svg>
+    <div>{rows.map(row => <span key={row.hash_type}><i style={{ background: colors[row.hash_type] }} />{row.hash_type}</span>)}</div>
+  </div>;
+}
+
+function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
+  const observatory = factory.validationObservatory;
+  const selected = observatory?.selected;
+  const [selectedHashType, setSelectedHashType] = useState<HashTypeAnalysis['hash_type']>('complete');
+  const hashTypes = selected?.hash_type_analysis ?? [];
+  const activeType = hashTypes.find(row => row.hash_type === selectedHashType) ?? hashTypes[0];
+  if (!observatory || observatory.state === 'awaiting-evidence') {
+    return <section className="panel validation-observatory-panel"><header><h3>Validation evidence</h3><span>0 MEASURED RUNS</span></header><div className="operational-empty"><strong>Single-hash report pending</strong><small>Full, specific and complete-signature populations will appear after the scheduled corrected analysis.</small></div></section>;
+  }
+  const matrix = selected?.confusion_matrix;
+  return <>
+    <section className="panel validation-observatory-panel">
+      <header><h3>Validation evidence</h3><span>{observatory.summary.measured_runs} RUNS · {observatory.summary.validation_cohorts} COHORTS</span></header>
+      <div className="validation-run-selector">{observatory.runs.map(run => <button key={run.key} className={run.key === observatory.selected_run_key ? 'active' : ''} onClick={() => void factory.selectValidationRun(run.key)}><span>{run.validation_id}</span><strong>{run.run_id}</strong><small>{run.finished_at ? new Date(run.finished_at).toLocaleString() : 'time unavailable'} · FPR {observedPercent(run.rates.false_positive_rate)}</small></button>)}</div>
+      {selected && matrix && <>
+        <div className="observatory-outcomes">
+          <article><span>TP</span><strong>{matrix.true_positives.toLocaleString()}</strong><small>{observedPercent(selected.rates.true_positive_rate)} recall</small></article>
+          <article><span>FP</span><strong>{matrix.false_positives.toLocaleString()}</strong><small>{observedPercent(selected.rates.false_positive_rate)} FPR</small></article>
+          <article><span>TN</span><strong>{matrix.true_negatives.toLocaleString()}</strong><small>{observedPercent(selected.rates.true_negative_rate)} specificity</small></article>
+          <article><span>FN</span><strong>{matrix.false_negatives.toLocaleString()}</strong><small>{observedPercent(selected.rates.false_negative_rate)} miss rate</small></article>
+          <article><span>PRECISION</span><strong>{observedPercent(selected.rates.precision)}</strong><small>single-signature assertions</small></article>
+          <article><span>METHOD</span><strong>{selected.method_authority?.id ?? 'legacy'}</strong><small>{selected.method_authority?.sha256?.slice(0, 12) ?? 'unpinned'} · report {selected.report_sha256.slice(0, 12)}</small></article>
+        </div>
+        <div className="hash-type-comparison">{hashTypes.map(row => <button key={row.hash_type} className={row.hash_type === activeType?.hash_type ? 'active' : ''} onClick={() => setSelectedHashType(row.hash_type)}><span>{row.hash_type.toUpperCase()}</span><strong>{row.multi_owner_values.toLocaleString()}</strong><small>multi-owner / {row.distinct_values.toLocaleString()} values</small><dl><div><dt>AMBIGUOUS</dt><dd>{observedPercent(row.multi_owner_fraction)}</dd></div><div><dt>OWNER LINKS</dt><dd>{row.ambiguous_owner_links.toLocaleString()}</dd></div><div><dt>MAX OWNERS</dt><dd>{row.maximum_distinct_owners}</dd></div><div><dt>RESOLVED BY COMPLETE</dt><dd>{row.complete_disambiguated_owner_signatures.toLocaleString()}</dd></div></dl></button>)}</div>
+      </>}
+    </section>
+
+    {selected && hashTypes.length > 0 && <section className="panel hash-population-panel"><header><h3>Cross-library prevalence tail</h3><span>LOG VALUES × DISTINCT OWNERS</span></header><HashPopulationTail rows={hashTypes} /></section>}
+
+    {activeType && <section className="hdi-method-grid hash-drill-grid">
+      <article className="panel hash-ambiguity-panel"><header><h3>{activeType.hash_type} hash ambiguity</h3><span>{activeType.top_ambiguous?.length ?? 0} VISIBLE</span></header><div>{activeType.top_ambiguous?.map(row => <details key={`${row.scope}-${row.language}-${row.value}`}><summary><code>{row.value}</code><strong>{row.distinct_owners} owners</strong><span>{row.reference_observations.toLocaleString()} observations</span><em>EXPAND</em></summary><section><p><span>OWNERS</span><strong>{row.owners.join(' · ')}</strong></p><p><span>COMPATIBILITY</span><strong>{row.scope} · {row.language}</strong></p><p><span>EXACT VARIANTS</span><strong>{row.exact_signature_variants.toLocaleString()}</strong></p><p><span>EXACT FP OBS.</span><strong>{row.exact_false_positive_observations.toLocaleString()}</strong></p></section></details>)}{!activeType.top_ambiguous?.length && <div className="operational-empty"><strong>No multi-owner values</strong><small>This hash type did not repeat across owners in the selected run.</small></div>}</div></article>
+      <article className="panel hash-library-panel"><header><h3>Libraries carrying ambiguous {activeType.hash_type} hashes</h3><span>{activeType.libraries?.length ?? 0} OWNERS</span></header><div className="hash-library-head"><span>Library</span><span>Ambiguous</span><span>Values</span><span>Misses</span><span>Exact FP</span></div><div>{activeType.libraries?.map(row => <article key={row.owner}><strong>{row.owner}</strong><b>{observedPercent(row.ambiguous_fraction)}</b><span>{row.multi_owner_values.toLocaleString()} / {row.distinct_values.toLocaleString()}</span><span>{row.missed_observations.toLocaleString()}</span><span>{row.exact_false_positive_observations.toLocaleString()}</span></article>)}</div></article>
+    </section>}
+  </>;
+}
+
 function HashDiscriminationView({ factory }: { factory: FactoryApiState }) {
   const hdi = factory.authority?.hash_discrimination;
   const ledger = factory.noisyHashes;
-  const machineEvidence = factory.machineValidation?.results.hash_evidence;
   const [draftStates, setDraftStates] = useState<Record<string, NoisyHashRow['disposition']>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
@@ -1045,6 +1117,8 @@ function HashDiscriminationView({ factory }: { factory: FactoryApiState }) {
   return <div className="view-stack noisy-hash-view hdi-view">
     <section className="hdi-page-bar"><h2>Hash discrimination</h2><div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div></section>
 
+    <ValidationObservatoryPanel factory={factory} />
+
     <section className="panel hdi-readiness-panel"><header><h3>Model readiness</h3><span className={`validation-state ${hdi.readiness.ready_for_first_fit ? 'ready' : 'waiting'}`}>{hdi.state.replaceAll('-', ' ')}</span></header><div className="hdi-headline-metrics"><article><span>C10 WIDTH</span><strong>{hdi.readiness.complete_library_families}/{hdi.readiness.required_library_families}</strong><small>complete library families</small></article><article><span>LANE GENERATIONS</span><strong>{hdi.readiness.materialized_lane_generations}</strong><small>occurrence-preserving corpora</small></article><article><span>RAW OBSERVATIONS</span><strong>{hdi.readiness.raw_observations.toLocaleString()}</strong><small>all-signature denominator</small></article><article><span>SCORED HASHES</span><strong>{hdiMeasure(hdi.summary.scored_signatures)}</strong><small>unavailable until first fit</small></article><article><span>VALIDATION</span><strong>{hdi.readiness.machine_validation_state === 'measured-complete' ? 'MEASURED' : '—'}</strong><small>{hdi.readiness.ecological_measured_cases} held-out cases</small></article><article><span>COLLISION LEDGER</span><strong>{hdi.summary.observed_collision_signatures}</strong><small>one input, not the model</small></article></div>{hdi.readiness.blockers.length > 0 && <div className="hdi-blockers"><strong>FIRST-FIT BLOCKERS</strong><div>{hdi.readiness.blockers.map(blocker => <span key={blocker}>! {blocker}</span>)}</div></div>}</section>
 
     <HashFormulaPanel hdi={hdi} />
@@ -1060,8 +1134,6 @@ function HashDiscriminationView({ factory }: { factory: FactoryApiState }) {
     </section>
 
     <section className="panel hdi-score-panel"><header><h3>Hash scores</h3><span>{hdi.scores.length} SCORED</span></header><div className="hdi-score-head"><span>Hash / compatible scope</span><span>Candidate owner</span><span>HDI</span><span>Noise risk</span><span>Confidence / reason</span></div><div className="hdi-score-list">{hdi.scores.map(score => <article key={score.score_id}><p><code>{score.signature}</code><small>{score.scope}</small></p><strong>{score.candidate_owner}</strong><b>{score.hdi.toFixed(1)}</b><b>{score.noise_risk.toFixed(1)}</b><p><strong>{score.evidence_sufficiency}</strong><small>{score.reason_category.replaceAll('-', ' ')}</small></p></article>)}{!hdi.scores.length && <div className="operational-empty"><strong>Scores unavailable</strong><small>C10 and candidate-contribution evidence are not complete.</small></div>}</div></section>
-
-    <section className="panel hdi-score-panel"><header><h3>Observed low-information signatures</h3><span>{machineEvidence ? `${machineEvidence.multi_owner_signatures.toLocaleString()} MULTI-OWNER · ${machineEvidence.unattributed_signatures.toLocaleString()} UNATTRIBUTED` : 'AWAITING HASH RUN'}</span></header><div className="hdi-score-head"><span>Hash / compatible scope</span><span>Reference owners</span><span>TP</span><span>FP</span><span>Factor spread</span></div><div className="hdi-score-list">{machineEvidence?.top_low_information.slice(0, 100).map(row => <article key={`${row.scope}-${row.signature}`}><p><code>{row.signature}</code><small>{row.scope}</small></p><strong>{row.distinct_reference_owners}</strong><b>{row.true_positives}</b><b>{row.false_positives}</b><p><strong>{row.distinct_routes} routes</strong><small>{row.distinct_treatments} treatments · {row.unattributed_observations} unattributed</small></p></article>)}{!machineEvidence && <div className="operational-empty"><strong>Single-hash evidence pending</strong><small>The sealed C10 composites will be reanalysed without a match-count threshold.</small></div>}{machineEvidence && !machineEvidence.top_low_information.length && <div className="operational-empty"><strong>No multi-owner or unattributed signatures observed</strong><small>The complete evidence database remains available for factor analysis.</small></div>}</div></section>
 
     <section className="panel noisy-summary-panel"><header><h3>Manual trust ledger</h3><code>{ledger.authority_path}</code></header><div className="noisy-summary-grid"><article><span>CANDIDATES</span><strong>{ledger.summary.candidate_noisy}</strong><small>at least one opposite-fold match</small></article><article><span>CONFIRMED NOISY</span><strong>{ledger.summary.confirmed_noisy}</strong><small>≥{ledger.classification.confirmed_min_collisions} observations in ≥{ledger.classification.confirmed_min_distinct_runs} runs</small></article><article><span>QUARANTINED</span><strong>{ledger.summary.quarantined}</strong><small>forward admission exclusion</small></article><article><span>REVIEWED SHARED</span><strong>{ledger.summary.reviewed_shared}</strong><small>useful but ambiguous</small></article><article><span>CLEARED</span><strong>{ledger.summary.cleared}</strong><small>reviewed false alarm</small></article></div><footer><strong>{ledger.summary.evidence_databases_scanned} machine evidence databases.</strong><span>Disposition changes require an explicit reason; published evidence remains immutable.</span></footer></section>
     {message && <div className="toast">{message}</div>}
