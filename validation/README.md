@@ -92,6 +92,21 @@ primary key; reversing the join order recreates a many-occurrence intermediate
 and is a measured performance regression. Run the canary after changing either
 the schema or the matching query.
 
+## Post-run retention
+
+After a canary or full run reaches `measured-complete`, the runner calls the
+shared retention collector using the `machine-validation-complete` trigger.
+The TOML authority is `retention/policy.toml`. It always creates a
+content-addressed dry-run first and applies only when the estimate is within the
+reviewed bound.
+
+Validation retention verifies the status/report completion contract and hashes
+the preserved unit results, truth maps, query signatures and composite
+binaries. It may remove only direct-child `worker-*` scratch directories.
+Incomplete and failed runs remain quarantined whole. `units/`, the cohort
+reference index and terminal reports remain available for threshold-free
+per-hash reanalysis.
+
 Formal ecological validation comes later, after the intended dataset and lane
 generation are frozen. It uses held-out real binaries in tag-only/shadow mode
 and is the release gate for operational boilerplate ablation.

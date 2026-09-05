@@ -905,6 +905,39 @@ def canary_gate_status(
     }
 
 
+def _post_validation_retention(
+    root: Path, runtime: Mapping[str, object], run_id: str
+) -> dict[str, object]:
+    """Run the shared, dry-run-first collector without invalidating the report."""
+
+    try:
+        from .retention import automatic_retention, load_retention_policy
+
+        policy = load_retention_policy(root)
+        if (
+            not policy.validation_enabled
+            or not policy.validation_automatic_after_terminal_run
+        ):
+            return {
+                "state": "disabled",
+                "trigger": "machine-validation-complete",
+                "scope": "machine-validation",
+            }
+        return automatic_retention(
+            root,
+            str(runtime["ledger"]),
+            trigger="machine-validation-complete",
+            session_id=f"machine-validation-{run_id}",
+        )
+    except (OSError, RuntimeError, ValueError) as error:
+        return {
+            "state": "failed-safely",
+            "trigger": "machine-validation-complete",
+            "scope": "machine-validation",
+            "error": f"{type(error).__name__}: {error}",
+        }
+
+
 def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME, run_id: str | None = None) -> dict[str, object]:
     if mode not in {"canary", "full"}:
         raise ValueError("machine-validation mode must be canary or full")
@@ -1030,16 +1063,49 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
         )
         report_path = run_root / ("canary-report.json" if mode == "canary" else "report.json")
         _atomic_json(report_path, report)
-        _atomic_json(status_path, {
-            "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
-            "run_id": run_id, "mode": mode, "state": "complete" if report["state"] == "measured-complete" else "failed",
-            "pid": os.getpid(), "worker_pids": [process.pid for process in processes],
-            "started_at": started, "finished_at": _now(), "expected_work_units": len(positions),
-            "attempt_started_at": attempt_started, "resume_count": resume_count,
+        completed_status = {
+            "schema_version": RUN_STATUS_SCHEMA,
+            "validation_id": runtime["validation_id"],
+            "run_id": run_id,
+            "mode": mode,
+            "state": "complete" if report["state"] == "measured-complete" else "failed",
+            "pid": os.getpid(),
+            "worker_pids": [process.pid for process in processes],
+            "started_at": started,
+            "finished_at": _now(),
+            "expected_work_units": len(positions),
+            "attempt_started_at": attempt_started,
+            "resume_count": resume_count,
             "complete_work_units": report["metrics"]["complete_work_units"],
             "failed_work_units": report["metrics"]["failed_work_units"],
             "report_path": str(report_path.relative_to(root)),
-        })
+        }
+        _atomic_json(status_path, completed_status)
+        if report["state"] == "measured-complete":
+            # The retention collector refuses to touch validation scratch while
+            # this lock exists. Release it only after the terminal report and
+            # status are durable, then record the independent cleanup outcome.
+            lock.unlink(missing_ok=True)
+            retention = _post_validation_retention(root, runtime, run_id)
+            _atomic_json(run_root / "retention.json", retention)
+            _atomic_json(
+                status_path,
+                {
+                    **completed_status,
+                    "retention": {
+                        key: retention.get(key)
+                        for key in (
+                            "state",
+                            "trigger",
+                            "scope",
+                            "plan_digest",
+                            "estimated_apply_seconds",
+                            "error",
+                        )
+                        if retention.get(key) is not None
+                    },
+                },
+            )
         return report
     except Exception as error:
         _atomic_json(status_path, {

@@ -718,6 +718,14 @@ verification under **Operations → Retention**. Recycled workers with no durabl
 pending work park before full queue resolution and wake through a lightweight
 TOML-controlled ledger check.
 
+Measured-complete machine-validation runs enter the same dry-run-first system
+under a separate scope. The collector verifies and hashes the retained report,
+unit results, truth maps, query signatures and composite binaries, then selects
+only per-worker build/Ghidra scratch. Failed or incomplete validation runs stay
+quarantined. Automatic validation retention is controlled by the
+`machine-validation-complete` trigger in `retention/policy.toml`; its outcome is
+recorded beside the run in `retention.json`.
+
 These directories are intentionally ignored and are not source deliverables. A
 source-only handoff must omit `work/`, `artifacts/libs/`, `.venv/`, `.idea/`,
 Python caches and notebook execution outputs. Prefer producing a handoff from a

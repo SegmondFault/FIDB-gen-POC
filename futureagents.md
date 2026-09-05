@@ -312,6 +312,17 @@ so current successful attempt directories remain whole. Failed retries may be
 reduced only through a verified evidence bundle; different failure fingerprints,
 holds, symlinks and uncertain ownership remain quarantined.
 
+Machine validation shares this retention engine but uses a bounded
+`machine-validation` scope after a measured-complete run. The terminal report
+and status must agree; every result, truth map, query-signature export and
+composite binary is hashed before worker scratch becomes eligible. Only
+TOML-selected direct-child `worker-*` directories may be removed. Never delete
+`units/` or `reference-index.sqlite3`: the first C10 implementation reported a
+five-signature library-level threshold rather than the requested exhaustive
+hash-level confusion analysis, and the retained evidence is required to repair
+that analysis without recompilation or another Ghidra run. Failed validation
+runs are quarantined, not opportunistically cleaned.
+
 The first production dry-run selected 973 actions and 257,415,636,119 apparent
 bytes but estimated 1,041.553 seconds, above the 600-second automatic ceiling.
 It was therefore not applied. Do not raise that ceiling merely to clear the

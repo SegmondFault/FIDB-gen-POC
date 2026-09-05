@@ -11,6 +11,7 @@ from fidb_poc.machine_validation_runner import (
     REFERENCE_INDEX_SCHEMA,
     _archive_failed_result,
     _link_composite,
+    _post_validation_retention,
     _query_index,
     canary_gate_status,
     load_runtime,
@@ -313,6 +314,43 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertIn(str(root / "stack-chk-fail-local.o"), calls[2])
             self.assertIn("validation composite retry", (root / "link.log").read_text())
 
+
+
+    def test_terminal_validation_uses_shared_scoped_retention(self):
+        policy = SimpleNamespace(
+            validation_enabled=True,
+            validation_automatic_after_terminal_run=True,
+        )
+        expected = {"state": "complete", "plan_digest": "abc"}
+        with (
+            patch("fidb_poc.retention.load_retention_policy", return_value=policy),
+            patch(
+                "fidb_poc.retention.automatic_retention", return_value=expected
+            ) as collect,
+        ):
+            result = _post_validation_retention(
+                Path("/project"), {"ledger": "ledger.sqlite3"}, "run-full"
+            )
+
+        self.assertEqual(result, expected)
+        collect.assert_called_once_with(
+            Path("/project"),
+            "ledger.sqlite3",
+            trigger="machine-validation-complete",
+            session_id="machine-validation-run-full",
+        )
+
+    def test_terminal_validation_retention_failure_does_not_invalidate_report(self):
+        with patch(
+            "fidb_poc.retention.load_retention_policy",
+            side_effect=ValueError("invalid policy"),
+        ):
+            result = _post_validation_retention(
+                Path("/project"), {"ledger": "ledger.sqlite3"}, "run-full"
+            )
+
+        self.assertEqual(result["state"], "failed-safely")
+        self.assertIn("invalid policy", result["error"])
 
 
 if __name__ == "__main__":
