@@ -1071,7 +1071,11 @@ function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
   return <>
     <section className="panel validation-observatory-panel">
       <header><h3>Validation evidence</h3><span>{observatory.summary.measured_runs} RUNS · {observatory.summary.validation_cohorts} COHORTS</span></header>
-      <div className="validation-run-selector">{observatory.runs.map(run => <button key={run.key} className={run.key === observatory.selected_run_key ? 'active' : ''} onClick={() => void factory.selectValidationRun(run.key)}><span>{run.validation_id}</span><strong>{run.run_id}</strong><small>{run.finished_at ? new Date(run.finished_at).toLocaleString() : 'time unavailable'} · FPR {observedPercent(run.rates.false_positive_rate)}</small></button>)}</div>
+      <div className="validation-run-trend"><div className="validation-run-trend-head"><span>Batch / run</span><span>Full ambiguity</span><span>Specific ambiguity</span><span>Complete ambiguity</span><span>FPR</span><span>Recall</span></div>
+      <div className="validation-run-selector">{observatory.runs.map(run => {
+        const byType = Object.fromEntries(run.hash_types.map(row => [row.hash_type, row]));
+        return <button key={run.key} className={run.key === observatory.selected_run_key ? 'active' : ''} onClick={() => void factory.selectValidationRun(run.key)}><p><span>{run.validation_id}</span><strong>{run.run_id}</strong><small>{run.finished_at ? new Date(run.finished_at).toLocaleString() : 'time unavailable'}</small></p><b>{observedPercent(byType.full?.multi_owner_fraction)}</b><b>{observedPercent(byType.specific?.multi_owner_fraction)}</b><b>{observedPercent(byType.complete?.multi_owner_fraction)}</b><b>{observedPercent(run.rates.false_positive_rate)}</b><b>{observedPercent(run.rates.true_positive_rate)}</b></button>;
+      })}</div></div>
       {selected && matrix && <>
         <div className="observatory-outcomes">
           <article><span>TP</span><strong>{matrix.true_positives.toLocaleString()}</strong><small>{observedPercent(selected.rates.true_positive_rate)} recall</small></article>
