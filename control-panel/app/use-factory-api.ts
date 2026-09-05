@@ -1247,6 +1247,7 @@ export type MachineHashSummary = {
   true_positives: number;
   false_positives: number;
   false_negatives: number;
+  unattributed_observations: number;
   distinct_correct_owners: number;
   distinct_incorrect_owners: number;
   distinct_reference_owners: number;
@@ -1369,6 +1370,7 @@ export type MachineValidation = {
       noisy_signatures: number;
       multi_owner_signatures: number;
       missed_signatures: number;
+      unattributed_signatures: number;
       query_signature_observations: number;
       unattributed_query_signatures: number;
       fold_results: number;

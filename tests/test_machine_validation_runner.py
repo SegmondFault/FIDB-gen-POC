@@ -193,7 +193,9 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(result["true_negatives"], 2)
             self.assertEqual(result["false_negatives"], 2)
             self.assertEqual(result["unattributed_query_signatures"], 2)
-            self.assertEqual(outcomes, {"fn": 2, "fp": 1, "tp": 1})
+            self.assertEqual(
+                outcomes, {"fn": 2, "fp": 1, "tp": 1, "unattributed": 2}
+            )
 
     def test_hash_analysis_windows_are_toml_controlled(self):
         schedule = load_hash_schedule(self.root)

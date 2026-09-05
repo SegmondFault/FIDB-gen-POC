@@ -440,6 +440,7 @@ def _validation_results(
                 "noisy_signatures",
                 "multi_owner_signatures",
                 "missed_signatures",
+                "unattributed_signatures",
                 "query_signature_observations",
                 "unattributed_query_signatures",
                 "fold_results",

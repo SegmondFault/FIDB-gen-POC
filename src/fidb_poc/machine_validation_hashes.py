@@ -106,7 +106,7 @@ def _create_evidence(path: Path, source_run_id: str, source_digest: str) -> sqli
             specific_hash TEXT NOT NULL,
             additional_size INTEGER NOT NULL,
             code_size INTEGER NOT NULL,
-            outcome TEXT NOT NULL CHECK(outcome IN ('tp','fp','fn')),
+            outcome TEXT NOT NULL CHECK(outcome IN ('tp','fp','fn','unattributed')),
             owner TEXT NOT NULL,
             route_id TEXT NOT NULL,
             treatment_id TEXT NOT NULL,
@@ -132,6 +132,7 @@ def _create_evidence(path: Path, source_run_id: str, source_digest: str) -> sqli
             true_positives INTEGER NOT NULL,
             false_positives INTEGER NOT NULL,
             false_negatives INTEGER NOT NULL,
+            unattributed_observations INTEGER NOT NULL,
             distinct_correct_owners INTEGER NOT NULL,
             distinct_incorrect_owners INTEGER NOT NULL,
             distinct_reference_owners INTEGER NOT NULL,
@@ -253,6 +254,30 @@ def _classify_fold(
         "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         observation_rows,
     )
+    unattributed = [
+        row
+        for row in reference.execute(
+            """
+            SELECT address, function_name, language, full_hash, specific_hash,
+                   additional_size, code_size
+            FROM query_signature
+            """
+        )
+        if (str(row[2]), str(row[3]), str(row[4]), int(row[5]), int(row[6]))
+        not in matched_query
+    ]
+    output.executemany(
+        "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            (
+                _scope(target_os, binary_format, str(language)), str(language),
+                str(full_hash), str(specific_hash), int(additional), int(size),
+                "unattributed", "", route_id, treatment_id, fold,
+                str(address), str(function_name), "", query_relative,
+            )
+            for address, function_name, language, full_hash, specific_hash, additional, size in unattributed
+        ),
+    )
     miss_sql = """
         SELECT reference.language, reference.full_hash, reference.specific_hash,
                reference.additional_size, reference.code_size, reference.owner,
@@ -293,7 +318,7 @@ def _classify_fold(
         "false_positives": fp,
         "true_negatives": tn,
         "false_negatives": len(misses),
-        "unattributed_query_signatures": query_count - len(matched_query),
+        "unattributed_query_signatures": len(unattributed),
     }
     output.execute(
         "INSERT OR REPLACE INTO unit_result VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -312,11 +337,15 @@ def _signature_text(row: sqlite3.Row) -> str:
 
 
 def _summary_rows(connection: sqlite3.Connection, *, noisy: bool, limit: int) -> list[dict[str, object]]:
-    where = "false_positives > 0" if noisy else "distinct_reference_owners > 1"
+    where = (
+        "false_positives > 0"
+        if noisy
+        else "distinct_reference_owners > 1 OR unattributed_observations > 0"
+    )
     order = (
         "false_positives DESC, distinct_reference_owners DESC, true_positives DESC"
         if noisy
-        else "distinct_reference_owners DESC, false_positives DESC, true_positives DESC"
+        else "distinct_reference_owners DESC, unattributed_observations DESC, false_positives DESC"
     )
     connection.row_factory = sqlite3.Row
     rows = connection.execute(
@@ -330,6 +359,7 @@ def _summary_rows(connection: sqlite3.Connection, *, noisy: bool, limit: int) ->
             "true_positives": int(row["true_positives"]),
             "false_positives": int(row["false_positives"]),
             "false_negatives": int(row["false_negatives"]),
+            "unattributed_observations": int(row["unattributed_observations"]),
             "distinct_correct_owners": int(row["distinct_correct_owners"]),
             "distinct_incorrect_owners": int(row["distinct_incorrect_owners"]),
             "distinct_reference_owners": int(row["distinct_reference_owners"]),
@@ -462,6 +492,7 @@ def analyze_hashes(
             SELECT scope, language, full_hash, specific_hash, additional_size,
                    code_size,
                    SUM(outcome='tp'), SUM(outcome='fp'), SUM(outcome='fn'),
+                   SUM(outcome='unattributed'),
                    COUNT(DISTINCT CASE WHEN outcome='tp' THEN owner END),
                    COUNT(DISTINCT CASE WHEN outcome='fp' THEN owner END),
                    COUNT(DISTINCT owner), COUNT(DISTINCT route_id),
@@ -488,7 +519,8 @@ def analyze_hashes(
             SELECT COUNT(*),
                    SUM(false_positives > 0),
                    SUM(distinct_reference_owners > 1),
-                   SUM(false_negatives > 0)
+                   SUM(false_negatives > 0),
+                   SUM(unattributed_observations > 0)
             FROM hash_summary
             """
         ).fetchone()
@@ -534,6 +566,7 @@ def analyze_hashes(
             "noisy_signatures": int(counts[1] or 0),
             "multi_owner_signatures": int(counts[2] or 0),
             "missed_signatures": int(counts[3] or 0),
+            "unattributed_signatures": int(counts[4] or 0),
             "query_signature_observations": int(matrix_row[4] or 0),
             "unattributed_query_signatures": int(matrix_row[5] or 0),
             "fold_results": int(matrix_row[6] or 0),
