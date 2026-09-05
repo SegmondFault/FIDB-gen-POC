@@ -1,0 +1,4152 @@
+schema_version = "fidb-source-acquisition-lock/v1"
+id = "c80-four-source-n80-v1"
+label = "C80 four-source N80 research-candidate acquisition"
+candidate_authority = "coverage/evidence/four-source-n80-v1.csv"
+candidate_authority_sha256 = "66e24e2a9b9606f34e5ef8e706569829441898f8cffc0ac33dbfdb4bcf13148b"
+resolution_algorithm = "ordered-exact-or-declared-alias-v1"
+
+[[metadata_snapshot]]
+resolver_id = "homebrew"
+kind = "homebrew-formula-json"
+url = "https://formulae.brew.sh/api/formula.json"
+sha256 = "84ddacd92062df8310a3f179e5d111ca6727ed346d02c91c013b7228f6666ab0"
+bytes = 31008418
+
+[[metadata_snapshot]]
+resolver_id = "debian-sid"
+kind = "debian-sources-xz"
+url = "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+sha256 = "c52236f26181183da08cdcd52609e8bc364dc228cc4c6997ac20374ee5103e7e"
+bytes = 11916144
+
+[[candidate]]
+rank = 1
+candidate_key = "openssl"
+display_name = "openssl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openssl@3"
+match_kind = "registry-alias"
+version = "3.6.4"
+release_page = "https://formulae.brew.sh/formula/openssl@3"
+url = "https://github.com/openssl/openssl/releases/download/openssl-3.6.4/openssl-3.6.4.tar.gz"
+sha256 = "9bffaa1ad1e07b354c21bd3324ec02fa15579f45a7d0494b3e74bc449b7333ef"
+download_bytes = 0
+filename = "openssl-3.6.4.tar.gz"
+
+[[candidate]]
+rank = 2
+candidate_key = "cmake"
+display_name = "cmake"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "cmake"
+match_kind = "exact"
+version = "4.4.3"
+release_page = "https://formulae.brew.sh/formula/cmake"
+url = "https://github.com/Kitware/CMake/releases/download/v4.4.3/cmake-4.4.3.tar.gz"
+sha256 = "c46400618b4f1f2b43507f24fb22f3ae830c3416cf23b776e16e1d413aa892f0"
+download_bytes = 0
+filename = "cmake-4.4.3.tar.gz"
+
+[[candidate]]
+rank = 3
+candidate_key = "zlib"
+display_name = "zlib"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "zlib"
+match_kind = "exact"
+version = "1.3.2"
+release_page = "https://formulae.brew.sh/formula/zlib"
+url = "https://zlib.net/zlib-1.3.2.tar.gz"
+sha256 = "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+download_bytes = 0
+filename = "zlib-1.3.2.tar.gz"
+
+[[candidate]]
+rank = 4
+candidate_key = "pkgconf"
+display_name = "pkgconf"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pkgconf"
+match_kind = "exact"
+version = "3.0.7"
+release_page = "https://formulae.brew.sh/formula/pkgconf"
+url = "https://distfiles.ariadne.space/pkgconf/pkgconf-3.0.7.tar.xz"
+sha256 = "c926ff491cbd9a331a589160811bd97ab1749b4d5198a519338f2cdfabe6940a"
+download_bytes = 0
+filename = "pkgconf-3.0.7.tar.xz"
+
+[[candidate]]
+rank = 5
+candidate_key = "ffmpeg"
+display_name = "ffmpeg"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "ffmpeg"
+match_kind = "exact"
+version = "9.0.1"
+release_page = "https://formulae.brew.sh/formula/ffmpeg"
+url = "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz"
+sha256 = "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635"
+download_bytes = 0
+filename = "ffmpeg-9.0.1.tar.xz"
+
+[[candidate]]
+rank = 6
+candidate_key = "glib"
+display_name = "glib"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "glib"
+match_kind = "exact"
+version = "2.88.3"
+release_page = "https://formulae.brew.sh/formula/glib"
+url = "https://download.gnome.org/sources/glib/2.88/glib-2.88.3.tar.xz"
+sha256 = "ab24d24e698dfa1e408b7bcdb508f4aafc906185a8b8ce72fdf79bbbdc9b383b"
+download_bytes = 0
+filename = "glib-2.88.3.tar.xz"
+
+[[candidate]]
+rank = 7
+candidate_key = "boost"
+display_name = "boost"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "boost"
+match_kind = "exact"
+version = "1.92.0"
+release_page = "https://formulae.brew.sh/formula/boost"
+url = "https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz"
+sha256 = "ea7b982002cc9dfbe59b0b217b206f470dc75f3de0bb2973d844118934d82411"
+download_bytes = 0
+filename = "boost-1.92.0-b2-nodocs.tar.xz"
+
+[[candidate]]
+rank = 8
+candidate_key = "gettext"
+display_name = "gettext"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gettext"
+match_kind = "exact"
+version = "1.0"
+release_page = "https://formulae.brew.sh/formula/gettext"
+url = "https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+sha256 = "85d99b79c981a404874c02e0342176cf75c7698e2b51fe41031cf6526d974f1a"
+download_bytes = 0
+filename = "gettext-1.0.tar.gz"
+
+[[candidate]]
+rank = 9
+candidate_key = "openjdk"
+display_name = "openjdk"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openjdk"
+match_kind = "exact"
+version = "26.0.2.1"
+release_page = "https://formulae.brew.sh/formula/openjdk"
+url = "https://github.com/openjdk/jdk26u/archive/refs/tags/jdk-26.0.2.1-ga.tar.gz"
+sha256 = "91dd5ddd93e156f00a12c28d9b74b5ee1704e9f12d323d412d158b12e91d56d0"
+download_bytes = 0
+filename = "jdk-26.0.2.1-ga.tar.gz"
+
+[[candidate]]
+rank = 10
+candidate_key = "libpng"
+display_name = "libpng"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libpng"
+match_kind = "exact"
+version = "1.6.58"
+release_page = "https://formulae.brew.sh/formula/libpng"
+url = "https://downloads.sourceforge.net/project/libpng/libpng16/1.6.58/libpng-1.6.58.tar.xz"
+sha256 = "28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775"
+download_bytes = 0
+filename = "libpng-1.6.58.tar.xz"
+
+[[candidate]]
+rank = 11
+candidate_key = "zstd"
+display_name = "zstd"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "zstd"
+match_kind = "exact"
+version = "1.5.7"
+release_page = "https://formulae.brew.sh/formula/zstd"
+url = "https://github.com/facebook/zstd/archive/refs/tags/v1.5.7.tar.gz"
+sha256 = "37d7284556b20954e56e1ca85b80226768902e2edabd3b649e9e72c0c9012ee3"
+download_bytes = 0
+filename = "v1.5.7.tar.gz"
+
+[[candidate]]
+rank = 12
+candidate_key = "libtool"
+display_name = "libtool"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libtool"
+match_kind = "exact"
+version = "2.6.2"
+release_page = "https://formulae.brew.sh/formula/libtool"
+url = "https://ftpmirror.gnu.org/gnu/libtool/libtool-2.6.2.tar.xz"
+sha256 = "2ef1067c16c97db930fd740cc9bc3d3ba9a583804ae5ac42cc3e8719e49e191e"
+download_bytes = 0
+filename = "libtool-2.6.2.tar.xz"
+
+[[candidate]]
+rank = 13
+candidate_key = "freetype"
+display_name = "freetype"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "freetype"
+match_kind = "exact"
+version = "2.14.3"
+release_page = "https://formulae.brew.sh/formula/freetype"
+url = "https://downloads.sourceforge.net/project/freetype/freetype2/2.14.3/freetype-2.14.3.tar.xz"
+sha256 = "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+download_bytes = 0
+filename = "freetype-2.14.3.tar.xz"
+
+[[candidate]]
+rank = 14
+candidate_key = "harfbuzz"
+display_name = "harfbuzz"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "harfbuzz"
+match_kind = "exact"
+version = "14.4.0"
+release_page = "https://formulae.brew.sh/formula/harfbuzz"
+url = "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz"
+sha256 = "2357ed966c6ced7bfa720b0640c0231065af01158fbea215093ffa15aed44371"
+download_bytes = 0
+filename = "harfbuzz-14.4.0.tar.xz"
+
+[[candidate]]
+rank = 15
+candidate_key = "libxcb"
+display_name = "libxcb"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxcb"
+match_kind = "exact"
+version = "1.17.0"
+release_page = "https://formulae.brew.sh/formula/libxcb"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libxcb-1.17.0.tar.xz"
+sha256 = "599ebf9996710fea71622e6e184f3a8ad5b43d0e5fa8c4e407123c88a59a6d55"
+download_bytes = 0
+filename = "libxcb-1.17.0.tar.xz"
+
+[[candidate]]
+rank = 16
+candidate_key = "protobuf"
+display_name = "protobuf"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "protobuf"
+match_kind = "exact"
+version = "36.1"
+release_page = "https://formulae.brew.sh/formula/protobuf"
+url = "https://github.com/protocolbuffers/protobuf/releases/download/v36.1/protobuf-36.1.tar.gz"
+sha256 = "dc74fa582f559cbd31614ddfefb4868f43c919d7184bde514bb47f90c6025eb8"
+download_bytes = 0
+filename = "protobuf-36.1.tar.gz"
+
+[[candidate]]
+rank = 17
+candidate_key = "gmp"
+display_name = "gmp"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gmp"
+match_kind = "exact"
+version = "6.3.0"
+release_page = "https://formulae.brew.sh/formula/gmp"
+url = "https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
+sha256 = "a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898"
+download_bytes = 0
+filename = "gmp-6.3.0.tar.xz"
+
+[[candidate]]
+rank = 18
+candidate_key = "pcre2"
+display_name = "pcre2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pcre2"
+match_kind = "exact"
+version = "10.48"
+release_page = "https://formulae.brew.sh/formula/pcre2"
+url = "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.48/pcre2-10.48.tar.bz2"
+sha256 = "b6c68fdf6f3ac31388b50aa89ff0fc49c00c987c16e7b5146491d12003f2c8ed"
+download_bytes = 0
+filename = "pcre2-10.48.tar.bz2"
+
+[[candidate]]
+rank = 19
+candidate_key = "lz4"
+display_name = "lz4"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "lz4"
+match_kind = "exact"
+version = "1.10.0"
+release_page = "https://formulae.brew.sh/formula/lz4"
+url = "https://github.com/lz4/lz4/archive/refs/tags/v1.10.0.tar.gz"
+sha256 = "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b"
+download_bytes = 0
+filename = "v1.10.0.tar.gz"
+
+[[candidate]]
+rank = 20
+candidate_key = "dbus"
+display_name = "dbus"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "dbus"
+match_kind = "exact"
+version = "1.16.2"
+release_page = "https://formulae.brew.sh/formula/dbus"
+url = "https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz"
+sha256 = "0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2"
+download_bytes = 0
+filename = "dbus-1.16.2.tar.xz"
+
+[[candidate]]
+rank = 21
+candidate_key = "imagemagick"
+display_name = "imagemagick"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "imagemagick"
+match_kind = "exact"
+version = "7.1.2-31"
+release_page = "https://formulae.brew.sh/formula/imagemagick"
+url = "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-31/ImageMagick-7.1.2-31.7z"
+sha256 = "a050a1f6b632cf3a5b326fe6fb863790ce4d52d55fba9c6a7645b42599660e18"
+download_bytes = 0
+filename = "ImageMagick-7.1.2-31.7z"
+
+[[candidate]]
+rank = 22
+candidate_key = "meson"
+display_name = "meson"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "meson"
+match_kind = "exact"
+version = "1.12.0"
+release_page = "https://formulae.brew.sh/formula/meson"
+url = "https://github.com/mesonbuild/meson/releases/download/1.12.0/meson-1.12.0.tar.gz"
+sha256 = "88afe0c20e52030218924ac37d0c81c59b4b5f3ae3752c8c6d7470c7d365886c"
+download_bytes = 0
+filename = "meson-1.12.0.tar.gz"
+
+[[candidate]]
+rank = 23
+candidate_key = "ncurses"
+display_name = "ncurses"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "ncurses"
+match_kind = "exact"
+version = "6.6"
+release_page = "https://formulae.brew.sh/formula/ncurses"
+url = "https://invisible-mirror.net/archives/ncurses/ncurses-6.6.tar.gz"
+sha256 = "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11"
+download_bytes = 0
+filename = "ncurses-6.6.tar.gz"
+
+[[candidate]]
+rank = 24
+candidate_key = "fmt"
+display_name = "fmt"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "fmt"
+match_kind = "exact"
+version = "12.2.0"
+release_page = "https://formulae.brew.sh/formula/fmt"
+url = "https://github.com/fmtlib/fmt/releases/download/12.2.0/fmt-12.2.0.zip"
+sha256 = "a2f4a8d51178f954e4c339007f77edd76ba0cb2e36f87a48e5a5403d9be5878f"
+download_bytes = 0
+filename = "fmt-12.2.0.zip"
+
+[[candidate]]
+rank = 25
+candidate_key = "expat"
+display_name = "expat"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "expat"
+match_kind = "exact"
+version = "2.8.4"
+release_page = "https://formulae.brew.sh/formula/expat"
+url = "https://github.com/libexpat/libexpat/releases/download/R_2_8_4/expat-2.8.4.tar.xz"
+sha256 = "656ae1cc8da3b4ea513bb4e254f33e6243938084c0ec6239da873376b09985a7"
+download_bytes = 0
+filename = "expat-2.8.4.tar.xz"
+
+[[candidate]]
+rank = 26
+candidate_key = "fontconfig"
+display_name = "fontconfig"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "fontconfig"
+match_kind = "exact"
+version = "2.18.3"
+release_page = "https://formulae.brew.sh/formula/fontconfig"
+url = "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/2.18.3/fontconfig-2.18.3.tar.gz"
+sha256 = "9ae01e1d53acdef56010c5451cd34aa41d325b2faccd8606448d8fa01b2496b3"
+download_bytes = 0
+filename = "fontconfig-2.18.3.tar.gz"
+
+[[candidate]]
+rank = 27
+candidate_key = "cairo"
+display_name = "cairo"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "cairo"
+match_kind = "exact"
+version = "1.18.4"
+release_page = "https://formulae.brew.sh/formula/cairo"
+url = "https://cairographics.org/releases/cairo-1.18.4.tar.xz"
+sha256 = "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb"
+download_bytes = 0
+filename = "cairo-1.18.4.tar.xz"
+
+[[candidate]]
+rank = 28
+candidate_key = "bzip2"
+display_name = "bzip2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "bzip2"
+match_kind = "exact"
+version = "1.0.8"
+release_page = "https://formulae.brew.sh/formula/bzip2"
+url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
+sha256 = "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"
+download_bytes = 0
+filename = "bzip2-1.0.8.tar.gz"
+
+[[candidate]]
+rank = 29
+candidate_key = "readline"
+display_name = "readline"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "readline"
+match_kind = "exact"
+version = "8.3.3"
+release_page = "https://formulae.brew.sh/formula/readline"
+url = "https://ftpmirror.gnu.org/gnu/readline/readline-8.3.tar.gz"
+sha256 = "fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc"
+download_bytes = 0
+filename = "readline-8.3.tar.gz"
+
+[[candidate]]
+rank = 30
+candidate_key = "libtiff"
+display_name = "libtiff"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libtiff"
+match_kind = "exact"
+version = "4.7.2"
+release_page = "https://formulae.brew.sh/formula/libtiff"
+url = "https://download.osgeo.org/libtiff/tiff-4.7.2.tar.gz"
+sha256 = "672bd7d10aee4606171afb864f3570b83340f6a33e2c186dc0512f7145ffdf6a"
+download_bytes = 0
+filename = "tiff-4.7.2.tar.gz"
+
+[[candidate]]
+rank = 31
+candidate_key = "krb5"
+display_name = "krb5"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "krb5"
+match_kind = "exact"
+version = "1.22.2"
+release_page = "https://formulae.brew.sh/formula/krb5"
+url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.2.tar.gz"
+sha256 = "3243ffbc8ea4d4ac22ddc7dd2a1dc54c57874c40648b60ff97009763554eaf13"
+download_bytes = 0
+filename = "krb5-1.22.2.tar.gz"
+
+[[candidate]]
+rank = 32
+candidate_key = "libx11"
+display_name = "libx11"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libx11"
+match_kind = "exact"
+version = "1.8.13"
+release_page = "https://formulae.brew.sh/formula/libx11"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.13.tar.gz"
+sha256 = "acf0e7cd7541110e6330ecb539441a2d53061f386ec7be6906dfde0de2598470"
+download_bytes = 0
+filename = "libX11-1.8.13.tar.gz"
+
+[[candidate]]
+rank = 33
+candidate_key = "nlohmann-json"
+display_name = "nlohmann-json"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "nlohmann-json"
+match_kind = "exact"
+version = "3.12.0"
+release_page = "https://formulae.brew.sh/formula/nlohmann-json"
+url = "https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz"
+sha256 = "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187"
+download_bytes = 0
+filename = "v3.12.0.tar.gz"
+
+[[candidate]]
+rank = 34
+candidate_key = "curl"
+display_name = "curl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "curl"
+match_kind = "exact"
+version = "8.22.0"
+release_page = "https://formulae.brew.sh/formula/curl"
+url = "https://curl.se/download/curl-8.22.0.tar.bz2"
+sha256 = "5d956a6a22b3c279f50c421ee5d3c9e9d660cb6f115dcf881b579e952130549c"
+download_bytes = 0
+filename = "curl-8.22.0.tar.bz2"
+
+[[candidate]]
+rank = 35
+candidate_key = "libxml2"
+display_name = "libxml2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxml2"
+match_kind = "exact"
+version = "2.15.4"
+release_page = "https://formulae.brew.sh/formula/libxml2"
+url = "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz"
+sha256 = "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821"
+download_bytes = 0
+filename = "libxml2-2.15.4.tar.xz"
+
+[[candidate]]
+rank = 36
+candidate_key = "automake"
+display_name = "automake"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "automake"
+match_kind = "exact"
+version = "1.18.1"
+release_page = "https://formulae.brew.sh/formula/automake"
+url = "https://ftpmirror.gnu.org/gnu/automake/automake-1.18.1.tar.xz"
+sha256 = "168aa363278351b89af56684448f525a5bce5079d0b6842bd910fdd3f1646887"
+download_bytes = 0
+filename = "automake-1.18.1.tar.xz"
+
+[[candidate]]
+rank = 37
+candidate_key = "sqlite3"
+display_name = "sqlite3"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "sqlite"
+match_kind = "registry-alias"
+version = "3.53.4"
+release_page = "https://formulae.brew.sh/formula/sqlite"
+url = "https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz"
+sha256 = "0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c"
+download_bytes = 0
+filename = "sqlite-autoconf-3530400.tar.gz"
+
+[[candidate]]
+rank = 38
+candidate_key = "libjpeg-turbo"
+display_name = "libjpeg-turbo"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "jpeg-turbo"
+match_kind = "registry-alias"
+version = "3.2.0"
+release_page = "https://formulae.brew.sh/formula/jpeg-turbo"
+url = "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz"
+sha256 = "6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e"
+download_bytes = 0
+filename = "libjpeg-turbo-3.2.0.tar.gz"
+
+[[candidate]]
+rank = 39
+candidate_key = "poppler"
+display_name = "poppler"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "poppler"
+match_kind = "exact"
+version = "26.09.0"
+release_page = "https://formulae.brew.sh/formula/poppler"
+url = "https://poppler.freedesktop.org/poppler-26.09.0.tar.xz"
+sha256 = "8059eadb6805340768f138c465b57f8164c92b4a0773c37ef031ea6c0d987b2e"
+download_bytes = 0
+filename = "poppler-26.09.0.tar.xz"
+
+[[candidate]]
+rank = 40
+candidate_key = "xorg"
+display_name = "xorg"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "xorg"
+match_kind = "exact"
+version = "1:7.7+26"
+release_page = "https://tracker.debian.org/pkg/xorg"
+url = "https://deb.debian.org/debian/pool/main/x/xorg/xorg_7.7%2B26.tar.xz"
+sha256 = "60b5827327f725d0a36965f7443f2c8c3488624b1cffa7127394c0cf0bcbd519"
+download_bytes = 234356
+filename = "xorg_7.7+26.tar.xz"
+
+[[candidate]]
+rank = 41
+candidate_key = "libyaml"
+display_name = "libyaml"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libyaml"
+match_kind = "exact"
+version = "0.2.5"
+release_page = "https://formulae.brew.sh/formula/libyaml"
+url = "https://github.com/yaml/libyaml/archive/refs/tags/0.2.5.tar.gz"
+sha256 = "fa240dbf262be053f3898006d502d514936c818e422afdcf33921c63bed9bf2e"
+download_bytes = 0
+filename = "0.2.5.tar.gz"
+
+[[candidate]]
+rank = 42
+candidate_key = "gcc"
+display_name = "gcc"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gcc"
+match_kind = "exact"
+version = "16.2.0"
+release_page = "https://formulae.brew.sh/formula/gcc"
+url = "https://ftpmirror.gnu.org/gnu/gcc/gcc-16.2.0/gcc-16.2.0.tar.xz"
+sha256 = "e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e"
+download_bytes = 0
+filename = "gcc-16.2.0.tar.xz"
+
+[[candidate]]
+rank = 43
+candidate_key = "gdk-pixbuf"
+display_name = "gdk-pixbuf"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gdk-pixbuf"
+match_kind = "exact"
+version = "2.44.8"
+release_page = "https://formulae.brew.sh/formula/gdk-pixbuf"
+url = "https://download.gnome.org/sources/gdk-pixbuf/2.44/gdk-pixbuf-2.44.8.tar.xz"
+sha256 = "919f529512961a12e81cd4b4b466a48c3933469e7f9a310c6513cd4fb252ba3c"
+download_bytes = 0
+filename = "gdk-pixbuf-2.44.8.tar.xz"
+
+[[candidate]]
+rank = 44
+candidate_key = "eigen"
+display_name = "eigen"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "eigen"
+match_kind = "exact"
+version = "5.0.1"
+release_page = "https://formulae.brew.sh/formula/eigen"
+url = "https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz"
+sha256 = "e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec"
+download_bytes = 0
+filename = "eigen-5.0.1.tar.gz"
+
+[[candidate]]
+rank = 45
+candidate_key = "libiconv"
+display_name = "libiconv"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libiconv"
+match_kind = "exact"
+version = "1.19"
+release_page = "https://formulae.brew.sh/formula/libiconv"
+url = "https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.19.tar.gz"
+sha256 = "88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6"
+download_bytes = 0
+filename = "libiconv-1.19.tar.gz"
+
+[[candidate]]
+rank = 46
+candidate_key = "brotli"
+display_name = "brotli"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "brotli"
+match_kind = "exact"
+version = "1.2.0"
+release_page = "https://formulae.brew.sh/formula/brotli"
+url = "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz"
+sha256 = "816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec"
+download_bytes = 0
+filename = "v1.2.0.tar.gz"
+
+[[candidate]]
+rank = 47
+candidate_key = "libjpeg"
+display_name = "libjpeg"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "jpeg"
+match_kind = "registry-alias"
+version = "10"
+release_page = "https://formulae.brew.sh/formula/jpeg"
+url = "https://www.ijg.org/files/jpegsrc.v10.tar.gz"
+sha256 = "8b9eaa13242690ebd03e1728ab1edf97a81a78ed6e83624d493655f31ac95ab5"
+download_bytes = 0
+filename = "jpegsrc.v10.tar.gz"
+
+[[candidate]]
+rank = 48
+candidate_key = "xz-utils"
+display_name = "xz_utils"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "xz-utils"
+match_kind = "exact"
+version = "5.8.3-1"
+release_page = "https://tracker.debian.org/pkg/xz-utils"
+url = "https://deb.debian.org/debian/pool/main/x/xz-utils/xz-utils_5.8.3.orig.tar.xz"
+sha256 = "fff1ffcf2b0da84d308a14de513a1aa23d4e9aa3464d17e64b9714bfdd0bbfb6"
+download_bytes = 1548064
+filename = "xz-utils_5.8.3.orig.tar.xz"
+
+[[candidate]]
+rank = 49
+candidate_key = "qtbase"
+display_name = "qtbase"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "qtbase"
+match_kind = "exact"
+version = "6.11.2"
+release_page = "https://formulae.brew.sh/formula/qtbase"
+url = "https://download.qt.io/official_releases/qt/6.11/6.11.2/submodules/qtbase-everywhere-src-6.11.2.tar.xz"
+sha256 = "5b2e00eccaf5a4d8c14134ffa0ea8dfd0a35ae1ffc7f8d87fa4305a1ed23cf22"
+download_bytes = 0
+filename = "qtbase-everywhere-src-6.11.2.tar.xz"
+
+[[candidate]]
+rank = 50
+candidate_key = "pango"
+display_name = "pango"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pango"
+match_kind = "exact"
+version = "1.58.2"
+release_page = "https://formulae.brew.sh/formula/pango"
+url = "https://download.gnome.org/sources/pango/1.58/pango-1.58.2.tar.xz"
+sha256 = "342385b6ca3b7c73455d7c80a13b7dbe4489e00bc3bd4c5bd6ed4dce421e374a"
+download_bytes = 0
+filename = "pango-1.58.2.tar.xz"
+
+[[candidate]]
+rank = 51
+candidate_key = "at-spi2-core"
+display_name = "at-spi2-core"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "at-spi2-core"
+match_kind = "exact"
+version = "2.60.6"
+release_page = "https://formulae.brew.sh/formula/at-spi2-core"
+url = "https://download.gnome.org/sources/at-spi2-core/2.60/at-spi2-core-2.60.6.tar.xz"
+sha256 = "a89b64a8b217a8042bdf0e35cbfab629ceee35640dba75df578afde9aa789d57"
+download_bytes = 0
+filename = "at-spi2-core-2.60.6.tar.xz"
+
+[[candidate]]
+rank = 52
+candidate_key = "libwebp"
+display_name = "libwebp"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libwebp"
+match_kind = "exact"
+version = "1.5.0-0.1"
+release_page = "https://tracker.debian.org/pkg/libwebp"
+url = "https://deb.debian.org/debian/pool/main/libw/libwebp/libwebp_1.5.0.orig.tar.gz"
+sha256 = "7d6fab70cf844bf6769077bd5d7a74893f8ffd4dfb42861745750c63c2a5c92c"
+download_bytes = 4267494
+filename = "libwebp_1.5.0.orig.tar.gz"
+
+[[candidate]]
+rank = 53
+candidate_key = "graphviz"
+display_name = "graphviz"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "graphviz"
+match_kind = "exact"
+version = "15.1.1"
+release_page = "https://formulae.brew.sh/formula/graphviz"
+url = "https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/15.1.1/graphviz-15.1.1.tar.xz"
+sha256 = "afc7c28dd43d3639910f58820bdce7d89655aa9ac0a4961ac67ffcf77e6a9ac3"
+download_bytes = 0
+filename = "graphviz-15.1.1.tar.xz"
+
+[[candidate]]
+rank = 54
+candidate_key = "llvm"
+display_name = "llvm"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "llvm"
+match_kind = "exact"
+version = "23.1.0"
+release_page = "https://formulae.brew.sh/formula/llvm"
+url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/llvm-project-23.1.0.src.tar.xz"
+sha256 = "ab1f0e3ec52448c33e8782eaf0422504b87c7b016b22514653ee0d8fcee479ff"
+download_bytes = 0
+filename = "llvm-project-23.1.0.src.tar.xz"
+
+[[candidate]]
+rank = 55
+candidate_key = "libusb"
+display_name = "libusb"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libusb"
+match_kind = "exact"
+version = "1.0.30"
+release_page = "https://formulae.brew.sh/formula/libusb"
+url = "https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2"
+sha256 = "fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf"
+download_bytes = 0
+filename = "libusb-1.0.30.tar.bz2"
+
+[[candidate]]
+rank = 56
+candidate_key = "libpq"
+display_name = "libpq"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libpq"
+match_kind = "exact"
+version = "18.6"
+release_page = "https://formulae.brew.sh/formula/libpq"
+url = "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2"
+sha256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
+download_bytes = 0
+filename = "postgresql-18.6.tar.bz2"
+
+[[candidate]]
+rank = 57
+candidate_key = "wayland"
+display_name = "wayland"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "wayland"
+match_kind = "exact"
+version = "1.26.0"
+release_page = "https://formulae.brew.sh/formula/wayland"
+url = "https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.26.0/downloads/wayland-1.26.0.tar.xz"
+sha256 = "64176eaa46e4969903e286f8e5ef8331affc17fdf03ac9b58381d2b23162b7a3"
+download_bytes = 0
+filename = "wayland-1.26.0.tar.xz"
+
+[[candidate]]
+rank = 58
+candidate_key = "avahi"
+display_name = "avahi"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "avahi"
+match_kind = "exact"
+version = "0.9-rc5"
+release_page = "https://formulae.brew.sh/formula/avahi"
+url = "https://github.com/avahi/avahi/archive/refs/tags/v0.9-rc5.tar.gz"
+sha256 = "5b0a9d88110b0fc8aaafc5cc0a26e83e7d2a4aca3a36bc27c9b626db7ead27b0"
+download_bytes = 0
+filename = "v0.9-rc5.tar.gz"
+
+[[candidate]]
+rank = 59
+candidate_key = "libffi"
+display_name = "libffi"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libffi"
+match_kind = "exact"
+version = "3.8.0"
+release_page = "https://formulae.brew.sh/formula/libffi"
+url = "https://github.com/libffi/libffi/releases/download/v3.8.0/libffi-3.8.0.tar.gz"
+sha256 = "7da3e2d9a171eb0a038f592ecad3ff2bb2550f3496d87b3b29ad0cf4430c0db4"
+download_bytes = 0
+filename = "libffi-3.8.0.tar.gz"
+
+[[candidate]]
+rank = 60
+candidate_key = "librsvg"
+display_name = "librsvg"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "librsvg"
+match_kind = "exact"
+version = "2.62.3"
+release_page = "https://formulae.brew.sh/formula/librsvg"
+url = "https://download.gnome.org/sources/librsvg/2.62/librsvg-2.62.3.tar.xz"
+sha256 = "7eb449b2722a768021356f66dfee3202c229b54ed4e6a70ce40c090e97ff16f2"
+download_bytes = 0
+filename = "librsvg-2.62.3.tar.xz"
+
+[[candidate]]
+rank = 61
+candidate_key = "abseil"
+display_name = "abseil"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "abseil"
+match_kind = "exact"
+version = "20260817.0"
+release_page = "https://formulae.brew.sh/formula/abseil"
+url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20260817.0.tar.gz"
+sha256 = "f7e05179df39c45434cad433f5783840bb3788ef322976f9138bc6b72b3a107d"
+download_bytes = 0
+filename = "20260817.0.tar.gz"
+
+[[candidate]]
+rank = 62
+candidate_key = "opengl"
+display_name = "opengl"
+status = "unresolved"
+reason = "virtual-system-interface: OpenGL names an API and loader contract, not one canonical source release; implementation selection belongs to candidate screening."
+
+[[candidate]]
+rank = 63
+candidate_key = "libgpg-error"
+display_name = "libgpg-error"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libgpg-error"
+match_kind = "exact"
+version = "1.61"
+release_page = "https://formulae.brew.sh/formula/libgpg-error"
+url = "https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.61.tar.bz2"
+sha256 = "7a85413f2bc354f4f8aa832b718af122e48965e9e0eb9012ee659c13c6385c93"
+download_bytes = 0
+filename = "libgpg-error-1.61.tar.bz2"
+
+[[candidate]]
+rank = 64
+candidate_key = "libdrm"
+display_name = "libdrm"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libdrm"
+match_kind = "exact"
+version = "2.4.134"
+release_page = "https://formulae.brew.sh/formula/libdrm"
+url = "https://dri.freedesktop.org/libdrm/libdrm-2.4.134.tar.xz"
+sha256 = "ac5e74d157830eb8bee44c6a6bf3ad49774ef0dd2a72bdad74a8f20308b52a95"
+download_bytes = 0
+filename = "libdrm-2.4.134.tar.xz"
+
+[[candidate]]
+rank = 65
+candidate_key = "qt"
+display_name = "qt"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "qt"
+match_kind = "exact"
+version = "6.11.2"
+release_page = "https://formulae.brew.sh/formula/qt"
+url = "https://download.qt.io/official_releases/qt/6.11/6.11.2/submodules/md5sums.txt"
+sha256 = "1034acf85131b4c8b11469ce5e23db2e6adaa8b74a7f92a5eb9b933eb65e8071"
+download_bytes = 0
+filename = "md5sums.txt"
+
+[[candidate]]
+rank = 66
+candidate_key = "binutils"
+display_name = "binutils"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "binutils"
+match_kind = "exact"
+version = "2.47"
+release_page = "https://formulae.brew.sh/formula/binutils"
+url = "https://ftpmirror.gnu.org/gnu/binutils/binutils-2.47.tar.bz2"
+sha256 = "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8"
+download_bytes = 0
+filename = "binutils-2.47.tar.bz2"
+
+[[candidate]]
+rank = 67
+candidate_key = "mesa"
+display_name = "mesa"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mesa"
+match_kind = "exact"
+version = "26.2.2"
+release_page = "https://formulae.brew.sh/formula/mesa"
+url = "https://archive.mesa3d.org/mesa-26.2.2.tar.xz"
+sha256 = "eeb29ca7e56cfaa8e8a79538dcf834e3b18e501c31bef5145e959ea437cc4216"
+download_bytes = 0
+filename = "mesa-26.2.2.tar.xz"
+
+[[candidate]]
+rank = 68
+candidate_key = "libxext"
+display_name = "libxext"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxext"
+match_kind = "exact"
+version = "1.3.7"
+release_page = "https://formulae.brew.sh/formula/libxext"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXext-1.3.7.tar.gz"
+sha256 = "6564608dc3b816b0cfddf0c7ddc62bc579055dd70b2f28113a618df2acb64189"
+download_bytes = 0
+filename = "libXext-1.3.7.tar.gz"
+
+[[candidate]]
+rank = 69
+candidate_key = "gnutls"
+display_name = "gnutls"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gnutls"
+match_kind = "exact"
+version = "3.8.13"
+release_page = "https://formulae.brew.sh/formula/gnutls"
+url = "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.13.tar.xz"
+sha256 = "ffed8ec1bf09c2426d4f14aae377de4753b53e537d685e604e99a8b16ca9c97e"
+download_bytes = 0
+filename = "gnutls-3.8.13.tar.xz"
+
+[[candidate]]
+rank = 70
+candidate_key = "libheif"
+display_name = "libheif"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libheif"
+match_kind = "exact"
+version = "1.23.3"
+release_page = "https://formulae.brew.sh/formula/libheif"
+url = "https://github.com/strukturag/libheif/releases/download/v1.23.3/libheif-1.23.3.tar.gz"
+sha256 = "11c1179e0e4bec33624b87f22ec42c1e993a40d946d44d26f9c431cf1456a863"
+download_bytes = 0
+filename = "libheif-1.23.3.tar.gz"
+
+[[candidate]]
+rank = 71
+candidate_key = "libglvnd"
+display_name = "libglvnd"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libglvnd"
+match_kind = "exact"
+version = "1.7.0-3"
+release_page = "https://tracker.debian.org/pkg/libglvnd"
+url = "https://deb.debian.org/debian/pool/main/libg/libglvnd/libglvnd_1.7.0.orig.tar.gz"
+sha256 = "073e7292788d4d3eeb45ea6c7bdcce9bfdb3b3eef8d7dbd47f2f30dce046ef98"
+download_bytes = 839809
+filename = "libglvnd_1.7.0.orig.tar.gz"
+
+[[candidate]]
+rank = 72
+candidate_key = "pipewire"
+display_name = "pipewire"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pipewire"
+match_kind = "exact"
+version = "1.6.8"
+release_page = "https://formulae.brew.sh/formula/pipewire"
+url = "https://gitlab.freedesktop.org/pipewire/pipewire/-/archive/1.6.8/pipewire-1.6.8.tar.gz"
+sha256 = "8181172a1d95131f6af8bbc0b98f90b2a33349b042b84c3ce57dd5d11348cc58"
+download_bytes = 0
+filename = "pipewire-1.6.8.tar.gz"
+
+[[candidate]]
+rank = 73
+candidate_key = "openssh"
+display_name = "openssh"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openssh"
+match_kind = "exact"
+version = "10.5p1"
+release_page = "https://formulae.brew.sh/formula/openssh"
+url = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.5p1.tar.gz"
+sha256 = "d44d28a839ea9daf969cc69150fde59910b2b39361dad81a3bd6cbd19218db11"
+download_bytes = 0
+filename = "openssh-10.5p1.tar.gz"
+
+[[candidate]]
+rank = 74
+candidate_key = "libvorbis"
+display_name = "libvorbis"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libvorbis"
+match_kind = "exact"
+version = "1.3.7"
+release_page = "https://formulae.brew.sh/formula/libvorbis"
+url = "https://ftp.osuosl.org/pub/xiph/releases/vorbis/libvorbis-1.3.7.tar.xz"
+sha256 = "b33cc4934322bcbf6efcbacf49e3ca01aadbea4114ec9589d1b1e9d20f72954b"
+download_bytes = 0
+filename = "libvorbis-1.3.7.tar.xz"
+
+[[candidate]]
+rank = 75
+candidate_key = "gobject-introspection"
+display_name = "gobject-introspection"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gobject-introspection"
+match_kind = "exact"
+version = "1.86.0"
+release_page = "https://formulae.brew.sh/formula/gobject-introspection"
+url = "https://download.gnome.org/sources/gobject-introspection/1.86/gobject-introspection-1.86.0.tar.xz"
+sha256 = "920d1a3fcedeadc32acff95c2e203b319039dd4b4a08dd1a2dfd283d19c0b9ae"
+download_bytes = 0
+filename = "gobject-introspection-1.86.0.tar.xz"
+
+[[candidate]]
+rank = 76
+candidate_key = "libunistring"
+display_name = "libunistring"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libunistring"
+match_kind = "exact"
+version = "1.4.2"
+release_page = "https://formulae.brew.sh/formula/libunistring"
+url = "https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.gz"
+sha256 = "e82664b170064e62331962126b259d452d53b227bb4a93ab20040d846fec01d8"
+download_bytes = 0
+filename = "libunistring-1.4.2.tar.gz"
+
+[[candidate]]
+rank = 77
+candidate_key = "ninja"
+display_name = "ninja"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "ninja"
+match_kind = "exact"
+version = "1.13.2"
+release_page = "https://formulae.brew.sh/formula/ninja"
+url = "https://github.com/ninja-build/ninja/archive/refs/tags/v1.13.2.tar.gz"
+sha256 = "974d6b2f4eeefa25625d34da3cb36bdcebe7fbce40f4c16ac0835fd1c0cbae17"
+download_bytes = 0
+filename = "v1.13.2.tar.gz"
+
+[[candidate]]
+rank = 78
+candidate_key = "libidn2"
+display_name = "libidn2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libidn2"
+match_kind = "exact"
+version = "2.3.8"
+release_page = "https://formulae.brew.sh/formula/libidn2"
+url = "https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+sha256 = "f557911bf6171621e1f72ff35f5b1825bb35b52ed45325dcdee931e5d3c0787a"
+download_bytes = 0
+filename = "libidn2-2.3.8.tar.gz"
+
+[[candidate]]
+rank = 79
+candidate_key = "xxhash"
+display_name = "xxhash"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "xxhash"
+match_kind = "exact"
+version = "0.8.3"
+release_page = "https://formulae.brew.sh/formula/xxhash"
+url = "https://github.com/Cyan4973/xxHash/archive/refs/tags/v0.8.3.tar.gz"
+sha256 = "aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80"
+download_bytes = 0
+filename = "v0.8.3.tar.gz"
+
+[[candidate]]
+rank = 80
+candidate_key = "openexr"
+display_name = "openexr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openexr"
+match_kind = "exact"
+version = "3.4.15"
+release_page = "https://formulae.brew.sh/formula/openexr"
+url = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v3.4.15.tar.gz"
+sha256 = "445ed5b0ea4d9cf98be3a4f219e419628b123b61dec65ccb743ab9b07fbebdaa"
+download_bytes = 0
+filename = "v3.4.15.tar.gz"
+
+[[candidate]]
+rank = 81
+candidate_key = "bison"
+display_name = "bison"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "bison"
+match_kind = "exact"
+version = "3.8.2"
+release_page = "https://formulae.brew.sh/formula/bison"
+url = "https://ftpmirror.gnu.org/gnu/bison/bison-3.8.2.tar.xz"
+sha256 = "9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2"
+download_bytes = 0
+filename = "bison-3.8.2.tar.xz"
+
+[[candidate]]
+rank = 82
+candidate_key = "libevent"
+display_name = "libevent"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libevent"
+match_kind = "exact"
+version = "2.1.13"
+release_page = "https://formulae.brew.sh/formula/libevent"
+url = "https://github.com/libevent/libevent/releases/download/release-2.1.13-stable/libevent-2.1.13-stable.tar.gz"
+sha256 = "f7e9383b8c0baa81b687e5b5eecc01beefaf1b19b64151d95ed61647fe7a315c"
+download_bytes = 0
+filename = "libevent-2.1.13-stable.tar.gz"
+
+[[candidate]]
+rank = 83
+candidate_key = "ruby"
+display_name = "ruby"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "ruby"
+match_kind = "exact"
+version = "4.0.6"
+release_page = "https://formulae.brew.sh/formula/ruby"
+url = "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.6.tar.gz"
+sha256 = "837d299e8f7ddf2be31a229a7a7e019d354979825117989acb3b32b1a9be262a"
+download_bytes = 0
+filename = "ruby-4.0.6.tar.gz"
+
+[[candidate]]
+rank = 84
+candidate_key = "snappy"
+display_name = "snappy"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "snappy"
+match_kind = "exact"
+version = "1.2.2"
+release_page = "https://formulae.brew.sh/formula/snappy"
+url = "https://github.com/google/snappy/archive/refs/tags/1.2.2.tar.gz"
+sha256 = "90f74bc1fbf78a6c56b3c4a082a05103b3a56bb17bca1a27e052ea11723292dc"
+download_bytes = 0
+filename = "1.2.2.tar.gz"
+
+[[candidate]]
+rank = 85
+candidate_key = "audit"
+display_name = "audit"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "audit"
+match_kind = "exact"
+version = "1:4.1.2-1"
+release_page = "https://tracker.debian.org/pkg/audit"
+url = "https://deb.debian.org/debian/pool/main/a/audit/audit_4.1.2.orig.tar.gz"
+sha256 = "5c638bbeef9adb6c5715d3a60f0f5adb93e9b81633608af13d23c61f5e5db04d"
+download_bytes = 656095
+filename = "audit_4.1.2.orig.tar.gz"
+
+[[candidate]]
+rank = 86
+candidate_key = "acl"
+display_name = "acl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "acl"
+match_kind = "exact"
+version = "2.4.0"
+release_page = "https://formulae.brew.sh/formula/acl"
+url = "https://download.savannah.nongnu.org/releases/acl/acl-2.4.0.tar.gz"
+sha256 = "73c853c3d44e1f693e5a96a986f1bd19d3d0dac2c7d453e796177774bc4e5f6a"
+download_bytes = 0
+filename = "acl-2.4.0.tar.gz"
+
+[[candidate]]
+rank = 87
+candidate_key = "kmod"
+display_name = "kmod"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "kmod"
+match_kind = "exact"
+version = "34.2"
+release_page = "https://formulae.brew.sh/formula/kmod"
+url = "https://mirrors.edge.kernel.org/pub/linux/utils/kernel/kmod/kmod-34.2.tar.xz"
+sha256 = "5a5d5073070cc7e0c7a7a3c6ec2a0e1780850c8b47b3e3892226b93ffcb9cb54"
+download_bytes = 0
+filename = "kmod-34.2.tar.xz"
+
+[[candidate]]
+rank = 88
+candidate_key = "openjpeg"
+display_name = "openjpeg"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openjpeg"
+match_kind = "exact"
+version = "2.5.4"
+release_page = "https://formulae.brew.sh/formula/openjpeg"
+url = "https://github.com/uclouvain/openjpeg/archive/refs/tags/v2.5.4.tar.gz"
+sha256 = "a695fbe19c0165f295a8531b1e4e855cd94d0875d2f88ec4b61080677e27188a"
+download_bytes = 0
+filename = "v2.5.4.tar.gz"
+
+[[candidate]]
+rank = 89
+candidate_key = "libsodium"
+display_name = "libsodium"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libsodium"
+match_kind = "exact"
+version = "1.0.22"
+release_page = "https://formulae.brew.sh/formula/libsodium"
+url = "https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz"
+sha256 = "adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349"
+download_bytes = 0
+filename = "libsodium-1.0.22.tar.gz"
+
+[[candidate]]
+rank = 90
+candidate_key = "libuv"
+display_name = "libuv"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libuv"
+match_kind = "exact"
+version = "1.52.1"
+release_page = "https://formulae.brew.sh/formula/libuv"
+url = "https://dist.libuv.org/dist/v1.52.1/libuv-v1.52.1.tar.gz"
+sha256 = "66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7"
+download_bytes = 0
+filename = "libuv-v1.52.1.tar.gz"
+
+[[candidate]]
+rank = 91
+candidate_key = "opus"
+display_name = "opus"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "opus"
+match_kind = "exact"
+version = "1.6.1"
+release_page = "https://formulae.brew.sh/formula/opus"
+url = "https://ftp.osuosl.org/pub/xiph/releases/opus/opus-1.6.1.tar.gz"
+sha256 = "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1"
+download_bytes = 0
+filename = "opus-1.6.1.tar.gz"
+
+[[candidate]]
+rank = 92
+candidate_key = "libxcrypt"
+display_name = "libxcrypt"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxcrypt"
+match_kind = "exact"
+version = "4.5.2"
+release_page = "https://formulae.brew.sh/formula/libxcrypt"
+url = "https://github.com/besser82/libxcrypt/releases/download/v4.5.2/libxcrypt-4.5.2.tar.xz"
+sha256 = "71513a31c01a428bccd5367a32fd95f115d6dac50fb5b60c779d5c7942aec071"
+download_bytes = 0
+filename = "libxcrypt-4.5.2.tar.xz"
+
+[[candidate]]
+rank = 93
+candidate_key = "flex"
+display_name = "flex"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "flex"
+match_kind = "exact"
+version = "2.6.4"
+release_page = "https://formulae.brew.sh/formula/flex"
+url = "https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz"
+sha256 = "e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995"
+download_bytes = 0
+filename = "flex-2.6.4.tar.gz"
+
+[[candidate]]
+rank = 94
+candidate_key = "icu"
+display_name = "icu"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "icu"
+match_kind = "exact"
+version = "78.3-2"
+release_page = "https://tracker.debian.org/pkg/icu"
+url = "https://deb.debian.org/debian/pool/main/i/icu/icu_78.3.orig.tar.gz"
+sha256 = "3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0"
+download_bytes = 27977255
+filename = "icu_78.3.orig.tar.gz"
+
+[[candidate]]
+rank = 95
+candidate_key = "aom"
+display_name = "aom"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "aom"
+match_kind = "exact"
+version = "3.14.1-1"
+release_page = "https://tracker.debian.org/pkg/aom"
+url = "https://deb.debian.org/debian/pool/main/a/aom/aom_3.14.1.orig.tar.xz"
+sha256 = "4ef9882eda023582499511b845f4d4368a34c9886f545a7eea4ca20799d3c161"
+download_bytes = 4468480
+filename = "aom_3.14.1.orig.tar.xz"
+
+[[candidate]]
+rank = 96
+candidate_key = "giflib"
+display_name = "giflib"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "giflib"
+match_kind = "exact"
+version = "6.1.3"
+release_page = "https://formulae.brew.sh/formula/giflib"
+url = "https://downloads.sourceforge.net/project/giflib/giflib-6.x/giflib-6.1.3.tar.gz"
+sha256 = "b65b66b99f0424b93525f987386f22fc5efb9da2bfc92ad4a532249aaffbab0e"
+download_bytes = 0
+filename = "giflib-6.1.3.tar.gz"
+
+[[candidate]]
+rank = 97
+candidate_key = "libselinux"
+display_name = "libselinux"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libselinux"
+match_kind = "exact"
+version = "3.11"
+release_page = "https://formulae.brew.sh/formula/libselinux"
+url = "https://github.com/SELinuxProject/selinux/releases/download/3.11/libselinux-3.11.tar.gz"
+sha256 = "73d419c6e20e874adaa4019372cbd097eecf4d276e13f27ec5e67d35c0bd203c"
+download_bytes = 0
+filename = "libselinux-3.11.tar.gz"
+
+[[candidate]]
+rank = 98
+candidate_key = "pulseaudio"
+display_name = "pulseaudio"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pulseaudio"
+match_kind = "exact"
+version = "17.0"
+release_page = "https://formulae.brew.sh/formula/pulseaudio"
+url = "https://www.freedesktop.org/software/pulseaudio/releases/pulseaudio-17.0.tar.xz"
+sha256 = "053794d6671a3e397d849e478a80b82a63cb9d8ca296bd35b73317bb5ceb87b5"
+download_bytes = 0
+filename = "pulseaudio-17.0.tar.xz"
+
+[[candidate]]
+rank = 99
+candidate_key = "libxau"
+display_name = "libxau"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxau"
+match_kind = "exact"
+version = "1.0.12"
+release_page = "https://formulae.brew.sh/formula/libxau"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXau-1.0.12.tar.xz"
+sha256 = "74d0e4dfa3d39ad8939e99bda37f5967aba528211076828464d2777d477fc0fb"
+download_bytes = 0
+filename = "libXau-1.0.12.tar.xz"
+
+[[candidate]]
+rank = 100
+candidate_key = "libarchive"
+display_name = "libarchive"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libarchive"
+match_kind = "exact"
+version = "3.8.9"
+release_page = "https://formulae.brew.sh/formula/libarchive"
+url = "https://www.libarchive.org/downloads/libarchive-3.8.9.tar.xz"
+sha256 = "888c934f9d95648ecb9163dc8e23ab80a476ecb81a8f1154704a227b5b676dde"
+download_bytes = 0
+filename = "libarchive-3.8.9.tar.xz"
+
+[[candidate]]
+rank = 101
+candidate_key = "pixman"
+display_name = "pixman"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pixman"
+match_kind = "exact"
+version = "0.46.4"
+release_page = "https://formulae.brew.sh/formula/pixman"
+url = "https://cairographics.org/releases/pixman-0.46.4.tar.gz"
+sha256 = "d09c44ebc3bd5bee7021c79f922fe8fb2fb57f7320f55e97ff9914d2346a591c"
+download_bytes = 0
+filename = "pixman-0.46.4.tar.gz"
+
+[[candidate]]
+rank = 102
+candidate_key = "libogg"
+display_name = "libogg"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libogg"
+match_kind = "exact"
+version = "1.3.6"
+release_page = "https://formulae.brew.sh/formula/libogg"
+url = "https://ftp.osuosl.org/pub/xiph/releases/ogg/libogg-1.3.6.tar.gz"
+sha256 = "83e6704730683d004d20e21b8f7f55dcb3383cdf84c0daedf30bde175f774638"
+download_bytes = 0
+filename = "libogg-1.3.6.tar.gz"
+
+[[candidate]]
+rank = 103
+candidate_key = "json-c"
+display_name = "json-c"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "json-c"
+match_kind = "exact"
+version = "0.19"
+release_page = "https://formulae.brew.sh/formula/json-c"
+url = "https://s3.amazonaws.com/json-c_releases/releases/json-c-0.19.tar.gz"
+sha256 = "37ad0249902e301bd9052bf712e511fcc6acff4ecaad4b5900aad9ce564e26de"
+download_bytes = 0
+filename = "json-c-0.19.tar.gz"
+
+[[candidate]]
+rank = 104
+candidate_key = "nettle"
+display_name = "nettle"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "nettle"
+match_kind = "exact"
+version = "4.0"
+release_page = "https://formulae.brew.sh/formula/nettle"
+url = "https://ftpmirror.gnu.org/gnu/nettle/nettle-4.0.tar.gz"
+sha256 = "3addbc00da01846b232fb3bc453538ea5468da43033f21bb345cb1e9073f5094"
+download_bytes = 0
+filename = "nettle-4.0.tar.gz"
+
+[[candidate]]
+rank = 105
+candidate_key = "mbedtls"
+display_name = "mbedtls"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mbedtls"
+match_kind = "exact"
+version = "4.2.0"
+release_page = "https://formulae.brew.sh/formula/mbedtls"
+url = "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-4.2.0/mbedtls-4.2.0.tar.bz2"
+sha256 = "2bed9d713b4668f76553b097e72b8aa30bc8f112a940d7ae228d524bbde6ffea"
+download_bytes = 0
+filename = "mbedtls-4.2.0.tar.bz2"
+
+[[candidate]]
+rank = 106
+candidate_key = "libdeflate"
+display_name = "libdeflate"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libdeflate"
+match_kind = "exact"
+version = "1.26"
+release_page = "https://formulae.brew.sh/formula/libdeflate"
+url = "https://github.com/ebiggers/libdeflate/archive/refs/tags/v1.26.tar.gz"
+sha256 = "bba03fffc5538576213675ce6968fcff6ce2e67d82e4d5febea2d05f9f13cf85"
+download_bytes = 0
+filename = "v1.26.tar.gz"
+
+[[candidate]]
+rank = 107
+candidate_key = "c-ares"
+display_name = "c-ares"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "c-ares"
+match_kind = "exact"
+version = "1.34.8"
+release_page = "https://formulae.brew.sh/formula/c-ares"
+url = "https://github.com/c-ares/c-ares/releases/download/v1.34.8/c-ares-1.34.8.tar.gz"
+sha256 = "c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78"
+download_bytes = 0
+filename = "c-ares-1.34.8.tar.gz"
+
+[[candidate]]
+rank = 108
+candidate_key = "opencv"
+display_name = "opencv"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "opencv"
+match_kind = "exact"
+version = "5.0.0"
+release_page = "https://formulae.brew.sh/formula/opencv"
+url = "https://github.com/opencv/opencv/archive/refs/tags/5.0.0.tar.gz"
+sha256 = "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095"
+download_bytes = 0
+filename = "5.0.0.tar.gz"
+
+[[candidate]]
+rank = 109
+candidate_key = "libssh2"
+display_name = "libssh2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libssh2"
+match_kind = "exact"
+version = "1.11.1"
+release_page = "https://formulae.brew.sh/formula/libssh2"
+url = "https://libssh2.org/download/libssh2-1.11.1.tar.gz"
+sha256 = "d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7"
+download_bytes = 0
+filename = "libssh2-1.11.1.tar.gz"
+
+[[candidate]]
+rank = 110
+candidate_key = "libxdmcp"
+display_name = "libxdmcp"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxdmcp"
+match_kind = "exact"
+version = "1.1.5"
+release_page = "https://formulae.brew.sh/formula/libxdmcp"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXdmcp-1.1.5.tar.xz"
+sha256 = "d8a5222828c3adab70adf69a5583f1d32eb5ece04304f7f8392b6a353aa2228c"
+download_bytes = 0
+filename = "libXdmcp-1.1.5.tar.xz"
+
+[[candidate]]
+rank = 111
+candidate_key = "spdlog"
+display_name = "spdlog"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "spdlog"
+match_kind = "exact"
+version = "1.17.0"
+release_page = "https://formulae.brew.sh/formula/spdlog"
+url = "https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.tar.gz"
+sha256 = "d8862955c6d74e5846b3f580b1605d2428b11d97a410d86e2fb13e857cd3a744"
+download_bytes = 0
+filename = "v1.17.0.tar.gz"
+
+[[candidate]]
+rank = 112
+candidate_key = "tesseract"
+display_name = "tesseract"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "tesseract"
+match_kind = "exact"
+version = "5.5.3"
+release_page = "https://formulae.brew.sh/formula/tesseract"
+url = "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz"
+sha256 = "9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884"
+download_bytes = 0
+filename = "5.5.3.tar.gz"
+
+[[candidate]]
+rank = 113
+candidate_key = "hdf5"
+display_name = "hdf5"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "hdf5"
+match_kind = "exact"
+version = "2.2.0"
+release_page = "https://formulae.brew.sh/formula/hdf5"
+url = "https://github.com/HDFGroup/hdf5/releases/download/2.2.0/hdf5-2.2.0.tar.gz"
+sha256 = "1a1ab8209b35586fbc1aa279ba76d102130b95badcb20ca329587219112d8c16"
+download_bytes = 0
+filename = "hdf5-2.2.0.tar.gz"
+
+[[candidate]]
+rank = 114
+candidate_key = "jansson"
+display_name = "jansson"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "jansson"
+match_kind = "exact"
+version = "2.15.1"
+release_page = "https://formulae.brew.sh/formula/jansson"
+url = "https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz"
+sha256 = "0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f"
+download_bytes = 0
+filename = "jansson-2.15.1.tar.gz"
+
+[[candidate]]
+rank = 115
+candidate_key = "libsndfile"
+display_name = "libsndfile"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libsndfile"
+match_kind = "exact"
+version = "1.2.2"
+release_page = "https://formulae.brew.sh/formula/libsndfile"
+url = "https://github.com/libsndfile/libsndfile/releases/download/1.2.2/libsndfile-1.2.2.tar.xz"
+sha256 = "3799ca9924d3125038880367bf1468e53a1b7e3686a934f098b7e1d286cdb80e"
+download_bytes = 0
+filename = "libsndfile-1.2.2.tar.xz"
+
+[[candidate]]
+rank = 116
+candidate_key = "libedit"
+display_name = "libedit"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libedit"
+match_kind = "exact"
+version = "20260512-3.1"
+release_page = "https://formulae.brew.sh/formula/libedit"
+url = "https://thrysoee.dk/editline/libedit-20260512-3.1.tar.gz"
+sha256 = "432d5e7ea8b0116dd39f2eca7bc11d0eed77faa6b77ea526ace89907c23ea4a0"
+download_bytes = 0
+filename = "libedit-20260512-3.1.tar.gz"
+
+[[candidate]]
+rank = 117
+candidate_key = "nss"
+display_name = "nss"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "nss"
+match_kind = "exact"
+version = "3.128"
+release_page = "https://formulae.brew.sh/formula/nss"
+url = "https://ftp.mozilla.org/pub/security/nss/releases/NSS_3_128_RTM/src/nss-3.128.tar.gz"
+sha256 = "70ea638f4e4fc341b24782ef9af6d88a2d3280ef5e46736748411fe8ca586351"
+download_bytes = 0
+filename = "nss-3.128.tar.gz"
+
+[[candidate]]
+rank = 118
+candidate_key = "fribidi"
+display_name = "fribidi"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "fribidi"
+match_kind = "exact"
+version = "1.0.16"
+release_page = "https://formulae.brew.sh/formula/fribidi"
+url = "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz"
+sha256 = "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
+download_bytes = 0
+filename = "fribidi-1.0.16.tar.xz"
+
+[[candidate]]
+rank = 119
+candidate_key = "openldap"
+display_name = "openldap"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openldap"
+match_kind = "exact"
+version = "2.7.0"
+release_page = "https://formulae.brew.sh/formula/openldap"
+url = "https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-2.7.0.tgz"
+sha256 = "9e86f37da375aa948a1b478dd76fe87b02090e47c21facae19223588e3407922"
+download_bytes = 0
+filename = "openldap-2.7.0.tgz"
+
+[[candidate]]
+rank = 120
+candidate_key = "rapidjson"
+display_name = "rapidjson"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "rapidjson"
+match_kind = "exact"
+version = "1.1.0"
+release_page = "https://formulae.brew.sh/formula/rapidjson"
+url = "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz"
+sha256 = "bf7ced29704a1e696fbccf2a2b4ea068e7774fa37f6d7dd4039d0787f8bed98e"
+download_bytes = 0
+filename = "v1.1.0.tar.gz"
+
+[[candidate]]
+rank = 121
+candidate_key = "elfutils"
+display_name = "elfutils"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "elfutils"
+match_kind = "exact"
+version = "0.196"
+release_page = "https://formulae.brew.sh/formula/elfutils"
+url = "https://sourceware.org/elfutils/ftp/0.196/elfutils-0.196.tar.bz2"
+sha256 = "fd5cc6b77ad6773cac93cb3f415f9318ac3b3455eecf801f6b4a742c4f6c7209"
+download_bytes = 0
+filename = "elfutils-0.196.tar.bz2"
+
+[[candidate]]
+rank = 122
+candidate_key = "attr"
+display_name = "attr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "attr"
+match_kind = "exact"
+version = "2.6.0"
+release_page = "https://formulae.brew.sh/formula/attr"
+url = "https://download.savannah.nongnu.org/releases/attr/attr-2.6.0.tar.gz"
+sha256 = "d42fa374513180bb48cb11a46696f488240e5124ff1e6ad88b0abff706985612"
+download_bytes = 0
+filename = "attr-2.6.0.tar.gz"
+
+[[candidate]]
+rank = 123
+candidate_key = "maven"
+display_name = "maven"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "maven"
+match_kind = "exact"
+version = "3.9.16"
+release_page = "https://formulae.brew.sh/formula/maven"
+url = "https://www.apache.org/dyn/closer.lua?path=maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz"
+sha256 = "80ffca22aed9e8b9713a232f3394fd81d7f20322df75efdb2b047dbd3e3a23bb"
+download_bytes = 0
+filename = "closer.lua"
+
+[[candidate]]
+rank = 124
+candidate_key = "libxrender"
+display_name = "libxrender"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxrender"
+match_kind = "exact"
+version = "0.9.12"
+release_page = "https://formulae.brew.sh/formula/libxrender"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXrender-0.9.12.tar.gz"
+sha256 = "0fff64125819c02d1102b6236f3d7d861a07b5216d8eea336c3811d31494ecf7"
+download_bytes = 0
+filename = "libXrender-0.9.12.tar.gz"
+
+[[candidate]]
+rank = 125
+candidate_key = "asio"
+display_name = "asio"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "asio"
+match_kind = "exact"
+version = "1.38.2"
+release_page = "https://formulae.brew.sh/formula/asio"
+url = "https://downloads.sourceforge.net/project/asio/asio/1.38.2%20%28Stable%29/asio-1.38.2.tar.bz2"
+sha256 = "c04e0e66ac29741faad763a56f3c50196421d4b968009fc237c53314769bf8ad"
+download_bytes = 0
+filename = "asio-1.38.2.tar.bz2"
+
+[[candidate]]
+rank = 126
+candidate_key = "autoconf"
+display_name = "autoconf"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "autoconf"
+match_kind = "exact"
+version = "2.73"
+release_page = "https://formulae.brew.sh/formula/autoconf"
+url = "https://ftpmirror.gnu.org/gnu/autoconf/autoconf-2.73.tar.gz"
+sha256 = "259ddfa3bddc799cfb81489cc0f17dfdf1bd6d1505dda53c0f45ff60d6a4f9a7"
+download_bytes = 0
+filename = "autoconf-2.73.tar.gz"
+
+[[candidate]]
+rank = 127
+candidate_key = "libnghttp2"
+display_name = "libnghttp2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libnghttp2"
+match_kind = "exact"
+version = "1.70.0"
+release_page = "https://formulae.brew.sh/formula/libnghttp2"
+url = "https://github.com/nghttp2/nghttp2/releases/download/v1.70.0/nghttp2-1.70.0.tar.gz"
+sha256 = "aa317e2cf9dca6afa0aed68f8fad6ff303ec6982e25a78c75c0b65e2b9b3ded5"
+download_bytes = 0
+filename = "nghttp2-1.70.0.tar.gz"
+
+[[candidate]]
+rank = 128
+candidate_key = "libunwind"
+display_name = "libunwind"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libunwind"
+match_kind = "exact"
+version = "1.8.3"
+release_page = "https://formulae.brew.sh/formula/libunwind"
+url = "https://github.com/libunwind/libunwind/releases/download/v1.8.3/libunwind-1.8.3.tar.gz"
+sha256 = "be30d910e67f58d82e753231f1357f326a1a088acf126b21ff77e60aab19b90b"
+download_bytes = 0
+filename = "libunwind-1.8.3.tar.gz"
+
+[[candidate]]
+rank = 129
+candidate_key = "imath"
+display_name = "imath"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "imath"
+match_kind = "exact"
+version = "3.2.3"
+release_page = "https://formulae.brew.sh/formula/imath"
+url = "https://github.com/AcademySoftwareFoundation/Imath/archive/refs/tags/v3.2.3.tar.gz"
+sha256 = "e10c12b3f21f45bf08e09d4215d9c7691368d747beebd840de0b6fefed2df9f8"
+download_bytes = 0
+filename = "v3.2.3.tar.gz"
+
+[[candidate]]
+rank = 130
+candidate_key = "libxslt"
+display_name = "libxslt"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxslt"
+match_kind = "exact"
+version = "1.1.45"
+release_page = "https://formulae.brew.sh/formula/libxslt"
+url = "https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz"
+sha256 = "9acfe68419c4d06a45c550321b3212762d92f41465062ca4ea19e632ee5d216e"
+download_bytes = 0
+filename = "libxslt-1.1.45.tar.xz"
+
+[[candidate]]
+rank = 131
+candidate_key = "tar"
+display_name = "tar"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "tar"
+match_kind = "exact"
+version = "1.35+dfsg-5"
+release_page = "https://tracker.debian.org/pkg/tar"
+url = "https://deb.debian.org/debian/pool/main/t/tar/tar_1.35%2Bdfsg.orig.tar.xz"
+sha256 = "9ae57e981c1e73c0eebc2b26c9b0c4497fe310ef1d516ea430efb5470b71f7a8"
+download_bytes = 2111608
+filename = "tar_1.35+dfsg.orig.tar.xz"
+
+[[candidate]]
+rank = 132
+candidate_key = "json-glib"
+display_name = "json-glib"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "json-glib"
+match_kind = "exact"
+version = "1.10.8"
+release_page = "https://formulae.brew.sh/formula/json-glib"
+url = "https://download.gnome.org/sources/json-glib/1.10/json-glib-1.10.8.tar.xz"
+sha256 = "55c5c141a564245b8f8fbe7698663c87a45a7333c2a2c56f06f811ab73b212dd"
+download_bytes = 0
+filename = "json-glib-1.10.8.tar.xz"
+
+[[candidate]]
+rank = 133
+candidate_key = "libmnl"
+display_name = "libmnl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libmnl"
+match_kind = "exact"
+version = "1.0.5"
+release_page = "https://formulae.brew.sh/formula/libmnl"
+url = "https://www.netfilter.org/projects/libmnl/files/libmnl-1.0.5.tar.bz2"
+sha256 = "274b9b919ef3152bfb3da3a13c950dd60d6e2bcd54230ffeca298d03b40d0525"
+download_bytes = 0
+filename = "libmnl-1.0.5.tar.bz2"
+
+[[candidate]]
+rank = 134
+candidate_key = "vulkan-loader"
+display_name = "vulkan-loader"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "vulkan-loader"
+match_kind = "exact"
+version = "1.4.357.0"
+release_page = "https://formulae.brew.sh/formula/vulkan-loader"
+url = "https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz"
+sha256 = "54f2537df22313768da0317dda2abdaaab7711b4081c48c869a79db343d0ae70"
+download_bytes = 0
+filename = "vulkan-sdk-1.4.357.0.tar.gz"
+
+[[candidate]]
+rank = 135
+candidate_key = "nghttp2"
+display_name = "nghttp2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "nghttp2"
+match_kind = "exact"
+version = "1.70.0"
+release_page = "https://formulae.brew.sh/formula/nghttp2"
+url = "https://github.com/nghttp2/nghttp2/releases/download/v1.70.0/nghttp2-1.70.0.tar.gz"
+sha256 = "aa317e2cf9dca6afa0aed68f8fad6ff303ec6982e25a78c75c0b65e2b9b3ded5"
+download_bytes = 0
+filename = "nghttp2-1.70.0.tar.gz"
+
+[[candidate]]
+rank = 136
+candidate_key = "m4"
+display_name = "m4"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "m4"
+match_kind = "exact"
+version = "1.4.21"
+release_page = "https://formulae.brew.sh/formula/m4"
+url = "https://ftpmirror.gnu.org/gnu/m4/m4-1.4.21.tar.xz"
+sha256 = "f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab66"
+download_bytes = 0
+filename = "m4-1.4.21.tar.xz"
+
+[[candidate]]
+rank = 137
+candidate_key = "uchardet"
+display_name = "uchardet"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "uchardet"
+match_kind = "exact"
+version = "0.0.8"
+release_page = "https://formulae.brew.sh/formula/uchardet"
+url = "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz"
+sha256 = "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0"
+download_bytes = 0
+filename = "uchardet-0.0.8.tar.xz"
+
+[[candidate]]
+rank = 138
+candidate_key = "libsecret"
+display_name = "libsecret"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libsecret"
+match_kind = "exact"
+version = "0.21.7"
+release_page = "https://formulae.brew.sh/formula/libsecret"
+url = "https://download.gnome.org/sources/libsecret/0.21/libsecret-0.21.7.tar.xz"
+sha256 = "6b452e4750590a2b5617adc40026f28d2f4903de15f1250e1d1c40bfd68ed55e"
+download_bytes = 0
+filename = "libsecret-0.21.7.tar.xz"
+
+[[candidate]]
+rank = 139
+candidate_key = "ccache"
+display_name = "ccache"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "ccache"
+match_kind = "exact"
+version = "4.14"
+release_page = "https://formulae.brew.sh/formula/ccache"
+url = "https://github.com/ccache/ccache/releases/download/v4.14/ccache-4.14.tar.xz"
+sha256 = "b093ac5d38204cb4d9f29b0bbd570675aa5a592a78e6675b2c506dbe045234e7"
+download_bytes = 0
+filename = "ccache-4.14.tar.xz"
+
+[[candidate]]
+rank = 140
+candidate_key = "libva"
+display_name = "libva"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libva"
+match_kind = "exact"
+version = "2.24.1"
+release_page = "https://formulae.brew.sh/formula/libva"
+url = "https://github.com/intel/libva/releases/download/2.24.1/libva-2.24.1.tar.bz2"
+sha256 = "eec6050b52876f229bd35e9df17cd31a06785e18e6f7990c445b584628483d67"
+download_bytes = 0
+filename = "libva-2.24.1.tar.bz2"
+
+[[candidate]]
+rank = 141
+candidate_key = "graphite2"
+display_name = "graphite2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "graphite2"
+match_kind = "exact"
+version = "1.3.15"
+release_page = "https://formulae.brew.sh/formula/graphite2"
+url = "https://github.com/silnrsi/graphite/releases/download/1.3.15/graphite2-1.3.15.tgz"
+sha256 = "c6bc8b4252724665297f7cad0c55897285c673f9b8e6db3522ace833593fe0b1"
+download_bytes = 0
+filename = "graphite2-1.3.15.tgz"
+
+[[candidate]]
+rank = 142
+candidate_key = "dav1d"
+display_name = "dav1d"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "dav1d"
+match_kind = "exact"
+version = "1.5.4"
+release_page = "https://formulae.brew.sh/formula/dav1d"
+url = "https://code.videolan.org/videolan/dav1d/-/archive/1.5.4/dav1d-1.5.4.tar.bz2"
+sha256 = "2abfb0c89212e6e4733a54e0ae509ec00a5b845a6360946f918806e14aedb011"
+download_bytes = 0
+filename = "dav1d-1.5.4.tar.bz2"
+
+[[candidate]]
+rank = 143
+candidate_key = "popt"
+display_name = "popt"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "popt"
+match_kind = "exact"
+version = "1.19"
+release_page = "https://formulae.brew.sh/formula/popt"
+url = "https://ftp.osuosl.org/pub/rpm/popt/releases/popt-1.x/popt-1.19.tar.gz"
+sha256 = "c25a4838fc8e4c1c8aacb8bd620edb3084a3d63bf8987fdad3ca2758c63240f9"
+download_bytes = 0
+filename = "popt-1.19.tar.gz"
+
+[[candidate]]
+rank = 144
+candidate_key = "gdbm"
+display_name = "gdbm"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gdbm"
+match_kind = "exact"
+version = "1.26"
+release_page = "https://formulae.brew.sh/formula/gdbm"
+url = "https://ftpmirror.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz"
+sha256 = "6a24504a14de4a744103dcb936be976df6fbe88ccff26065e54c1c47946f4a5e"
+download_bytes = 0
+filename = "gdbm-1.26.tar.gz"
+
+[[candidate]]
+rank = 145
+candidate_key = "z3"
+display_name = "z3"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "z3"
+match_kind = "exact"
+version = "5.1.0"
+release_page = "https://formulae.brew.sh/formula/z3"
+url = "https://github.com/Z3Prover/z3/archive/refs/tags/z3-5.1.0.tar.gz"
+sha256 = "c433e1add0431c5edf1644bd9951c40588024d2d288f0e4215e5fcb6e3b4277d"
+download_bytes = 0
+filename = "z3-5.1.0.tar.gz"
+
+[[candidate]]
+rank = 146
+candidate_key = "pugixml"
+display_name = "pugixml"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pugixml"
+match_kind = "exact"
+version = "1.16"
+release_page = "https://formulae.brew.sh/formula/pugixml"
+url = "https://github.com/zeux/pugixml/releases/download/v1.16/pugixml-1.16.tar.gz"
+sha256 = "4cee1ca4aad395170f4c7a07824f3bdd41f28316c6e1e1090a1425b278ec0b4b"
+download_bytes = 0
+filename = "pugixml-1.16.tar.gz"
+
+[[candidate]]
+rank = 147
+candidate_key = "openblas"
+display_name = "openblas"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openblas"
+match_kind = "exact"
+version = "0.3.34"
+release_page = "https://formulae.brew.sh/formula/openblas"
+url = "https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.34.tar.gz"
+sha256 = "cd7e129868320cc2d033afa920e31202dfe0b8066a5b66661900ccc0f197dfed"
+download_bytes = 0
+filename = "v0.3.34.tar.gz"
+
+[[candidate]]
+rank = 148
+candidate_key = "lua"
+display_name = "lua"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "lua"
+match_kind = "exact"
+version = "5.5.1"
+release_page = "https://formulae.brew.sh/formula/lua"
+url = "https://www.lua.org/ftp/lua-5.5.1.tar.gz"
+sha256 = "1c4b4068d67061f2a2231ad2b5422e77acea1487ea9890f6320af614f4373dce"
+download_bytes = 0
+filename = "lua-5.5.1.tar.gz"
+
+[[candidate]]
+rank = 149
+candidate_key = "shared-mime-info"
+display_name = "shared-mime-info"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "shared-mime-info"
+match_kind = "exact"
+version = "2.5.1"
+release_page = "https://formulae.brew.sh/formula/shared-mime-info"
+url = "https://gitlab.freedesktop.org/xdg/shared-mime-info/-/archive/2.5.1/shared-mime-info-2.5.1.tar.bz2"
+sha256 = "b75b420da9b0be9a3d99b1bee6ed87957b56ab54583ac1a97fbd0dc98ddddb25"
+download_bytes = 0
+filename = "shared-mime-info-2.5.1.tar.bz2"
+
+[[candidate]]
+rank = 150
+candidate_key = "eigen3"
+display_name = "eigen3"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "eigen3"
+match_kind = "exact"
+version = "5.0.1-1"
+release_page = "https://tracker.debian.org/pkg/eigen3"
+url = "https://deb.debian.org/debian/pool/main/e/eigen3/eigen3_5.0.1.orig.tar.bz2"
+sha256 = "197d404a98cb1f99925c4e2cbda278881b167ee2e6437ed97cffb5f9d4952e75"
+download_bytes = 2335796
+filename = "eigen3_5.0.1.orig.tar.bz2"
+
+[[candidate]]
+rank = 151
+candidate_key = "libavif"
+display_name = "libavif"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libavif"
+match_kind = "exact"
+version = "1.4.2"
+release_page = "https://formulae.brew.sh/formula/libavif"
+url = "https://github.com/AOMediaCodec/libavif/archive/refs/tags/v1.4.2.tar.gz"
+sha256 = "2b645287340ba5a631d268b551dc2d72bd73ac33335962dd36dcdb6d8366921d"
+download_bytes = 0
+filename = "v1.4.2.tar.gz"
+
+[[candidate]]
+rank = 152
+candidate_key = "mpfr"
+display_name = "mpfr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mpfr"
+match_kind = "exact"
+version = "4.2.2"
+release_page = "https://formulae.brew.sh/formula/mpfr"
+url = "https://ftpmirror.gnu.org/gnu/mpfr/mpfr-4.2.2.tar.xz"
+sha256 = "b67ba0383ef7e8a8563734e2e889ef5ec3c3b898a01d00fa0a6869ad81c6ce01"
+download_bytes = 0
+filename = "mpfr-4.2.2.tar.xz"
+
+[[candidate]]
+rank = 153
+candidate_key = "libtirpc"
+display_name = "libtirpc"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libtirpc"
+match_kind = "exact"
+version = "1.3.7"
+release_page = "https://formulae.brew.sh/formula/libtirpc"
+url = "https://downloads.sourceforge.net/project/libtirpc/libtirpc/1.3.7/libtirpc-1.3.7.tar.bz2"
+sha256 = "b47d3ac19d3549e54a05d0019a6c400674da716123858cfdb6d3bdd70a66c702"
+download_bytes = 0
+filename = "libtirpc-1.3.7.tar.bz2"
+
+[[candidate]]
+rank = 154
+candidate_key = "onetbb"
+display_name = "onetbb"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "tbb"
+match_kind = "registry-alias"
+version = "2023.1.0"
+release_page = "https://formulae.brew.sh/formula/tbb"
+url = "https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2023.1.0.tar.gz"
+sha256 = "191288b52e1e6b17198000b64d77d194bb65e791be46ebc606e9b091781e2070"
+download_bytes = 0
+filename = "v2023.1.0.tar.gz"
+
+[[candidate]]
+rank = 155
+candidate_key = "libbsd"
+display_name = "libbsd"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libbsd"
+match_kind = "exact"
+version = "0.12.2"
+release_page = "https://formulae.brew.sh/formula/libbsd"
+url = "https://libbsd.freedesktop.org/releases/libbsd-0.12.2.tar.xz"
+sha256 = "b88cc9163d0c652aaf39a99991d974ddba1c3a9711db8f1b5838af2a14731014"
+download_bytes = 0
+filename = "libbsd-0.12.2.tar.xz"
+
+[[candidate]]
+rank = 156
+candidate_key = "tiff"
+display_name = "tiff"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "tiff"
+match_kind = "exact"
+version = "4.7.2-1"
+release_page = "https://tracker.debian.org/pkg/tiff"
+url = "https://deb.debian.org/debian/pool/main/t/tiff/tiff_4.7.2.orig.tar.bz2"
+sha256 = "c5086d8f7c5ba51ca98241f24a8bd1cb66218c399077aeccbf6a236cf3152acc"
+download_bytes = 2250440
+filename = "tiff_4.7.2.orig.tar.bz2"
+
+[[candidate]]
+rank = 157
+candidate_key = "pciutils"
+display_name = "pciutils"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pciutils"
+match_kind = "exact"
+version = "3.15.0"
+release_page = "https://formulae.brew.sh/formula/pciutils"
+url = "https://github.com/pciutils/pciutils/releases/download/v3.15.0/pciutils-3.15.0.tar.gz"
+sha256 = "a42e6e3f76fb6b1f6ac2e08cdd151f6bf78bc4f6312c591f4b6ec197582ede3a"
+download_bytes = 0
+filename = "pciutils-3.15.0.tar.gz"
+
+[[candidate]]
+rank = 158
+candidate_key = "flac"
+display_name = "flac"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "flac"
+match_kind = "exact"
+version = "1.5.0"
+release_page = "https://formulae.brew.sh/formula/flac"
+url = "https://ftp.osuosl.org/pub/xiph/releases/flac/flac-1.5.0.tar.xz"
+sha256 = "f2c1c76592a82ffff8413ba3c4a1299b6c7ab06c734dee03fd88630485c2b920"
+download_bytes = 0
+filename = "flac-1.5.0.tar.xz"
+
+[[candidate]]
+rank = 159
+candidate_key = "tcp-wrappers"
+display_name = "tcp-wrappers"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "tcp-wrappers"
+match_kind = "exact"
+version = "7.6.q-37"
+release_page = "https://tracker.debian.org/pkg/tcp-wrappers"
+url = "https://deb.debian.org/debian/pool/main/t/tcp-wrappers/tcp-wrappers_7.6.q.orig.tar.gz"
+sha256 = "9543d7adedf78a6de0b221ccbbd1952e08b5138717f4ade814039bb489a4315d"
+download_bytes = 99438
+filename = "tcp-wrappers_7.6.q.orig.tar.gz"
+
+[[candidate]]
+rank = 160
+candidate_key = "libxkbcommon"
+display_name = "libxkbcommon"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxkbcommon"
+match_kind = "exact"
+version = "1.13.2"
+release_page = "https://formulae.brew.sh/formula/libxkbcommon"
+url = "https://github.com/xkbcommon/libxkbcommon/archive/refs/tags/xkbcommon-1.13.2.tar.gz"
+sha256 = "acc4d5f7c3cbba5f9f8d08d8bdbeede84ecede46792f47929aa9321873385528"
+download_bytes = 0
+filename = "xkbcommon-1.13.2.tar.gz"
+
+[[candidate]]
+rank = 161
+candidate_key = "libxmu"
+display_name = "libxmu"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxmu"
+match_kind = "exact"
+version = "1.3.1"
+release_page = "https://formulae.brew.sh/formula/libxmu"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXmu-1.3.1.tar.xz"
+sha256 = "81a99e94c4501e81c427cbaa4a11748b584933e94b7a156830c3621256857bc4"
+download_bytes = 0
+filename = "libXmu-1.3.1.tar.xz"
+
+[[candidate]]
+rank = 162
+candidate_key = "mpdecimal"
+display_name = "mpdecimal"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mpdecimal"
+match_kind = "exact"
+version = "4.0.1"
+release_page = "https://formulae.brew.sh/formula/mpdecimal"
+url = "https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-4.0.1.tar.gz"
+sha256 = "96d33abb4bb0070c7be0fed4246cd38416188325f820468214471938545b1ac8"
+download_bytes = 0
+filename = "mpdecimal-4.0.1.tar.gz"
+
+[[candidate]]
+rank = 163
+candidate_key = "mozjpeg"
+display_name = "mozjpeg"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mozjpeg"
+match_kind = "exact"
+version = "4.1.5"
+release_page = "https://formulae.brew.sh/formula/mozjpeg"
+url = "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.tar.gz"
+sha256 = "9fcbb7171f6ac383f5b391175d6fb3acde5e64c4c4727274eade84ed0998fcc1"
+download_bytes = 0
+filename = "v4.1.5.tar.gz"
+
+[[candidate]]
+rank = 164
+candidate_key = "nspr"
+display_name = "nspr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "nspr"
+match_kind = "exact"
+version = "4.40"
+release_page = "https://formulae.brew.sh/formula/nspr"
+url = "https://archive.mozilla.org/pub/nspr/releases/v4.40/src/nspr-4.40.tar.gz"
+sha256 = "c0c1884c627f3db7a783f7c7314c695226b2043696791d15519e7e0578c19bdc"
+download_bytes = 0
+filename = "nspr-4.40.tar.gz"
+
+[[candidate]]
+rank = 165
+candidate_key = "glib-networking"
+display_name = "glib-networking"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "glib-networking"
+match_kind = "exact"
+version = "2.80.1"
+release_page = "https://formulae.brew.sh/formula/glib-networking"
+url = "https://download.gnome.org/sources/glib-networking/2.80/glib-networking-2.80.1.tar.xz"
+sha256 = "b80e2874157cd55071f1b6710fa0b911d5ac5de106a9ee2a4c9c7bee61782f8e"
+download_bytes = 0
+filename = "glib-networking-2.80.1.tar.xz"
+
+[[candidate]]
+rank = 166
+candidate_key = "libbpf"
+display_name = "libbpf"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libbpf"
+match_kind = "exact"
+version = "1.7.0"
+release_page = "https://formulae.brew.sh/formula/libbpf"
+url = "https://github.com/libbpf/libbpf/archive/refs/tags/v1.7.0.tar.gz"
+sha256 = "7ab5feffbf78557f626f2e3e3204788528394494715a30fc2070fcddc2051b7b"
+download_bytes = 0
+filename = "v1.7.0.tar.gz"
+
+[[candidate]]
+rank = 167
+candidate_key = "libmd"
+display_name = "libmd"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libmd"
+match_kind = "exact"
+version = "1.2.0"
+release_page = "https://formulae.brew.sh/formula/libmd"
+url = "https://archive.hadrons.org/software/libmd/libmd-1.2.0.tar.xz"
+sha256 = "ac15ffb8430502fbaccdec66c5a82ee0eab0b0f36220df56710feadfeb13d0a0"
+download_bytes = 0
+filename = "libmd-1.2.0.tar.xz"
+
+[[candidate]]
+rank = 168
+candidate_key = "libxfixes"
+display_name = "libxfixes"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxfixes"
+match_kind = "exact"
+version = "6.0.2"
+release_page = "https://formulae.brew.sh/formula/libxfixes"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXfixes-6.0.2.tar.xz"
+sha256 = "39f115d72d9c5f8111e4684164d3d68cc1fd21f9b27ff2401b08fddfc0f409ba"
+download_bytes = 0
+filename = "libXfixes-6.0.2.tar.xz"
+
+[[candidate]]
+rank = 169
+candidate_key = "mpg123"
+display_name = "mpg123"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mpg123"
+match_kind = "exact"
+version = "1.33.7"
+release_page = "https://formulae.brew.sh/formula/mpg123"
+url = "https://www.mpg123.de/download/mpg123-1.33.7.tar.bz2"
+sha256 = "31d0e35a4ca567ec9b5ebda6c3062bb4435d6d3eacd6ef0d95cadd7854dc03ee"
+download_bytes = 0
+filename = "mpg123-1.33.7.tar.bz2"
+
+[[candidate]]
+rank = 170
+candidate_key = "xorg-macros"
+display_name = "xorg-macros"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "xutils-dev"
+match_kind = "declared-alias"
+version = "1:7.7+7"
+release_page = "https://tracker.debian.org/pkg/xutils-dev"
+url = "https://deb.debian.org/debian/pool/main/x/xutils-dev/xutils-dev_7.7%2B7.tar.gz"
+sha256 = "2d9418f0b08079c7748fb6951f894f9ea67c5c69a32fb9d7a61a029c0ad6dc20"
+download_bytes = 3744939
+filename = "xutils-dev_7.7+7.tar.gz"
+
+[[candidate]]
+rank = 171
+candidate_key = "numactl"
+display_name = "numactl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "numactl"
+match_kind = "exact"
+version = "2.0.19"
+release_page = "https://formulae.brew.sh/formula/numactl"
+url = "https://github.com/numactl/numactl/releases/download/v2.0.19/numactl-2.0.19.tar.gz"
+sha256 = "f2672a0381cb59196e9c246bf8bcc43d5568bc457700a697f1a1df762b9af884"
+download_bytes = 0
+filename = "numactl-2.0.19.tar.gz"
+
+[[candidate]]
+rank = 172
+candidate_key = "libxi"
+display_name = "libxi"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxi"
+match_kind = "exact"
+version = "1.8.3"
+release_page = "https://formulae.brew.sh/formula/libxi"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXi-1.8.3.tar.xz"
+sha256 = "7ad60056f01af4f786cfe93b3a7707447711626fc8da2637bec71a90409babe5"
+download_bytes = 0
+filename = "libXi-1.8.3.tar.xz"
+
+[[candidate]]
+rank = 173
+candidate_key = "aws-c-common"
+display_name = "aws-c-common"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "aws-c-common"
+match_kind = "exact"
+version = "1.0.0"
+release_page = "https://formulae.brew.sh/formula/aws-c-common"
+url = "https://github.com/awslabs/aws-c-common/archive/refs/tags/v1.0.0.tar.gz"
+sha256 = "94de89f65d4917dd7381679ea3297d7304c43338158fa7bec190fa53c218ce90"
+download_bytes = 0
+filename = "v1.0.0.tar.gz"
+
+[[candidate]]
+rank = 174
+candidate_key = "fftw3"
+display_name = "fftw3"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "fftw3"
+match_kind = "exact"
+version = "3.3.11-1"
+release_page = "https://tracker.debian.org/pkg/fftw3"
+url = "https://deb.debian.org/debian/pool/main/f/fftw3/fftw3_3.3.11.orig.tar.gz"
+sha256 = "5630c24cdeb33b131612f7eb4b1a9934234754f9f388ff8617458d0be6f239a1"
+download_bytes = 4310712
+filename = "fftw3_3.3.11.orig.tar.gz"
+
+[[candidate]]
+rank = 175
+candidate_key = "grpc"
+display_name = "grpc"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "grpc"
+match_kind = "exact"
+version = "1.51.1-9"
+release_page = "https://tracker.debian.org/pkg/grpc"
+url = "https://deb.debian.org/debian/pool/main/g/grpc/grpc_1.51.1.orig.tar.gz"
+sha256 = "b55696fb249669744de3e71acc54a9382bea0dce7cd5ba379b356b12b82d4229"
+download_bytes = 8550112
+filename = "grpc_1.51.1.orig.tar.gz"
+
+[[candidate]]
+rank = 176
+candidate_key = "xkeyboard-config"
+display_name = "xkeyboard-config"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "xkeyboard-config"
+match_kind = "exact"
+version = "2.48"
+release_page = "https://formulae.brew.sh/formula/xkeyboard-config"
+url = "https://xorg.freedesktop.org/archive/individual/data/xkeyboard-config/xkeyboard-config-2.48.tar.xz"
+sha256 = "b77041324f0109f77161ee43743fe04baa485866af8460d31e476ad3f7648fd5"
+download_bytes = 0
+filename = "xkeyboard-config-2.48.tar.xz"
+
+[[candidate]]
+rank = 177
+candidate_key = "mawk"
+display_name = "mawk"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "mawk"
+match_kind = "exact"
+version = "1.3.4-20260302"
+release_page = "https://formulae.brew.sh/formula/mawk"
+url = "https://invisible-mirror.net/archives/mawk/mawk-1.3.4-20260302.tgz"
+sha256 = "e2c08a77d0a84a01f9be454d1ca3872d4f103f9ada683d075198b0c6e965633d"
+download_bytes = 0
+filename = "mawk-1.3.4-20260302.tgz"
+
+[[candidate]]
+rank = 178
+candidate_key = "lmdb"
+display_name = "lmdb"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "lmdb"
+match_kind = "exact"
+version = "1.0.1"
+release_page = "https://formulae.brew.sh/formula/lmdb"
+url = "https://git.openldap.org/openldap/openldap/-/archive/LMDB_1.0.1/openldap-LMDB_1.0.1.tar.bz2"
+sha256 = "1ae17f11ebdeb0d69e53416bb6e0a7479a7d3d5b5ca443a474bff5b5f886a348"
+download_bytes = 0
+filename = "openldap-LMDB_1.0.1.tar.bz2"
+
+[[candidate]]
+rank = 179
+candidate_key = "graphene"
+display_name = "graphene"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "graphene"
+match_kind = "exact"
+version = "1.10.8"
+release_page = "https://formulae.brew.sh/formula/graphene"
+url = "https://github.com/ebassi/graphene/archive/refs/tags/1.10.8.tar.gz"
+sha256 = "922dc109d2dc5dc56617a29bd716c79dd84db31721a8493a13a5f79109a4a4ed"
+download_bytes = 0
+filename = "1.10.8.tar.gz"
+
+[[candidate]]
+rank = 180
+candidate_key = "nasm"
+display_name = "nasm"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "nasm"
+match_kind = "exact"
+version = "3.02"
+release_page = "https://formulae.brew.sh/formula/nasm"
+url = "https://www.nasm.us/pub/nasm/releasebuilds/3.02/nasm-3.02.tar.xz"
+sha256 = "87336eba53b4acfe917424ab5d500d2b0054d9f5148d35c2273ccf2cfb712f0d"
+download_bytes = 0
+filename = "nasm-3.02.tar.xz"
+
+[[candidate]]
+rank = 181
+candidate_key = "libnfnetlink"
+display_name = "libnfnetlink"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libnfnetlink"
+match_kind = "exact"
+version = "1.0.2"
+release_page = "https://formulae.brew.sh/formula/libnfnetlink"
+url = "https://www.netfilter.org/projects/libnfnetlink/files/libnfnetlink-1.0.2.tar.bz2"
+sha256 = "b064c7c3d426efb4786e60a8e6859b82ee2f2c5e49ffeea640cfe4fe33cbc376"
+download_bytes = 0
+filename = "libnfnetlink-1.0.2.tar.bz2"
+
+[[candidate]]
+rank = 182
+candidate_key = "protobuf-c"
+display_name = "protobuf-c"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "protobuf-c"
+match_kind = "exact"
+version = "1.5.2"
+release_page = "https://formulae.brew.sh/formula/protobuf-c"
+url = "https://github.com/protobuf-c/protobuf-c/releases/download/v1.5.2/protobuf-c-1.5.2.tar.gz"
+sha256 = "e2c86271873a79c92b58fef7ebf8de1aa0df4738347a8bd5d4e65a80a16d0d24"
+download_bytes = 0
+filename = "protobuf-c-1.5.2.tar.gz"
+
+[[candidate]]
+rank = 183
+candidate_key = "libcanberra"
+display_name = "libcanberra"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libcanberra"
+match_kind = "exact"
+version = "0.30"
+release_page = "https://formulae.brew.sh/formula/libcanberra"
+url = "https://0pointer.de/lennart/projects/libcanberra/libcanberra-0.30.tar.xz"
+sha256 = "c2b671e67e0c288a69fc33dc1b6f1b534d07882c2aceed37004bf48c601afa72"
+download_bytes = 0
+filename = "libcanberra-0.30.tar.xz"
+
+[[candidate]]
+rank = 184
+candidate_key = "gflags"
+display_name = "gflags"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gflags"
+match_kind = "exact"
+version = "2.3.1"
+release_page = "https://formulae.brew.sh/formula/gflags"
+url = "https://github.com/gflags/gflags/archive/refs/tags/v2.3.1.tar.gz"
+sha256 = "1b5e0648d7b94021895086e65479b4eaca7935eecfffd7dd9512eb576181c53d"
+download_bytes = 0
+filename = "v2.3.1.tar.gz"
+
+[[candidate]]
+rank = 185
+candidate_key = "libepoxy"
+display_name = "libepoxy"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libepoxy"
+match_kind = "exact"
+version = "1.5.10"
+release_page = "https://formulae.brew.sh/formula/libepoxy"
+url = "https://download.gnome.org/sources/libepoxy/1.5/libepoxy-1.5.10.tar.xz"
+sha256 = "072cda4b59dd098bba8c2363a6247299db1fa89411dc221c8b81b8ee8192e623"
+download_bytes = 0
+filename = "libepoxy-1.5.10.tar.xz"
+
+[[candidate]]
+rank = 186
+candidate_key = "opencore-amr"
+display_name = "opencore-amr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "opencore-amr"
+match_kind = "exact"
+version = "0.1.6"
+release_page = "https://formulae.brew.sh/formula/opencore-amr"
+url = "https://downloads.sourceforge.net/project/opencore-amr/opencore-amr/opencore-amr-0.1.6.tar.gz"
+sha256 = "483eb4061088e2b34b358e47540b5d495a96cd468e361050fae615b1809dc4a1"
+download_bytes = 0
+filename = "opencore-amr-0.1.6.tar.gz"
+
+[[candidate]]
+rank = 187
+candidate_key = "fftw"
+display_name = "fftw"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "fftw"
+match_kind = "exact"
+version = "3.3.11"
+release_page = "https://formulae.brew.sh/formula/fftw"
+url = "https://fftw.org/fftw-3.3.11.tar.gz"
+sha256 = "5630c24cdeb33b131612f7eb4b1a9934234754f9f388ff8617458d0be6f239a1"
+download_bytes = 0
+filename = "fftw-3.3.11.tar.gz"
+
+[[candidate]]
+rank = 188
+candidate_key = "gstreamer"
+display_name = "gstreamer"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gstreamer"
+match_kind = "exact"
+version = "1.28.6"
+release_page = "https://formulae.brew.sh/formula/gstreamer"
+url = "https://gitlab.freedesktop.org/gstreamer/gstreamer/-/archive/1.28.6/gstreamer-1.28.6.tar.bz2"
+sha256 = "fd51f0e32fded3f78ed31eab94a7e41b1cd56763abc853f6fd03d740d8bc4b90"
+download_bytes = 0
+filename = "gstreamer-1.28.6.tar.bz2"
+
+[[candidate]]
+rank = 189
+candidate_key = "libice"
+display_name = "libice"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libice"
+match_kind = "exact"
+version = "1.1.2"
+release_page = "https://formulae.brew.sh/formula/libice"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libICE-1.1.2.tar.xz"
+sha256 = "974e4ed414225eb3c716985df9709f4da8d22a67a2890066bc6dfc89ad298625"
+download_bytes = 0
+filename = "libICE-1.1.2.tar.xz"
+
+[[candidate]]
+rank = 190
+candidate_key = "libassuan"
+display_name = "libassuan"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libassuan"
+match_kind = "exact"
+version = "3.0.2"
+release_page = "https://formulae.brew.sh/formula/libassuan"
+url = "https://gnupg.org/ftp/gcrypt/libassuan/libassuan-3.0.2.tar.bz2"
+sha256 = "d2931cdad266e633510f9970e1a2f346055e351bb19f9b78912475b8074c36f6"
+download_bytes = 0
+filename = "libassuan-3.0.2.tar.bz2"
+
+[[candidate]]
+rank = 191
+candidate_key = "libdatrie"
+display_name = "libdatrie"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libdatrie"
+match_kind = "exact"
+version = "0.2.14"
+release_page = "https://formulae.brew.sh/formula/libdatrie"
+url = "https://github.com/tlwg/libdatrie/releases/download/v0.2.14/libdatrie-0.2.14.tar.xz"
+sha256 = "f04095010518635b51c2313efa4f290b7db828d6273e39b2b8858f859dfe81d5"
+download_bytes = 0
+filename = "libdatrie-0.2.14.tar.xz"
+
+[[candidate]]
+rank = 192
+candidate_key = "tinyxml2"
+display_name = "tinyxml2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "tinyxml2"
+match_kind = "exact"
+version = "11.0.0"
+release_page = "https://formulae.brew.sh/formula/tinyxml2"
+url = "https://github.com/leethomason/tinyxml2/archive/refs/tags/11.0.0.tar.gz"
+sha256 = "5556deb5081fb246ee92afae73efd943c889cef0cafea92b0b82422d6a18f289"
+download_bytes = 0
+filename = "11.0.0.tar.gz"
+
+[[candidate]]
+rank = 193
+candidate_key = "apr-util"
+display_name = "apr-util"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "apr-util"
+match_kind = "exact"
+version = "1.6.5"
+release_page = "https://formulae.brew.sh/formula/apr-util"
+url = "https://www.apache.org/dyn/closer.lua?path=apr/apr-util-1.6.5.tar.bz2"
+sha256 = "96de1dd6f6a0476d2d2e7964926d8c1ddc3bb0e210e1b1812d3ba5a454a392e2"
+download_bytes = 0
+filename = "closer.lua"
+
+[[candidate]]
+rank = 194
+candidate_key = "libgcrypt"
+display_name = "libgcrypt"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libgcrypt"
+match_kind = "exact"
+version = "1.12.3"
+release_page = "https://formulae.brew.sh/formula/libgcrypt"
+url = "https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.12.3.tar.bz2"
+sha256 = "98d1b0b3202d2b03fa754a35aa3cbbfcf526a3260d8d2ee213748001b1043006"
+download_bytes = 0
+filename = "libgcrypt-1.12.3.tar.bz2"
+
+[[candidate]]
+rank = 195
+candidate_key = "libxrandr"
+display_name = "libxrandr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxrandr"
+match_kind = "exact"
+version = "1.5.5"
+release_page = "https://formulae.brew.sh/formula/libxrandr"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXrandr-1.5.5.tar.xz"
+sha256 = "72b922c2e765434e9e9f0960148070bd4504b288263e2868a4ccce1b7cf2767a"
+download_bytes = 0
+filename = "libXrandr-1.5.5.tar.xz"
+
+[[candidate]]
+rank = 196
+candidate_key = "appstream"
+display_name = "appstream"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "appstream"
+match_kind = "exact"
+version = "1.2.0"
+release_page = "https://formulae.brew.sh/formula/appstream"
+url = "https://github.com/ximion/appstream/archive/refs/tags/v1.2.0.tar.gz"
+sha256 = "02f723cb1afa372d434896e138503163a44ad49e4a813d0d30713fc38ccb8d0c"
+download_bytes = 0
+filename = "v1.2.0.tar.gz"
+
+[[candidate]]
+rank = 197
+candidate_key = "luajit"
+display_name = "luajit"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "luajit"
+match_kind = "exact"
+version = "2.1.1788460057"
+release_page = "https://formulae.brew.sh/formula/luajit"
+url = "https://github.com/LuaJIT/LuaJIT/archive/24c20c94e7db195b640854619577441f9b4bc6be.tar.gz"
+sha256 = "178c656b62bb796e536a23f1d3bb09e1824e4dd28eaf2a4758b295ac328e32e6"
+download_bytes = 0
+filename = "24c20c94e7db195b640854619577441f9b4bc6be.tar.gz"
+
+[[candidate]]
+rank = 198
+candidate_key = "simdjson"
+display_name = "simdjson"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "simdjson"
+match_kind = "exact"
+version = "4.6.11"
+release_page = "https://formulae.brew.sh/formula/simdjson"
+url = "https://github.com/simdjson/simdjson/archive/refs/tags/v4.6.11.tar.gz"
+sha256 = "61d948fc24f0d793829ad658058e7597d064988a89b4607ea02e401a82df98ff"
+download_bytes = 0
+filename = "v4.6.11.tar.gz"
+
+[[candidate]]
+rank = 199
+candidate_key = "rsync"
+display_name = "rsync"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "rsync"
+match_kind = "exact"
+version = "3.5.0"
+release_page = "https://formulae.brew.sh/formula/rsync"
+url = "https://github.com/RsyncProject/rsync/releases/download/v3.5.0/rsync-3.5.0.tar.gz"
+sha256 = "c7ffd1ef653e99540f661e47cb00b7f9cad1ee6b972399b16f93d672656e0d33"
+download_bytes = 0
+filename = "rsync-3.5.0.tar.gz"
+
+[[candidate]]
+rank = 200
+candidate_key = "libsamplerate"
+display_name = "libsamplerate"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libsamplerate"
+match_kind = "exact"
+version = "0.2.2"
+release_page = "https://formulae.brew.sh/formula/libsamplerate"
+url = "https://github.com/libsndfile/libsamplerate/releases/download/0.2.2/libsamplerate-0.2.2.tar.xz"
+sha256 = "3258da280511d24b49d6b08615bbe824d0cacc9842b0e4caf11c52cf2b043893"
+download_bytes = 0
+filename = "libsamplerate-0.2.2.tar.xz"
+
+[[candidate]]
+rank = 201
+candidate_key = "double-conversion"
+display_name = "double-conversion"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "double-conversion"
+match_kind = "exact"
+version = "3.4.0"
+release_page = "https://formulae.brew.sh/formula/double-conversion"
+url = "https://github.com/google/double-conversion/archive/refs/tags/v3.4.0.tar.gz"
+sha256 = "42fd4d980ea86426e457b24bdfa835a6f5ad9517ddb01cdb42b99ab9c8dd5dc9"
+download_bytes = 0
+filename = "v3.4.0.tar.gz"
+
+[[candidate]]
+rank = 202
+candidate_key = "glog"
+display_name = "glog"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "glog"
+match_kind = "exact"
+version = "0.7.1"
+release_page = "https://formulae.brew.sh/formula/glog"
+url = "https://github.com/google/glog/archive/refs/tags/v0.7.1.tar.gz"
+sha256 = "00e4a87e87b7e7612f519a41e491f16623b12423620006f59f5688bfd8d13b08"
+download_bytes = 0
+filename = "v0.7.1.tar.gz"
+
+[[candidate]]
+rank = 203
+candidate_key = "libexif"
+display_name = "libexif"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libexif"
+match_kind = "exact"
+version = "0.6.26"
+release_page = "https://formulae.brew.sh/formula/libexif"
+url = "https://github.com/libexif/libexif/releases/download/v0.6.26/libexif-0.6.26.tar.bz2"
+sha256 = "0830ed253fceeb60444fb309598bc8a9491d3007dc054aad3a50a347c5597c57"
+download_bytes = 0
+filename = "libexif-0.6.26.tar.bz2"
+
+[[candidate]]
+rank = 204
+candidate_key = "lapack"
+display_name = "lapack"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "lapack"
+match_kind = "exact"
+version = "3.12.1"
+release_page = "https://formulae.brew.sh/formula/lapack"
+url = "https://github.com/Reference-LAPACK/lapack/archive/refs/tags/v3.12.1.tar.gz"
+sha256 = "2ca6407a001a474d4d4d35f3a61550156050c48016d949f0da0529c0aa052422"
+download_bytes = 0
+filename = "v3.12.1.tar.gz"
+
+[[candidate]]
+rank = 205
+candidate_key = "svt-av1"
+display_name = "svt-av1"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "svt-av1"
+match_kind = "exact"
+version = "4.2.0"
+release_page = "https://formulae.brew.sh/formula/svt-av1"
+url = "https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v4.2.0/SVT-AV1-v4.2.0.tar.bz2"
+sha256 = "512f2ea5649e3e76c2dddcc25c2556fb67a9582baaab207c9c96161c94659dad"
+download_bytes = 0
+filename = "SVT-AV1-v4.2.0.tar.bz2"
+
+[[candidate]]
+rank = 206
+candidate_key = "jemalloc"
+display_name = "jemalloc"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "jemalloc"
+match_kind = "exact"
+version = "5.3.1"
+release_page = "https://formulae.brew.sh/formula/jemalloc"
+url = "https://github.com/jemalloc/jemalloc/releases/download/5.3.1/jemalloc-5.3.1.tar.bz2"
+sha256 = "3826bc80232f22ed5c4662f3034f799ca316e819103bdc7bb99018a421706f92"
+download_bytes = 0
+filename = "jemalloc-5.3.1.tar.bz2"
+
+[[candidate]]
+rank = 207
+candidate_key = "jbigkit"
+display_name = "jbigkit"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "jbigkit"
+match_kind = "exact"
+version = "2.1"
+release_page = "https://formulae.brew.sh/formula/jbigkit"
+url = "https://www.cl.cam.ac.uk/~mgk25/jbigkit/download/jbigkit-2.1.tar.gz"
+sha256 = "de7106b6bfaf495d6865c7dd7ac6ca1381bd12e0d81405ea81e7f2167263d932"
+download_bytes = 0
+filename = "jbigkit-2.1.tar.gz"
+
+[[candidate]]
+rank = 208
+candidate_key = "libmtp"
+display_name = "libmtp"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libmtp"
+match_kind = "exact"
+version = "1.1.23"
+release_page = "https://formulae.brew.sh/formula/libmtp"
+url = "https://downloads.sourceforge.net/project/libmtp/libmtp/1.1.23/libmtp-1.1.23.tar.gz"
+sha256 = "74a2b6e8cb4a0304e95b995496ea3ac644c29371649b892b856e22f12a0bdeed"
+download_bytes = 0
+filename = "libmtp-1.1.23.tar.gz"
+
+[[candidate]]
+rank = 209
+candidate_key = "libpsl"
+display_name = "libpsl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libpsl"
+match_kind = "exact"
+version = "0.23.3"
+release_page = "https://formulae.brew.sh/formula/libpsl"
+url = "https://github.com/rockdaboot/libpsl/releases/download/0.23.3/libpsl-0.23.3.tar.gz"
+sha256 = "93941f85a1e7bd593fa94f299233cb5dfc91cd144fd9a78a6ceb75001c5b03be"
+download_bytes = 0
+filename = "libpsl-0.23.3.tar.gz"
+
+[[candidate]]
+rank = 210
+candidate_key = "x264"
+display_name = "x264"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "x264"
+match_kind = "exact"
+version = "2:0.165.3223+git20250910.0480cb0-1"
+release_page = "https://tracker.debian.org/pkg/x264"
+url = "https://deb.debian.org/debian/pool/main/x/x264/x264_0.165.3223%2Bgit20250910.0480cb0.orig.tar.xz"
+sha256 = "de68ca43d0c6e09baeb86a38ed5cde86b0a84a21d6babcc569804201dc9df133"
+download_bytes = 747420
+filename = "x264_0.165.3223+git20250910.0480cb0.orig.tar.xz"
+
+[[candidate]]
+rank = 211
+candidate_key = "libxpm"
+display_name = "libxpm"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxpm"
+match_kind = "exact"
+version = "3.5.19"
+release_page = "https://formulae.brew.sh/formula/libxpm"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXpm-3.5.19.tar.gz"
+sha256 = "f241f705c607fba1a53338f7e1c12005d6da326b5cb55a11a10847781b4578c0"
+download_bytes = 0
+filename = "libXpm-3.5.19.tar.gz"
+
+[[candidate]]
+rank = 212
+candidate_key = "libsm"
+display_name = "libsm"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libsm"
+match_kind = "exact"
+version = "1.2.6"
+release_page = "https://formulae.brew.sh/formula/libsm"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libSM-1.2.6.tar.xz"
+sha256 = "be7c0abdb15cbfd29ac62573c1c82e877f9d4047ad15321e7ea97d1e43d835be"
+download_bytes = 0
+filename = "libSM-1.2.6.tar.xz"
+
+[[candidate]]
+rank = 213
+candidate_key = "apr"
+display_name = "apr"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "apr"
+match_kind = "exact"
+version = "1.7.6"
+release_page = "https://formulae.brew.sh/formula/apr"
+url = "https://www.apache.org/dyn/closer.lua?path=apr/apr-1.7.6.tar.bz2"
+sha256 = "49030d92d2575da735791b496dc322f3ce5cff9494779ba8cc28c7f46c5deb32"
+download_bytes = 0
+filename = "closer.lua"
+
+[[candidate]]
+rank = 214
+candidate_key = "highway"
+display_name = "highway"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "highway"
+match_kind = "exact"
+version = "1.4.0"
+release_page = "https://formulae.brew.sh/formula/highway"
+url = "https://github.com/google/highway/archive/refs/tags/1.4.0.tar.gz"
+sha256 = "e72241ac9524bb653ae52ced768b508045d4438726a303f10181a38f764a453c"
+download_bytes = 0
+filename = "1.4.0.tar.gz"
+
+[[candidate]]
+rank = 215
+candidate_key = "libnftnl"
+display_name = "libnftnl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libnftnl"
+match_kind = "exact"
+version = "1.3.2"
+release_page = "https://formulae.brew.sh/formula/libnftnl"
+url = "https://www.netfilter.org/pub/libnftnl/libnftnl-1.3.2.tar.xz"
+sha256 = "c97abc3409f8fa396b4462b2bb7f147a3a47a4ddc97cfa0b2f18890c9cfde8b0"
+download_bytes = 0
+filename = "libnftnl-1.3.2.tar.xz"
+
+[[candidate]]
+rank = 216
+candidate_key = "libinput"
+display_name = "libinput"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libinput"
+match_kind = "exact"
+version = "1.31.3-1"
+release_page = "https://tracker.debian.org/pkg/libinput"
+url = "https://deb.debian.org/debian/pool/main/libi/libinput/libinput_1.31.3.orig.tar.gz"
+sha256 = "1c37348cf34cc1ac85c94f41a978ec6a81613f7146bf994c9457137c4a85a249"
+download_bytes = 1178294
+filename = "libinput_1.31.3.orig.tar.gz"
+
+[[candidate]]
+rank = 217
+candidate_key = "zeromq"
+display_name = "zeromq"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "zeromq"
+match_kind = "exact"
+version = "4.3.5"
+release_page = "https://formulae.brew.sh/formula/zeromq"
+url = "https://github.com/zeromq/libzmq/releases/download/v4.3.5/zeromq-4.3.5.tar.gz"
+sha256 = "6653ef5910f17954861fe72332e68b03ca6e4d9c7160eb3a8de5a5a913bfab43"
+download_bytes = 0
+filename = "zeromq-4.3.5.tar.gz"
+
+[[candidate]]
+rank = 218
+candidate_key = "pcre"
+display_name = "pcre"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "pcre"
+match_kind = "exact"
+version = "8.45"
+release_page = "https://formulae.brew.sh/formula/pcre"
+url = "https://downloads.sourceforge.net/project/pcre/pcre/8.45/pcre-8.45.tar.bz2"
+sha256 = "4dae6fdcd2bb0bb6c37b5f97c33c2be954da743985369cddac3546e3218bffb8"
+download_bytes = 0
+filename = "pcre-8.45.tar.bz2"
+
+[[candidate]]
+rank = 219
+candidate_key = "lerc"
+display_name = "lerc"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "lerc"
+match_kind = "exact"
+version = "4.2.0+ds-1"
+release_page = "https://tracker.debian.org/pkg/lerc"
+url = "https://deb.debian.org/debian/pool/main/l/lerc/lerc_4.2.0%2Bds.orig.tar.xz"
+sha256 = "12bcd6951a41d85bbf183595812af6f6aedaa4c8535286b7ada1586405542d23"
+download_bytes = 351184
+filename = "lerc_4.2.0+ds.orig.tar.xz"
+
+[[candidate]]
+rank = 220
+candidate_key = "glfw"
+display_name = "glfw"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "glfw"
+match_kind = "exact"
+version = "3.5.1"
+release_page = "https://formulae.brew.sh/formula/glfw"
+url = "https://github.com/glfw/glfw/archive/refs/tags/3.5.1.tar.gz"
+sha256 = "5234f4f29473e9a06bc7847d8371858dd135d38466eeeaa652fdc9f8f9ff0c20"
+download_bytes = 0
+filename = "3.5.1.tar.gz"
+
+[[candidate]]
+rank = 221
+candidate_key = "libao"
+display_name = "libao"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libao"
+match_kind = "exact"
+version = "1.2.2"
+release_page = "https://formulae.brew.sh/formula/libao"
+url = "https://gitlab.xiph.org/xiph/libao/-/archive/1.2.2/libao-1.2.2.tar.gz"
+sha256 = "df8a6d0e238feeccb26a783e778716fb41a801536fe7b6fce068e313c0e2bf4d"
+download_bytes = 0
+filename = "libao-1.2.2.tar.gz"
+
+[[candidate]]
+rank = 222
+candidate_key = "libzip"
+display_name = "libzip"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libzip"
+match_kind = "exact"
+version = "1.11.4"
+release_page = "https://formulae.brew.sh/formula/libzip"
+url = "https://libzip.org/download/libzip-1.11.4.tar.xz"
+sha256 = "8a247f57d1e3e6f6d11413b12a6f28a9d388de110adc0ec608d893180ed7097b"
+download_bytes = 0
+filename = "libzip-1.11.4.tar.xz"
+
+[[candidate]]
+rank = 223
+candidate_key = "libxtst"
+display_name = "libxtst"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxtst"
+match_kind = "exact"
+version = "1.2.5"
+release_page = "https://formulae.brew.sh/formula/libxtst"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXtst-1.2.5.tar.gz"
+sha256 = "244ba6e1c5ffa44f1ba251affdfa984d55d99c94bb925a342657e5e7aaf6d39c"
+download_bytes = 0
+filename = "libXtst-1.2.5.tar.gz"
+
+[[candidate]]
+rank = 224
+candidate_key = "x265"
+display_name = "x265"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "x265"
+match_kind = "exact"
+version = "4.3"
+release_page = "https://formulae.brew.sh/formula/x265"
+url = "https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz"
+sha256 = "83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121"
+download_bytes = 0
+filename = "x265_4.3.tar.gz"
+
+[[candidate]]
+rank = 225
+candidate_key = "libvpx"
+display_name = "libvpx"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libvpx"
+match_kind = "exact"
+version = "1.17.0"
+release_page = "https://formulae.brew.sh/formula/libvpx"
+url = "https://github.com/webmproject/libvpx/archive/refs/tags/v1.17.0.tar.gz"
+sha256 = "1020f184046187baa2985dbde38e0691f49c44088bca7a1842b0236c6081dc0a"
+download_bytes = 0
+filename = "v1.17.0.tar.gz"
+
+[[candidate]]
+rank = 226
+candidate_key = "lzo"
+display_name = "lzo"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "lzo"
+match_kind = "exact"
+version = "2.10"
+release_page = "https://formulae.brew.sh/formula/lzo"
+url = "https://www.oberhumer.com/opensource/lzo/download/lzo-2.10.tar.gz"
+sha256 = "c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072"
+download_bytes = 0
+filename = "lzo-2.10.tar.gz"
+
+[[candidate]]
+rank = 227
+candidate_key = "make"
+display_name = "make"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "make"
+match_kind = "exact"
+version = "4.4.1"
+release_page = "https://formulae.brew.sh/formula/make"
+url = "https://ftpmirror.gnu.org/gnu/make/make-4.4.1.tar.lz"
+sha256 = "8814ba072182b605d156d7589c19a43b89fc58ea479b9355146160946f8cf6e9"
+download_bytes = 0
+filename = "make-4.4.1.tar.lz"
+
+[[candidate]]
+rank = 228
+candidate_key = "re2"
+display_name = "re2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "re2"
+match_kind = "exact"
+version = "2025-11-05"
+release_page = "https://formulae.brew.sh/formula/re2"
+url = "https://github.com/google/re2/releases/download/2025-11-05/re2-2025-11-05.tar.gz"
+sha256 = "87f6029d2f6de8aa023654240a03ada90e876ce9a4676e258dd01ea4c26ffd67"
+download_bytes = 0
+filename = "re2-2025-11-05.tar.gz"
+
+[[candidate]]
+rank = 229
+candidate_key = "stb"
+display_name = "stb"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libstb"
+match_kind = "declared-alias"
+version = "0.0~git20250907.fede005+ds-1"
+release_page = "https://tracker.debian.org/pkg/libstb"
+url = "https://deb.debian.org/debian/pool/main/libs/libstb/libstb_0.0~git20250907.fede005%2Bds.orig.tar.xz"
+sha256 = "f6dcc67fcf215d3e59ede31fa7b9e744826642519dc628d9edde7ffec01ed3b5"
+download_bytes = 1159900
+filename = "libstb_0.0~git20250907.fede005+ds.orig.tar.xz"
+
+[[candidate]]
+rank = 230
+candidate_key = "cpuinfo"
+display_name = "cpuinfo"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "cpuinfo"
+match_kind = "exact"
+version = "0.0~git20250905.877328f-1"
+release_page = "https://tracker.debian.org/pkg/cpuinfo"
+url = "https://deb.debian.org/debian/pool/main/c/cpuinfo/cpuinfo_0.0~git20250905.877328f.orig.tar.xz"
+sha256 = "557ca404a3836b9f335a3a06b65ff9fe9dbaaefab7fb5c0185f53d9f33615a10"
+download_bytes = 1765972
+filename = "cpuinfo_0.0~git20250905.877328f.orig.tar.xz"
+
+[[candidate]]
+rank = 231
+candidate_key = "minizip"
+display_name = "minizip"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "minizip"
+match_kind = "exact"
+version = "1.3.2"
+release_page = "https://formulae.brew.sh/formula/minizip"
+url = "https://zlib.net/zlib-1.3.2.tar.gz"
+sha256 = "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+download_bytes = 0
+filename = "zlib-1.3.2.tar.gz"
+
+[[candidate]]
+rank = 232
+candidate_key = "libfido2"
+display_name = "libfido2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libfido2"
+match_kind = "exact"
+version = "1.17.0"
+release_page = "https://formulae.brew.sh/formula/libfido2"
+url = "https://github.com/Yubico/libfido2/archive/refs/tags/1.17.0.tar.gz"
+sha256 = "ace062d14a482ff9325410ff63d06c8b5fe87e79ebc18dda07add2bc0188c77f"
+download_bytes = 0
+filename = "1.17.0.tar.gz"
+
+[[candidate]]
+rank = 233
+candidate_key = "gdal"
+display_name = "gdal"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "gdal"
+match_kind = "exact"
+version = "3.13.3"
+release_page = "https://formulae.brew.sh/formula/gdal"
+url = "https://github.com/OSGeo/gdal/releases/download/v3.13.3/gdal-3.13.3.tar.gz"
+sha256 = "5e0c388d83da2d686cc00a40272882432cdb54edff43d4af173e532844a0a0ea"
+download_bytes = 0
+filename = "gdal-3.13.3.tar.gz"
+
+[[candidate]]
+rank = 234
+candidate_key = "argon2"
+display_name = "argon2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "argon2"
+match_kind = "exact"
+version = "20190702"
+release_page = "https://formulae.brew.sh/formula/argon2"
+url = "https://github.com/P-H-C/phc-winner-argon2/archive/refs/tags/20190702.tar.gz"
+sha256 = "daf972a89577f8772602bf2eb38b6a3dd3d922bf5724d45e7f9589b5e830442c"
+download_bytes = 0
+filename = "20190702.tar.gz"
+
+[[candidate]]
+rank = 235
+candidate_key = "qtdeclarative"
+display_name = "qtdeclarative"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "qtdeclarative"
+match_kind = "exact"
+version = "6.11.2"
+release_page = "https://formulae.brew.sh/formula/qtdeclarative"
+url = "https://download.qt.io/official_releases/qt/6.11/6.11.2/submodules/qtdeclarative-everywhere-src-6.11.2.tar.xz"
+sha256 = "215b7b70517e380123eabc6b92243f3c47b6f016a91d126057dbe53551c6b430"
+download_bytes = 0
+filename = "qtdeclarative-everywhere-src-6.11.2.tar.xz"
+
+[[candidate]]
+rank = 236
+candidate_key = "libxinerama"
+display_name = "libxinerama"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxinerama"
+match_kind = "exact"
+version = "1.1.6"
+release_page = "https://formulae.brew.sh/formula/libxinerama"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXinerama-1.1.6.tar.xz"
+sha256 = "d00fc1599c303dc5cbc122b8068bdc7405d6fcb19060f4597fc51bd3a8be51d7"
+download_bytes = 0
+filename = "libXinerama-1.1.6.tar.xz"
+
+[[candidate]]
+rank = 237
+candidate_key = "unixodbc"
+display_name = "unixodbc"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "unixodbc"
+match_kind = "exact"
+version = "2.3.14"
+release_page = "https://formulae.brew.sh/formula/unixodbc"
+url = "https://www.unixodbc.org/unixODBC-2.3.14.tar.gz"
+sha256 = "4e2814de3e01fc30b0b9f75e83bb5aba91ab0384ee951286504bb70205524771"
+download_bytes = 0
+filename = "unixODBC-2.3.14.tar.gz"
+
+[[candidate]]
+rank = 238
+candidate_key = "libnotify"
+display_name = "libnotify"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libnotify"
+match_kind = "exact"
+version = "0.8.8"
+release_page = "https://formulae.brew.sh/formula/libnotify"
+url = "https://download.gnome.org/sources/libnotify/0.8/libnotify-0.8.8.tar.xz"
+sha256 = "23420ef619dc2cb5aebad613f4823a2fa41c07e5a1d05628d40f6ec4b35bfddd"
+download_bytes = 0
+filename = "libnotify-0.8.8.tar.xz"
+
+[[candidate]]
+rank = 239
+candidate_key = "ngtcp2"
+display_name = "ngtcp2"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "ngtcp2"
+match_kind = "exact"
+version = "1.24.0-1"
+release_page = "https://tracker.debian.org/pkg/ngtcp2"
+url = "https://deb.debian.org/debian/pool/main/n/ngtcp2/ngtcp2_1.24.0.orig.tar.xz"
+sha256 = "7fa5ec2be0f0cbed8bc4ec89c0787dfa9d8ce678f1ed9477c52f30eb1a591207"
+download_bytes = 702424
+filename = "ngtcp2_1.24.0.orig.tar.xz"
+
+[[candidate]]
+rank = 240
+candidate_key = "libidn"
+display_name = "libidn"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libidn"
+match_kind = "exact"
+version = "1.44"
+release_page = "https://formulae.brew.sh/formula/libidn"
+url = "https://ftpmirror.gnu.org/gnu/libidn/libidn-1.44.tar.gz"
+sha256 = "499608bab3a65650a0ea52888c13a8deebe3f71408e319acd9ec52e02eb13959"
+download_bytes = 0
+filename = "libidn-1.44.tar.gz"
+
+[[candidate]]
+rank = 241
+candidate_key = "isl"
+display_name = "isl"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "isl"
+match_kind = "exact"
+version = "0.28"
+release_page = "https://formulae.brew.sh/formula/isl"
+url = "https://libisl.sourceforge.io/isl-0.28.tar.xz"
+sha256 = "3dc31b8e1b18329e42d5dfbf84dd55e15c59b61569a2ab246f61497d9592f727"
+download_bytes = 0
+filename = "isl-0.28.tar.xz"
+
+[[candidate]]
+rank = 242
+candidate_key = "libpciaccess"
+display_name = "libpciaccess"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libpciaccess"
+match_kind = "exact"
+version = "0.19"
+release_page = "https://formulae.brew.sh/formula/libpciaccess"
+url = "https://www.x.org/pub/individual/lib/libpciaccess-0.19.tar.xz"
+sha256 = "3c55aa86c82e54a4e3109786f0463530d53b36b6d1cfd14616454f985dd2aa43"
+download_bytes = 0
+filename = "libpciaccess-0.19.tar.xz"
+
+[[candidate]]
+rank = 243
+candidate_key = "libyuv"
+display_name = "libyuv"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libyuv"
+match_kind = "exact"
+version = "0.0.1971.20260904-1"
+release_page = "https://tracker.debian.org/pkg/libyuv"
+url = "https://deb.debian.org/debian/pool/main/liby/libyuv/libyuv_0.0.1971.20260904.orig.tar.xz"
+sha256 = "9dc0432edf3f36cfa031b5e6a46c206d40773868a9e50605ac9f8dcb8d08c2cc"
+download_bytes = 393448
+filename = "libyuv_0.0.1971.20260904.orig.tar.xz"
+
+[[candidate]]
+rank = 244
+candidate_key = "libbluray"
+display_name = "libbluray"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libbluray"
+match_kind = "exact"
+version = "1.5.0"
+release_page = "https://formulae.brew.sh/formula/libbluray"
+url = "https://download.videolan.org/videolan/libbluray/1.5.0/libbluray-1.5.0.tar.xz"
+sha256 = "f676408e91a5d321abf8b8d4dfdae36205c297dab5c54c3ec519639025f474a2"
+download_bytes = 0
+filename = "libbluray-1.5.0.tar.xz"
+
+[[candidate]]
+rank = 245
+candidate_key = "yaml-cpp"
+display_name = "yaml-cpp"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "yaml-cpp"
+match_kind = "exact"
+version = "0.9.0"
+release_page = "https://formulae.brew.sh/formula/yaml-cpp"
+url = "https://github.com/jbeder/yaml-cpp/archive/refs/tags/yaml-cpp-0.9.0.tar.gz"
+sha256 = "25cb043240f828a8c51beb830569634bc7ac603978e0f69d6b63558dadefd49a"
+download_bytes = 0
+filename = "yaml-cpp-0.9.0.tar.gz"
+
+[[candidate]]
+rank = 246
+candidate_key = "libnetfilter-conntrack"
+display_name = "libnetfilter_conntrack"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libnetfilter-conntrack"
+match_kind = "exact"
+version = "1.1.1-1"
+release_page = "https://tracker.debian.org/pkg/libnetfilter-conntrack"
+url = "https://deb.debian.org/debian/pool/main/libn/libnetfilter-conntrack/libnetfilter-conntrack_1.1.1.orig.tar.xz"
+sha256 = "769d3eaf57fa4fbdb05dd12873b6cb9a5be7844d8937e222b647381d44284820"
+download_bytes = 313396
+filename = "libnetfilter-conntrack_1.1.1.orig.tar.xz"
+
+[[candidate]]
+rank = 247
+candidate_key = "iso-codes"
+display_name = "iso-codes"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "iso-codes"
+match_kind = "exact"
+version = "4.20.1"
+release_page = "https://formulae.brew.sh/formula/iso-codes"
+url = "https://deb.debian.org/debian/pool/main/i/iso-codes/iso-codes_4.20.1.orig.tar.xz"
+sha256 = "5d551f3ddb32548c4321e9011720fd97751af0107592f79ebffc939bd32f2268"
+download_bytes = 0
+filename = "iso-codes_4.20.1.orig.tar.xz"
+
+[[candidate]]
+rank = 248
+candidate_key = "libass"
+display_name = "libass"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libass"
+match_kind = "exact"
+version = "0.17.5"
+release_page = "https://formulae.brew.sh/formula/libass"
+url = "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz"
+sha256 = "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
+download_bytes = 0
+filename = "libass-0.17.5.tar.xz"
+
+[[candidate]]
+rank = 249
+candidate_key = "speex"
+display_name = "speex"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "speex"
+match_kind = "exact"
+version = "1.2.1"
+release_page = "https://formulae.brew.sh/formula/speex"
+url = "https://ftp.osuosl.org/pub/xiph/releases/speex/speex-1.2.1.tar.gz"
+sha256 = "4b44d4f2b38a370a2d98a78329fefc56a0cf93d1c1be70029217baae6628feea"
+download_bytes = 0
+filename = "speex-1.2.1.tar.gz"
+
+[[candidate]]
+rank = 250
+candidate_key = "libimobiledevice"
+display_name = "libimobiledevice"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libimobiledevice"
+match_kind = "exact"
+version = "1.4.0"
+release_page = "https://formulae.brew.sh/formula/libimobiledevice"
+url = "https://github.com/libimobiledevice/libimobiledevice/releases/download/1.4.0/libimobiledevice-1.4.0.tar.bz2"
+sha256 = "23cc0077e221c7d991bd0eb02150a0d49199bcca1ddf059edccee9ffd914939d"
+download_bytes = 0
+filename = "libimobiledevice-1.4.0.tar.bz2"
+
+[[candidate]]
+rank = 251
+candidate_key = "duktape"
+display_name = "duktape"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "duktape"
+match_kind = "exact"
+version = "2.7.0"
+release_page = "https://formulae.brew.sh/formula/duktape"
+url = "https://github.com/svaarala/duktape/releases/download/v2.7.0/duktape-2.7.0.tar.xz"
+sha256 = "90f8d2fa8b5567c6899830ddef2c03f3c27960b11aca222fa17aa7ac613c2890"
+download_bytes = 0
+filename = "duktape-2.7.0.tar.xz"
+
+[[candidate]]
+rank = 252
+candidate_key = "libgit2"
+display_name = "libgit2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libgit2"
+match_kind = "exact"
+version = "1.9.7"
+release_page = "https://formulae.brew.sh/formula/libgit2"
+url = "https://github.com/libgit2/libgit2/archive/refs/tags/v1.9.7.tar.gz"
+sha256 = "1a4fbe7589e814777ae76b64734ad80f4ecad22cd33a22682a2aaea4ae5375e7"
+download_bytes = 0
+filename = "v1.9.7.tar.gz"
+
+[[candidate]]
+rank = 253
+candidate_key = "libssh"
+display_name = "libssh"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libssh"
+match_kind = "exact"
+version = "0.12.2"
+release_page = "https://formulae.brew.sh/formula/libssh"
+url = "https://www.libssh.org/files/0.12/libssh-0.12.2.tar.xz"
+sha256 = "49560f677d96e3706a904ac2de1116e25f3680937d51e5c92198fcba4a1c1e9f"
+download_bytes = 0
+filename = "libssh-0.12.2.tar.xz"
+
+[[candidate]]
+rank = 254
+candidate_key = "libcap"
+display_name = "libcap"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libcap"
+match_kind = "exact"
+version = "2.78"
+release_page = "https://formulae.brew.sh/formula/libcap"
+url = "https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.78.tar.xz"
+sha256 = "0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11"
+download_bytes = 0
+filename = "libcap-2.78.tar.xz"
+
+[[candidate]]
+rank = 255
+candidate_key = "libpcap"
+display_name = "libpcap"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libpcap"
+match_kind = "exact"
+version = "1.10.6"
+release_page = "https://formulae.brew.sh/formula/libpcap"
+url = "https://www.tcpdump.org/release/libpcap-1.10.6.tar.gz"
+sha256 = "872dd11337fe1ab02ad9d4fee047c9da244d695c6ddf34e2ebb733efd4ed8aa9"
+download_bytes = 0
+filename = "libpcap-1.10.6.tar.gz"
+
+[[candidate]]
+rank = 256
+candidate_key = "libdaemon"
+display_name = "libdaemon"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libdaemon"
+match_kind = "exact"
+version = "0.14"
+release_page = "https://formulae.brew.sh/formula/libdaemon"
+url = "https://0pointer.de/lennart/projects/libdaemon/libdaemon-0.14.tar.gz"
+sha256 = "fd23eb5f6f986dcc7e708307355ba3289abe03cc381fc47a80bca4a50aa6b834"
+download_bytes = 0
+filename = "libdaemon-0.14.tar.gz"
+
+[[candidate]]
+rank = 257
+candidate_key = "libxshmfence"
+display_name = "libxshmfence"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxshmfence"
+match_kind = "exact"
+version = "1.3.3"
+release_page = "https://formulae.brew.sh/formula/libxshmfence"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libxshmfence-1.3.3.tar.xz"
+sha256 = "d4a4df096aba96fea02c029ee3a44e11a47eb7f7213c1a729be83e85ec3fde10"
+download_bytes = 0
+filename = "libxshmfence-1.3.3.tar.xz"
+
+[[candidate]]
+rank = 258
+candidate_key = "openjph"
+display_name = "openjph"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openjph"
+match_kind = "exact"
+version = "0.31.0"
+release_page = "https://formulae.brew.sh/formula/openjph"
+url = "https://github.com/aous72/OpenJPH/archive/refs/tags/0.31.0.tar.gz"
+sha256 = "fe169dbbaae71a169a0a6a68dccb346616193252c1ca044217afa0d5d1dc436f"
+download_bytes = 0
+filename = "0.31.0.tar.gz"
+
+[[candidate]]
+rank = 259
+candidate_key = "liburing"
+display_name = "liburing"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "liburing"
+match_kind = "exact"
+version = "2.15"
+release_page = "https://formulae.brew.sh/formula/liburing"
+url = "https://github.com/axboe/liburing/archive/refs/tags/liburing-2.15.tar.gz"
+sha256 = "8d052f2622dcb3678cbaee5ff582a87572672a6c0a56533cdda5b65cb636120a"
+download_bytes = 0
+filename = "liburing-2.15.tar.gz"
+
+[[candidate]]
+rank = 260
+candidate_key = "xerces-c"
+display_name = "xerces-c"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "xerces-c"
+match_kind = "exact"
+version = "3.3.0"
+release_page = "https://formulae.brew.sh/formula/xerces-c"
+url = "https://www.apache.org/dyn/closer.lua?path=xerces/c/3/sources/xerces-c-3.3.0.tar.gz"
+sha256 = "9555f1d06f82987fbb4658862705515740414fd34b4db6ad2ed76a2dc08d3bde"
+download_bytes = 0
+filename = "closer.lua"
+
+[[candidate]]
+rank = 261
+candidate_key = "libproxy"
+display_name = "libproxy"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libproxy"
+match_kind = "exact"
+version = "0.5.12"
+release_page = "https://formulae.brew.sh/formula/libproxy"
+url = "https://github.com/libproxy/libproxy/archive/refs/tags/0.5.12.tar.gz"
+sha256 = "a1fa55991998b80a567450a9e84382421a7176a84446c95caaa8b72cf09fa86f"
+download_bytes = 0
+filename = "0.5.12.tar.gz"
+
+[[candidate]]
+rank = 262
+candidate_key = "utf8proc"
+display_name = "utf8proc"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "utf8proc"
+match_kind = "exact"
+version = "2.11.3"
+release_page = "https://formulae.brew.sh/formula/utf8proc"
+url = "https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v2.11.3.tar.gz"
+sha256 = "abfed50b6d4da51345713661370290f4f4747263ee73dc90356299dfc7990c78"
+download_bytes = 0
+filename = "v2.11.3.tar.gz"
+
+[[candidate]]
+rank = 263
+candidate_key = "libtheora"
+display_name = "libtheora"
+status = "pinned"
+resolver_id = "debian-sid"
+registry_key = "libtheora"
+match_kind = "exact"
+version = "1.2.0+dfsg-6"
+release_page = "https://tracker.debian.org/pkg/libtheora"
+url = "https://deb.debian.org/debian/pool/main/libt/libtheora/libtheora_1.2.0%2Bdfsg.orig.tar.gz"
+sha256 = "92a32e9c1d79984e6fc6abe325da05bf4ec97ee38d1a4d49d338545ed050a28f"
+download_bytes = 2525524
+filename = "libtheora_1.2.0+dfsg.orig.tar.gz"
+
+[[candidate]]
+rank = 264
+candidate_key = "vulkan-headers"
+display_name = "vulkan-headers"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "vulkan-headers"
+match_kind = "exact"
+version = "1.4.357.0"
+release_page = "https://formulae.brew.sh/formula/vulkan-headers"
+url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz"
+sha256 = "e87dce08116151f6b6d7de6b6faf41498e87e6cf848ff16fa3bd5402190ad4a3"
+download_bytes = 0
+filename = "vulkan-sdk-1.4.357.0.tar.gz"
+
+[[candidate]]
+rank = 265
+candidate_key = "llhttp"
+display_name = "llhttp"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "llhttp"
+match_kind = "exact"
+version = "9.4.3"
+release_page = "https://formulae.brew.sh/formula/llhttp"
+url = "https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.4.3.tar.gz"
+sha256 = "1eb813c7437b31a87496a1cd3ed79f00746720f5e7e29c79b42c02cb69f36c39"
+download_bytes = 0
+filename = "v9.4.3.tar.gz"
+
+[[candidate]]
+rank = 266
+candidate_key = "libfontenc"
+display_name = "libfontenc"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libfontenc"
+match_kind = "exact"
+version = "1.1.9"
+release_page = "https://formulae.brew.sh/formula/libfontenc"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libfontenc-1.1.9.tar.xz"
+sha256 = "9d8392705cb10803d5fe1d27d236cbab3f664e26841ce01916bbbe430cf273e2"
+download_bytes = 0
+filename = "libfontenc-1.1.9.tar.xz"
+
+[[candidate]]
+rank = 267
+candidate_key = "libde265"
+display_name = "libde265"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libde265"
+match_kind = "exact"
+version = "1.1.2"
+release_page = "https://formulae.brew.sh/formula/libde265"
+url = "https://github.com/strukturag/libde265/releases/download/v1.1.2/libde265-1.1.2.tar.gz"
+sha256 = "eaacd1943ab0c452c19f6136a36ca227e6b761b39a81eaca8454d48c147e1f67"
+download_bytes = 0
+filename = "libde265-1.1.2.tar.gz"
+
+[[candidate]]
+rank = 268
+candidate_key = "libgphoto2"
+display_name = "libgphoto2"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libgphoto2"
+match_kind = "exact"
+version = "2.5.34"
+release_page = "https://formulae.brew.sh/formula/libgphoto2"
+url = "https://downloads.sourceforge.net/project/gphoto/libgphoto/2.5.34/libgphoto2-2.5.34.tar.bz2"
+sha256 = "5df9e774eb4ab6087a193afff84dcafe9f666e3443fe29e73e6779f659ff7f28"
+download_bytes = 0
+filename = "libgphoto2-2.5.34.tar.bz2"
+
+[[candidate]]
+rank = 269
+candidate_key = "serd"
+display_name = "serd"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "serd"
+match_kind = "exact"
+version = "0.32.10"
+release_page = "https://formulae.brew.sh/formula/serd"
+url = "https://download.drobilla.net/serd-0.32.10.tar.xz"
+sha256 = "b0e93b49e52f01a049475b7886ef140407115a32d3b1e5dc5f95141c88275d1c"
+download_bytes = 0
+filename = "serd-0.32.10.tar.xz"
+
+[[candidate]]
+rank = 270
+candidate_key = "tree-sitter"
+display_name = "tree-sitter"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "tree-sitter"
+match_kind = "exact"
+version = "0.27.0"
+release_page = "https://formulae.brew.sh/formula/tree-sitter"
+url = "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v0.27.0.tar.gz"
+sha256 = "d35c96e68736bd9569d2757c3cc71052485f33082c3825f1aed9d0e86013a159"
+download_bytes = 0
+filename = "v0.27.0.tar.gz"
+
+[[candidate]]
+rank = 271
+candidate_key = "glew"
+display_name = "glew"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "glew"
+match_kind = "exact"
+version = "2.3.1"
+release_page = "https://formulae.brew.sh/formula/glew"
+url = "https://downloads.sourceforge.net/project/glew/glew/2.3.1/glew-2.3.1.tgz"
+sha256 = "b64790f94b926acd7e8f84c5d6000a86cb43967bd1e688b03089079799c9e889"
+download_bytes = 0
+filename = "glew-2.3.1.tgz"
+
+[[candidate]]
+rank = 272
+candidate_key = "libxdamage"
+display_name = "libxdamage"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libxdamage"
+match_kind = "exact"
+version = "1.1.7"
+release_page = "https://formulae.brew.sh/formula/libxdamage"
+url = "https://xorg.freedesktop.org/archive/individual/lib/libXdamage-1.1.7.tar.xz"
+sha256 = "127067f521d3ee467b97bcb145aeba1078e2454d448e8748eb984d5b397bde24"
+download_bytes = 0
+filename = "libXdamage-1.1.7.tar.xz"
+
+[[candidate]]
+rank = 273
+candidate_key = "libevdev"
+display_name = "libevdev"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "libevdev"
+match_kind = "exact"
+version = "1.13.7"
+release_page = "https://formulae.brew.sh/formula/libevdev"
+url = "https://www.freedesktop.org/software/libevdev/libevdev-1.13.7.tar.xz"
+sha256 = "0caf824971108f15bb2ad356433bae198d7d3bf1e82d43f63626e069e060bfa6"
+download_bytes = 0
+filename = "libevdev-1.13.7.tar.xz"
+
+[[candidate]]
+rank = 274
+candidate_key = "miniz"
+display_name = "miniz"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "miniz"
+match_kind = "exact"
+version = "3.1.2"
+release_page = "https://formulae.brew.sh/formula/miniz"
+url = "https://github.com/richgel999/miniz/archive/refs/tags/3.1.2.tar.gz"
+sha256 = "98468f8924934b723276680f85238b6c78bf1f8b49b4459cc9b7214a20e2e9fb"
+download_bytes = 0
+filename = "3.1.2.tar.gz"
+
+[[candidate]]
+rank = 275
+candidate_key = "jsoncpp"
+display_name = "jsoncpp"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "jsoncpp"
+match_kind = "exact"
+version = "1.9.8"
+release_page = "https://formulae.brew.sh/formula/jsoncpp"
+url = "https://github.com/open-source-parsers/jsoncpp/archive/refs/tags/1.9.8.tar.gz"
+sha256 = "51828cf3574281d2b79ec2a1c56a9e4c20cc1103711321ea96384cffb8d2d904"
+download_bytes = 0
+filename = "1.9.8.tar.gz"
+
+[[candidate]]
+rank = 276
+candidate_key = "openal-soft"
+display_name = "openal-soft"
+status = "pinned"
+resolver_id = "homebrew"
+registry_key = "openal-soft"
+match_kind = "exact"
+version = "1.25.2"
+release_page = "https://formulae.brew.sh/formula/openal-soft"
+url = "https://openal-soft.org/openal-releases/openal-soft-1.25.2.tar.bz2"
+sha256 = "1dbaac44e7579d5bc8847ca8db4b2e8b9fd3961041f35ee20def4958301e1089"
+download_bytes = 0
+filename = "openal-soft-1.25.2.tar.bz2"

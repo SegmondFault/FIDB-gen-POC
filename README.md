@@ -313,6 +313,15 @@ candidate → full-path canary → explicit admission → execution → validati
 retention. See [`campaigns/README.md`](campaigns/README.md) and
 [`qualification/README.md`](qualification/README.md).
 
+Research-candidate source prefetching has its own inspectable authority. The
+`source acquisition` lifecycle freezes official registry snapshots, resolves
+all 276 rows into a tracked TOML lock, reports cache state read-only, and then
+permits checksum-verified transfer into the shared source cache. The current
+lock pins 275 concrete archives; `opengl` remains explicitly unresolved
+because it is an API rather than one canonical source distribution. See
+[`sources/README.md`](sources/README.md) for the refresh → resolve → status →
+pull procedure and the per-lock TOML provenance registry.
+
 ### Portable performance profiles
 
 [`performance/profiles.toml`](performance/profiles.toml) keeps cell concurrency,

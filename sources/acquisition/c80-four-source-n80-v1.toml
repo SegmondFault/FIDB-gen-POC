@@ -1,0 +1,38 @@
+schema_version = "fidb-source-acquisition/v1"
+id = "c80-four-source-n80-v1"
+label = "C80 four-source N80 research-candidate acquisition"
+candidate_authority = "coverage/evidence/four-source-n80-v1.csv"
+candidate_authority_sha256 = "66e24e2a9b9606f34e5ef8e706569829441898f8cffc0ac33dbfdb4bcf13148b"
+lock_path = "sources/locks/c80-four-source-n80-v1.toml"
+max_metadata_bytes = 134217728
+max_archive_bytes = 4294967296
+download_workers = 8
+
+[[resolver]]
+id = "homebrew"
+kind = "homebrew-formula-json"
+priority = 10
+url = "https://formulae.brew.sh/api/formula.json"
+
+[[resolver]]
+id = "debian-sid"
+kind = "debian-sources-xz"
+priority = 20
+url = "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+
+[[alias]]
+resolver_id = "debian-sid"
+candidate_key = "xorg-macros"
+registry_key = "xutils-dev"
+reason = "Debian ships the X.Org autoconf macros from the xutils-dev source package."
+
+[[alias]]
+resolver_id = "debian-sid"
+candidate_key = "stb"
+registry_key = "libstb"
+reason = "Debian's source package for the upstream stb headers is named libstb."
+
+[[unresolved]]
+candidate_key = "opengl"
+classification = "virtual-system-interface"
+reason = "OpenGL names an API and loader contract, not one canonical source release; implementation selection belongs to candidate screening."

@@ -516,3 +516,18 @@ selected immutable run carries its prevalence tail, ambiguous hashes, owners
 and per-library burden. The Hash discrimination page deliberately puts that
 measured output above future HDI fitting controls. Keep report, source-evidence
 and method digests visible so a graph can always be traced to its authority.
+
+# Source acquisition authority
+
+The complete four-source N80 research frontier uses the staged source
+acquisition process documented in `sources/README.md`. Do not write an ad-hoc
+download loop or infer a source URL from a candidate name. Use `source
+acquisition refresh`, inspect/freeze `resolve`, check `status`, and only then
+run `pull`. The tracked lock is scientific input authority; the ignored
+per-lock TOML acquisition registry is host evidence. A cached candidate is
+still not screened, recipe-ready, qualified or admitted.
+
+`opengl` is deliberately unresolved because it names a virtual API rather
+than a unique source tree. Resolving it requires an explicit candidate-screen
+decision about the implementation; silently substituting Mesa changes the
+experimental population.
