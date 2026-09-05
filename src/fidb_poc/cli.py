@@ -1093,6 +1093,10 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_main(tokens[1:])
     if tokens and tokens[0] == "compile-width-batch":
         return _compile_width_batch_main(tokens[1:])
+    if tokens and tokens[0] == "qualify-recipes":
+        from .recipe_qualification import main as qualification_main
+
+        return qualification_main(tokens[1:])
     if tokens and tokens[0] == "performance":
         return _performance_main(tokens[1:])
     if tokens and tokens[0] == "plan-time-blocks":

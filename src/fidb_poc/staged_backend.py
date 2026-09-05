@@ -269,6 +269,7 @@ def execute_build_stage(
     *,
     verbose: bool = False,
     build_jobs_per_cell: int = 4,
+    shared_downloads: Path | None = None,
 ) -> dict[str, object]:
     """Compile one staged cell without importing or starting Ghidra."""
 
@@ -287,8 +288,12 @@ def execute_build_stage(
     pipeline_error = ""
     with _ResourceSampler(group_root) as sampler:
         try:
+            downloads = shared_downloads or group_root / "work/downloads"
             archive = download_library(
-                library, group_root / "work/downloads", timing=timing.span
+                library,
+                downloads,
+                content_addressed=shared_downloads is not None,
+                timing=timing.span,
             )
             source_root = extract_source(
                 library,
@@ -299,8 +304,9 @@ def execute_build_stage(
             )
             build_inputs = prepare_build_inputs(
                 library,
-                group_root / "work/downloads",
+                downloads,
                 group_root / "work/sources/build-inputs",
+                content_addressed=shared_downloads is not None,
                 timing=timing.span,
             )
             try:
