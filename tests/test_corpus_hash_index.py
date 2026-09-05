@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 
 from fidb_poc.corpus_hash_index import (
+    DELTA_ROLLUP_SELECT_SQL,
+    SCHEMA_SQL,
     inspect_corpus_hash_index,
     load_corpus_hash_authority,
     update_corpus_hash_index,
@@ -122,6 +124,35 @@ class CorpusHashIndexTests(unittest.TestCase):
         self.assertFalse(authority["safety"]["permit_in_place_schema_migration"])
         self.assertEqual(authority["acceleration"]["mode"], "compare")
         self.assertEqual(authority["acceleration"]["publish_from"], "canonical-only")
+
+    def test_delta_rollup_uses_signature_id_primary_key_lookup(self):
+        connection = sqlite3.connect(":memory:")
+        try:
+            connection.executescript(SCHEMA_SQL)
+            connection.execute("""
+                CREATE TEMP TABLE delta_owner_by_signature(
+                    signature_id INTEGER NOT NULL,
+                    owner TEXT NOT NULL,
+                    reference_observations INTEGER NOT NULL,
+                    recovered_observations INTEGER NOT NULL,
+                    missed_observations INTEGER NOT NULL,
+                    PRIMARY KEY(signature_id, owner)
+                ) WITHOUT ROWID
+                """)
+            plan = [
+                str(row[3])
+                for row in connection.execute(
+                    "EXPLAIN QUERY PLAN " + DELTA_ROLLUP_SELECT_SQL,
+                    (1,),
+                )
+            ]
+        finally:
+            connection.close()
+
+        self.assertTrue(
+            any("SEARCH owner USING PRIMARY KEY (signature_id=?)" in row for row in plan)
+        )
+        self.assertFalse(any("SCAN owner" in row for row in plan))
 
     def test_two_deltas_update_only_touched_signatures_and_are_idempotent(self):
         first = self.evidence(

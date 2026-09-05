@@ -432,6 +432,20 @@ as accepted unless all returned indices are identical. The `gpu` extra must be
 installed on GPU workers; absence or driver failure is recorded without
 invalidating CPU truth.
 
+The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
+failure: `delta_rollup` joined every signature to an unindexed six-text-field
+`delta_owner` table. SQLite chose `SCAN delta_owner LEFT-JOIN`; the attempt was
+stopped after 5 h 43 m and about 60 TB of logical cached reads. The sealed
+`hash-evidence.sqlite3` remained valid and the uncommitted partial index was
+quarantined. The supported implementation now normalises query and owner rows
+to `signature_id`, stores them in `WITHOUT ROWID` temporary tables with primary
+keys, and joins the roll-up by that integer. Never remove
+`test_delta_rollup_uses_signature_id_primary_key_lookup`; correctness-only tiny
+fixtures did not reveal the original quadratic plan. After an interrupted
+admission, stop the service, verify that no process owns the files, quarantine
+the exact `.partial` plus journal, and clear or quarantine the stale
+`.hash-analysis.lock` before retrying. Never remove the sealed source evidence.
+
 Do not rerun the 41 GiB C10 composite/Ghidra workload to correct the old
 five-match methodology. The sealed run already retains all 444
 `query-signatures.jsonl` fold exports. `analyze-hashes` uses the lightweight

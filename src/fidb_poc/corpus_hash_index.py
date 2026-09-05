@@ -24,6 +24,20 @@ APPLICATION_ID = 0x46494849  # FIHI
 USER_VERSION = 1
 DEFAULT_AUTHORITY = Path("validation/corpus-hash-index.toml")
 
+DELTA_ROLLUP_SELECT_SQL = """
+SELECT batch.signature_id,
+       batch.query_observations, batch.true_positives,
+       batch.internal_false_positives, batch.false_negatives,
+       batch.unattributed_observations,
+       COUNT(owner.owner) AS new_owners,
+       COALESCE(SUM(owner.reference_observations),0) AS reference_count
+FROM signature_batch AS batch
+LEFT JOIN delta_owner_by_signature AS owner
+  ON owner.signature_id=batch.signature_id
+WHERE batch.batch_id=?
+GROUP BY batch.signature_id
+"""
+
 
 SCHEMA_SQL = """
 CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -430,39 +444,65 @@ def update_corpus_hash_index(
             ((owner, batch_id) for owner in owners),
         )
         connection.execute("""
-            CREATE TEMP TABLE delta_query AS
-            SELECT scope, language, full_hash, specific_hash, additional_size,
-                   code_size, COUNT(*) AS observations
-            FROM (
-                SELECT DISTINCT scope, language, full_hash, specific_hash,
-                       additional_size, code_size, route_id, treatment_id, fold
-                FROM evidence.hash_observation
-            )
-            GROUP BY scope, language, full_hash, specific_hash,
-                     additional_size, code_size
-            """)
-        connection.execute("""
-            CREATE TEMP TABLE delta_owner AS
-            SELECT scope, language, full_hash, specific_hash, additional_size,
-                   code_size, owner,
-                   SUM(reference_observations) AS reference_observations,
-                   SUM(recovered_observations) AS recovered_observations,
-                   SUM(missed_observations) AS missed_observations
-            FROM evidence.hash_signature_owner
-            GROUP BY scope, language, full_hash, specific_hash, additional_size,
-                     code_size, owner
-            """)
-        connection.execute("""
             INSERT OR IGNORE INTO signature(
                 scope, language, full_hash, specific_hash, additional_size, code_size
             )
             SELECT scope, language, full_hash, specific_hash, additional_size, code_size
             FROM evidence.hash_summary
             """)
+        connection.execute("""
+            CREATE TEMP TABLE delta_query_by_signature(
+                signature_id INTEGER PRIMARY KEY,
+                observations INTEGER NOT NULL
+            ) WITHOUT ROWID
+            """)
+        connection.execute("""
+            INSERT INTO delta_query_by_signature
+            SELECT signature.id, COUNT(*)
+            FROM (
+                SELECT DISTINCT scope, language, full_hash, specific_hash,
+                       additional_size, code_size, route_id, treatment_id, fold
+                FROM evidence.hash_observation
+            ) AS observation
+            JOIN signature
+              ON signature.scope=observation.scope
+             AND signature.language=observation.language
+             AND signature.full_hash=observation.full_hash
+             AND signature.specific_hash=observation.specific_hash
+             AND signature.additional_size=observation.additional_size
+             AND signature.code_size=observation.code_size
+            GROUP BY signature.id
+            """)
+        connection.execute("""
+            CREATE TEMP TABLE delta_owner_by_signature(
+                signature_id INTEGER NOT NULL,
+                owner TEXT NOT NULL,
+                reference_observations INTEGER NOT NULL,
+                recovered_observations INTEGER NOT NULL,
+                missed_observations INTEGER NOT NULL,
+                PRIMARY KEY(signature_id, owner)
+            ) WITHOUT ROWID
+            """)
+        connection.execute("""
+            INSERT INTO delta_owner_by_signature
+            SELECT signature.id, source.owner,
+                   SUM(source.reference_observations),
+                   SUM(source.recovered_observations),
+                   SUM(source.missed_observations)
+            FROM evidence.hash_signature_owner AS source
+            JOIN signature
+              ON signature.scope=source.scope
+             AND signature.language=source.language
+             AND signature.full_hash=source.full_hash
+             AND signature.specific_hash=source.specific_hash
+             AND signature.additional_size=source.additional_size
+             AND signature.code_size=source.code_size
+            GROUP BY signature.id, source.owner
+            """)
         connection.execute(
             """
             INSERT INTO signature_batch
-            SELECT ?, signature.id, COALESCE(delta_query.observations,0),
+            SELECT ?, signature.id, COALESCE(query.observations,0),
                    summary.true_positives, summary.false_positives,
                    summary.false_negatives, summary.unattributed_observations
             FROM evidence.hash_summary AS summary
@@ -473,37 +513,25 @@ def update_corpus_hash_index(
              AND signature.specific_hash=summary.specific_hash
              AND signature.additional_size=summary.additional_size
              AND signature.code_size=summary.code_size
-            LEFT JOIN delta_query
-              ON delta_query.scope=summary.scope
-             AND delta_query.language=summary.language
-             AND delta_query.full_hash=summary.full_hash
-             AND delta_query.specific_hash=summary.specific_hash
-             AND delta_query.additional_size=summary.additional_size
-             AND delta_query.code_size=summary.code_size
+            LEFT JOIN delta_query_by_signature AS query
+              ON query.signature_id=signature.id
             """,
             (batch_id,),
         )
+        connection.execute("""
+            CREATE TEMP TABLE delta_rollup(
+                signature_id INTEGER PRIMARY KEY,
+                query_observations INTEGER NOT NULL,
+                true_positives INTEGER NOT NULL,
+                internal_false_positives INTEGER NOT NULL,
+                false_negatives INTEGER NOT NULL,
+                unattributed_observations INTEGER NOT NULL,
+                new_owners INTEGER NOT NULL,
+                reference_count INTEGER NOT NULL
+            ) WITHOUT ROWID
+            """)
         connection.execute(
-            """
-            CREATE TEMP TABLE delta_rollup AS
-            SELECT signature.id AS signature_id,
-                   batch.query_observations, batch.true_positives,
-                   batch.internal_false_positives, batch.false_negatives,
-                   batch.unattributed_observations,
-                   COUNT(delta_owner.owner) AS new_owners,
-                   COALESCE(SUM(delta_owner.reference_observations),0) AS reference_count
-            FROM signature_batch AS batch
-            JOIN signature ON signature.id=batch.signature_id
-            LEFT JOIN delta_owner
-              ON delta_owner.scope=signature.scope
-             AND delta_owner.language=signature.language
-             AND delta_owner.full_hash=signature.full_hash
-             AND delta_owner.specific_hash=signature.specific_hash
-             AND delta_owner.additional_size=signature.additional_size
-             AND delta_owner.code_size=signature.code_size
-            WHERE batch.batch_id=?
-            GROUP BY signature.id
-            """,
+            "INSERT INTO delta_rollup " + DELTA_ROLLUP_SELECT_SQL,
             (batch_id,),
         )
         connection.execute(
@@ -544,16 +572,9 @@ def update_corpus_hash_index(
         connection.execute(
             """
             INSERT INTO signature_owner
-            SELECT signature.id, delta.owner, ?, delta.reference_observations,
+            SELECT delta.signature_id, delta.owner, ?, delta.reference_observations,
                    delta.recovered_observations, delta.missed_observations
-            FROM delta_owner AS delta
-            JOIN signature
-              ON signature.scope=delta.scope
-             AND signature.language=delta.language
-             AND signature.full_hash=delta.full_hash
-             AND signature.specific_hash=delta.specific_hash
-             AND signature.additional_size=delta.additional_size
-             AND signature.code_size=delta.code_size
+            FROM delta_owner_by_signature AS delta
             """,
             (batch_id,),
         )

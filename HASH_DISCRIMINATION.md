@@ -227,6 +227,14 @@ evidence instead of migrating either immutable source in place. Each generation
 pins its preceding generation digest, authority digest, source-evidence digest
 and cumulative counts.
 
+Delta ingestion resolves the six-field signature identity to the corpus
+`signature_id` once. Query and owner staging tables are keyed by that integer,
+and the roll-up joins them through explicit primary-key lookups. Do not replace
+this with an unindexed text-key join: the first C10 attempt demonstrated that
+SQLite otherwise selects a nested `SCAN ... LEFT-JOIN` and rereads the same
+temporary owner relation for every signature. The query-plan regression test
+must continue to reject that plan.
+
 The optional `gpu` dependency adds a WGPU packed-key candidate. C10 compares
 its seven-`u32` complete-signature lookup result exactly with the packed CPU
 result and records device, buffer, packing, CPU-probe and GPU end-to-end timing.

@@ -164,6 +164,11 @@ WGPU exact-signature probe with its packed CPU result. The comparison report is
 written beside `hash-report.json`. It includes complete device and wall-time
 measurements, but it never grants the GPU result publication authority.
 
+Corpus delta staging must resolve complete identities to `signature_id` once
+and use the indexed integer-key roll-up. The regression suite rejects SQLite's
+quadratic `SCAN delta_owner LEFT-JOIN` plan, which is not visible in tiny
+correctness fixtures.
+
 `machine-validation-hash-method.toml` is the versioned scientific authority.
 It removes cohort-size assumptions from the analyser, defines the compatible
 scope and complete FID identity, fixes the absence of a library-level match
