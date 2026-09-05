@@ -14,6 +14,7 @@ from fidb_poc.machine_validation_runner import (
     _link_composite,
     _post_validation_retention,
     _query_index,
+    _width_openssl_signatures,
     canary_gate_status,
     load_runtime,
     pause_validation,
@@ -21,9 +22,11 @@ from fidb_poc.machine_validation_runner import (
     runtime_status,
 )
 from fidb_poc.machine_validation_hashes import (
+    ANALYSIS_ENGINE,
     DECISION_UNIT,
     _classify_fold,
     _create_evidence,
+    _load_unit_reference,
     _window_open,
     load_hash_schedule,
 )
@@ -117,6 +120,20 @@ class MachineValidationRunnerTests(unittest.TestCase):
             )
             self.assertEqual(wrong_platform, {})
 
+    def test_openssl_fallback_cannot_fill_another_library_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            report = root / "width-run.json"
+            report.write_text(json.dumps({"replay_results": []}), encoding="utf-8")
+
+            resolved = _width_openssl_signatures(
+                root,
+                {"openssl_width_report": report.name},
+                {("sqlite@3.53.4", "route", "treatment")},
+            )
+
+            self.assertEqual(resolved, {})
+
     def test_single_hash_analysis_has_no_library_acceptance_threshold(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -164,6 +181,42 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            signatures = {}
+            for owner in ("one", "two", "three"):
+                source = root / f"{owner}.jsonl"
+                rows = reference.execute(
+                    """
+                    SELECT function_name, language, full_hash, specific_hash,
+                           additional_size, code_size
+                    FROM reference_identity WHERE owner=?
+                    """,
+                    (owner,),
+                ).fetchall()
+                source.write_text(
+                    "".join(
+                        json.dumps(
+                            {
+                                "address": "",
+                                "function_name": name,
+                                "ghidra_language_id": language,
+                                "full_hash": full,
+                                "specific_hash": specific,
+                                "specific_hash_additional_size": additional,
+                                "code_unit_size": size,
+                            }
+                        )
+                        + "\n"
+                        for name, language, full, specific, additional, size in rows
+                    ),
+                    encoding="utf-8",
+                )
+                signatures[(owner, "r", "t")] = {
+                    "path": source,
+                    "source": source.name,
+                }
+            loaded = _load_unit_reference(
+                reference, signatures, ("one", "two", "three"), "r", "t"
+            )
             output = _create_evidence(root / "evidence.sqlite3", "run", "digest")
             result = _classify_fold(
                 output,
@@ -178,6 +231,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 cohort=["one", "two", "three"],
                 query_path=query,
                 query_relative="query.jsonl",
+                reference_table="unit_reference",
             )
             outcomes = dict(
                 output.execute(
@@ -188,6 +242,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
             reference.close()
 
             self.assertEqual(DECISION_UNIT, "complete-fid-signature-owner-assertion")
+            self.assertEqual(ANALYSIS_ENGINE, "unit-local-reference-v1")
+            self.assertEqual(loaded, 4)
             self.assertEqual(result["true_positives"], 1)
             self.assertEqual(result["false_positives"], 1)
             self.assertEqual(result["true_negatives"], 2)

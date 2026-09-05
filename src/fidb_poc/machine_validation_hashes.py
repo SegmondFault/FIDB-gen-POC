@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
 import tomllib
 from typing import Iterable, Mapping
 from zoneinfo import ZoneInfo
@@ -25,6 +26,7 @@ HASH_EVIDENCE_SCHEMA = "fidb-machine-validation-hash-evidence/v1"
 DECISION_UNIT = "complete-fid-signature-owner-assertion"
 HASH_SCHEDULE_SCHEMA = "fidb-machine-validation-hash-schedule/v1"
 DEFAULT_HASH_SCHEDULE = Path("validation/machine-validation-hash-schedule.toml")
+ANALYSIS_ENGINE = "unit-local-reference-v1"
 
 
 def _now() -> str:
@@ -184,6 +186,65 @@ def _load_query(connection: sqlite3.Connection, query_path: Path) -> int:
     return int(connection.execute("SELECT COUNT(*) FROM query_signature").fetchone()[0])
 
 
+def _load_unit_reference(
+    connection: sqlite3.Connection,
+    signatures: Mapping[tuple[str, str, str], Mapping[str, object]],
+    cohort: Iterable[str],
+    route_id: str,
+    treatment_id: str,
+) -> int:
+    """Load one exact execution identity once for both validation folds."""
+
+    connection.execute("DROP TABLE IF EXISTS temp.unit_reference")
+    connection.execute(
+        """
+        CREATE TEMP TABLE unit_reference(
+            language TEXT NOT NULL,
+            full_hash TEXT NOT NULL,
+            specific_hash TEXT NOT NULL,
+            additional_size INTEGER NOT NULL,
+            code_size INTEGER NOT NULL,
+            owner TEXT NOT NULL,
+            function_name TEXT NOT NULL,
+            evidence_path TEXT NOT NULL,
+            PRIMARY KEY(
+                language, full_hash, specific_hash, additional_size,
+                code_size, owner
+            )
+        ) WITHOUT ROWID
+        """
+    )
+    for owner in cohort:
+        item = signatures[(owner, route_id, treatment_id)]
+        path = Path(item["path"])
+        evidence_path = str(item["source"])
+        connection.executemany(
+            "INSERT OR IGNORE INTO unit_reference VALUES (?,?,?,?,?,?,?,?)",
+            (
+                (
+                    language,
+                    full_hash,
+                    specific_hash,
+                    additional_size,
+                    code_size,
+                    owner,
+                    function_name,
+                    evidence_path,
+                )
+                for (
+                    _address,
+                    function_name,
+                    language,
+                    full_hash,
+                    specific_hash,
+                    additional_size,
+                    code_size,
+                ) in _signature_rows(path)
+            ),
+        )
+    return int(connection.execute("SELECT COUNT(*) FROM unit_reference").fetchone()[0])
+
+
 def _classify_fold(
     output: sqlite3.Connection,
     reference: sqlite3.Connection,
@@ -198,7 +259,11 @@ def _classify_fold(
     cohort: list[str],
     query_path: Path,
     query_relative: str,
+    reference_table: str = "reference_identity",
+    query_sha256: str | None = None,
 ) -> dict[str, int]:
+    if reference_table not in {"reference_identity", "unit_reference"}:
+        raise ValueError("unsupported single-hash reference table")
     query_count = _load_query(reference, query_path)
     present_set = set(present)
     absent_set = set(cohort) - present_set
@@ -210,37 +275,49 @@ def _classify_fold(
         "INSERT INTO fold_owner VALUES (?,?)",
         ((owner, int(owner in present_set)) for owner in cohort),
     )
-    match_sql = """
+    identity_filter = (
+        "" if reference_table == "unit_reference" else
+        """reference.target_os=? AND reference.binary_format=?
+         AND reference.route_id=? AND reference.treatment_id=? AND"""
+    )
+    match_sql = f"""
         SELECT query.address, query.function_name, query.language,
                query.full_hash, query.specific_hash, query.additional_size,
                query.code_size, reference.owner, reference.function_name,
                reference.evidence_path, fold_owner.present
         FROM query_signature AS query
-        JOIN reference_identity AS reference
-          ON reference.target_os=? AND reference.binary_format=?
-         AND reference.route_id=? AND reference.treatment_id=?
-         AND reference.language=query.language
+        JOIN {reference_table} AS reference
+          ON {identity_filter} reference.language=query.language
          AND reference.full_hash=query.full_hash
          AND reference.specific_hash=query.specific_hash
          AND reference.additional_size=query.additional_size
          AND reference.code_size=query.code_size
         JOIN fold_owner ON fold_owner.owner=reference.owner
     """
-    matches = list(
-        reference.execute(
-            match_sql, (target_os, binary_format, route_id, treatment_id)
-        )
+    parameters = (
+        ()
+        if reference_table == "unit_reference"
+        else (target_os, binary_format, route_id, treatment_id)
     )
-    tp = sum(int(row[10]) for row in matches)
-    fp = len(matches) - tp
-    matched_query = {
-        (row[2], row[3], row[4], int(row[5]), int(row[6]))
-        for row in matches
-        if int(row[10])
-    }
+    tp = 0
+    fp = 0
+    matched_query: set[tuple[str, str, str, int, int]] = set()
     observation_rows = []
-    for row in matches:
+    for row in reference.execute(match_sql, parameters):
         address, query_name, language, full_hash, specific_hash, additional, size, owner, corpus_name, evidence_path, is_present = row
+        if is_present:
+            tp += 1
+            matched_query.add(
+                (
+                    str(language),
+                    str(full_hash),
+                    str(specific_hash),
+                    int(additional),
+                    int(size),
+                )
+            )
+        else:
+            fp += 1
         observation_rows.append(
             (
                 _scope(target_os, binary_format, str(language)),
@@ -250,39 +327,57 @@ def _classify_fold(
                 str(evidence_path),
             )
         )
-    output.executemany(
-        "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        observation_rows,
-    )
-    unattributed = [
-        row
-        for row in reference.execute(
-            """
-            SELECT address, function_name, language, full_hash, specific_hash,
-                   additional_size, code_size
-            FROM query_signature
-            """
+        if len(observation_rows) >= 5000:
+            output.executemany(
+                "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                observation_rows,
+            )
+            observation_rows.clear()
+    if observation_rows:
+        output.executemany(
+            "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            observation_rows,
         )
-        if (str(row[2]), str(row[3]), str(row[4]), int(row[5]), int(row[6]))
-        not in matched_query
-    ]
-    output.executemany(
-        "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
+    unattributed_count = 0
+    observation_rows = []
+    for row in reference.execute(
+        """
+        SELECT address, function_name, language, full_hash, specific_hash,
+               additional_size, code_size
+        FROM query_signature
+        """
+    ):
+        address, function_name, language, full_hash, specific_hash, additional, size = row
+        identity = (
+            str(language), str(full_hash), str(specific_hash), int(additional), int(size)
+        )
+        if identity in matched_query:
+            continue
+        unattributed_count += 1
+        observation_rows.append(
             (
                 _scope(target_os, binary_format, str(language)), str(language),
                 str(full_hash), str(specific_hash), int(additional), int(size),
                 "unattributed", "", route_id, treatment_id, fold,
                 str(address), str(function_name), "", query_relative,
             )
-            for address, function_name, language, full_hash, specific_hash, additional, size in unattributed
-        ),
-    )
-    miss_sql = """
+        )
+        if len(observation_rows) >= 5000:
+            output.executemany(
+                "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                observation_rows,
+            )
+            observation_rows.clear()
+    if observation_rows:
+        output.executemany(
+            "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            observation_rows,
+        )
+    miss_sql = f"""
         SELECT reference.language, reference.full_hash, reference.specific_hash,
                reference.additional_size, reference.code_size, reference.owner,
                reference.function_name, reference.evidence_path
-        FROM reference_identity AS reference
+        FROM {reference_table} AS reference
         JOIN fold_owner ON fold_owner.owner=reference.owner AND fold_owner.present=1
         LEFT JOIN query_signature AS query
           ON query.language=reference.language
@@ -290,45 +385,51 @@ def _classify_fold(
          AND query.specific_hash=reference.specific_hash
          AND query.additional_size=reference.additional_size
          AND query.code_size=reference.code_size
-        WHERE reference.target_os=? AND reference.binary_format=?
-          AND reference.route_id=? AND reference.treatment_id=?
-          AND query.language IS NULL
+        WHERE {identity_filter} query.language IS NULL
     """
-    misses = list(
-        reference.execute(
-            miss_sql, (target_os, binary_format, route_id, treatment_id)
-        )
-    )
-    output.executemany(
-        "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
+    miss_count = 0
+    observation_rows = []
+    for (
+        language, full_hash, specific_hash, additional, size, owner,
+        corpus_name, evidence_path,
+    ) in reference.execute(miss_sql, parameters):
+        miss_count += 1
+        observation_rows.append(
             (
                 _scope(target_os, binary_format, str(language)), str(language),
                 str(full_hash), str(specific_hash), int(additional), int(size),
                 "fn", str(owner), route_id, treatment_id, fold, "", "",
                 str(corpus_name), str(evidence_path),
             )
-            for language, full_hash, specific_hash, additional, size, owner, corpus_name, evidence_path in misses
-        ),
-    )
+        )
+        if len(observation_rows) >= 5000:
+            output.executemany(
+                "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                observation_rows,
+            )
+            observation_rows.clear()
+    if observation_rows:
+        output.executemany(
+            "INSERT OR REPLACE INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            observation_rows,
+        )
     tn = query_count * len(absent_set) - fp
     result = {
         "query_distinct_signatures": query_count,
         "true_positives": tp,
         "false_positives": fp,
         "true_negatives": tn,
-        "false_negatives": len(misses),
-        "unattributed_query_signatures": len(unattributed),
+        "false_negatives": miss_count,
+        "unattributed_query_signatures": unattributed_count,
     }
     output.execute(
         "INSERT OR REPLACE INTO unit_result VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             position, route_id, treatment_id, fold, query_relative,
-            _sha256(query_path), query_count, tp, fp, tn, len(misses),
+            query_sha256 or _sha256(query_path), query_count, tp, fp, tn, miss_count,
             result["unattributed_query_signatures"],
         ),
     )
-    output.commit()
     return result
 
 
@@ -378,11 +479,17 @@ def analyze_hashes(
 ) -> dict[str, object]:
     """Create a reproducible single-hash report from one sealed validation run."""
 
-    from .machine_validation_runner import load_runtime, resolve_evidence
+    from .machine_validation_runner import (
+        load_runtime,
+        resolve_hash_analysis_evidence,
+    )
 
+    analysis_started_ns = time.monotonic_ns()
     root = Path(project_root).expanduser().resolve()
     runtime = load_runtime(root, runtime_path)
-    evidence = resolve_evidence(root, runtime_path)
+    resolution_started_ns = time.monotonic_ns()
+    evidence = resolve_hash_analysis_evidence(root, runtime_path)
+    resolution_wall_ns = time.monotonic_ns() - resolution_started_ns
     output_root = (root / str(runtime["output_root"])).resolve()
     run_root = (output_root / run_id).resolve()
     if run_root.parent != output_root or not run_root.is_dir():
@@ -408,28 +515,44 @@ def analyze_hashes(
     reference_metadata = sqlite3.connect(
         f"file:{reference_path}?mode=ro", uri=True
     )
+    reference_values: dict[str, str] = {}
     try:
         for key, value in reference_metadata.execute(
             "SELECT key, value FROM metadata ORDER BY key"
         ):
+            reference_values[str(key)] = str(value)
             source_digest.update(str(key).encode("utf-8"))
             source_digest.update(b"\0")
             source_digest.update(str(value).encode("utf-8"))
             source_digest.update(b"\n")
     finally:
         reference_metadata.close()
+    exact_input_digest = hashlib.sha256(
+        json.dumps(
+            sorted(
+                (list(key), value["sha256"])
+                for key, value in evidence["signatures"].items()
+            ),
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    if reference_values.get("input_digest") != exact_input_digest:
+        raise ValueError(
+            "single-hash signature inputs no longer match the sealed reference index"
+        )
     result_paths = sorted((run_root / "units").glob("*/result.json"))
     if len(result_paths) != int(status["expected_work_units"]):
         raise ValueError("source validation result set is incomplete")
+    query_digests: dict[Path, str] = {}
     for path in result_paths:
         source_digest.update(_sha256(path).encode("ascii"))
         result = json.loads(path.read_text(encoding="utf-8"))
         for fold_result in result.get("folds", []):
             fold_root = path.parent / f'fold-{fold_result["fold"]}'
             source_digest.update(_sha256(fold_root / "truth-map.json").encode("ascii"))
-            source_digest.update(
-                _sha256(fold_root / "query-signatures.jsonl").encode("ascii")
-            )
+            query_path = fold_root / "query-signatures.jsonl"
+            query_digests[query_path] = _sha256(query_path)
+            source_digest.update(query_digests[query_path].encode("ascii"))
     source_digest_hex = source_digest.hexdigest()
     database_path = run_root / "hash-evidence.sqlite3"
     report_path = run_root / "hash-report.json"
@@ -440,6 +563,7 @@ def analyze_hashes(
                 existing.get("schema_version") == HASH_REPORT_SCHEMA
                 and existing.get("state") == "measured-complete"
                 and existing.get("source_evidence_sha256") == source_digest_hex
+                and existing.get("performance", {}).get("engine") == ANALYSIS_ENGINE
             ):
                 return existing
         except (OSError, ValueError, json.JSONDecodeError):
@@ -454,9 +578,13 @@ def analyze_hashes(
     output = _create_evidence(partial, run_id, source_digest_hex)
     reference = sqlite3.connect(f"file:{reference_path}?mode=ro", uri=True)
     try:
+        reference.execute("PRAGMA temp_store=MEMORY")
+        reference.execute("PRAGMA cache_size=-65536")
         routes = {route.id: route for route in evidence["configuration"].routes}
-        cohort = list(evidence["status"]["randomization"]["canonical_ids"])
+        cohort = list(evidence["cohort"])
         expected_folds = 0
+        reference_rows = 0
+        classification_started_ns = time.monotonic_ns()
         for result_path in result_paths:
             result = json.loads(result_path.read_text(encoding="utf-8"))
             if result.get("state") != "complete" or result.get("mode") != "full":
@@ -465,6 +593,13 @@ def analyze_hashes(
             route_id = str(result["route_id"])
             treatment_id = str(result["treatment_id"])
             route = routes[route_id]
+            reference_rows += _load_unit_reference(
+                reference,
+                evidence["signatures"],
+                cohort,
+                route_id,
+                treatment_id,
+            )
             for fold_result in result["folds"]:
                 fold = str(fold_result["fold"])
                 fold_root = result_path.parent / f"fold-{fold}"
@@ -484,8 +619,12 @@ def analyze_hashes(
                     cohort=cohort,
                     query_path=query_path,
                     query_relative=str(query_path.relative_to(root)),
+                    reference_table="unit_reference",
+                    query_sha256=query_digests[query_path],
                 )
                 expected_folds += 1
+            output.commit()
+        classification_wall_ns = time.monotonic_ns() - classification_started_ns
         output.execute(
             """
             INSERT INTO hash_summary
@@ -595,6 +734,15 @@ def analyze_hashes(
             "complete_fold_results": expected_folds,
             "threshold": None,
             "all_hash_observations_retained": True,
+        },
+        "performance": {
+            "engine": ANALYSIS_ENGINE,
+            "jvm_processes_started": 0,
+            "compiler_processes_started": 0,
+            "exact_reference_rows_loaded": reference_rows,
+            "evidence_resolution_wall_time_ns": resolution_wall_ns,
+            "classification_wall_time_ns": classification_wall_ns,
+            "total_wall_time_ns": time.monotonic_ns() - analysis_started_ns,
         },
     }
     _atomic_json(report_path, report)

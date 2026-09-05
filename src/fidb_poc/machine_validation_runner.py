@@ -219,7 +219,13 @@ def _queue_drained(root: Path, runtime: Mapping[str, object]) -> bool:
         connection.close()
 
 
-def _production_evidence(root: Path, runtime: Mapping[str, object], cohort: set[str]) -> tuple[dict, dict]:
+def _production_evidence(
+    root: Path,
+    runtime: Mapping[str, object],
+    cohort: set[str],
+    *,
+    verify_archives: bool = True,
+) -> tuple[dict, dict]:
     archives: dict[tuple[str, str, str], dict[str, object]] = {}
     signatures: dict[tuple[str, str, str], dict[str, object]] = {}
     ledger = _inside(root, str(runtime["ledger"]), "production ledger")
@@ -248,24 +254,25 @@ def _production_evidence(root: Path, runtime: Mapping[str, object], cohort: set[
                 raise ValueError(f"duplicate active production evidence for {key}")
             result = json.loads(row["result_json"])
             attempt = _inside(root, str(result["attempt_root"]), "attempt root")
-            seal_path = _inside(root, str(result["seal"]["path"]), "cell seal")
-            if _sha256(seal_path) != result["seal"]["sha256"]:
-                raise ValueError(f"cell seal digest mismatch for {row['job_id']}")
-            seal = json.loads(seal_path.read_text(encoding="utf-8"))
-            archive_paths = [attempt / value for value in str(seal["evidence"]["static_archive_path"]).split(";")]
-            archive_digests = str(seal["evidence"]["static_archive_sha256"]).split(";")
-            if len(archive_paths) != len(archive_digests) or any(not path.is_file() for path in archive_paths):
-                raise ValueError(f"retained static archives are incomplete for {key}")
-            if any(_sha256(path) != digest for path, digest in zip(archive_paths, archive_digests, strict=True)):
-                raise ValueError(f"retained static archive digest mismatch for {key}")
+            if verify_archives:
+                seal_path = _inside(root, str(result["seal"]["path"]), "cell seal")
+                if _sha256(seal_path) != result["seal"]["sha256"]:
+                    raise ValueError(f"cell seal digest mismatch for {row['job_id']}")
+                seal = json.loads(seal_path.read_text(encoding="utf-8"))
+                archive_paths = [attempt / value for value in str(seal["evidence"]["static_archive_path"]).split(";")]
+                archive_digests = str(seal["evidence"]["static_archive_sha256"]).split(";")
+                if len(archive_paths) != len(archive_digests) or any(not path.is_file() for path in archive_paths):
+                    raise ValueError(f"retained static archives are incomplete for {key}")
+                if any(_sha256(path) != digest for path, digest in zip(archive_paths, archive_digests, strict=True)):
+                    raise ValueError(f"retained static archive digest mismatch for {key}")
+                archives[key] = {
+                    "paths": archive_paths,
+                    "sha256": archive_digests,
+                    "source": str(attempt.relative_to(root)),
+                }
             signature_files = list((attempt / "artifacts/libs/fid-signatures").glob("*.jsonl"))
             if len(signature_files) != 1 or not signature_files[0].is_file():
                 raise ValueError(f"retained signature evidence is incomplete for {key}")
-            archives[key] = {
-                "paths": archive_paths,
-                "sha256": archive_digests,
-                "source": str(attempt.relative_to(root)),
-            }
             signatures[key] = {
                 "path": signature_files[0],
                 "sha256": _sha256(signature_files[0]),
@@ -287,7 +294,9 @@ def _width_openssl_signatures(root: Path, runtime: Mapping[str, object], expecte
     base = report_path.parent / "replay-01"
     result = {}
     for key in expected:
-        _owner, route, treatment = key
+        owner, route, treatment = key
+        if owner != "openssl@3.5.8":
+            continue
         digest = expected_digests.get((route, treatment))
         if digest is None:
             continue
@@ -363,6 +372,72 @@ def resolve_evidence(project_root: str | Path, runtime_path: str | Path = DEFAUL
             "available_memory_bytes": available_memory,
         },
         "blockers": blockers,
+    }
+
+
+def resolve_hash_analysis_evidence(
+    project_root: str | Path,
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+) -> dict[str, object]:
+    """Resolve only the immutable inputs needed by single-hash analysis.
+
+    Full validation preflight deliberately verifies retained archives, compiler
+    executables, queue state, RAM and disk because it may rebuild and analyse
+    composites.  A post-run hash pass consumes already sealed JSONL exports and
+    must not pay that multi-gigabyte archive-verification cost or inherit those
+    execution-only gates.
+    """
+
+    root = Path(project_root).expanduser().resolve()
+    runtime = load_runtime(root, runtime_path)
+    manifest = _manifest(root, runtime)
+    randomization = manifest.get("randomization", {})
+    cohort = {
+        str(owner)
+        for fold in ("fold_a", "fold_b")
+        for owner in randomization.get(fold, [])
+    }
+    if len(cohort) != 10:
+        raise ValueError("machine-validation manifest does not freeze ten owners")
+    expected = {
+        (owner, str(unit["route_id"]), str(unit["treatment_id"]))
+        for owner in cohort
+        for unit in manifest["work_unit"]
+    }
+    _archives, signatures = _production_evidence(
+        root, runtime, cohort, verify_archives=False
+    )
+    signatures.update(
+        _width_openssl_signatures(root, runtime, expected - set(signatures))
+    )
+    missing = expected - set(signatures)
+    if missing:
+        raise ValueError(
+            f"single-hash analysis is missing {len(missing)} exact signature inputs"
+        )
+    configuration = _configuration(root)
+    routes = {route.id: route for route in configuration.routes}
+    treatments = {treatment.id: treatment for treatment in configuration.treatments}
+    invalid = [
+        str(unit["id"])
+        for unit in manifest["work_unit"]
+        if (
+            (route := routes.get(str(unit["route_id"]))) is None
+            or (treatment := treatments.get(str(unit["treatment_id"]))) is None
+            or not treatment.applies_to(route)
+        )
+    ]
+    if invalid:
+        raise ValueError(
+            f"single-hash analysis has {len(invalid)} invalid width identities"
+        )
+    return {
+        "runtime": runtime,
+        "manifest": manifest,
+        "configuration": configuration,
+        "cohort": sorted(cohort),
+        "signatures": signatures,
+        "expected_inputs": len(expected),
     }
 
 
