@@ -142,6 +142,15 @@ nothing is pending:
 uv run fidb-poc machine-validation scheduled-hashes --project-root .
 ```
 
+The corrected pass reuses the 444 retained fold exports from the sealed full
+run. Its `unit-local-reference-v1` engine verifies signature inputs without
+rehashing retained static archives, loads the ten exact owner references once
+per route/treatment, and reuses that bounded table for both folds. Match, miss
+and unattributed observations are streamed to SQLite in bounded batches. The
+terminal report records evidence-resolution, classification and total wall
+time as well as zero compiler/JVM launches. A new composite build is neither
+required nor desirable merely to replace the superseded five-match report.
+
 The systemd service and two timers in `operations/` call that command. A
 successful scheduled pass immediately invokes validation-scoped retention, so
 worker build/Ghidra scratch is considered only after the hash database and its

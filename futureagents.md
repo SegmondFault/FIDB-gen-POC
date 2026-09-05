@@ -415,3 +415,16 @@ compilers or Ghidra. The checked-in user service and timers are named
 `fidb-machine-validation-hash-analysis.service`,
 `fidb-machine-validation-hash-analysis-afternoon.timer`, and
 `fidb-machine-validation-hash-analysis-nightly.timer`.
+
+Do not rerun the 41 GiB C10 composite/Ghidra workload to correct the old
+five-match methodology. The sealed run already retains all 444
+`query-signatures.jsonl` fold exports. `analyze-hashes` uses the lightweight
+hash-analysis resolver: it verifies the 2,220 exact signature inputs and their
+reference-index digest, but deliberately does not verify static archives,
+inspect compiler executables, require a drained production queue, or launch a
+JVM. Its `unit-local-reference-v1` engine loads one route/treatment's ten-owner
+reference set once and reuses it for both folds; restoring per-fold scans of
+the 3.3-million-row `reference_identity` table is a performance regression.
+Keep observation writes bounded, retain the engine name and stage timings in
+`hash-report.json`, and use a fresh canary only when changing the expensive
+composite/Ghidra contract itself.
