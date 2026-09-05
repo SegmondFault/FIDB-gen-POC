@@ -46,7 +46,7 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(document["readiness"]["materializable_executions"], 1_998)
         self.assertEqual(document["readiness"]["blocked_executions"], 0)
         self.assertEqual(
-            document["readiness"]["queue_state"], "not-materialized-disarmed"
+            document["readiness"]["queue_state"], "historical-sealed"
         )
 
     def test_build_requires_an_explicit_route(self):
@@ -67,7 +67,7 @@ class CommandLineTests(unittest.TestCase):
                     str(root),
                     "--plan",
                     "--library",
-                    "zlib",
+                    "zlib@1.3.1",
                     "--route",
                     "linux-x86_64-gnu-gcc",
                 ]
@@ -122,7 +122,7 @@ class CommandLineTests(unittest.TestCase):
                     "--project-root",
                     str(root),
                     "--library",
-                    "zlib",
+                    "zlib@1.3.1",
                     "--route",
                     "linux-x86_64-gnu-gcc",
                 ]
@@ -174,7 +174,7 @@ class CommandLineTests(unittest.TestCase):
                         str(root),
                         "--fresh",
                         "--library",
-                        "zlib",
+                        "zlib@1.3.1",
                         "--route",
                         "linux-x86_64-gnu-gcc",
                     ]
