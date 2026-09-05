@@ -57,6 +57,38 @@ denominator must count library families before releases, compiler variants and
 treatments so that a library with greater build width does not appear
 artificially common.
 
+## Hash representations and the validation observatory
+
+The controlled machine experiment uses the complete FID signature tuple for
+ground-truth decisions: Ghidra language, full hash, specific hash, specific
+additional size and code-unit size inside a compatible target/format scope.
+The full and specific hashes are also analysed separately as counterfactual
+components. The complete signature is not a third independent hash algorithm;
+it is the matching identity assembled from both hashes and the size fields.
+
+For each run, `hash-evidence.sqlite3` retains the owner population behind all
+three representations. It records distinct values, singleton and multi-owner
+values, owner links, prevalence by number of distinct owners, affected
+libraries and exact-signature false-positive participation. It also counts the
+component/owner cases that are ambiguous under full-only or specific-only
+identity but unique under the complete tuple. This shows which representation
+loses discrimination without mislabelling a component collision as an actual
+FID false positive.
+
+The primary prevalence denominator is distinct library-release owners within
+the compatible scope. Reference-observation counts remain available as a
+width-sensitive diagnostic, not as independent-library evidence. Exact
+TP/FP/TN/FN rates continue to use the complete tuple; full-only and
+specific-only prevalence answer how much ambiguity each component would create.
+
+The read-only validation observatory indexes every measured `hash-report.json`
+without scanning its large evidence database during a normal GUI refresh. Its
+all-runs view preserves batch identity, method/report/source digests and trend
+points. Selecting a run loads its bounded distribution, per-library table and
+top ambiguous values with owner provenance. Historical reports are never
+rewritten, so later C20/C30 and cross-language views can show population drift
+and be reproduced from the pinned run databases.
+
 Observed facts and inferred explanations remain separate. Initial reason
 categories are compiler/runtime boilerplate, widespread cross-library reuse,
 library-family or common-ancestry reuse, cross-language reuse, trivial/small

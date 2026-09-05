@@ -428,3 +428,30 @@ the 3.3-million-row `reference_identity` table is a performance regression.
 Keep observation writes bounded, retain the engine name and stage timings in
 `hash-report.json`, and use a fresh canary only when changing the expensive
 composite/Ghidra contract itself.
+
+The classifier is cohort-generic. Do not restore the original `len(cohort) ==
+10` acquisition gate: any frozen run must instead contain two non-empty,
+duplicate-free, disjoint folds. The canonical method authority is
+`validation/machine-validation-hash-method.toml`; its SHA-256 participates in
+the source-evidence digest and is stored in the evidence database and report.
+A formula, identity, denominator or safety change requires a new method ID,
+not an in-place reinterpretation of historical rows.
+
+Ghidra exposes a full hash and a specific hash, while exact FID matching here
+uses both plus the additional-size and code-size fields. The evidence compiler
+therefore materialises three views: full-only, specific-only and complete
+tuple. Treat the first two as counterfactual ambiguity measurements. They do
+not redefine TP/FP/TN/FN, and a component shared by several owners is not by
+itself an actual false positive. Preserve the `hash_signature_owner`,
+`hash_type_summary`, `hash_component_distribution`, `hash_component_noise`,
+`hash_component_owner` and `hash_component_library` tables when extending the
+analysis.
+
+`src/fidb_poc/validation_observatory.py` and the read-only
+`/api/v1/validation-observatory` endpoint are the bounded GUI projection.
+Normal refresh reads compact JSON reports only; it must not open every large
+evidence database. The all-runs response omits row-level lists, while one
+selected immutable run carries its prevalence tail, ambiguous hashes, owners
+and per-library burden. The Hash discrimination page deliberately puts that
+measured output above future HDI fitting controls. Keep report, source-evidence
+and method digests visible so a graph can always be traced to its authority.

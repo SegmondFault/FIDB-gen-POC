@@ -205,6 +205,15 @@ the split and the threshold-free, single-signature TP/FP/TN/FN evidence
 contract. Sealed composites can be reanalysed without compilation or Ghidra;
 every TP, FP and FN observation is retained in a run-local SQLite database,
 while TN remains exactly reproducible from stored denominators.
+The analysis method is frozen in
+[`validation/machine-validation-hash-method.toml`](validation/machine-validation-hash-method.toml).
+Each immutable run now records separate full-hash, specific-hash and complete
+FID-signature population evidence, including cross-library prevalence, owner
+provenance and cases where the complete tuple resolves a component-level
+ambiguity. The **Hash discrimination** page indexes all measured batches,
+compares the three representations, plots their prevalence tails and drills
+from a run into affected hashes and libraries. Component-only ambiguity is
+descriptive evidence; TP/FP/TN/FN remains defined on the complete FID tuple.
 
 The split RNG is not process-random. Its checked-in `randomization.seed` is a
 32-byte hexadecimal authority and `sha256-ranked-v1` deterministically ranks

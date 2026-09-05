@@ -151,6 +151,23 @@ terminal report records evidence-resolution, classification and total wall
 time as well as zero compiler/JVM launches. A new composite build is neither
 required nor desirable merely to replace the superseded five-match report.
 
+`machine-validation-hash-method.toml` is the versioned scientific authority.
+It removes cohort-size assumptions from the analyser, defines the compatible
+scope and complete FID identity, fixes the absence of a library-level match
+threshold, and pins the full/specific/complete component comparison. Its digest
+is included in both the evidence database metadata and terminal report; a
+method change therefore invalidates cache reuse and creates new evidence.
+
+The evidence database also stores `hash_type_summary`,
+`hash_component_distribution`, `hash_component_noise`,
+`hash_component_owner` and `hash_component_library`. Full-only and
+specific-only rows measure component ambiguity; the complete tuple remains the
+classification identity for TP/FP/TN/FN. The local read-only endpoint
+`/api/v1/validation-observatory` lists compact summaries for every measured
+run. Supplying one `run_id=<validation-id>:<run-id>` adds the bounded per-run
+distribution, hash/owner and library drill-down without loading every SQLite
+database into the control panel.
+
 The systemd service and two timers in `operations/` call that command. A
 successful scheduled pass immediately invokes validation-scoped retention, so
 worker build/Ghidra scratch is considered only after the hash database and its
