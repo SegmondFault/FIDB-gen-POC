@@ -1,0 +1,14 @@
+[Unit]
+Description=FIDB single-hash machine-validation analysis
+After=local-fs.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified
+ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation scheduled-hashes --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+
+[Install]
+WantedBy=default.target

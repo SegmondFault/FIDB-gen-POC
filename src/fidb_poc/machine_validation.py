@@ -16,7 +16,7 @@ from .c_width import compile_c_width
 VALIDATION_SCHEMA = "fidb-machine-validation/v1"
 VALIDATION_STATUS_SCHEMA = "fidb-machine-validation-status/v1"
 VALIDATION_BATCH_SCHEMA = "fidb-machine-validation-batch/v1"
-VALIDATION_REPORT_SCHEMA = "fidb-machine-validation-report/v1"
+VALIDATION_REPORT_SCHEMA = "fidb-machine-validation-hash-report/v1"
 VALIDATION_SCHEDULE_SCHEMA = "fidb-validation-schedule/v1"
 DEFAULT_AUTHORITY = Path("validation/machine-validation.toml")
 
@@ -363,7 +363,7 @@ def _validation_results(
             "state": "not-run",
             "report_path": None,
             "confusion_matrix": {
-                "unit": "owner-labelled-candidate-decision",
+                "unit": "complete-fid-signature-owner-assertion",
                 "true_positives": None,
                 "false_positives": None,
                 "true_negatives": None,
@@ -381,7 +381,7 @@ def _validation_results(
             "report_path": str(path.relative_to(root)),
             "detail": str(error),
             "confusion_matrix": {
-                "unit": "owner-labelled-candidate-decision",
+                "unit": "complete-fid-signature-owner-assertion",
                 "true_positives": None,
                 "false_positives": None,
                 "true_negatives": None,
@@ -392,6 +392,7 @@ def _validation_results(
         }
     matrix = document.get("confusion_matrix")
     failures = document.get("failures")
+    hash_evidence = document.get("hash_evidence")
     required_matrix = {
         "unit",
         "true_positives",
@@ -420,25 +421,47 @@ def _validation_results(
     valid_matrix = (
         isinstance(matrix, dict)
         and set(matrix) == required_matrix
-        and matrix.get("unit") == "owner-labelled-candidate-decision"
+        and matrix.get("unit") == "complete-fid-signature-owner-assertion"
         and all(
             isinstance(matrix.get(field), int) and matrix[field] >= 0
             for field in required_matrix - {"unit"}
         )
+    )
+    valid_hash_evidence = (
+        isinstance(hash_evidence, dict)
+        and isinstance(hash_evidence.get("database_path"), str)
+        and isinstance(hash_evidence.get("database_sha256"), str)
+        and len(hash_evidence["database_sha256"]) == 64
+        and all(
+            isinstance(hash_evidence.get(field), int)
+            and hash_evidence[field] >= 0
+            for field in (
+                "distinct_signatures",
+                "noisy_signatures",
+                "multi_owner_signatures",
+                "missed_signatures",
+                "query_signature_observations",
+                "unattributed_query_signatures",
+                "fold_results",
+            )
+        )
+        and isinstance(hash_evidence.get("top_noisy"), list)
+        and isinstance(hash_evidence.get("top_low_information"), list)
     )
     if (
         document.get("schema_version") != VALIDATION_REPORT_SCHEMA
         or document.get("validation_id") != validation_id
         or document.get("state") != "measured-complete"
         or not valid_matrix
+        or not valid_hash_evidence
         or not valid_failures
     ):
         return {
             "state": "invalid-report",
             "report_path": str(path.relative_to(root)),
-            "detail": "report does not satisfy fidb-machine-validation-report/v1",
+            "detail": "report does not satisfy fidb-machine-validation-hash-report/v1",
             "confusion_matrix": {
-                "unit": "owner-labelled-candidate-decision",
+                "unit": "complete-fid-signature-owner-assertion",
                 "true_positives": None,
                 "false_positives": None,
                 "true_negatives": None,
@@ -452,10 +475,11 @@ def _validation_results(
         "report_path": str(path.relative_to(root)),
         "confusion_matrix": matrix,
         "failure_summary": {
-            "collisions": sum(row["failure_type"] == "collision" for row in failures),
-            "misses": sum(row["failure_type"] == "miss" for row in failures),
+            "collisions": int(document.get("failure_summary", {}).get("collisions", 0)),
+            "misses": int(document.get("failure_summary", {}).get("misses", 0)),
         },
         "failures": failures,
+        "hash_evidence": hash_evidence,
     }
 
 
@@ -584,10 +608,10 @@ def compile_machine_validation(
             "detail": f"{composite_programs} non-executed composites",
         },
         {
-            "id": "owner-labelled-queries",
-            "label": "Run owner-labelled queries",
+            "id": "single-hash-classification",
+            "label": "Classify every signature",
             "state": "not-run" if eligible else "blocked",
-            "detail": f"{query_projections} primary projections",
+            "detail": "TP / FP / TN / FN without a match-count threshold",
         },
         {
             "id": "machine-report",

@@ -236,7 +236,7 @@ def _machine_validation_main(argv: list[str]) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for command in (
         "status", "reconcile", "materialize", "preflight", "start", "pause",
-        "resume", "run", "_worker",
+        "resume", "run", "analyze-hashes", "scheduled-hashes", "_worker",
     ):
         child = commands.add_parser(command)
         child.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -245,6 +245,12 @@ def _machine_validation_main(argv: list[str]) -> int:
                 "--authority",
                 type=Path,
                 default=Path("validation/machine-validation.toml"),
+            )
+        elif command == "scheduled-hashes":
+            child.add_argument(
+                "--schedule",
+                type=Path,
+                default=Path("validation/machine-validation-hash-schedule.toml"),
             )
         else:
             child.add_argument(
@@ -258,7 +264,7 @@ def _machine_validation_main(argv: list[str]) -> int:
             mode.add_argument("--check", action="store_true")
         if command in {"start", "run", "_worker"}:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
-        if command in {"run", "_worker"}:
+        if command in {"run", "analyze-hashes", "_worker"}:
             child.add_argument("--run-id", required=True)
         if command == "_worker":
             child.add_argument("--positions", required=True)
@@ -280,6 +286,7 @@ def _machine_validation_main(argv: list[str]) -> int:
             runtime_status,
             start_validation,
         )
+        from .machine_validation_hashes import analyze_hashes, scheduled_hash_analysis
 
         if arguments.command == "preflight":
             document = preflight(arguments.project_root, arguments.runtime)
@@ -303,6 +310,21 @@ def _machine_validation_main(argv: list[str]) -> int:
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0 if document["state"] == "measured-complete" else 1
+        if arguments.command == "analyze-hashes":
+            document = analyze_hashes(
+                arguments.project_root,
+                arguments.run_id,
+                runtime_path=arguments.runtime,
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0 if document["state"] == "measured-complete" else 1
+        if arguments.command == "scheduled-hashes":
+            document = scheduled_hash_analysis(
+                arguments.project_root,
+                schedule_path=arguments.schedule,
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
         if arguments.command == "_worker":
             positions = [int(value) for value in arguments.positions.split(",") if value]
             return _worker(

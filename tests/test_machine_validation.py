@@ -40,7 +40,7 @@ class MachineValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             status["results"]["confusion_matrix"]["unit"],
-            "owner-labelled-candidate-decision",
+            "complete-fid-signature-owner-assertion",
         )
         self.assertIsNone(status["results"]["confusion_matrix"]["true_positives"])
 

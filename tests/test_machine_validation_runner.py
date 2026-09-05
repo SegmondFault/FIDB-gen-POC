@@ -2,6 +2,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -18,6 +19,13 @@ from fidb_poc.machine_validation_runner import (
     pause_validation,
     resume_validation,
     runtime_status,
+)
+from fidb_poc.machine_validation_hashes import (
+    DECISION_UNIT,
+    _classify_fold,
+    _create_evidence,
+    _window_open,
+    load_hash_schedule,
 )
 
 
@@ -108,6 +116,100 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 index, query, "r1", "t1", "android", "ELF", True
             )
             self.assertEqual(wrong_platform, {})
+
+    def test_single_hash_analysis_has_no_library_acceptance_threshold(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            index = root / "reference.sqlite3"
+            reference = sqlite3.connect(index)
+            reference.execute(
+                """
+                CREATE TABLE reference_identity(
+                    language TEXT, target_os TEXT, binary_format TEXT,
+                    full_hash TEXT, specific_hash TEXT,
+                    additional_size INTEGER, code_size INTEGER, owner TEXT,
+                    route_id TEXT, treatment_id TEXT, function_name TEXT,
+                    evidence_path TEXT
+                )
+                """
+            )
+            reference.executemany(
+                "INSERT INTO reference_identity VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                [
+                    ("lang", "linux", "ELF", "01", "a", 0, 10, "one", "r", "t", "one-hit", "one.jsonl"),
+                    ("lang", "linux", "ELF", "04", "d", 0, 40, "one", "r", "t", "one-miss", "one.jsonl"),
+                    ("lang", "linux", "ELF", "05", "e", 0, 50, "two", "r", "t", "two-miss", "two.jsonl"),
+                    ("lang", "linux", "ELF", "02", "b", 0, 20, "three", "r", "t", "wrong-owner", "three.jsonl"),
+                ],
+            )
+            reference.commit()
+            query = root / "query.jsonl"
+            query.write_text(
+                "\n".join(
+                    json.dumps(
+                        {
+                            "address": str(index),
+                            "function_name": f"query-{index}",
+                            "ghidra_language_id": "lang",
+                            "full_hash": full,
+                            "specific_hash": specific,
+                            "specific_hash_additional_size": 0,
+                            "code_unit_size": size,
+                        }
+                    )
+                    for index, (full, specific, size) in enumerate(
+                        (("01", "a", 10), ("02", "b", 20), ("03", "c", 30))
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            output = _create_evidence(root / "evidence.sqlite3", "run", "digest")
+            result = _classify_fold(
+                output,
+                reference,
+                position=1,
+                route_id="r",
+                treatment_id="t",
+                target_os="linux",
+                binary_format="ELF",
+                fold="A",
+                present=["one", "two"],
+                cohort=["one", "two", "three"],
+                query_path=query,
+                query_relative="query.jsonl",
+            )
+            outcomes = dict(
+                output.execute(
+                    "SELECT outcome, COUNT(*) FROM hash_observation GROUP BY outcome"
+                ).fetchall()
+            )
+            output.close()
+            reference.close()
+
+            self.assertEqual(DECISION_UNIT, "complete-fid-signature-owner-assertion")
+            self.assertEqual(result["true_positives"], 1)
+            self.assertEqual(result["false_positives"], 1)
+            self.assertEqual(result["true_negatives"], 2)
+            self.assertEqual(result["false_negatives"], 2)
+            self.assertEqual(result["unattributed_query_signatures"], 2)
+            self.assertEqual(outcomes, {"fn": 2, "fp": 1, "tp": 1})
+
+    def test_hash_analysis_windows_are_toml_controlled(self):
+        schedule = load_hash_schedule(self.root)
+
+        afternoon = datetime(2026, 9, 5, 12, 0, tzinfo=timezone.utc)
+        overnight = datetime(2026, 9, 5, 1, 0, tzinfo=timezone.utc)
+        closed = datetime(2026, 9, 5, 6, 0, tzinfo=timezone.utc)
+
+        self.assertEqual(
+            _window_open(schedule, afternoon),
+            (True, "c10-reanalysis-2026-09-05-afternoon"),
+        )
+        self.assertEqual(
+            _window_open(schedule, overnight), (True, "normal-overnight")
+        )
+        self.assertEqual(_window_open(schedule, closed), (False, None))
 
     def test_canary_gate_rejects_stale_runtime_and_accepts_exact_contract(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,0 +1,21 @@
+schema_version = "fidb-machine-validation-hash-schedule/v1"
+timezone = "Europe/Luxembourg"
+source_run_policy = "latest-complete-full-without-current-hash-report"
+runtime = "validation/machine-validation-runtime.toml"
+finish_started = true
+
+[[window]]
+id = "c10-reanalysis-2026-09-05-afternoon"
+kind = "once"
+date = "2026-09-05"
+start = "13:30"
+stop_admitting = "17:30"
+enabled = true
+
+[[window]]
+id = "normal-overnight"
+kind = "weekly"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_admitting = "05:30"
+enabled = true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the one-off C10 single-hash reanalysis in the afternoon window
+
+[Timer]
+OnCalendar=2026-09-05 13:30:00 Europe/Luxembourg
+Persistent=true
+AccuracySec=1s
+Unit=fidb-machine-validation-hash-analysis.service
+
+[Install]
+WantedBy=timers.target

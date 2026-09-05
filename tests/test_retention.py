@@ -201,13 +201,19 @@ class RetentionTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        report = run / "report.json"
+        database = run / "hash-evidence.sqlite3"
+        database.write_bytes(b"retained hash observations")
+        report = run / "hash-report.json"
         report.write_text(
             json.dumps(
                 {
-                    "schema_version": "fidb-machine-validation-report/v1",
+                    "schema_version": "fidb-machine-validation-hash-report/v1",
                     "validation_id": "cohort-001",
                     "state": "measured-complete",
+                    "hash_evidence": {
+                        "database_path": str(database.relative_to(self.root)),
+                        "database_sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
+                    },
                     "metrics": {
                         "expected_work_units": 1,
                         "complete_work_units": 1,
@@ -433,7 +439,8 @@ class RetentionTests(unittest.TestCase):
 
         self.assertFalse((run / "worker-1234").exists())
         self.assertTrue((run / "worker-01.log").is_file())
-        self.assertTrue((run / "report.json").is_file())
+        self.assertTrue((run / "hash-report.json").is_file())
+        self.assertTrue((run / "hash-evidence.sqlite3").is_file())
         self.assertTrue(
             (run / "units/001-route-baseline/fold-A/query-signatures.jsonl").is_file()
         )

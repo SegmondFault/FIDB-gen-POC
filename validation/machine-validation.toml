@@ -23,7 +23,7 @@ identity_policy = "all-applicable-execution-identities"
 materialize_only_when_eligible = true
 ledger = "var/fidb-coordinator/ledger.sqlite3"
 width_run_glob = "artifacts/width-runs/*/*/width-run.json"
-report_glob = "artifacts/validation-runs/c-top10-cohort-001/*/report.json"
+report_glob = "artifacts/validation-runs/c-top10-cohort-001/*/hash-report.json"
 
 [randomization]
 method = "uniform-random-five-five"
@@ -73,9 +73,9 @@ trigger = "after-complete-ten-library-cohort"
 
 [queries]
 primary_projections = [
-  "correct-fold-exact-identity-withheld",
-  "opposite-fold",
-  "complete-owner-labelled-candidate-db",
+  "exact-signature-present-owner",
+  "exact-signature-opposite-fold-owner",
+  "complete-signature-owner-evidence-ledger",
 ]
 
 [metrics]

@@ -849,7 +849,7 @@ def _validation_evidence_record(
     expected_schema = (
         "fidb-machine-validation-canary/v1"
         if mode == "canary"
-        else "fidb-machine-validation-report/v1"
+        else "fidb-machine-validation-hash-report/v1"
     )
     metrics = report.get("metrics")
     if (
@@ -886,6 +886,27 @@ def _validation_evidence_record(
 
     retain(status_path, "validation status")
     retain(report_path, "validation terminal report")
+    if mode == "full":
+        hash_evidence = report.get("hash_evidence")
+        database_value = (
+            hash_evidence.get("database_path")
+            if isinstance(hash_evidence, dict)
+            else None
+        )
+        if not isinstance(database_value, str):
+            raise RetentionError("validation hash report has no evidence database")
+        database_path = _safe_regular(
+            policy.root, Path(database_value), "validation hash evidence database"
+        )
+        try:
+            database_path.relative_to(run_root)
+        except ValueError as error:
+            raise RetentionError(
+                "validation hash evidence database escapes its run root"
+            ) from error
+        if _sha256(database_path) != hash_evidence.get("database_sha256"):
+            raise RetentionError("validation hash evidence digest does not match report")
+        retain(database_path, "validation hash evidence database")
     result_paths = sorted((run_root / "units").glob("*/result.json"))
     if len(result_paths) != expected_units:
         raise RetentionError(

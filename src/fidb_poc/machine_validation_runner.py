@@ -1081,6 +1081,14 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             "report_path": str(report_path.relative_to(root)),
         }
         _atomic_json(status_path, completed_status)
+        if report["state"] == "measured-complete" and mode == "full":
+            # Keep report.json as evidence of the superseded thresholded
+            # implementation.  The status-bound scientific report is rebuilt
+            # from every retained signature with no acceptance threshold.
+            from .machine_validation_hashes import analyze_hashes
+
+            report = analyze_hashes(root, run_id, runtime_path=runtime_path)
+            completed_status = json.loads(status_path.read_text(encoding="utf-8"))
         if report["state"] == "measured-complete":
             # The retention collector refuses to touch validation scratch while
             # this lock exists. Release it only after the terminal report and
