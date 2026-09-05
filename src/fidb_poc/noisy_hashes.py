@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 import tempfile
 import tomllib
 from typing import Mapping
@@ -21,7 +22,7 @@ DEFAULT_AUTHORITY = Path("validation/noisy-hashes.toml")
 _SIGNATURE_ID = re.compile(r"^noise-[0-9a-f]{24}$")
 _TOP_LEVEL = {"schema_version", "id", "label", "state", "sources", "classification", "management", "display"}
 _SECTIONS = {
-    "sources": {"machine_report_glob", "ecological_report_glob", "route_registry", "lane_registry", "decision_glob"},
+    "sources": {"machine_evidence_glob", "ecological_report_glob", "route_registry", "lane_registry", "decision_glob"},
     "classification": {"candidate_min_collisions", "confirmed_min_collisions", "confirmed_min_distinct_runs", "high_risk_min_distinct_owners", "grouping_key"},
     "management": {"default_state", "allowed_states", "quarantine_effect", "automatic_deletion", "require_reason"},
     "display": {"max_evidence_rows_per_hash", "show_single_observation_candidates"},
@@ -143,11 +144,67 @@ def compile_noisy_hashes(
         set(config["management"]["allowed_states"]),
     )
     groups: dict[tuple[str, str], dict[str, object]] = {}
-    source_specs = (
-        ("machine", str(config["sources"]["machine_report_glob"])),
-        ("ecological", str(config["sources"]["ecological_report_glob"])),
-    )
+    evidence_limit = int(config["display"]["max_evidence_rows_per_hash"])
+    source_specs = (("ecological", str(config["sources"]["ecological_report_glob"])),)
     reports_scanned = 0
+    evidence_databases_scanned = 0
+    for path in sorted(root.glob(str(config["sources"]["machine_evidence_glob"]))):
+        if not path.is_file() or path.is_symlink():
+            continue
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        try:
+            metadata = dict(connection.execute("SELECT key, value FROM metadata"))
+            if (
+                metadata.get("schema_version")
+                != "fidb-machine-validation-hash-evidence/v1"
+                or metadata.get("state") != "complete"
+            ):
+                continue
+            evidence_databases_scanned += 1
+            run_id = metadata.get("source_run_id", path.parent.name)
+            for row in connection.execute(
+                """
+                SELECT scope, language, full_hash, specific_hash,
+                       additional_size, code_size, owner, route_id,
+                       treatment_id, query_function, evidence_path
+                FROM hash_observation
+                WHERE outcome='fp'
+                ORDER BY scope, full_hash, specific_hash, additional_size,
+                         code_size, owner, route_id, treatment_id
+                """
+            ):
+                signature = (
+                    f'{row["full_hash"]}:{row["specific_hash"]}:'
+                    f'{row["additional_size"]}:{row["code_size"]}'
+                )
+                scope = str(row["scope"])
+                group = groups.setdefault(
+                    (scope, signature),
+                    {"scope": scope, "signature": signature, "runs": set(), "owners": set(), "sources": set(), "evidence": [], "collisions": 0},
+                )
+                group["runs"].add(run_id)
+                group["owners"].add(str(row["owner"]))
+                group["sources"].add("machine")
+                group["collisions"] += 1
+                if len(group["evidence"]) < evidence_limit:
+                    group["evidence"].append(
+                        {
+                            "source": "machine",
+                            "run_id": run_id,
+                            "owner": str(row["owner"]),
+                            "library_id": str(row["owner"]),
+                            "function_id": str(row["query_function"]),
+                            "route_id": str(row["route_id"]),
+                            "compiler_id": str(row["route_id"]),
+                            "treatment_id": str(row["treatment_id"]),
+                            "evidence_path": str(row["evidence_path"] or path.relative_to(root)),
+                        }
+                    )
+        except sqlite3.Error:
+            continue
+        finally:
+            connection.close()
     for source_kind, pattern in source_specs:
         for path in sorted(root.glob(pattern)):
             if not path.is_file() or path.is_symlink():
@@ -169,32 +226,33 @@ def compile_noisy_hashes(
                 scope = _scope_for_failure(failure, report, routes)
                 group = groups.setdefault(
                     (scope, signature),
-                    {"scope": scope, "signature": signature, "runs": set(), "owners": set(), "sources": set(), "evidence": []},
+                    {"scope": scope, "signature": signature, "runs": set(), "owners": set(), "sources": set(), "evidence": [], "collisions": 0},
                 )
                 group["runs"].add(run_id)
                 owner = str(failure.get("owner") or failure.get("candidate_owner") or "unknown")
                 group["owners"].add(owner)
                 group["sources"].add(source_kind)
-                group["evidence"].append(
-                    {
-                        "source": source_kind,
-                        "run_id": run_id,
-                        "owner": owner,
-                        "library_id": failure.get("library_id") or owner,
-                        "function_id": failure.get("function_id") or failure.get("target_function") or "",
-                        "route_id": failure.get("route_id") or "",
-                        "compiler_id": failure.get("compiler_id") or "",
-                        "treatment_id": failure.get("treatment_id") or "",
-                        "evidence_path": failure.get("evidence_path") or str(path.relative_to(root)),
-                    }
-                )
+                group["collisions"] += 1
+                if len(group["evidence"]) < evidence_limit:
+                    group["evidence"].append(
+                        {
+                            "source": source_kind,
+                            "run_id": run_id,
+                            "owner": owner,
+                            "library_id": failure.get("library_id") or owner,
+                            "function_id": failure.get("function_id") or failure.get("target_function") or "",
+                            "route_id": failure.get("route_id") or "",
+                            "compiler_id": failure.get("compiler_id") or "",
+                            "treatment_id": failure.get("treatment_id") or "",
+                            "evidence_path": failure.get("evidence_path") or str(path.relative_to(root)),
+                        }
+                    )
     rows: list[dict[str, object]] = []
     thresholds = config["classification"]
-    evidence_limit = int(config["display"]["max_evidence_rows_per_hash"])
     for (scope, signature), group in groups.items():
         identity = hashlib.sha256(f"{scope}\0{signature}".encode()).hexdigest()
         signature_id = f"noise-{identity[:24]}"
-        collisions = len(group["evidence"])
+        collisions = int(group["collisions"])
         distinct_runs = len(group["runs"])
         distinct_owners = len(group["owners"])
         classification = (
@@ -244,6 +302,7 @@ def compile_noisy_hashes(
         "reviewed_shared": sum(row["disposition"] == "reviewed-shared" for row in rows),
         "cleared": sum(row["disposition"] == "cleared" for row in rows),
         "reports_scanned": reports_scanned,
+        "evidence_databases_scanned": evidence_databases_scanned,
     }
     body = {
         "schema_version": NOISY_HASH_STATUS_SCHEMA,

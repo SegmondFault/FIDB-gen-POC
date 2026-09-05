@@ -4,7 +4,7 @@ label = "Cross-validation noisy hash trust ledger"
 state = "active-observation"
 
 [sources]
-machine_report_glob = "artifacts/validation-runs/*/*/report.json"
+machine_evidence_glob = "artifacts/validation-runs/*/*/hash-evidence.sqlite3"
 ecological_report_glob = "var/fidb-ecological-validation/cases/eco-*/report.json"
 route_registry = "toolchains/routes.toml"
 lane_registry = "lanes/registry.toml"

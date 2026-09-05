@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import shutil
+import sqlite3
 import tempfile
 import unittest
 
@@ -69,3 +70,51 @@ class NoisyHashTests(unittest.TestCase):
         decision = self.root / f'validation/noisy-hash-decisions/{row["signature_id"]}.toml'
         self.assertTrue(decision.is_file())
 
+    def test_machine_hash_evidence_reads_every_fp_observation(self):
+        evidence = (
+            self.root
+            / "artifacts/validation-runs/cohort/run/hash-evidence.sqlite3"
+        )
+        evidence.parent.mkdir(parents=True)
+        connection = sqlite3.connect(evidence)
+        connection.executescript(
+            """
+            CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE hash_observation(
+                scope TEXT, language TEXT, full_hash TEXT, specific_hash TEXT,
+                additional_size INTEGER, code_size INTEGER, outcome TEXT,
+                owner TEXT, route_id TEXT, treatment_id TEXT, fold TEXT,
+                query_address TEXT, query_function TEXT,
+                corpus_function TEXT, evidence_path TEXT
+            );
+            """
+        )
+        connection.executemany(
+            "INSERT INTO metadata VALUES (?,?)",
+            [
+                ("schema_version", "fidb-machine-validation-hash-evidence/v1"),
+                ("state", "complete"),
+                ("source_run_id", "machine-run"),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [
+                (
+                    "linux|ELF|lang", "lang", "aa", "bb", 1, 20, "fp",
+                    owner, "route", "treatment", "A", "1000", "query",
+                    "corpus", "reference.jsonl",
+                )
+                for owner in ("wrong-a@1", "wrong-b@2")
+            ],
+        )
+        connection.commit()
+        connection.close()
+
+        status = compile_noisy_hashes(self.root)
+        machine = next(row for row in status["hashes"] if row["scope"] == "linux|ELF|lang")
+
+        self.assertEqual(status["summary"]["evidence_databases_scanned"], 1)
+        self.assertEqual(machine["collisions"], 2)
+        self.assertEqual(machine["distinct_owners"], 2)
+        self.assertEqual(machine["sources"], ["machine"])
