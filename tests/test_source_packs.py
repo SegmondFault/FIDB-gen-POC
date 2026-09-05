@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from fidb_poc.cli import main
 from fidb_poc.source_packs import (
+    import_source_archive,
     load_source_pack,
     pull_source_pack,
     source_pack_status,
@@ -123,6 +124,41 @@ class SourcePackTests(unittest.TestCase):
                 root / "var/fidb-sources/downloads",
             )
             self.assertTrue(result["summary"]["ready"])
+
+    def test_import_verifies_local_archive_into_managed_cache(self):
+        payload = b"source"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack_path = root / "sources/test-pack.toml"
+            digest, _ = _catalog(pack_path, payload)
+            archive = root / "incoming.tar.gz"
+            archive.write_bytes(payload)
+
+            result = import_source_archive(root, pack_path, "alpha", archive)
+
+            cached = root / "var/fidb-sources/downloads" / digest
+            self.assertEqual(cached.read_bytes(), payload)
+            self.assertEqual(result["operation"], "import")
+            self.assertTrue(result["summary"]["ready"])
+
+    def test_cli_import_requires_one_reviewed_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _catalog(root / "sources/test-pack.toml")
+            errors = io.StringIO()
+            with contextlib.redirect_stderr(errors):
+                status = main(
+                    [
+                        "source",
+                        "import",
+                        "test-pack",
+                        "--project-root",
+                        str(root),
+                    ]
+                )
+
+            self.assertEqual(status, 1)
+            self.assertIn("exactly one --id and --file", errors.getvalue())
 
     def test_cli_status_does_not_acquire(self):
         with tempfile.TemporaryDirectory() as temporary:

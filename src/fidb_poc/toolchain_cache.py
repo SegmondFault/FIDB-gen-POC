@@ -238,3 +238,81 @@ def acquire_pinned(
         raise CacheError(
             f"failed to acquire reviewed payload after {attempts} attempts: {url}"
         ) from last_error
+
+
+def import_pinned(
+    source: Path,
+    expected_sha256: str,
+    downloads: Path,
+    *,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+) -> AcquisitionResult:
+    """Import one local payload through the immutable cache boundary.
+
+    This is the offline counterpart to :func:`acquire_pinned`: the caller must
+    still resolve the digest from reviewed authority, while this function
+    verifies the local bytes and installs them using the same per-digest lock,
+    quarantine and durable atomic rename contract.
+    """
+
+    _validate_digest(expected_sha256)
+    if max_bytes < 1:
+        raise ValueError("max_bytes must be positive")
+    if source.is_symlink() or not source.is_file():
+        raise CacheError("local import must be a regular file")
+    source = source.resolve()
+
+    downloads.mkdir(parents=True, exist_ok=True)
+    locks = downloads.parent / "locks"
+    locks.mkdir(parents=True, exist_ok=True)
+    _fsync_directory(downloads.parent)
+    destination = downloads / expected_sha256
+    quarantined: Path | None = None
+
+    lock_path = locks / f"{expected_sha256}.lock"
+    with lock_path.open("a+b") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        cached = inspect_cached(downloads, expected_sha256)
+        if cached.state == "verified-cached":
+            return AcquisitionResult(
+                path=destination,
+                sha256=expected_sha256,
+                bytes=int(cached.bytes or 0),
+                cache_hit=True,
+                attempts=0,
+            )
+        if destination.exists():
+            quarantined = _quarantine(downloads, destination, expected_sha256)
+
+        temporary: Path | None = None
+        try:
+            descriptor, name = tempfile.mkstemp(
+                prefix=f".{expected_sha256}.", suffix=".part", dir=downloads
+            )
+            temporary = Path(name)
+            with source.open("rb") as input_stream, os.fdopen(descriptor, "wb") as output:
+                observed, byte_count = _copy_response(
+                    input_stream, output, max_bytes=max_bytes
+                )
+                output.flush()
+                os.fsync(output.fileno())
+            if observed != expected_sha256:
+                raise CacheIntegrityError(
+                    "local payload digest does not match reviewed SHA-256: "
+                    f"expected {expected_sha256}, observed {observed}"
+                )
+            os.chmod(temporary, 0o644)
+            os.replace(temporary, destination)
+            temporary = None
+            _fsync_directory(downloads)
+            return AcquisitionResult(
+                path=destination,
+                sha256=expected_sha256,
+                bytes=byte_count,
+                cache_hit=False,
+                attempts=1,
+                quarantined=quarantined,
+            )
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)

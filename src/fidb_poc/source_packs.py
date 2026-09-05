@@ -14,7 +14,7 @@ import re
 import tomllib
 from urllib.parse import urlparse
 
-from .toolchain_cache import acquire_pinned, inspect_cached
+from .toolchain_cache import acquire_pinned, import_pinned, inspect_cached
 
 SOURCE_PACK_SCHEMA = "fidb-source-pack/v1"
 SOURCE_STATUS_SCHEMA = "fidb-source-pack-status/v1"
@@ -252,4 +252,35 @@ def pull_source_pack(
     status = source_pack_status(project_root, pack_path, requested)
     status["operation"] = "pull"
     status["acquisitions"] = acquisitions
+    return status
+
+
+def import_source_archive(
+    project_root: Path,
+    pack_path: Path,
+    source_id: str,
+    archive: Path,
+) -> dict[str, object]:
+    """Verify and import one reviewed local archive without extracting it."""
+
+    pack = load_source_pack(pack_path)
+    selected = select_sources(pack["source"], (source_id,))  # type: ignore[arg-type]
+    source = selected[0]
+    observed_bytes = archive.stat().st_size
+    if observed_bytes != int(source["download_bytes"]):
+        raise ValueError(
+            f"reviewed size mismatch for {source_id}: expected "
+            f"{source['download_bytes']}, observed {observed_bytes}"
+        )
+    result = import_pinned(
+        archive, str(source["sha256"]), project_root / MANAGED_SOURCE_DOWNLOADS
+    )
+    status = source_pack_status(project_root, pack_path, (source_id,))
+    status["operation"] = "import"
+    values = asdict(result)
+    values["path"] = str(result.path)
+    values["quarantined"] = (
+        str(result.quarantined) if result.quarantined is not None else None
+    )
+    status["acquisitions"] = [{"source_id": source_id, **values}]
     return status
