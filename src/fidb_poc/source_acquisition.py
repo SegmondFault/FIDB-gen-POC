@@ -779,6 +779,84 @@ def acquisition_status(
     }
 
 
+def acquisition_receipt_projection(
+    root: Path, acquisition_id: str
+) -> dict[str, object]:
+    """Project the last durable verification receipt without rehashing archives.
+
+    The CLI ``status`` command remains the full integrity check.  This bounded
+    projection is for frequently refreshed operator views: it accepts a row
+    only when the receipt is bound to the current lock and the immutable cache
+    object still has the recorded path and size.
+    """
+
+    lock = load_acquisition_lock(root, acquisition_id)
+    receipt = root / MANAGED_RECEIPTS / f"{acquisition_id}.{lock['lock_sha256']}.toml"
+    receipt_rows: dict[str, dict[str, object]] = {}
+    receipt_updated_utc: str | None = None
+    if receipt.exists():
+        document = tomllib.loads(receipt.read_text(encoding="utf-8"))
+        if (
+            document.get("schema_version") != RECEIPT_SCHEMA
+            or document.get("acquisition_id") != acquisition_id
+            or document.get("lock_sha256") != lock["lock_sha256"]
+        ):
+            raise ValueError("source acquisition receipt authority differs")
+        receipt_updated_utc = str(document["updated_utc"])
+        receipt_rows = {
+            str(row["candidate_key"]): row for row in document.get("source", [])
+        }
+    downloads = (root / MANAGED_SOURCE_DOWNLOADS).resolve()
+    candidates = []
+    for row in lock["candidate"]:
+        key = str(row["candidate_key"])
+        receipt_row = receipt_rows.get(key)
+        receipt_cached = False
+        if row["status"] == "pinned" and receipt_row:
+            expected_path = downloads / str(row["sha256"])
+            recorded_path = Path(str(receipt_row.get("cache_path", "")))
+            try:
+                receipt_cached = (
+                    recorded_path.resolve() == expected_path
+                    and expected_path.is_file()
+                    and not expected_path.is_symlink()
+                    and expected_path.stat().st_size == int(receipt_row["bytes"])
+                    and receipt_row.get("sha256") == row["sha256"]
+                )
+            except (OSError, TypeError, ValueError):
+                receipt_cached = False
+        candidates.append(
+            {
+                "rank": row["rank"],
+                "candidate_key": key,
+                "status": row["status"],
+                "resolver_id": row.get("resolver_id"),
+                "version": row.get("version"),
+                "receipt_cached": receipt_cached,
+                "last_verified_utc": (
+                    receipt_row.get("last_verified_utc") if receipt_row else None
+                ),
+                "reason": row.get("reason"),
+            }
+        )
+    return {
+        "acquisition_id": acquisition_id,
+        "config_path": lock["acquisition"]["catalog_path"],
+        "config_sha256": lock["acquisition"]["catalog_sha256"],
+        "lock_path": lock["lock_path"],
+        "lock_sha256": lock["lock_sha256"],
+        "receipt_path": str(receipt),
+        "receipt_updated_utc": receipt_updated_utc,
+        "summary": {
+            "candidates": len(candidates),
+            "pinned": sum(row["status"] == "pinned" for row in candidates),
+            "receipt_cached": sum(row["receipt_cached"] for row in candidates),
+            "unresolved": sum(row["status"] == "unresolved" for row in candidates),
+        },
+        "candidates": candidates,
+    }
+
+
 def _render_receipt(
     status: dict[str, object],
     failures: list[dict[str, str]],

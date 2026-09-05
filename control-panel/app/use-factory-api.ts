@@ -1227,6 +1227,11 @@ export type CampaignProgrammeCandidate = {
   source_breadth: number;
   popularity_proxy_share_pct: number;
   cumulative_popularity_proxy_pct: number;
+  research_source_pinned: boolean;
+  research_source_cached: boolean;
+  research_source_resolver: string | null;
+  research_source_version: string | null;
+  research_source_reason: string | null;
   screened: boolean;
   source_pinned: boolean;
   source_cached: boolean;
@@ -1248,6 +1253,8 @@ export type CampaignProgrammeCohort = {
   state: 'planned-disarmed';
   stage: string;
   counts: {
+    research_source_pinned: number;
+    research_source_cached: number;
     screened: number;
     source_pinned: number;
     source_cached: number;
@@ -1281,6 +1288,8 @@ export type CampaignProgramme = {
     cohorts: number;
     full_cohorts: number;
     final_cohort_size: number;
+    research_source_pinned_candidates: number;
+    research_source_cached_candidates: number;
     screened_candidates: number;
     source_pinned_candidates: number;
     source_cached_candidates: number;
@@ -1288,6 +1297,12 @@ export type CampaignProgramme = {
     qualification_satisfied_candidates: number;
     planned_qualification_cells: number;
     planned_campaign_executions: number;
+  };
+  source_acquisition: {
+    candidates: number;
+    pinned: number;
+    receipt_cached: number;
+    unresolved: number;
   };
   stage_counts: Record<string, number>;
   cohorts: CampaignProgrammeCohort[];

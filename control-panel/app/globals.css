@@ -297,7 +297,7 @@ button { font: inherit; }
 .c80-programme-head > div:not(:first-child) { padding-left: 11px; border-left: 1px solid #293442; }
 .c80-programme-head strong { color: #d4dde6; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .c80-programme-head small { color: var(--muted-2); font-size: 6px; }
-.c80-funnel { padding: 10px 13px; display: grid; grid-template-columns: repeat(11, auto); justify-content: center; gap: 10px; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.c80-funnel { padding: 10px 13px; display: grid; grid-template-columns: repeat(13, auto); justify-content: center; gap: 8px; align-items: center; border-bottom: 1px solid var(--line-soft); }
 .c80-funnel article { min-width: 105px; display: flex; flex-direction: column; gap: 3px; }
 .c80-funnel article > span { color: #77879a; font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 .c80-funnel article > strong { color: #cdd6df; font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -308,7 +308,7 @@ button { font: inherit; }
 .c80-workload-strip span { padding: 7px 10px; color: #657387; border-right: 1px solid var(--line-soft); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; text-align: center; }
 .c80-workload-strip span:last-child { border-right: 0; }
 .c80-workload-strip b { color: var(--cyan); font-size: 8px; }
-.c80-cohort-ledger > header, .c80-cohort-ledger > details > summary { min-height: 43px; padding: 6px 12px; display: grid; grid-template-columns: minmax(245px, 1.5fr) repeat(4, minmax(62px, .4fr)) minmax(115px, .7fr) 42px; gap: 9px; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.c80-cohort-ledger > header, .c80-cohort-ledger > details > summary { min-height: 43px; padding: 6px 12px; display: grid; grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(62px, .4fr)) minmax(110px, .65fr) 42px; gap: 8px; align-items: center; border-bottom: 1px solid var(--line-soft); }
 .c80-cohort-ledger > header { min-height: 27px; color: #637187; background: #0c131b; font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 .c80-cohort-ledger > details > summary { cursor: pointer; list-style: none; }
 .c80-cohort-ledger > details > summary::-webkit-details-marker { display: none; }

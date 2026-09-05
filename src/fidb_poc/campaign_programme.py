@@ -14,6 +14,7 @@ import re
 import tomllib
 
 from .source_packs import MANAGED_SOURCE_DOWNLOADS, load_source_pack
+from .source_acquisition import acquisition_receipt_projection
 from .toolchain_cache import inspect_cached
 
 PROGRAMME_SCHEMA = "fidb-campaign-programme/v1"
@@ -265,6 +266,10 @@ def compile_campaign_programme(
     if len(aliases) != len(raw_aliases):
         raise ValueError("campaign identity aliases must be unique")
     sources = _reviewed_sources(root)
+    research_acquisition = acquisition_receipt_projection(root, str(document["id"]))
+    research_sources = {
+        str(row["candidate_key"]): row for row in research_acquisition["candidates"]
+    }
     recipe_ids = (
         {str(row["name"]) for row in recipes if row.get("kind") == "native"}
         if recipes is not None
@@ -279,6 +284,7 @@ def compile_campaign_programme(
     for raw in candidates:
         subject_id = aliases.get(str(raw["canonical_key"]), str(raw["canonical_key"]))
         source = sources.get(subject_id)
+        research_source = research_sources[str(raw["canonical_key"])]
         batch = batches_by_subject.get(subject_id)
         qualification = batch.get("qualification") if batch else None
         candidate = {
@@ -290,6 +296,11 @@ def compile_campaign_programme(
                 source and source["cache_state"] == "verified-cached"
             ),
             "source": source,
+            "research_source_pinned": research_source["status"] == "pinned",
+            "research_source_cached": bool(research_source["receipt_cached"]),
+            "research_source_resolver": research_source["resolver_id"],
+            "research_source_version": research_source["version"],
+            "research_source_reason": research_source["reason"],
             "recipe_ready": subject_id in recipe_ids,
             "width_batch_bound": batch is not None,
             "width_batch_id": batch.get("id") if batch else None,
@@ -323,6 +334,12 @@ def compile_campaign_programme(
             raise ValueError("campaign cohorts must be contiguous and disarmed")
         rows = projected_candidates[start - 1 : end]
         counts = {
+            "research_source_pinned": sum(
+                bool(row["research_source_pinned"]) for row in rows
+            ),
+            "research_source_cached": sum(
+                bool(row["research_source_cached"]) for row in rows
+            ),
             "screened": sum(bool(row["screened"]) for row in rows),
             "source_pinned": sum(bool(row["source_pinned"]) for row in rows),
             "source_cached": sum(bool(row["source_cached"]) for row in rows),
@@ -373,6 +390,12 @@ def compile_campaign_programme(
         "screened_candidates": sum(
             bool(row["screened"]) for row in projected_candidates
         ),
+        "research_source_pinned_candidates": sum(
+            bool(row["research_source_pinned"]) for row in projected_candidates
+        ),
+        "research_source_cached_candidates": sum(
+            bool(row["research_source_cached"]) for row in projected_candidates
+        ),
         "source_pinned_candidates": sum(
             bool(row["source_pinned"]) for row in projected_candidates
         ),
@@ -415,7 +438,17 @@ def compile_campaign_programme(
             "width_sha256": width_digest,
             "qualification_template": str(template_path.relative_to(root)),
             "qualification_template_sha256": template_digest,
+            "source_acquisition": str(
+                Path(str(research_acquisition["config_path"])).relative_to(root)
+            ),
+            "source_acquisition_sha256": research_acquisition["config_sha256"],
+            "source_lock": str(
+                Path(str(research_acquisition["lock_path"])).relative_to(root)
+            ),
+            "source_lock_sha256": research_acquisition["lock_sha256"],
+            "source_receipt": research_acquisition["receipt_path"],
         },
+        "source_acquisition": research_acquisition["summary"],
         "pipeline": document["pipeline"],
         "summary": summary,
         "stage_counts": stage_counts,

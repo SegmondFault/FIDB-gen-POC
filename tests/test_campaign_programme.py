@@ -18,6 +18,8 @@ class CampaignProgrammeTests(unittest.TestCase):
         )
         self.assertEqual(programme["state"], "planned-disarmed")
         self.assertEqual(programme["summary"]["candidate_population"], 276)
+        self.assertEqual(programme["summary"]["research_source_pinned_candidates"], 275)
+        self.assertEqual(programme["source_acquisition"]["unresolved"], 1)
         self.assertEqual(programme["summary"]["cohorts"], 28)
         self.assertEqual(programme["summary"]["full_cohorts"], 27)
         self.assertEqual(programme["summary"]["final_cohort_size"], 6)
@@ -47,11 +49,16 @@ class CampaignProgrammeTests(unittest.TestCase):
         sqlite = next(row for row in candidates if row["canonical_key"] == "sqlite3")
 
         self.assertTrue(openssl["screened"])
+        self.assertTrue(openssl["research_source_pinned"])
         self.assertTrue(openssl["recipe_ready"])
         self.assertFalse(cmake["screened"])
+        self.assertTrue(cmake["research_source_pinned"])
         self.assertEqual(cmake["stage"], "candidate-screen")
         self.assertEqual(sqlite["subject_id"], "sqlite")
         self.assertTrue(sqlite["source_pinned"])
+        opengl = next(row for row in candidates if row["canonical_key"] == "opengl")
+        self.assertFalse(opengl["research_source_pinned"])
+        self.assertIn("virtual-system-interface", opengl["research_source_reason"])
 
 
 if __name__ == "__main__":
