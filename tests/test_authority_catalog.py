@@ -30,7 +30,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(
             validation["results"]["confusion_matrix"]["unit"],
-            "owner-labelled-candidate-decision",
+            "complete-fid-signature-owner-assertion",
         )
         self.assertEqual(
             len(document["source_digests"]["machine_validations_sha256"]), 64
