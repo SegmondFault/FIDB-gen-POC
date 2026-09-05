@@ -415,7 +415,12 @@ def analyze_hashes(
         except (OSError, ValueError, json.JSONDecodeError):
             pass
     partial = database_path.with_suffix(".sqlite3.partial")
-    partial.unlink(missing_ok=True)
+    for stale in (
+        partial,
+        Path(f"{partial}-wal"),
+        Path(f"{partial}-shm"),
+    ):
+        stale.unlink(missing_ok=True)
     output = _create_evidence(partial, run_id, source_digest_hex)
     reference = sqlite3.connect(f"file:{reference_path}?mode=ro", uri=True)
     try:
