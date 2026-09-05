@@ -82,6 +82,28 @@ class SourcePackTests(unittest.TestCase):
         )
         self.assertEqual(pack["study_path"], "coverage/c-top20-width-study.toml")
 
+    def test_top_thirty_pack_pins_the_next_ranked_continuation(self):
+        root = Path(__file__).resolve().parents[1]
+        pack = load_source_pack(root / "sources/c-top30-v1.toml")
+
+        self.assertEqual(len(pack["source"]), 30)
+        self.assertEqual(
+            [(row["rank"], row["id"]) for row in pack["source"][20:]],
+            [
+                (21, "zlib"),
+                (22, "libidn2"),
+                (23, "libffi"),
+                (24, "icu"),
+                (25, "libxml2"),
+                (26, "libgcrypt"),
+                (27, "gnutls"),
+                (28, "libuv"),
+                (29, "openjpeg"),
+                (30, "opus"),
+            ],
+        )
+        self.assertEqual(pack["study_path"], "coverage/c-top30-width-study.toml")
+
     def test_status_is_read_only_and_reports_verified_cache(self):
         payload = b"source"
         with tempfile.TemporaryDirectory() as temporary:

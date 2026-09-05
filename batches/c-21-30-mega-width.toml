@@ -1,0 +1,36 @@
+schema_version = "fidb-width-batch/v1"
+id = "batch-c21-30"
+name = "c-21-30-mega-width"
+label = "C ranks 21–30 · exact non-Apple width v2"
+state = "defined-disarmed"
+language_id = "c"
+purpose = "Prepare global study ranks 21–30 against the same expanded non-Apple compiler-generation and treatment width used for C10 and C11–20."
+source_pack = "sources/c-top30-v1.toml"
+source_pack_sha256 = "1a98a2720d58343bf95cdf0a03c5a25629e151994938b15397f4d7507619445e"
+source_ids = [
+  "zlib",
+  "libidn2",
+  "libffi",
+  "icu",
+  "libxml2",
+  "libgcrypt",
+  "gnutls",
+  "libuv",
+  "openjpeg",
+  "opus",
+]
+width_authority = "coverage/c-width-v2.toml"
+width_authority_sha256 = "228669026327dd6aee49af151167fa82e89dc3307bfdc795612682a73762d6f0"
+width_route_profile_digest = "2d2c7f74dff3fac244bc19f92c83885db8f9605ac2f3eca195a8b81ef1a3861d"
+width_study = "coverage/c-top30-width-study.toml"
+width_study_sha256 = "014521765e4ffa8414bca30b4c2d05bdadb377b8be1d96572a12f7c4508cea3a"
+recipe_policy = "Resolve each selected source as <source-id>@<pinned-version>; require its reviewed native recipe to match the source URL and SHA-256 before materialization."
+queue_policy = "Preparation only. Keep out of plans/priority-queue.toml until every selected library has a reviewed fixed adapter and recipe, all required dependency pins are cached, and route qualification is deliberately executed and reviewed."
+
+[expected]
+libraries = 10
+route_profiles = 37
+compiler_identities = 10
+executable_treatments = 6
+executions_per_library = 222
+total_executions = 2220

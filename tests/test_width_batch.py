@@ -76,6 +76,35 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(batch["summary"]["total_executions"], 2_220)
         self.assertEqual(batch["summary"]["locally_qualified_routes"], 37)
 
+    def test_c21_to_c30_batch_is_bound_but_recipe_blocked(self):
+        path = self.root / "batches/c-21-30-mega-width.toml"
+        batch = load_width_batch(self.root, path)
+        projected = project_width_batch_readiness(
+            batch, authority_catalog(self.root)["recipes"]
+        )
+
+        self.assertEqual(
+            [(row["rank"], row["id"]) for row in batch["libraries"]],
+            [
+                (21, "zlib"),
+                (22, "libidn2"),
+                (23, "libffi"),
+                (24, "icu"),
+                (25, "libxml2"),
+                (26, "libgcrypt"),
+                (27, "gnutls"),
+                (28, "libuv"),
+                (29, "openjpeg"),
+                (30, "opus"),
+            ],
+        )
+        self.assertEqual(batch["summary"]["route_profiles"], 37)
+        self.assertEqual(batch["summary"]["executions_per_library"], 222)
+        self.assertEqual(batch["summary"]["total_executions"], 2_220)
+        self.assertEqual(projected["readiness"]["recipe_ready_libraries"], 0)
+        self.assertEqual(projected["readiness"]["materializable_executions"], 0)
+        self.assertEqual(projected["readiness"]["blocked_executions"], 2_220)
+
     def test_recipe_gates_expose_reviewed_libraries_without_arming_queue(self):
         catalog = authority_catalog(self.root)
         batch = project_width_batch_readiness(
