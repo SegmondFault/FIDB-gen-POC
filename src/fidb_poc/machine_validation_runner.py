@@ -1100,6 +1100,8 @@ def _audit_linked_image(
     output: Path,
     audit_path: Path,
     harness_mode: str,
+    *,
+    linker_compatibility: str = "strict",
 ) -> dict[str, object]:
     objdump = _companion_tool(route, "objdump")
     result = subprocess.run(
@@ -1113,6 +1115,9 @@ def _audit_linked_image(
     audit = {
         "schema_version": "fidb-validation-link-audit/v1",
         "harness_mode": harness_mode,
+        "linker_compatibility": linker_compatibility,
+        "text_relocations_permitted": linker_compatibility
+        == "android-32-text-relocations",
         "route_id": route.id,
         "binary_format": route.binary_format,
         "image_kind": "shared-object" if route.binary_format == "ELF" else "dll",
@@ -1136,6 +1141,24 @@ def _audit_linked_image(
     return audit
 
 
+def _needs_android_32_text_relocations(route, stderr: str) -> bool:
+    """Recognise the bounded Android 32-bit non-PIC archive failure.
+
+    Android API 21 can represent these relocations in a shared image.  The
+    validation image is never executed; allowing them preserves the original
+    archive instructions while the link audit still rejects unresolved direct
+    control flow to address zero.
+    """
+
+    return (
+        route.binary_format == "ELF"
+        and getattr(route, "target_os", None) == "android"
+        and getattr(route, "architecture", None) in {"arm", "i686"}
+        and "recompile with -fPIC" in stderr
+        and ("R_ARM_ABS32" in stderr or "R_386_32" in stderr)
+    )
+
+
 def _link_composite(
     route,
     archives: list[Path],
@@ -1151,7 +1174,9 @@ def _link_composite(
         )
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    def command(support: list[Path]) -> list[str]:
+    def command(
+        support: list[Path], *, allow_android_32_text_relocations: bool = False
+    ) -> list[str]:
         if route.binary_format == "PE/COFF":
             return [
                 *route.compiler,
@@ -1165,12 +1190,16 @@ def _link_composite(
                 "-o",
                 str(output),
             ]
+        compatibility_flags = (
+            ["-Wl,-z,notext"] if allow_android_32_text_relocations else []
+        )
         return [
             *route.compiler,
             "-shared",
             "-nostdlib",
             "-Wl,-Bsymbolic",
             "-Wl,--allow-multiple-definition",
+            *compatibility_flags,
             f"-Wl,-Map,{truth_map}",
             *map(str, support),
             "-Wl,--whole-archive",
@@ -1180,47 +1209,80 @@ def _link_composite(
             str(output),
         ]
 
+    support: list[Path] = []
+    allow_android_32_text_relocations = False
     result = subprocess.run(
-        command([]), text=True, capture_output=True, timeout=900, check=False
+        command(support), text=True, capture_output=True, timeout=900, check=False
     )
     log = result.stdout + result.stderr
-    if (
-        result.returncode != 0
-        and route.binary_format == "ELF"
-        and "__stack_chk_fail_local" in result.stderr
-    ):
-        source = output.parent / "stack-chk-fail-local.S"
-        support = output.parent / "stack-chk-fail-local.o"
-        source.write_text(
-            ".text\n.globl __stack_chk_fail_local\n.hidden __stack_chk_fail_local\n"
-            ".type __stack_chk_fail_local, %function\n__stack_chk_fail_local:\n"
-            ".size __stack_chk_fail_local, .-__stack_chk_fail_local\n",
-            encoding="utf-8",
-        )
-        compiled = subprocess.run(
-            [*route.compiler, "-c", "-x", "assembler", str(source), "-o", str(support)],
-            text=True,
-            capture_output=True,
-            timeout=120,
-            check=False,
-        )
-        log += (
-            "\n--- validation stack-check support ---\n"
-            + compiled.stdout
-            + compiled.stderr
-        )
-        if compiled.returncode == 0 and support.is_file():
-            output.unlink(missing_ok=True)
-            result = subprocess.run(
-                command([support]),
+    stack_support_attempted = False
+    for _attempt in range(2):
+        if result.returncode == 0:
+            break
+        if (
+            not allow_android_32_text_relocations
+            and _needs_android_32_text_relocations(route, result.stderr)
+        ):
+            allow_android_32_text_relocations = True
+            retry_label = "android 32-bit text-relocation compatibility"
+        elif (
+            not stack_support_attempted
+            and route.binary_format == "ELF"
+            and "__stack_chk_fail_local" in result.stderr
+        ):
+            stack_support_attempted = True
+            source = output.parent / "stack-chk-fail-local.S"
+            support_object = output.parent / "stack-chk-fail-local.o"
+            source.write_text(
+                ".text\n.globl __stack_chk_fail_local\n.hidden __stack_chk_fail_local\n"
+                ".type __stack_chk_fail_local, %function\n__stack_chk_fail_local:\n"
+                ".size __stack_chk_fail_local, .-__stack_chk_fail_local\n",
+                encoding="utf-8",
+            )
+            compiled = subprocess.run(
+                [
+                    *route.compiler,
+                    "-c",
+                    "-x",
+                    "assembler",
+                    str(source),
+                    "-o",
+                    str(support_object),
+                ],
                 text=True,
                 capture_output=True,
-                timeout=900,
+                timeout=120,
                 check=False,
             )
             log += (
-                "\n--- validation composite retry ---\n" + result.stdout + result.stderr
+                "\n--- validation stack-check support ---\n"
+                + compiled.stdout
+                + compiled.stderr
             )
+            if compiled.returncode != 0 or not support_object.is_file():
+                break
+            support = [support_object]
+            retry_label = "stack-check support"
+        else:
+            break
+        output.unlink(missing_ok=True)
+        result = subprocess.run(
+            command(
+                support,
+                allow_android_32_text_relocations=(
+                    allow_android_32_text_relocations
+                ),
+            ),
+            text=True,
+            capture_output=True,
+            timeout=900,
+            check=False,
+        )
+        log += (
+            f"\n--- validation composite retry: {retry_label} ---\n"
+            + result.stdout
+            + result.stderr
+        )
     (output.parent / "link.log").write_text(log, encoding="utf-8")
     if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
         raise RuntimeError(
@@ -1231,6 +1293,11 @@ def _link_composite(
         output,
         truth_map.with_name("link-audit.json"),
         harness_mode,
+        linker_compatibility=(
+            "android-32-text-relocations"
+            if allow_android_32_text_relocations
+            else "strict"
+        ),
     )
     return output
 

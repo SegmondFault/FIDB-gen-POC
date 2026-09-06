@@ -1031,6 +1031,100 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertNotIn("-Wl,--unresolved-symbols=ignore-all", calls[2])
             self.assertIn("validation composite retry", (root / "link.log").read_text())
 
+    def test_android_32_composite_records_bounded_text_relocation_retry(self):
+        for architecture, relocation in (
+            ("arm", "R_ARM_ABS32"),
+            ("i686", "R_386_32"),
+        ):
+            with self.subTest(architecture=architecture), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                archive = root / "library.a"
+                archive.write_bytes(b"archive")
+                output = root / "truth.elf"
+                calls = []
+
+                def run(command, **_kwargs):
+                    calls.append(command)
+                    if len(calls) == 1:
+                        return Mock(
+                            returncode=1,
+                            stdout="",
+                            stderr=(
+                                f"relocation {relocation} cannot be used; "
+                                "recompile with -fPIC"
+                            ),
+                        )
+                    output.write_bytes(b"\x7fELF")
+                    return Mock(returncode=0, stdout="", stderr="")
+
+                route = SimpleNamespace(
+                    id=f"android-{architecture}",
+                    target_os="android",
+                    architecture=architecture,
+                    binary_format="ELF",
+                    compiler=("/toolchain/bin/clang",),
+                )
+                with (
+                    patch(
+                        "fidb_poc.machine_validation_runner.subprocess.run",
+                        side_effect=run,
+                    ),
+                    patch(
+                        "fidb_poc.machine_validation_runner._audit_linked_image"
+                    ) as audit,
+                ):
+                    linked = _link_composite(
+                        route,
+                        [archive],
+                        output,
+                        root / "link.map",
+                        harness_mode=LINK_HARNESS_POLICY,
+                    )
+
+                self.assertEqual(linked, output)
+                self.assertEqual(len(calls), 2)
+                self.assertNotIn("-Wl,-z,notext", calls[0])
+                self.assertIn("-Wl,-z,notext", calls[1])
+                self.assertEqual(
+                    audit.call_args.kwargs["linker_compatibility"],
+                    "android-32-text-relocations",
+                )
+                self.assertIn(
+                    "android 32-bit text-relocation compatibility",
+                    (root / "link.log").read_text(),
+                )
+
+    def test_non_android_composite_does_not_relax_non_pic_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "library.a"
+            archive.write_bytes(b"archive")
+            route = SimpleNamespace(
+                id="linux-i686",
+                target_os="linux",
+                architecture="i686",
+                binary_format="ELF",
+                compiler=("/toolchain/bin/clang",),
+            )
+            failure = Mock(
+                returncode=1,
+                stdout="",
+                stderr="relocation R_386_32 cannot be used; recompile with -fPIC",
+            )
+            with patch(
+                "fidb_poc.machine_validation_runner.subprocess.run",
+                return_value=failure,
+            ) as run:
+                with self.assertRaisesRegex(RuntimeError, "composite link failed"):
+                    _link_composite(
+                        route,
+                        [archive],
+                        root / "truth.elf",
+                        root / "link.map",
+                        harness_mode=LINK_HARNESS_POLICY,
+                    )
+            run.assert_called_once()
+
     def test_zero_address_control_flow_is_detected_across_instruction_sets(self):
         lines = [
             "  4010: e8 eb bf ff ff call 0 <missing>",
