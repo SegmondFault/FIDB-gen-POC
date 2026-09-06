@@ -37,6 +37,7 @@ RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
 FOLD_RESULT_SCHEMA = "fidb-machine-validation-fold-result/v1"
+WORK_CLAIM_SCHEMA = "fidb-machine-validation-work-claim/v1"
 REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 PAUSE_REQUEST_NAME = "pause-request.json"
@@ -243,6 +244,108 @@ def _unit_result_path(
     )
 
 
+def _claim_path(run_root: Path, position: int) -> Path:
+    return run_root / "claims" / f"{position:03d}.json"
+
+
+def _claim_position(run_root: Path, position: int, *, pid: int | None = None) -> bool:
+    """Claim one unit without a coordinator or cross-process race."""
+
+    path = _claim_path(run_root, position)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    owner = os.getpid() if pid is None else pid
+    try:
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return False
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump(
+            {
+                "schema_version": WORK_CLAIM_SCHEMA,
+                "position": position,
+                "pid": owner,
+                "claimed_at": _now(),
+            },
+            stream,
+            sort_keys=True,
+        )
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    return True
+
+
+def _release_position_claim(
+    run_root: Path, position: int, *, pid: int | None = None
+) -> bool:
+    path = _claim_path(run_root, position)
+    try:
+        claim = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    owner = os.getpid() if pid is None else pid
+    if claim.get("pid") != owner or claim.get("position") != position:
+        return False
+    path.unlink(missing_ok=True)
+    return True
+
+
+def _release_worker_claims(run_root: Path, pid: int) -> list[int]:
+    released = []
+    for path in (run_root / "claims").glob("*.json"):
+        try:
+            claim = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if claim.get("pid") != pid:
+            continue
+        position = claim.get("position")
+        if type(position) is int and _release_position_claim(
+            run_root, position, pid=pid
+        ):
+            released.append(position)
+    return sorted(released)
+
+
+def _worker_finished_cleanly(run_root: Path, pid: int) -> bool:
+    try:
+        progress = json.loads(
+            _worker_progress_path(run_root, pid).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return False
+    return progress.get("state") == "finished"
+
+
+def _cost_aware_positions(
+    run_root: Path,
+    units: Mapping[int, Mapping[str, object]],
+    positions: Iterable[int],
+    mode: str,
+) -> list[int]:
+    """Put historically expensive cells first while preserving deterministic ties."""
+
+    route_seconds: dict[str, list[float]] = defaultdict(list)
+    for document in _result_documents(run_root, mode):
+        if document.get("state") != "complete":
+            continue
+        elapsed = document.get("wall_time_ns")
+        route_id = document.get("route_id")
+        if type(elapsed) is int and elapsed > 0 and isinstance(route_id, str):
+            route_seconds[route_id].append(elapsed / 1_000_000_000)
+    route_cost = {
+        route_id: sum(values) / len(values)
+        for route_id, values in route_seconds.items()
+    }
+    observed_default = sum(route_cost.values()) / len(route_cost) if route_cost else 0.0
+
+    def key(position: int) -> tuple[float, int]:
+        route_id = str(units[position]["route_id"])
+        return (-route_cost.get(route_id, observed_default), position)
+
+    return sorted(positions, key=key)
+
+
 def _terminal_positions(
     run_root: Path,
     mode: str,
@@ -414,6 +517,7 @@ def load_runtime(
         "cell_timeout_attempts",
         "maximum_worker_restarts",
         "worker_poll_seconds",
+        "scheduling_policy",
     }:
         raise ValueError("machine-validation execution policy has unexpected fields")
     if set(canary) != {
@@ -452,6 +556,8 @@ def load_runtime(
         raise ValueError(
             "machine-validation execution.continue_after_cell_failure must be boolean"
         )
+    if execution["scheduling_policy"] != "dynamic-longest-observed-first":
+        raise ValueError("machine-validation scheduling policy is unsupported")
     if safety["execute_target_binaries"] is not False:
         raise ValueError("machine-validation must never execute target binaries")
     for field in (
@@ -1395,7 +1501,14 @@ def _worker(
         unit_root = result_path.parent
         if result_path.is_file():
             previous = json.loads(result_path.read_text(encoding="utf-8"))
-            if previous.get("state") == "complete":
+            if previous.get("state") in {"complete", "failed"}:
+                continue
+        if not _claim_position(run_root, position):
+            continue
+        if result_path.is_file():
+            previous = json.loads(result_path.read_text(encoding="utf-8"))
+            if previous.get("state") in {"complete", "failed"}:
+                _release_position_claim(run_root, position)
                 continue
             _archive_failed_result(result_path)
         route = routes[str(unit["route_id"])]
@@ -1620,8 +1733,10 @@ def _worker(
             _write_worker_progress(run_root, "idle", position=position)
             failed_positions += 1
             if not execution["continue_after_cell_failure"]:
+                _release_position_claim(run_root, position)
                 _write_worker_progress(run_root, "finished", position=position)
                 return 1
+        _release_position_claim(run_root, position)
     _write_worker_progress(run_root, "finished")
     return int(failed_positions > 0)
 
@@ -1986,13 +2101,25 @@ def run_validation(
                     "full machine validation requires a completed canary for the "
                     "current runtime and reference-index contract"
                 )
-        pending = sorted(positions)
         units = {
             int(unit["position"]): unit for unit in evidence["manifest"]["work_unit"]
         }
+        pending = sorted(
+            positions - _terminal_positions(run_root, mode, units, positions)
+        )
+        pending = _cost_aware_positions(run_root, units, pending, mode)
+        shutil.rmtree(run_root / "claims", ignore_errors=True)
+        _atomic_json(
+            run_root / "scheduling-order.json",
+            {
+                "schema_version": "fidb-machine-validation-scheduling-order/v1",
+                "policy": runtime["execution"]["scheduling_policy"],
+                "created_at": _now(),
+                "positions": pending,
+            },
+        )
         worker_count = min(int(runtime["execution"]["workers"]), len(pending))
-        shards = [pending[index::worker_count] for index in range(worker_count)]
-        for index, shard in enumerate(shards, start=1):
+        for index in range(1, worker_count + 1):
             workers.append(
                 _spawn_validation_worker(
                     root,
@@ -2001,7 +2128,7 @@ def run_validation(
                     run_id,
                     mode,
                     index,
-                    shard,
+                    pending,
                 )
             )
         pause_requested = False
@@ -2049,6 +2176,7 @@ def run_validation(
                     )
                     if timed_out is not None:
                         _terminate_worker_groups([process])
+                        _release_worker_claims(run_root, process.pid)
                         result_path = _supervisor_failure(
                             run_root,
                             units[timed_out],
@@ -2069,16 +2197,14 @@ def run_validation(
                         ):
                             _archive_failed_result(result_path)
                 if process.poll() is not None and not worker["handled"]:
-                    worker_positions = list(worker["positions"])
-                    terminal = _terminal_positions(
-                        run_root, mode, units, worker_positions
-                    )
+                    released = _release_worker_claims(run_root, process.pid)
+                    terminal = _terminal_positions(run_root, mode, units, positions)
                     remaining = [
-                        position
-                        for position in worker_positions
-                        if position not in terminal
+                        position for position in pending if position not in terminal
                     ]
-                    if remaining and int(worker["restarts"]) < int(
+                    if _worker_finished_cleanly(run_root, process.pid):
+                        worker["handled"] = True
+                    elif remaining and int(worker["restarts"]) < int(
                         runtime["execution"]["maximum_worker_restarts"]
                     ):
                         replacement = _spawn_validation_worker(
@@ -2088,20 +2214,20 @@ def run_validation(
                             run_id,
                             mode,
                             int(worker["worker_id"]),
-                            remaining,
+                            pending,
                             int(worker["restarts"]) + 1,
                         )
                         worker.update(replacement)
                     else:
-                        if remaining:
-                            for position in remaining:
+                        if released:
+                            for position in released:
                                 _supervisor_failure(
                                     run_root,
                                     units[position],
                                     position,
                                     mode,
                                     "worker-restarts-exhausted",
-                                    "validation worker exited before completing its shard",
+                                    "validation worker exited before completing its claimed unit",
                                 )
                         worker["handled"] = True
             if all(bool(worker["handled"]) for worker in workers):

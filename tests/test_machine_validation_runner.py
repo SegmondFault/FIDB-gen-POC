@@ -12,12 +12,16 @@ from fidb_poc.machine_validation_runner import (
     QUERY_COPY_POLICY,
     REFERENCE_INDEX_SCHEMA,
     _archive_failed_result,
+    _claim_position,
+    _cost_aware_positions,
     _fold_checkpoint_path,
     _link_composite,
     _load_fold_checkpoint,
     _post_validation_retention,
     _query_index,
     _resolve_worker_evidence,
+    _release_position_claim,
+    _release_worker_claims,
     _supervisor_failure,
     _terminal_positions,
     _timed_out_position,
@@ -60,6 +64,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
         self.assertTrue(runtime["execution"]["continue_after_cell_failure"])
         self.assertEqual(runtime["execution"]["cell_timeout_seconds"], 1800)
         self.assertEqual(runtime["execution"]["cell_timeout_attempts"], 2)
+        self.assertEqual(
+            runtime["execution"]["scheduling_policy"],
+            "dynamic-longest-observed-first",
+        )
         self.assertFalse(runtime["safety"]["execute_target_binaries"])
         self.assertEqual(runtime["canary"]["positions"], [1, 145, 175])
 
@@ -669,6 +677,43 @@ class MachineValidationRunnerTests(unittest.TestCase):
             archived = result.parent / "attempts/result-001.json"
             self.assertEqual(
                 json.loads(archived.read_text(encoding="utf-8"))["error"], "link"
+            )
+
+    def test_workers_claim_units_exclusively_and_release_only_their_own(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+
+            self.assertTrue(_claim_position(run_root, 7, pid=101))
+            self.assertFalse(_claim_position(run_root, 7, pid=202))
+            self.assertFalse(_release_position_claim(run_root, 7, pid=202))
+            self.assertEqual(_release_worker_claims(run_root, 101), [7])
+            self.assertTrue(_claim_position(run_root, 7, pid=202))
+
+    def test_cost_aware_queue_runs_slowest_observed_route_first(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            units = {
+                1: {"route_id": "fast", "treatment_id": "o2"},
+                2: {"route_id": "slow", "treatment_id": "o2"},
+                3: {"route_id": "unknown", "treatment_id": "o2"},
+            }
+            for position, route, seconds in ((10, "fast", 2), (11, "slow", 9)):
+                path = run_root / "units" / str(position) / "result.json"
+                path.parent.mkdir(parents=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "state": "complete",
+                            "mode": "full",
+                            "route_id": route,
+                            "wall_time_ns": seconds * 1_000_000_000,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            self.assertEqual(
+                _cost_aware_positions(run_root, units, units, "full"), [2, 3, 1]
             )
 
     def test_fold_checkpoint_reuses_only_the_exact_scientific_identity(self):
