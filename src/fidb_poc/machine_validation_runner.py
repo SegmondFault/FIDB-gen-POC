@@ -40,9 +40,17 @@ REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 PAUSE_REQUEST_NAME = "pause-request.json"
 
-_ZERO_CONTROL_FLOW = re.compile(
-    r"\b(?:callq?|j(?:mpq?|alr?)|b[a-z]{0,4}(?:\.[a-z0-9]+)?|jsr)"
-    r"\s+(?:#)?(?:0x)?0(?:\s|<|$)",
+_OBJDUMP_INSTRUCTION = re.compile(
+    r"^\s*[0-9a-f]+:\s+(?:(?:[0-9a-f]{2,16})\s+)+"
+    r"(?P<mnemonic>[a-z][a-z0-9.]*)\s*(?P<operands>.*)$",
+    re.IGNORECASE,
+)
+_CONTROL_FLOW_MNEMONIC = re.compile(
+    r"^(?:callq?|j(?:mpq?|alr?)|b[a-z]{0,4}(?:\.[a-z0-9]+)?|jsr)$",
+    re.IGNORECASE,
+)
+_ZERO_DIRECT_TARGET = re.compile(
+    r"(?:^|,\s*)(?:#)?(?:0x)?0+(?:\s*<[^>]+>)?\s*$",
     re.IGNORECASE,
 )
 
@@ -657,7 +665,16 @@ def _companion_tool(route, name: str) -> Path:
 
 
 def _zero_control_flow_lines(lines: Iterable[str]) -> list[str]:
-    return [line.strip() for line in lines if _ZERO_CONTROL_FLOW.search(line)]
+    hits = []
+    for line in lines:
+        instruction = _OBJDUMP_INSTRUCTION.match(line)
+        if instruction is None:
+            continue
+        if not _CONTROL_FLOW_MNEMONIC.fullmatch(instruction["mnemonic"]):
+            continue
+        if _ZERO_DIRECT_TARGET.search(instruction["operands"]):
+            hits.append(line.strip())
+    return hits
 
 
 def _audit_linked_image(

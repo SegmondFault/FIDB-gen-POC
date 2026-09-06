@@ -692,6 +692,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
             "  2008: 0c000000 jal 0 <missing>",
             "  300c: e8 6f 00 00 call 3080 <present>",
             "  4010: ff 10 call *(%rax)",
+            "  3d369b: 00 .byte 0",
+            "  5000: 00 00 add 0,%eax",
         ]
 
         self.assertEqual(len(_zero_control_flow_lines(lines)), 3)
