@@ -9,6 +9,7 @@ leave-one-exact-identity-out owner comparison from a bounded SQLite index.
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -38,6 +39,7 @@ RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
 FOLD_RESULT_SCHEMA = "fidb-machine-validation-fold-result/v1"
 WORK_CLAIM_SCHEMA = "fidb-machine-validation-work-claim/v1"
+PREPARED_FOLD_SCHEMA = "fidb-machine-validation-prepared-fold/v1"
 REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 PAUSE_REQUEST_NAME = "pause-request.json"
@@ -518,6 +520,8 @@ def load_runtime(
         "maximum_worker_restarts",
         "worker_poll_seconds",
         "scheduling_policy",
+        "preparation_workers",
+        "preparation_batch_size",
     }:
         raise ValueError("machine-validation execution policy has unexpected fields")
     if set(canary) != {
@@ -549,6 +553,8 @@ def load_runtime(
         "cell_timeout_attempts",
         "maximum_worker_restarts",
         "worker_poll_seconds",
+        "preparation_workers",
+        "preparation_batch_size",
     ):
         if type(execution[field]) is not int or execution[field] < 1:
             raise ValueError(f"machine-validation execution.{field} must be positive")
@@ -1168,6 +1174,200 @@ def _link_composite(
     return output
 
 
+def _prepared_fold_path(unit_root: Path, fold: str) -> Path:
+    return unit_root / f"fold-{fold}" / "prepared.json"
+
+
+def _load_prepared_fold(
+    root: Path,
+    path: Path,
+    *,
+    position: int,
+    route_id: str,
+    treatment_id: str,
+    fold: str,
+    runtime_authority_sha256: str,
+) -> dict[str, object] | None:
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    expected = {
+        "schema_version": PREPARED_FOLD_SCHEMA,
+        "state": "prepared",
+        "position": position,
+        "route_id": route_id,
+        "treatment_id": treatment_id,
+        "fold": fold,
+        "runtime_authority_sha256": runtime_authority_sha256,
+        "link_harness_policy": LINK_HARNESS_POLICY,
+        "query_copy_policy": QUERY_COPY_POLICY,
+    }
+    if any(document.get(key) != value for key, value in expected.items()):
+        return None
+    try:
+        truth_binary = _inside(root, str(document["truth_binary"]), "prepared truth")
+        query_binary = _inside(root, str(document["query_binary"]), "prepared query")
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not truth_binary.is_file() or not query_binary.is_file():
+        return None
+    return document
+
+
+def _prepare_fold(
+    root: Path,
+    evidence: Mapping[str, object],
+    route,
+    treatment,
+    unit_root: Path,
+    position: int,
+    fold: str,
+    owners: list[str],
+    archive_items: list[tuple[str, Mapping[str, object]]],
+) -> dict[str, object]:
+    marker_path = _prepared_fold_path(unit_root, fold)
+    identity = {
+        "position": position,
+        "route_id": route.id,
+        "treatment_id": treatment.id,
+        "fold": fold,
+        "runtime_authority_sha256": str(evidence["runtime"]["authority_sha256"]),
+    }
+    prepared = _load_prepared_fold(root, marker_path, **identity)
+    if prepared is not None:
+        return prepared
+    fold_root = marker_path.parent
+    truth = {
+        "schema_version": "fidb-machine-validation-truth-map/v1",
+        "fold": fold,
+        "owners": owners,
+        "route_id": route.id,
+        "treatment_id": treatment.id,
+        "archives": [
+            {
+                "owner": owner,
+                "paths": [str(path.relative_to(root)) for path in item["paths"]],
+                "sha256": item["sha256"],
+            }
+            for owner, item in archive_items
+        ],
+    }
+    _atomic_json(fold_root / "truth-map.json", truth)
+    suffix = ".dll" if route.binary_format == "PE/COFF" else ".elf"
+    truth_binary = fold_root / f"truth{suffix}"
+    archives = [path for _owner, item in archive_items for path in item["paths"]]
+    _link_composite(
+        route,
+        archives,
+        truth_binary,
+        fold_root / "link.map",
+        harness_mode=str(evidence["manifest"]["execution"]["harness_mode"]),
+    )
+    link_audit = json.loads((fold_root / "link-audit.json").read_text(encoding="utf-8"))
+    query_binary = fold_root / f"query{suffix}"
+    result = subprocess.run(
+        [
+            str(_strip_tool(route)),
+            "--strip-debug",
+            str(truth_binary),
+            "-o",
+            str(query_binary),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=300,
+        check=False,
+    )
+    if result.returncode != 0 or not query_binary.is_file():
+        raise RuntimeError(
+            f"query-copy creation failed for {route.id}: {result.stderr[-2000:]}"
+        )
+    prepared = {
+        "schema_version": PREPARED_FOLD_SCHEMA,
+        "state": "prepared",
+        **identity,
+        "prepared_at": _now(),
+        "link_harness_policy": LINK_HARNESS_POLICY,
+        "query_copy_policy": QUERY_COPY_POLICY,
+        "truth_binary": str(truth_binary.relative_to(root)),
+        "truth_sha256": _sha256(truth_binary),
+        "query_binary": str(query_binary.relative_to(root)),
+        "query_sha256": _sha256(query_binary),
+        "link_audit": link_audit,
+    }
+    _atomic_json(marker_path, prepared)
+    return prepared
+
+
+def _prepare_position(
+    root: Path,
+    evidence: Mapping[str, object],
+    run_root: Path,
+    position: int,
+    mode: str,
+) -> int:
+    units = {int(unit["position"]): unit for unit in evidence["manifest"]["work_unit"]}
+    routes = {route.id: route for route in evidence["configuration"].routes}
+    treatments = {
+        treatment.id: treatment for treatment in evidence["configuration"].treatments
+    }
+    fold_map = {
+        "A": evidence["status"]["randomization"]["fold_a"],
+        "B": evidence["status"]["randomization"]["fold_b"],
+    }
+    canary_folds = defaultdict(set)
+    for item in evidence["runtime"]["canary"]["folds_by_position"]:
+        canary_position, fold = str(item).split(":", 1)
+        canary_folds[int(canary_position)].add(fold)
+    unit = units[position]
+    route = routes[str(unit["route_id"])]
+    treatment = treatments[str(unit["treatment_id"])]
+    unit_root = _unit_result_path(run_root, unit, position).parent
+    folds = sorted(canary_folds[position]) if mode == "canary" else ["A", "B"]
+    for fold in folds:
+        checkpoint = _load_fold_checkpoint(
+            _fold_checkpoint_path(unit_root, fold),
+            mode=mode,
+            position=position,
+            route_id=route.id,
+            treatment_id=treatment.id,
+            fold=fold,
+            runtime_authority_sha256=str(evidence["runtime"]["authority_sha256"]),
+        )
+        if checkpoint is not None:
+            continue
+        owners = list(fold_map[fold])
+        archive_items = []
+        for owner in owners:
+            key = (owner, route.id, treatment.id)
+            item = evidence["archives"].get(key)
+            if item is None:
+                item = _rebuild_openssl_archives(
+                    root,
+                    evidence,
+                    route,
+                    treatment,
+                    run_root / "preparation" / f"{position:03d}" / "openssl",
+                )
+                evidence["archives"][key] = item
+            archive_items.append((owner, item))
+        _prepare_fold(
+            root,
+            evidence,
+            route,
+            treatment,
+            unit_root,
+            position,
+            fold,
+            owners,
+            archive_items,
+        )
+    return position
+
+
 def _read_signature_rows(path: Path) -> Iterable[dict[str, object]]:
     with path.open("r", encoding="utf-8") as stream:
         for line in stream:
@@ -1541,71 +1741,41 @@ def _worker(
                     fold_results.append(checkpoint)
                     continue
                 owners = list(fold_map[fold])
-                archive_items = []
-                for owner in owners:
-                    key = (owner, route.id, treatment.id)
-                    item = evidence["archives"].get(key)
-                    if item is None:
-                        item = _rebuild_openssl_archives(
-                            root,
-                            evidence,
-                            route,
-                            treatment,
-                            run_root / f"worker-{os.getpid()}" / "openssl",
-                        )
-                        evidence["archives"][key] = item
-                    archive_items.append((owner, item))
-                truth = {
-                    "schema_version": "fidb-machine-validation-truth-map/v1",
-                    "fold": fold,
-                    "owners": owners,
-                    "route_id": route.id,
-                    "treatment_id": treatment.id,
-                    "archives": [
-                        {
-                            "owner": owner,
-                            "paths": [
-                                str(path.relative_to(root)) for path in item["paths"]
-                            ],
-                            "sha256": item["sha256"],
-                        }
-                        for owner, item in archive_items
-                    ],
-                }
-                _atomic_json(fold_root / "truth-map.json", truth)
-                suffix = ".dll" if route.binary_format == "PE/COFF" else ".elf"
-                truth_binary = fold_root / f"truth{suffix}"
-                archives = [
-                    path for _owner, item in archive_items for path in item["paths"]
-                ]
-                _link_composite(
-                    route,
-                    archives,
-                    truth_binary,
-                    fold_root / "link.map",
-                    harness_mode=str(evidence["manifest"]["execution"]["harness_mode"]),
+                prepared = _load_prepared_fold(
+                    root,
+                    _prepared_fold_path(unit_root, fold),
+                    position=position,
+                    route_id=route.id,
+                    treatment_id=treatment.id,
+                    fold=fold,
+                    runtime_authority_sha256=str(
+                        evidence["runtime"]["authority_sha256"]
+                    ),
                 )
-                link_audit = json.loads(
-                    (fold_root / "link-audit.json").read_text(encoding="utf-8")
-                )
-                query_binary = fold_root / f"query{suffix}"
-                result = subprocess.run(
-                    [
-                        str(_strip_tool(route)),
-                        "--strip-debug",
-                        str(truth_binary),
-                        "-o",
-                        str(query_binary),
-                    ],
-                    text=True,
-                    capture_output=True,
-                    timeout=300,
-                    check=False,
-                )
-                if result.returncode != 0 or not query_binary.is_file():
-                    raise RuntimeError(
-                        f"query-copy creation failed for {route.id}: {result.stderr[-2000:]}"
+                if prepared is None:
+                    _prepare_position(root, evidence, run_root, position, mode)
+                    prepared = _load_prepared_fold(
+                        root,
+                        _prepared_fold_path(unit_root, fold),
+                        position=position,
+                        route_id=route.id,
+                        treatment_id=treatment.id,
+                        fold=fold,
+                        runtime_authority_sha256=str(
+                            evidence["runtime"]["authority_sha256"]
+                        ),
                     )
+                if prepared is None:
+                    raise RuntimeError(
+                        f"prepared validation fold is unavailable: {position}:{fold}"
+                    )
+                truth_binary = _inside(
+                    root, str(prepared["truth_binary"]), "prepared truth"
+                )
+                query_binary = _inside(
+                    root, str(prepared["query_binary"]), "prepared query"
+                )
+                link_audit = prepared["link_audit"]
                 project_parent = (
                     run_root
                     / f"worker-{os.getpid()}"
@@ -1670,8 +1840,8 @@ def _worker(
                     "binary_format": route.binary_format,
                     "link_harness_policy": LINK_HARNESS_POLICY,
                     "link_audit": link_audit,
-                    "query_sha256": _sha256(query_binary),
-                    "truth_sha256": _sha256(truth_binary),
+                    "query_sha256": prepared["query_sha256"],
+                    "truth_sha256": prepared["truth_sha256"],
                     "signature_summary": signature_summary,
                     "owner_match_counts": {
                         owner: len(matches.get(owner, set()))
@@ -2118,19 +2288,80 @@ def run_validation(
                 "positions": pending,
             },
         )
-        worker_count = min(int(runtime["execution"]["workers"]), len(pending))
-        for index in range(1, worker_count + 1):
-            workers.append(
-                _spawn_validation_worker(
-                    root,
-                    runtime_path,
-                    run_root,
-                    run_id,
-                    mode,
-                    index,
-                    pending,
-                )
+        prepared_count = 0
+        preparation_failed_count = 0
+        preparation_workers = int(runtime["execution"]["preparation_workers"])
+        preparation_batch_size = int(runtime["execution"]["preparation_batch_size"])
+        for offset in range(0, len(pending), preparation_batch_size):
+            if pause_request.is_file():
+                break
+            batch = pending[offset : offset + preparation_batch_size]
+            _atomic_json(
+                status_path,
+                {
+                    "schema_version": RUN_STATUS_SCHEMA,
+                    "validation_id": runtime["validation_id"],
+                    "run_id": run_id,
+                    "mode": mode,
+                    "state": "preparing-units",
+                    "pid": os.getpid(),
+                    "worker_pids": [],
+                    "started_at": started,
+                    "attempt_started_at": attempt_started,
+                    "resume_count": resume_count,
+                    "finished_at": None,
+                    "expected_work_units": len(positions),
+                    "complete_work_units": _result_counts(run_root, mode)[0],
+                    "failed_work_units": _result_counts(run_root, mode)[1],
+                    "prepared_work_units": prepared_count,
+                    "preparation_failed_work_units": preparation_failed_count,
+                    "expected_preparation_work_units": len(pending),
+                    "postprocess_job": postprocess_job,
+                },
             )
+            with ThreadPoolExecutor(
+                max_workers=min(preparation_workers, len(batch))
+            ) as executor:
+                futures = {
+                    executor.submit(
+                        _prepare_position,
+                        root,
+                        evidence,
+                        run_root,
+                        position,
+                        mode,
+                    ): position
+                    for position in batch
+                }
+                for future in as_completed(futures):
+                    position = futures[future]
+                    try:
+                        future.result()
+                        prepared_count += 1
+                    except Exception as error:
+                        preparation_failed_count += 1
+                        _supervisor_failure(
+                            run_root,
+                            units[position],
+                            position,
+                            mode,
+                            "preparation-failed",
+                            f"{type(error).__name__}: {error}",
+                        )
+        worker_count = min(int(runtime["execution"]["workers"]), len(pending))
+        if not pause_request.is_file():
+            for index in range(1, worker_count + 1):
+                workers.append(
+                    _spawn_validation_worker(
+                        root,
+                        runtime_path,
+                        run_root,
+                        run_id,
+                        mode,
+                        index,
+                        pending,
+                    )
+                )
         pause_requested = False
         while True:
             documents = _result_documents(run_root, mode)
@@ -2478,6 +2709,7 @@ def runtime_status(
     if status.get("state") in {
         "queued",
         "preparing-index",
+        "preparing-units",
         "running",
         "pausing",
         "postprocessing",
@@ -2577,7 +2809,13 @@ def pause_validation(
         }
         _atomic_json(status_path, paused)
         return paused
-    if status.get("state") not in {"queued", "preparing-index", "running", "pausing"}:
+    if status.get("state") not in {
+        "queued",
+        "preparing-index",
+        "preparing-units",
+        "running",
+        "pausing",
+    }:
         raise ValueError("machine validation is not active")
     run_id = str(status["run_id"])
     requested_at = _now()
@@ -2675,6 +2913,7 @@ def start_validation(
     current = runtime_status(root, runtime_path)
     if current.get("state") in {
         "preparing-index",
+        "preparing-units",
         "running",
         "queued",
         "pausing",

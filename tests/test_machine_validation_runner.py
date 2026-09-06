@@ -17,7 +17,9 @@ from fidb_poc.machine_validation_runner import (
     _fold_checkpoint_path,
     _link_composite,
     _load_fold_checkpoint,
+    _load_prepared_fold,
     _post_validation_retention,
+    _prepared_fold_path,
     _query_index,
     _resolve_worker_evidence,
     _release_position_claim,
@@ -68,6 +70,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
             runtime["execution"]["scheduling_policy"],
             "dynamic-longest-observed-first",
         )
+        self.assertEqual(runtime["execution"]["preparation_workers"], 8)
+        self.assertEqual(runtime["execution"]["preparation_batch_size"], 16)
         self.assertFalse(runtime["safety"]["execute_target_binaries"])
         self.assertEqual(runtime["canary"]["positions"], [1, 145, 175])
 
@@ -715,6 +719,42 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(
                 _cost_aware_positions(run_root, units, units, "full"), [2, 3, 1]
             )
+
+    def test_prepared_fold_requires_exact_identity_and_live_artifacts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            unit = root / "unit"
+            marker = _prepared_fold_path(unit, "B")
+            marker.parent.mkdir(parents=True)
+            truth = marker.parent / "truth.elf"
+            query = marker.parent / "query.elf"
+            truth.write_bytes(b"truth")
+            query.write_bytes(b"query")
+            document = {
+                "schema_version": "fidb-machine-validation-prepared-fold/v1",
+                "state": "prepared",
+                "position": 9,
+                "route_id": "route",
+                "treatment_id": "o2",
+                "fold": "B",
+                "runtime_authority_sha256": "authority",
+                "link_harness_policy": LINK_HARNESS_POLICY,
+                "query_copy_policy": QUERY_COPY_POLICY,
+                "truth_binary": str(truth.relative_to(root)),
+                "query_binary": str(query.relative_to(root)),
+            }
+            marker.write_text(json.dumps(document), encoding="utf-8")
+            identity = {
+                "position": 9,
+                "route_id": "route",
+                "treatment_id": "o2",
+                "fold": "B",
+                "runtime_authority_sha256": "authority",
+            }
+
+            self.assertEqual(_load_prepared_fold(root, marker, **identity), document)
+            query.unlink()
+            self.assertIsNone(_load_prepared_fold(root, marker, **identity))
 
     def test_fold_checkpoint_reuses_only_the_exact_scientific_identity(self):
         with tempfile.TemporaryDirectory() as temporary:

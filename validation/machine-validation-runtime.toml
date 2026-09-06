@@ -27,6 +27,8 @@ cell_timeout_attempts = 2
 maximum_worker_restarts = 8
 worker_poll_seconds = 5
 scheduling_policy = "dynamic-longest-observed-first"
+preparation_workers = 8
+preparation_batch_size = 16
 
 [canary]
 positions = [1, 145, 175]
