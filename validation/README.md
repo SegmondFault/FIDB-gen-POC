@@ -193,7 +193,9 @@ library drill-down without opening all case evidence during normal refresh.
 The user timer starts admission at 00:00 Europe/Luxembourg. `Persistent=false`
 is intentional: installing or enabling it after midnight must not immediately
 launch a missed heavy run. Work admitted inside the 00:00–05:30 window is
-allowed to finish.
+allowed to finish. Admission also rechecks the runtime TOML's available-memory
+and free-disk floors and the reviewed Ghidra executable before creating a run
+lock.
 
 ## Legacy exact-tuple analysis
 

@@ -436,6 +436,11 @@ workers with explicit JVM limits inherited from
 jobs, never executes target binaries, never starts a compiler and never mutates
 the production queue.
 
+Admission rechecks `minimum_available_memory_gib`, `minimum_free_disk_gib` and
+the reviewed Ghidra headless executable from the runtime TOML before it creates
+a campaign lock. Do not bypass this because a daytime observation looked safe;
+the midnight resource state is the one that matters.
+
 The timer is `fidb-fid-matching-campaign.timer`, at 00:00 Europe/Luxembourg.
 It intentionally uses `Persistent=false`; otherwise enabling it during the day
 could immediately run the missed midnight trigger. A case already admitted may

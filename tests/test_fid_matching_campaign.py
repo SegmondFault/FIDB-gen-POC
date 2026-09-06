@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from fidb_poc.fid_matching_campaign import (
     _expected_cases,
     _publish_hash_evidence,
+    _resource_preflight,
     _window_open,
     campaign_status,
     load_campaign,
@@ -38,6 +39,31 @@ class FidMatchingCampaignTests(unittest.TestCase):
             _window_open(self.campaign, datetime(2026, 9, 7, 8, 0, tzinfo=timezone)),
             (False, None),
         )
+
+    def test_resource_preflight_enforces_runtime_toml_floors(self):
+        with (
+            patch(
+                "fidb_poc.machine_validation_runner.load_runtime",
+                return_value={
+                    "ghidra_headless": "/missing-ghidra",
+                    "safety": {
+                        "minimum_available_memory_gib": 24,
+                        "minimum_free_disk_gib": 100,
+                    },
+                },
+            ),
+            patch(
+                "fidb_poc.machine_validation_runner._available_memory_bytes",
+                return_value=20 * 1024**3,
+            ),
+            patch("fidb_poc.fid_matching_campaign.shutil.disk_usage") as disk_usage,
+        ):
+            disk_usage.return_value.free = 90 * 1024**3
+
+            result = _resource_preflight(self.root, self.campaign)
+
+        self.assertEqual(result["state"], "blocked")
+        self.assertEqual(len(result["blockers"]), 3)
 
     def test_status_exposes_qualification_and_pending_cases(self):
         status = campaign_status(self.root)

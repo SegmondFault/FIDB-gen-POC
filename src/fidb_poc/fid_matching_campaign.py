@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -683,6 +684,35 @@ def _production_active(root: Path, campaign: Mapping[str, object]) -> int:
         connection.close()
 
 
+def _resource_preflight(
+    root: Path, campaign: Mapping[str, object]
+) -> dict[str, object]:
+    from .machine_validation_runner import _available_memory_bytes, load_runtime
+
+    runtime = load_runtime(root, str(campaign["runtime"]))
+    available_memory = _available_memory_bytes()
+    free_disk = shutil.disk_usage(root).free
+    safety = runtime["safety"]
+    memory_floor = int(safety["minimum_available_memory_gib"]) * 1024**3
+    disk_floor = int(safety["minimum_free_disk_gib"]) * 1024**3
+    blockers = []
+    if available_memory < memory_floor:
+        blockers.append("available memory is below the reviewed safety floor")
+    if free_disk < disk_floor:
+        blockers.append("free disk is below the reviewed safety floor")
+    headless = Path(str(runtime["ghidra_headless"]))
+    if not headless.is_file() or not os.access(headless, os.X_OK):
+        blockers.append("reviewed Ghidra headless executable is unavailable")
+    return {
+        "state": "ready" if not blockers else "blocked",
+        "available_memory_bytes": available_memory,
+        "minimum_available_memory_bytes": memory_floor,
+        "free_disk_bytes": free_disk,
+        "minimum_free_disk_bytes": disk_floor,
+        "blockers": blockers,
+    }
+
+
 def worker_cases(
     project_root: str | Path,
     cases: Iterable[str],
@@ -745,6 +775,9 @@ def run_campaign(
     campaign = load_campaign(root, authority)
     if _production_active(root, campaign):
         raise ValueError("production jobs are active; FID matching remains unclaimed")
+    resources = _resource_preflight(root, campaign)
+    if resources["blockers"]:
+        raise ValueError("; ".join(resources["blockers"]))
     campaign_root = _campaign_root(root, campaign)
     campaign_root.mkdir(parents=True, exist_ok=True)
     lock = campaign_root / ".campaign.lock"
@@ -764,6 +797,7 @@ def run_campaign(
             "mode": mode,
             "started_at": started_at,
             "worker_pids": [],
+            "resource_preflight": resources,
         },
     )
     processes = []
@@ -801,6 +835,7 @@ def run_campaign(
                 "mode": mode,
                 "started_at": started_at,
                 "worker_pids": [process.pid for process in processes],
+                "resource_preflight": resources,
             },
         )
         return_codes = [process.wait() for process in processes]
@@ -827,6 +862,7 @@ def run_campaign(
                 "finished_at": datetime.now(timezone.utc).isoformat(),
                 "worker_pids": [],
                 "report_path": str(report_path.relative_to(root)),
+                "resource_preflight": resources,
             },
         )
         return report
