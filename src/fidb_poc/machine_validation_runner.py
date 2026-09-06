@@ -54,14 +54,73 @@ _OBJDUMP_INSTRUCTION = re.compile(
     r"(?P<mnemonic>[a-z][a-z0-9.]*)\s*(?P<operands>.*)$",
     re.IGNORECASE,
 )
-_CONTROL_FLOW_MNEMONIC = re.compile(
-    r"^(?:callq?|j(?:mpq?|alr?)|b[a-z]{0,4}(?:\.[a-z0-9]+)?|jsr)$",
-    re.IGNORECASE,
-)
 _ZERO_DIRECT_TARGET = re.compile(
     r"(?:^|,\s*)(?:#)?(?:0x)?0+(?:\s*<[^>]+>)?\s*$",
     re.IGNORECASE,
 )
+
+_DIRECT_BRANCH_MNEMONICS = {
+    "b",
+    "ba",
+    "bal",
+    "bc",
+    "bca",
+    "bcl",
+    "bcla",
+    "bf",
+    "bl",
+    "bla",
+    "blx",
+    "bra",
+    "bsr",
+    "bt",
+    "bx",
+    "cbnz",
+    "cbz",
+    "tbnz",
+    "tbz",
+}
+_BRANCH_CONDITIONS = {
+    "cc",
+    "cs",
+    "eq",
+    "ge",
+    "gt",
+    "hi",
+    "hs",
+    "le",
+    "lo",
+    "ls",
+    "lt",
+    "mi",
+    "ne",
+    "nv",
+    "pl",
+    "vc",
+    "vs",
+}
+
+
+def _is_control_flow_mnemonic(mnemonic: str) -> bool:
+    value = mnemonic.lower().split(".", 1)[0]
+    if value in _DIRECT_BRANCH_MNEMONICS or value in {"call", "callq", "jsr"}:
+        return True
+    if value.startswith("j"):
+        return True
+    if value.startswith("b") and value[1:] in _BRANCH_CONDITIONS:
+        return True
+    if value.startswith("bl") and value[2:] in _BRANCH_CONDITIONS:
+        return True
+    return value in {
+        "beqz",
+        "bgez",
+        "bgezal",
+        "bgtz",
+        "blez",
+        "bltz",
+        "bltzal",
+        "bnez",
+    }
 
 
 def _now() -> str:
@@ -1027,7 +1086,7 @@ def _zero_control_flow_lines(lines: Iterable[str]) -> list[str]:
         instruction = _OBJDUMP_INSTRUCTION.match(line)
         if instruction is None:
             continue
-        if not _CONTROL_FLOW_MNEMONIC.fullmatch(instruction["mnemonic"]):
+        if not _is_control_flow_mnemonic(instruction["mnemonic"]):
             continue
         if _ZERO_DIRECT_TARGET.search(instruction["operands"]):
             hits.append(line.strip())

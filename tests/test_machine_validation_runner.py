@@ -979,6 +979,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
             "  2008: 0c000000 jal 0 <missing>",
             "  300c: e8 6f 00 00 call 3080 <present>",
             "  4010: ff 10 call *(%rax)",
+            "  25bc10: e3cb7000 bic r7, fp, #0",
+            "  25bc14: e3c77000 bic r7, r7, #0",
             "  3d369b: 00 .byte 0",
             "  5000: 00 00 add 0,%eax",
         ]
