@@ -197,6 +197,46 @@ allowed to finish. Admission also rechecks the runtime TOML's available-memory
 and free-disk floors and the reviewed Ghidra executable before creating a run
 lock.
 
+### Archive-to-executable miss trace
+
+Do not assume that a native-FID scorer can recover a function if the synthetic
+link has already changed its full hash. Trace selected functions through the
+retained archive member, a one-library executable and the original five-library
+composite with:
+
+```sh
+uv run python scripts/trace_fid_misses.py \
+  --run-id 20260904T152653Z-full --position 1 --fold B \
+  --function 'gettext@1.0:_libintl_find_domain' \
+  --output qualification/evidence/fid-fn-trace
+```
+
+The bounded 2026-09-06 x86-64/GCC 12 trace sampled eight old TP/FN functions
+from gettext, SQLite, GMP and PCRE2. All eight retained the same ELF symbol size
+and machine-instruction count from archive member through both linked forms, so
+the linker had not removed those functions. Only five of eight reference full
+hashes survived the one-library link, and only four survived the five-library
+link.
+
+The failures exposed more than one boundary effect. `_libintl_find_domain`
+remained a 734-byte, 204-instruction symbol, but unresolved calls resolved to
+address zero and Ghidra recovered only 14 code units instead of the archive
+reference's 177. Two GMP functions kept their complete machine-code extent but
+changed full hash during relocation relaxation or address resolution.
+`sqlite3PcacheTruncate` preserved its archive full hash in the one-library
+control, then changed in the five-library composite while its 198-byte,
+62-instruction extent remained intact. These are harness-induced candidate
+losses before FID scoring, not evidence that the score threshold rejected the
+correct library.
+
+The current portable matcher correctly reproduces the native decision for the
+signatures it is given; it cannot rescue a correct reference candidate that is
+absent from the full-hash bucket. Before treating a complete campaign as real
+executable recall, replace the unresolved-at-zero synthetic link, add
+executable-shaped reference evidence or another construct-valid control, and
+gate the canary on archive-to-query full-hash survival as a separately reported
+stage.
+
 ## Legacy exact-tuple analysis
 
 `machine-validation-hash-schedule.toml` admits the exact-tuple diagnostic during a
