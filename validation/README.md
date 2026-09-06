@@ -102,14 +102,17 @@ uv run fidb-poc machine-validation start --project-root . --mode full \
   --run-id c10-shared-image-symbolic-v2-full
 ```
 
-Active runs are checkpointed after every completed width identity. Pause stops
-the worker process groups (including Ghidra children), preserves completed unit
-results and releases the run lock. Resume keeps the same run ID, skips complete
-units and retains each failed result under the unit's `attempts/` directory
-before retrying it:
+Active runs checkpoint each fold as well as every completed width identity.
+Pause stops the worker process groups (including Ghidra children), preserves
+completed results and releases the run lock. Resume keeps the same run ID and
+skips complete units and folds. Failed cells are terminal until an operator
+names them with the evidence-preserving requeue command; the command moves each
+failure under the unit's `attempts/` directory and writes a requeue receipt:
 
 ```sh
 uv run fidb-poc machine-validation pause --project-root .
+uv run fidb-poc machine-validation requeue-failed --project-root . \
+  --positions 19,22,23
 uv run fidb-poc machine-validation resume --project-root .
 uv run fidb-poc machine-validation analyze-hashes --project-root . \
   --run-id 20260904T152653Z-full
@@ -119,14 +122,22 @@ The control panel exposes the same two bounded API operations. An active status
 whose recorded parent process is absent is reported as `interrupted` and can be
 resumed explicitly; PID reuse cannot make an unrelated process resumable.
 
+Before Ghidra starts, the runner prepares linked and stripped fold images in
+bounded batches using the TOML `preparation_workers` and
+`preparation_batch_size`. Atomic `prepared.json` files bind those images to the
+runtime, route, treatment, fold and harness. Long-lived Ghidra workers then
+draw cells from one filesystem-atomic claim queue in longest-observed-route
+order; an idle worker can take work that would previously have been stranded
+behind a slow static shard.
+
 Each worker writes its current cell and start time below the run's `workers/`
 directory. The parent supervisor applies the TOML `cell_timeout_seconds`, stops
-the complete worker process group when a cell exceeds it, and starts a fresh
-JVM for the unfinished shard. A timed-out cell receives the reason code
+the complete worker process group when a cell exceeds it, releases its exact
+claim and starts a fresh JVM. A timed-out cell receives the reason code
 `cell-timeout`; it is retried only up to `cell_timeout_attempts`. Unexpected
-worker exits also restart only the unfinished positions and are bounded by
+worker exits also release their claims and are bounded by
 `maximum_worker_restarts`. Ordinary cell failures remain visible but do not
-abandon the rest of a shard. These settings are operational safety bounds, not
+abandon unrelated work. These settings are operational safety bounds, not
 permission to weaken a failed link audit or discard its evidence.
 
 The full run is rejected unless the latest successful canary records the exact

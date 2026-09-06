@@ -590,6 +590,23 @@ the whole process group on timeout so the embedded JVM and every descendant are
 released. Never clear the run ledger or completed unit results to recover a
 shard.
 
+The resumed attempt exposed a second parser boundary and a throughput problem.
+ARM `bic` is a bit-clear instruction, not a branch; the direct-to-zero audit
+must use the explicit branch families in `_is_control_flow_mnemonic`, never a
+generic `b*` expression. Static round-robin shards let two pathological SH32
+cells occupy half of the four-worker pool for 30 minutes. Validation now stages
+native link/strip work with the TOML preparation limits, checkpoints each fold,
+orders historically expensive routes first and lets every long-lived Ghidra
+worker claim from one atomic queue. On worker death, release only claims owned
+by that PID. Do not restore static shards or repeat a completed fold.
+
+Failed validation cells do not become pending merely because the run resumes.
+While the run is stopped, use `machine-validation requeue-failed --positions
+<comma-separated positions>`; it archives every named result and writes an
+immutable receipt below `requeues/`. The 2026-09-06 repair requeued positions
+19, 22, 23, 26, 27, 30, 31, 34, 35, 63, 70, 120 and 121. The first nine were
+the ARM `bic` audit error; the last four were interrupted by the operator pause.
+
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field
 `delta_owner` table. SQLite chose `SCAN delta_owner LEFT-JOIN`; the attempt was
