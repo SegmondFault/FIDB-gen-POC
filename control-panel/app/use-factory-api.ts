@@ -1616,6 +1616,64 @@ export type HashAnalysisBackendStatus = {
 export type MachineValidationLive = {
   run: MachineValidationRun;
   canary_gate: MachineValidationCanaryGate;
+  fid_matching: FidMatchingCampaign;
+};
+
+export type FidMatchingCampaignReport = {
+  state: 'qualified' | 'measured-complete' | 'incomplete-or-failed';
+  progress: { expected_cases: number; complete_cases: number; failed_or_pending_cases: number };
+  oracle: { decision_mismatches: number; canary_passed: boolean | null };
+  truth: { labelled_functions: number; unlabelled_functions: number; coverage: number };
+  confusion_matrix: {
+    true_positives: number;
+    false_positives: number;
+    true_negatives: number;
+    false_negatives: number;
+  };
+};
+
+export type FidMatchingCampaign = {
+  schema_version: 'fidb-fid-matching-campaign-status/v1';
+  id: string;
+  state: string;
+  mode: 'canary' | 'full' | null;
+  started_at: string | null;
+  finished_at: string | null;
+  source_run_id: string;
+  workers: number;
+  schedule: {
+    timezone: string;
+    window: Array<{ id: string; days: string[]; start: string; stop_admitting: string; enabled: boolean }>;
+  };
+  methodology: {
+    decision_unit: string;
+    candidate_semantics: string;
+    truth_precedence: string[];
+    retain_hash_types: string[];
+  };
+  qualification: {
+    state: string;
+    case?: { route_id: string; treatment_id: string };
+    oracle?: { functions: number; candidate_rows: number; accepted_functions: number };
+    classification?: {
+      decision_unit: string;
+      labelled_functions: number;
+      unlabelled_functions: number;
+      true_positives: number;
+      false_positives: number;
+      true_negatives: number;
+      false_negatives: number;
+    };
+    backends?: Array<{
+      id: string;
+      device: string;
+      decision_mismatches: number;
+      maximum_score_float32_ulps: number;
+      wall_time_ns: number;
+    }>;
+  };
+  canary: FidMatchingCampaignReport;
+  full: FidMatchingCampaignReport;
 };
 
 export type MachineValidation = {
@@ -1629,6 +1687,7 @@ export type MachineValidation = {
   status_digest: string;
   run: MachineValidationRun;
   canary_gate: MachineValidationCanaryGate;
+  fid_matching: FidMatchingCampaign;
   randomization: {
     method: string;
     algorithm: string;
@@ -2580,6 +2639,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
           ...current,
           run: machineResult.run,
           canary_gate: machineResult.canary_gate,
+          fid_matching: machineResult.fid_matching,
         } : current);
         setEcologicalValidation(ecologicalResult);
         setNoisyHashes(noisyResult);

@@ -888,6 +888,10 @@ function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiSta
     : null;
   const noisyCandidates = factory.noisyHashes?.summary.candidate_noisy ?? null;
   const hashEvidence = validation.results.hash_evidence;
+  const fidMatching = validation.fid_matching;
+  const fidQualification = fidMatching.qualification;
+  const fidCanaryProgress = fidMatching.canary.progress;
+  const fidFullProgress = fidMatching.full.progress;
   const startRun = (mode: 'canary' | 'full') => {
     void factory.runMachineValidation(mode).catch(() => undefined);
   };
@@ -915,7 +919,25 @@ function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiSta
       })}</div>
     </section>
 
-    <section className="panel validation-results-panel validation-outcome-panel"><header><h3>Single-hash outcome · {validation.id}</h3><div><button className="text-button" onClick={() => navigateTo('Hash discrimination')}>Hash discrimination →</button><span className={`validation-state ${validation.results.state === 'measured-complete' ? 'ready' : 'waiting'}`}>{reportState}</span></div></header>
+    <section className="panel validation-results-panel fid-matching-panel">
+      <header><h3>Native FID methodology · {fidMatching.id}</h3><span className={`validation-state ${fidQualification.state === 'qualified' ? 'ready' : 'waiting'}`}>{fidMatching.state.replaceAll('-', ' ')}</span></header>
+      <div className="validation-rate-grid">
+        <article><span>ORACLE</span><strong>{fidQualification.state === 'qualified' ? 'QUALIFIED' : fidQualification.state.toUpperCase()}</strong><small>{fidQualification.oracle ? `${fidQualification.oracle.functions.toLocaleString()} functions · ${fidQualification.oracle.candidate_rows.toLocaleString()} candidates` : 'native Ghidra evidence pending'}</small></article>
+        {(fidQualification.backends ?? []).map(backend => <article key={backend.id}><span>{backend.id}</span><strong>{backend.decision_mismatches}</strong><small>decision mismatches · max {backend.maximum_score_float32_ulps} float32 ULP</small></article>)}
+        <article><span>CANARY</span><strong>{fidCanaryProgress.complete_cases} / {fidCanaryProgress.expected_cases}</strong><small>{fidMatching.canary.state.replaceAll('-', ' ')} · zero-mismatch gate</small></article>
+        <article><span>FULL C10</span><strong>{fidFullProgress.complete_cases} / {fidFullProgress.expected_cases}</strong><small>{fidMatching.workers} workers · resumes retained cases</small></article>
+        <article><span>NEXT WINDOW</span><strong>{fidMatching.schedule.window[0]?.start ?? '—'}–{fidMatching.schedule.window[0]?.stop_admitting ?? '—'}</strong><small>{fidMatching.schedule.timezone} · admitted work finishes</small></article>
+      </div>
+      {fidQualification.classification && <div className="validation-confusion-grid">{([
+        ['tp', 'TP', fidQualification.classification.true_positives, 'Correct library owner accepted'],
+        ['fp', 'FP', fidQualification.classification.false_positives, 'Incorrect library owner accepted'],
+        ['tn', 'TN', fidQualification.classification.true_negatives, 'Incorrect library owner rejected'],
+        ['fn', 'FN', fidQualification.classification.false_negatives, 'True library owner not accepted'],
+      ] as const).map(([kind, short, value, detail]) => <article className={kind} key={kind}><span>{short}</span><strong>{value.toLocaleString()}</strong><p><b>{detail}</b><small>query-function × library-owner</small></p></article>)}</div>}
+      <footer className="validation-hash-evidence-strip"><article><span>TRUTH</span><strong>linker map → unique name</strong><small>unresolved functions retained, not scored</small></article><article><span>HASH TYPES</span><strong>{fidMatching.methodology.retain_hash_types.join(' · ')}</strong><small>per-decision observations retained</small></article><article><span>SOURCE</span><code>{fidMatching.source_run_id}</code></article></footer>
+    </section>
+
+    <section className="panel validation-results-panel validation-outcome-panel"><header><h3>Exact-tuple survival diagnostic · {validation.id}</h3><div><button className="text-button" onClick={() => navigateTo('Hash discrimination')}>Hash discrimination →</button><span className={`validation-state ${validation.results.state === 'measured-complete' ? 'ready' : 'waiting'}`}>{reportState}</span></div></header>
       <div className="validation-rate-grid"><article><span>PRECISION</span><strong>{validationRate(tp, tp === null || fp === null ? null : tp + fp)}</strong><small>matched signature-owner assertions that were present</small></article><article><span>RECALL</span><strong>{validationRate(tp, tp === null || fn === null ? null : tp + fn)}</strong><small>expected exact signatures recovered</small></article><article><span>FALSE-POSITIVE RATE</span><strong>{validationRate(fp, fp === null || tn === null ? null : fp + tn)}</strong><small>opposite-fold hash-owner checks that matched</small></article><article><span>MEASURED ASSERTIONS</span><strong>{measuredDecisions === null ? '—' : measuredDecisions.toLocaleString()}</strong><small>{reportPending ? `${runOutstanding} work units unresolved` : matrix.unit.replaceAll('-', ' ')}</small></article><article><span>NOISY SIGNATURES</span><strong>{hashEvidence ? hashEvidence.noisy_signatures.toLocaleString() : '—'}</strong><small>{hashEvidence ? `${hashEvidence.multi_owner_signatures.toLocaleString()} multi-owner signatures` : 'awaiting hash evidence'}</small></article><article><span>HASH LEDGER</span><strong>{noisyCandidates === null ? '—' : noisyCandidates.toLocaleString()}</strong><small>review candidates across completed batches</small></article></div>
       <div className="validation-confusion-grid">{matrixCells.map(([short, label, value, detail]) => <article className={short.toLowerCase()} key={short}><span>{short}</span><strong>{value === null ? '—' : value.toLocaleString()}</strong><p><b>{label}</b><small>{detail}</small></p></article>)}</div>
       {hashEvidence && <div className="validation-hash-evidence-strip"><article><span>DISTINCT SIGNATURES</span><strong>{hashEvidence.distinct_signatures.toLocaleString()}</strong></article><article><span>QUERY OBSERVATIONS</span><strong>{hashEvidence.query_signature_observations.toLocaleString()}</strong></article><article><span>MISSED SIGNATURES</span><strong>{hashEvidence.missed_signatures.toLocaleString()}</strong></article><article><span>UNATTRIBUTED HASHES</span><strong>{hashEvidence.unattributed_signatures.toLocaleString()}</strong><small>{hashEvidence.unattributed_query_signatures.toLocaleString()} observations</small></article><article><span>FOLDS</span><strong>{hashEvidence.fold_results.toLocaleString()}</strong></article><article><span>EVIDENCE</span><code>{hashEvidence.database_path}</code></article></div>}

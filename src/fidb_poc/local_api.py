@@ -36,6 +36,7 @@ from .ecological_validation import (
     start_ecological_case,
 )
 from .hash_discrimination import compile_hash_discrimination
+from .fid_matching_campaign import campaign_status as fid_matching_campaign_status
 from .hash_gpu_trial import compile_hash_backend_status, save_hash_performance_mode
 from .machine_validation import compile_machine_validation
 from .machine_validation_runner import (
@@ -782,6 +783,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             result["canary_gate"] = machine_validation_canary_gate_status(
                 self.api_server.config.project_root
             )
+            result["fid_matching"] = fid_matching_campaign_status(
+                self.api_server.config.project_root
+            )
             self._json_response(HTTPStatus.OK, result, origin=origin)
             return
 
@@ -799,6 +803,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         self.api_server.config.project_root
                     ),
                     "canary_gate": machine_validation_canary_gate_status(
+                        self.api_server.config.project_root
+                    ),
+                    "fid_matching": fid_matching_campaign_status(
                         self.api_server.config.project_root
                     ),
                 },

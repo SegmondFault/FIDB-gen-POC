@@ -15,6 +15,7 @@ from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
 from .lane_registry import load_lane_registry
 from .machine_validation import compile_machine_validation
+from .fid_matching_campaign import campaign_status as fid_matching_campaign_status
 from .machine_validation_runner import (
     canary_gate_status as machine_validation_canary_gate_status,
     runtime_status as machine_validation_runtime_status,
@@ -740,6 +741,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 ),
                 "run": machine_validation_runtime_status(root),
                 "canary_gate": machine_validation_canary_gate_status(root),
+                "fid_matching": fid_matching_campaign_status(root),
             }
         )
     ecological_validation = compile_ecological_validation(root)
