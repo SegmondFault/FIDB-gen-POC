@@ -70,6 +70,16 @@ The earlier `report.json` remains immutable historical evidence of the
 superseded five-signature library-level experiment. It is not an input to the
 hash-discrimination ledger.
 
+FN is a harness-conditional observation. The positive reference unit is a
+function recovered from one library archive; the query unit is a function
+recovered after five archives have been linked into one composite. Linker
+symbol selection, weak/COMDAT coalescing, relaxation, thunks/veneers and Ghidra
+boundary recovery can change that population. The aggregate FN rate is
+therefore not an intrinsic FID-recall estimate. New reports retain FN/TP by
+route, treatment and library and show the route-rate spread. C10 remains
+construct-validity evidence under investigation until a bounded
+archive-to-executable control isolates those transformations.
+
 The first run rebuilds the reviewed recipes into two forced-inclusion static
 composites for each exact width identity. It does not assume old per-library
 archives were retained. Target programs are inspected and analysed but never
@@ -159,10 +169,18 @@ account for newly possible cross-cohort matches; TN remains arithmetic. The
 index is a rebuildable sidecar and neither lane databases nor immutable
 per-run evidence are migrated.
 
-When the optional `gpu` extra is installed, the same pass compares a packed
-WGPU exact-signature probe with its packed CPU result. The comparison report is
-written beside `hash-report.json`. It includes complete device and wall-time
-measurements, but it never grants the GPU result publication authority.
+`hash-analysis-backends.toml` records qualified exact-lookup backends and
+`../performance/hash-analysis.toml` selects `auto`, `gpu` or `cpu`. C10
+qualification returned zero mismatches over 3,025,703 queries and measured a
+3.31× packed-probe speedup. Normal validation executes the WGPU packed exact
+lookup once when available and falls back to CPU on absence or failure.
+Packing is cached by corpus-generation digest. CPU/GPU comparison runs only
+with the explicit `analyze-hashes --qualify-backend` operation.
+
+That acceleration boundary is deliberately narrow. It does not compile code,
+invoke a linker, recover functions, run Ghidra or generate FID hashes; changing
+those stages could change scientific evidence rather than merely how
+already-generated exact keys are looked up.
 
 Corpus delta staging must resolve complete identities to `signature_id` once
 and use the indexed integer-key roll-up. The regression suite rejects SQLite's

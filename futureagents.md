@@ -456,12 +456,35 @@ or validation database in place. A schema/authority change gets a new sidecar
 path and a deterministic rebuild from retained evidence. Batch ingestion is
 digest-idempotent and owners must be disjoint between cohort generations.
 
-The C10 pass also runs the optional `gpu-wgpu-packed-probe-v1` candidate against
-the canonical CPU packed lookup. CPU remains authoritative. Preserve
-`gpu-comparison.json`, investigate any mismatch, and never treat a fast result
-as accepted unless all returned indices are identical. The `gpu` extra must be
-installed on GPU workers; absence or driver failure is recorded without
-invalidating CPU truth.
+The C10 qualification established `gpu-wgpu-packed-probe-v1` for packed exact
+lookup: zero mismatches over 3,025,703 queries and 3.31× the CPU packed-probe
+throughput. The reviewed receipt is
+`validation/evidence/c10-wgpu-packed-probe-v1.json`. Normal batches select the
+backend through `performance/hash-analysis.toml`; `auto` uses WGPU when the
+device/runtime and qualification are present and otherwise falls back to CPU.
+Do not run both backends on every batch. Dual execution is an explicit
+`--qualify-backend` operation after implementation or platform changes.
+
+This backend never compiles, links, starts Ghidra, recovers functions or
+generates FID hashes. It receives already-generated packed exact keys. Do not
+describe the measured probe speedup as validation, Ghidra or build speedup.
+Packed matrices are cached below ignored
+`artifacts/hash-discrimination/packed-lookups/<generation-digest>/` and are
+rebuildable from the corpus database.
+
+Each newly materialised validation manifest must contain the required
+`hash-discrimination` postprocess job and pin the method, corpus and backend
+authorities. A full run is terminal only after report and retention complete.
+`postprocess-failed` means the expensive build-analysis units are sealed:
+recover from retained JSONL/SQLite evidence; do not start a fresh Ghidra run.
+
+Do not interpret C10's 45.66% aggregate FN rate as intrinsic FID recall. Its
+references are per-library archive functions but its queries are functions
+recovered from five-library linked composites. The large architecture swing
+(roughly 17% Linux x86-64 to roughly 90% MIPS32 BE) strongly implicates linker
+and function-recovery construct effects. Future reports retain route,
+treatment and owner FN strata. Preserve the raw observations and run a bounded
+archive-to-executable control before accepting or rejecting the recall result.
 
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field

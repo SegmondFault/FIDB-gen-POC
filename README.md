@@ -205,6 +205,10 @@ the split and the threshold-free, single-signature TP/FP/TN/FN evidence
 contract. Sealed composites can be reanalysed without compilation or Ghidra;
 every TP, FP and FN observation is retained in a run-local SQLite database,
 while TN remains exactly reproducible from stored denominators.
+The materialised batch also contains a required `hash-discrimination`
+postprocess job. A full run is terminal only after signature classification,
+population analysis, incremental corpus admission, exact lookup, report
+publication and retention have all completed.
 The analysis method is frozen in
 [`validation/machine-validation-hash-method.toml`](validation/machine-validation-hash-method.toml).
 Each immutable run now records separate full-hash, specific-hash and complete
@@ -242,8 +246,10 @@ forward-admission contract until the lane builder consumes it. See
 [`HASH_DISCRIMINATION.md`](HASH_DISCRIMINATION.md) for the model boundary and
 [`validation/README.md`](validation/README.md) for operational authorities.
 Beginning with C10, sealed per-batch evidence is also admitted once into a
-digest-pinned incremental corpus sidecar; optional WGPU execution is measured
-against, but cannot replace, the canonical CPU result.
+digest-pinned incremental corpus sidecar. A qualified WGPU backend performs
+only packed exact-hash lookup and falls back to CPU automatically. It never
+participates in compilation, linking, Ghidra analysis or FID generation. Dual
+CPU/GPU execution is reserved for explicit backend qualification.
 
 The disarmed next-run campaign is split between
 [`batches/c-next-nine-mega-width.toml`](batches/c-next-nine-mega-width.toml) and
