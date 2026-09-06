@@ -157,6 +157,15 @@ systemctl --user enable --now fidb-machine-validation-hash-analysis-afternoon.ti
 systemctl --user enable --now fidb-machine-validation-hash-analysis-nightly.timer
 ```
 
+The dated `fidb-c10-repaired-validation-20260906.timer` is retained as the
+inspectable admission record for the repaired C10 methodology. At 12:30
+Europe/Luxembourg it starts one fail-closed service chain: the immutable
+`c10-shared-image-symbolic-v2-full` source run, its required selected-backend
+single-hash postprocess and retention, then the native-FID canary and full
+campaign. The single-hash backend is selected by
+`performance/hash-analysis.toml`; normal execution does not run the CPU/GPU
+equivalence trial. Every later command is skipped if an earlier command fails.
+
 Review the copied environment file.  The API reuses it rather than introducing
 a second operator environment.  Starting the API is safe while the queue is
 disarmed: API synchronization, inspection, pause, and resume do not change the

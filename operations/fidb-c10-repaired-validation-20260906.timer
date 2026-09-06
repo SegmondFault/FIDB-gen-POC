@@ -1,0 +1,12 @@
+[Unit]
+Description=Start the repaired C10 validation chain at 12:30 Luxembourg time
+
+[Timer]
+OnCalendar=2026-09-06 12:30:00 Europe/Luxembourg
+Persistent=false
+AccuracySec=1s
+Unit=fidb-c10-repaired-validation.service
+
+[Install]
+WantedBy=timers.target
+
