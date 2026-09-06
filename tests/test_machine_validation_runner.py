@@ -16,6 +16,9 @@ from fidb_poc.machine_validation_runner import (
     _post_validation_retention,
     _query_index,
     _resolve_worker_evidence,
+    _supervisor_failure,
+    _terminal_positions,
+    _timed_out_position,
     _worker,
     _width_openssl_signatures,
     _zero_control_flow_lines,
@@ -52,6 +55,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
         self.assertEqual(runtime["execution"]["workers"], 4)
         self.assertEqual(runtime["execution"]["worker_startup_attempts"], 5)
         self.assertTrue(runtime["execution"]["continue_after_cell_failure"])
+        self.assertEqual(runtime["execution"]["cell_timeout_seconds"], 1800)
+        self.assertEqual(runtime["execution"]["cell_timeout_attempts"], 2)
         self.assertFalse(runtime["safety"]["execute_target_binaries"])
         self.assertEqual(runtime["canary"]["positions"], [1, 145, 175])
 
@@ -732,6 +737,54 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertTrue(
                 all(json.loads(path.read_text())["state"] == "failed" for path in results)
             )
+
+    def test_worker_progress_only_times_out_an_active_cell(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            progress = run_root / "workers/42.json"
+            progress.parent.mkdir()
+            progress.write_text(
+                json.dumps(
+                    {
+                        "state": "running",
+                        "position": 17,
+                        "started_unix_ns": 1_000_000_000,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertIsNone(_timed_out_position(run_root, 42, 30, 30_000_000_000))
+            self.assertEqual(
+                _timed_out_position(run_root, 42, 30, 31_000_000_000), 17
+            )
+            progress.write_text(
+                json.dumps({"state": "idle", "position": 17}), encoding="utf-8"
+            )
+            self.assertIsNone(_timed_out_position(run_root, 42, 30, 99_000_000_000))
+
+    def test_supervisor_failure_is_terminal_and_preserves_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            unit = {
+                "position": 7,
+                "route_id": "route",
+                "profile_id": "profile",
+                "treatment_id": "treatment",
+            }
+            result_path = _supervisor_failure(
+                run_root,
+                unit,
+                7,
+                "full",
+                "cell-timeout",
+                "timed out",
+            )
+
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["reason_code"], "cell-timeout")
+            self.assertEqual(result["route_id"], "route")
+            self.assertEqual(_terminal_positions(run_root, "full", {7: unit}, [7]), {7})
 
     def test_elf_composite_retries_hidden_stack_check_with_target_stub(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -119,6 +119,16 @@ The control panel exposes the same two bounded API operations. An active status
 whose recorded parent process is absent is reported as `interrupted` and can be
 resumed explicitly; PID reuse cannot make an unrelated process resumable.
 
+Each worker writes its current cell and start time below the run's `workers/`
+directory. The parent supervisor applies the TOML `cell_timeout_seconds`, stops
+the complete worker process group when a cell exceeds it, and starts a fresh
+JVM for the unfinished shard. A timed-out cell receives the reason code
+`cell-timeout`; it is retried only up to `cell_timeout_attempts`. Unexpected
+worker exits also restart only the unfinished positions and are bounded by
+`maximum_worker_restarts`. Ordinary cell failures remain visible but do not
+abandon the rest of a shard. These settings are operational safety bounds, not
+permission to weaken a failed link audit or discard its evidence.
+
 The full run is rejected unless the latest successful canary records the exact
 runtime-authority digest, query-copy policy and reference-index schema in use.
 The reference index stores exact identity presence separately from one

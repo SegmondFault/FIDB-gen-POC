@@ -575,6 +575,21 @@ Use `scripts/trace_fid_misses.py --rebuild-composite --native-oracle` for
 bounded investigations rather than launching the 444-case campaign while a
 construction defect is unresolved.
 
+The first full repaired-source attempt exposed three runner faults after 62/222
+cells: an objdump `.byte 0` directive was incorrectly classified as a direct
+branch to zero, one transient coordinator-ledger read made a worker declare the
+cohort ineligible, and a cell exception terminated that worker's entire
+round-robin shard. Two SH32 Ghidra analyses also remained in one cell for more
+than 2.5 hours because the runner had no cell watchdog. Do not remove the
+structural objdump parser, bounded evidence-resolution retry, continue-after-
+failure policy, or parent worker supervisor. Their authority is
+`validation/machine-validation-runtime.toml`. Worker progress is durable under
+`workers/<pid>.json`; timeouts and restart exhaustion are reason-coded unit
+failures, and failed attempts are archived before an explicit retry. Recycle
+the whole process group on timeout so the embedded JVM and every descendant are
+released. Never clear the run ledger or completed unit results to recover a
+shard.
+
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field
 `delta_owner` table. SQLite chose `SCAN delta_owner LEFT-JOIN`; the attempt was

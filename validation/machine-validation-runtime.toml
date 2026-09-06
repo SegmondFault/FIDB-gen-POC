@@ -22,6 +22,10 @@ retain_ghidra_projects_on_success = false
 worker_startup_attempts = 5
 worker_startup_retry_seconds = 2
 continue_after_cell_failure = true
+cell_timeout_seconds = 1800
+cell_timeout_attempts = 2
+maximum_worker_restarts = 8
+worker_poll_seconds = 5
 
 [canary]
 positions = [1, 145, 175]

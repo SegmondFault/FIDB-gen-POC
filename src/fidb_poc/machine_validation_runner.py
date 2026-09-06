@@ -162,6 +162,127 @@ def _terminate_worker_groups(processes: list[subprocess.Popen[bytes]]) -> None:
             process.wait()
 
 
+def _unit_result_path(
+    run_root: Path, unit: Mapping[str, object], position: int
+) -> Path:
+    return (
+        run_root
+        / "units"
+        / f"{position:03d}-{unit['route_id']}-{unit['treatment_id']}"
+        / "result.json"
+    )
+
+
+def _terminal_positions(
+    run_root: Path,
+    mode: str,
+    units: Mapping[int, Mapping[str, object]],
+    positions: Iterable[int],
+) -> set[int]:
+    terminal = set()
+    for position in positions:
+        path = _unit_result_path(run_root, units[position], position)
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if result.get("mode") == mode and result.get("state") in {
+            "complete",
+            "failed",
+        }:
+            terminal.add(position)
+    return terminal
+
+
+def _worker_progress_path(run_root: Path, pid: int) -> Path:
+    return run_root / "workers" / f"{pid}.json"
+
+
+def _write_worker_progress(
+    run_root: Path,
+    state: str,
+    *,
+    position: int | None = None,
+    started_unix_ns: int | None = None,
+) -> None:
+    document = {
+        "schema_version": "fidb-machine-validation-worker-progress/v1",
+        "pid": os.getpid(),
+        "state": state,
+        "position": position,
+        "updated_at": _now(),
+    }
+    if started_unix_ns is not None:
+        document["started_unix_ns"] = started_unix_ns
+    _atomic_json(_worker_progress_path(run_root, os.getpid()), document)
+
+
+def _timed_out_position(
+    run_root: Path, pid: int, timeout_seconds: int, now_unix_ns: int
+) -> int | None:
+    try:
+        progress = json.loads(
+            _worker_progress_path(run_root, pid).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return None
+    position = progress.get("position")
+    started = progress.get("started_unix_ns")
+    if (
+        progress.get("state") != "running"
+        or type(position) is not int
+        or type(started) is not int
+    ):
+        return None
+    if now_unix_ns - started < timeout_seconds * 1_000_000_000:
+        return None
+    return position
+
+
+def _supervisor_failure(
+    run_root: Path,
+    unit: Mapping[str, object],
+    position: int,
+    mode: str,
+    reason_code: str,
+    detail: str,
+) -> Path:
+    result_path = _unit_result_path(run_root, unit, position)
+    if result_path.is_file():
+        return result_path
+    _atomic_json(
+        result_path,
+        {
+            "schema_version": UNIT_RESULT_SCHEMA,
+            "state": "failed",
+            "mode": mode,
+            "position": position,
+            "route_id": str(unit["route_id"]),
+            "profile_id": str(unit["profile_id"]),
+            "treatment_id": str(unit["treatment_id"]),
+            "started_at": _now(),
+            "wall_time_ns": 0,
+            "reason_code": reason_code,
+            "error": detail,
+            "folds": [],
+        },
+    )
+    return result_path
+
+
+def _prior_supervisor_attempts(result_path: Path, reason_code: str) -> int:
+    attempts = result_path.parent / "attempts"
+    count = 0
+    for path in attempts.glob("result-*.json"):
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if result.get("reason_code") == reason_code:
+            count += 1
+    return count
+
+
 def _archive_failed_result(result_path: Path) -> None:
     """Retain concise failure evidence before an explicit resume retries a unit."""
     if not result_path.is_file():
@@ -219,6 +340,10 @@ def load_runtime(
         "worker_startup_attempts",
         "worker_startup_retry_seconds",
         "continue_after_cell_failure",
+        "cell_timeout_seconds",
+        "cell_timeout_attempts",
+        "maximum_worker_restarts",
+        "worker_poll_seconds",
     }:
         raise ValueError("machine-validation execution policy has unexpected fields")
     if set(canary) != {
@@ -246,6 +371,10 @@ def load_runtime(
         "checkpoint_every_units",
         "worker_startup_attempts",
         "worker_startup_retry_seconds",
+        "cell_timeout_seconds",
+        "cell_timeout_attempts",
+        "maximum_worker_restarts",
+        "worker_poll_seconds",
     ):
         if type(execution[field]) is not int or execution[field] < 1:
             raise ValueError(f"machine-validation execution.{field} must be positive")
@@ -1190,15 +1319,12 @@ def _worker(
         ghidra_home,
         ghidra_environment(run_root / f"worker-{os.getpid()}" / "ghidra-user"),
     )
+    _write_worker_progress(run_root, "idle")
     failed_positions = 0
     for position in positions:
         unit = units[position]
-        unit_root = (
-            run_root
-            / "units"
-            / f"{position:03d}-{unit['route_id']}-{unit['treatment_id']}"
-        )
-        result_path = unit_root / "result.json"
+        result_path = _unit_result_path(run_root, unit, position)
+        unit_root = result_path.parent
         if result_path.is_file():
             previous = json.loads(result_path.read_text(encoding="utf-8"))
             if previous.get("state") == "complete":
@@ -1209,6 +1335,12 @@ def _worker(
         folds = sorted(canary_folds[position]) if mode == "canary" else ["A", "B"]
         fold_results = []
         started_ns = time.monotonic_ns()
+        _write_worker_progress(
+            run_root,
+            "running",
+            position=position,
+            started_unix_ns=time.time_ns(),
+        )
         try:
             for fold in folds:
                 fold_root = unit_root / f"fold-{fold}"
@@ -1375,6 +1507,7 @@ def _worker(
                 "folds": fold_results,
             }
             _atomic_json(result_path, document)
+            _write_worker_progress(run_root, "idle", position=position)
         except Exception as error:
             _atomic_json(
                 result_path,
@@ -1390,9 +1523,12 @@ def _worker(
                     "folds": fold_results,
                 },
             )
+            _write_worker_progress(run_root, "idle", position=position)
             failed_positions += 1
             if not execution["continue_after_cell_failure"]:
+                _write_worker_progress(run_root, "finished", position=position)
                 return 1
+    _write_worker_progress(run_root, "finished")
     return int(failed_positions > 0)
 
 
@@ -1555,6 +1691,63 @@ def _post_validation_retention(
         }
 
 
+def _spawn_validation_worker(
+    root: Path,
+    runtime_path: str | Path,
+    run_root: Path,
+    run_id: str,
+    mode: str,
+    worker_id: int,
+    positions: list[int],
+    restarts: int = 0,
+) -> dict[str, object]:
+    log_path = run_root / f"worker-{worker_id:02d}.log"
+    with log_path.open("ab", buffering=0) as log:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "fidb_poc.cli",
+                "machine-validation",
+                "_worker",
+                "--project-root",
+                str(root),
+                "--runtime",
+                str(runtime_path),
+                "--run-id",
+                run_id,
+                "--mode",
+                mode,
+                "--positions",
+                ",".join(map(str, positions)),
+            ],
+            cwd=root,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+        )
+    return {
+        "worker_id": worker_id,
+        "process": process,
+        "positions": positions,
+        "restarts": restarts,
+        "handled": False,
+    }
+
+
+def _live_worker_processes(
+    workers: Iterable[Mapping[str, object]],
+) -> list[subprocess.Popen[bytes]]:
+    return [
+        process
+        for worker in workers
+        if isinstance((process := worker.get("process")), subprocess.Popen)
+        and process.poll() is None
+    ]
+
+
 def run_validation(
     project_root: str | Path,
     mode: str,
@@ -1618,6 +1811,7 @@ def run_validation(
         else None
     )
     postprocess_started = False
+    workers: list[dict[str, object]] = []
     _atomic_json(
         current_path, {"run_id": run_id, "path": str(status_path.relative_to(root))}
     )
@@ -1650,43 +1844,29 @@ def run_validation(
                     "current runtime and reference-index contract"
                 )
         pending = sorted(positions)
+        units = {
+            int(unit["position"]): unit for unit in evidence["manifest"]["work_unit"]
+        }
         worker_count = min(int(runtime["execution"]["workers"]), len(pending))
         shards = [pending[index::worker_count] for index in range(worker_count)]
-        processes = []
         for index, shard in enumerate(shards, start=1):
-            log_path = run_root / f"worker-{index:02d}.log"
-            with log_path.open("ab", buffering=0) as log:
-                process = subprocess.Popen(
-                    [
-                        sys.executable,
-                        "-m",
-                        "fidb_poc.cli",
-                        "machine-validation",
-                        "_worker",
-                        "--project-root",
-                        str(root),
-                        "--runtime",
-                        str(runtime_path),
-                        "--run-id",
-                        run_id,
-                        "--mode",
-                        mode,
-                        "--positions",
-                        ",".join(map(str, shard)),
-                    ],
-                    cwd=root,
-                    stdin=subprocess.DEVNULL,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    start_new_session=True,
-                    close_fds=True,
+            workers.append(
+                _spawn_validation_worker(
+                    root,
+                    runtime_path,
+                    run_root,
+                    run_id,
+                    mode,
+                    index,
+                    shard,
                 )
-            processes.append(process)
+            )
         pause_requested = False
-        while any(process.poll() is None for process in processes):
+        while True:
             documents = _result_documents(run_root, mode)
             if pause_request.is_file():
                 pause_requested = True
+                live_processes = _live_worker_processes(workers)
                 _atomic_json(
                     status_path,
                     {
@@ -1696,7 +1876,7 @@ def run_validation(
                         "mode": mode,
                         "state": "pausing",
                         "pid": os.getpid(),
-                        "worker_pids": [process.pid for process in processes],
+                        "worker_pids": [process.pid for process in live_processes],
                         "started_at": started,
                         "attempt_started_at": attempt_started,
                         "resume_count": resume_count,
@@ -1711,8 +1891,78 @@ def run_validation(
                         "postprocess_job": postprocess_job,
                     },
                 )
-                _terminate_worker_groups(processes)
+                _terminate_worker_groups(live_processes)
                 break
+            for worker in workers:
+                process = worker["process"]
+                if not isinstance(process, subprocess.Popen):
+                    raise TypeError("validation worker process record is invalid")
+                if process.poll() is None:
+                    timed_out = _timed_out_position(
+                        run_root,
+                        process.pid,
+                        int(runtime["execution"]["cell_timeout_seconds"]),
+                        time.time_ns(),
+                    )
+                    if timed_out is not None:
+                        _terminate_worker_groups([process])
+                        result_path = _supervisor_failure(
+                            run_root,
+                            units[timed_out],
+                            timed_out,
+                            mode,
+                            "cell-timeout",
+                            "validation cell exceeded the configured supervisor timeout",
+                        )
+                        attempt = (
+                            _prior_supervisor_attempts(result_path, "cell-timeout")
+                            + 1
+                        )
+                        if attempt < int(
+                            runtime["execution"]["cell_timeout_attempts"]
+                        ) and json.loads(result_path.read_text(encoding="utf-8")).get(
+                            "reason_code"
+                        ) == "cell-timeout":
+                            _archive_failed_result(result_path)
+                if process.poll() is not None and not worker["handled"]:
+                    worker_positions = list(worker["positions"])
+                    terminal = _terminal_positions(
+                        run_root, mode, units, worker_positions
+                    )
+                    remaining = [
+                        position
+                        for position in worker_positions
+                        if position not in terminal
+                    ]
+                    if remaining and int(worker["restarts"]) < int(
+                        runtime["execution"]["maximum_worker_restarts"]
+                    ):
+                        replacement = _spawn_validation_worker(
+                            root,
+                            runtime_path,
+                            run_root,
+                            run_id,
+                            mode,
+                            int(worker["worker_id"]),
+                            remaining,
+                            int(worker["restarts"]) + 1,
+                        )
+                        worker.update(replacement)
+                    else:
+                        if remaining:
+                            for position in remaining:
+                                _supervisor_failure(
+                                    run_root,
+                                    units[position],
+                                    position,
+                                    mode,
+                                    "worker-restarts-exhausted",
+                                    "validation worker exited before completing its shard",
+                                )
+                        worker["handled"] = True
+            if all(bool(worker["handled"]) for worker in workers):
+                break
+            live_processes = _live_worker_processes(workers)
             _atomic_json(
                 status_path,
                 {
@@ -1722,7 +1972,10 @@ def run_validation(
                     "mode": mode,
                     "state": "running",
                     "pid": os.getpid(),
-                    "worker_pids": [process.pid for process in processes],
+                    "worker_pids": [process.pid for process in live_processes],
+                    "worker_restarts": sum(
+                        int(worker["restarts"]) for worker in workers
+                    ),
                     "started_at": started,
                     "attempt_started_at": attempt_started,
                     "resume_count": resume_count,
@@ -1737,7 +1990,7 @@ def run_validation(
                     "postprocess_job": postprocess_job,
                 },
             )
-            time.sleep(5)
+            time.sleep(int(runtime["execution"]["worker_poll_seconds"]))
         if pause_requested:
             complete_count, failed_count = _result_counts(run_root, mode)
             paused = {
@@ -1790,7 +2043,8 @@ def run_validation(
                 else "complete" if report["state"] == "measured-complete" else "failed"
             ),
             "pid": os.getpid(),
-            "worker_pids": [process.pid for process in processes],
+            "worker_pids": [],
+            "worker_restarts": sum(int(worker["restarts"]) for worker in workers),
             "started_at": started,
             "finished_at": _now(),
             "expected_work_units": len(positions),
@@ -1889,6 +2143,7 @@ def run_validation(
             )
         return report
     except Exception as error:
+        _terminate_worker_groups(_live_worker_processes(workers))
         failed_state = "postprocess-failed" if postprocess_started else "failed"
         _atomic_json(
             status_path,
