@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from fidb_poc.machine_validation_runner import (
+    DEFAULT_RUNTIME,
     LINK_HARNESS_POLICY,
     QUERY_COPY_POLICY,
     REFERENCE_INDEX_SCHEMA,
@@ -587,6 +588,71 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertFalse((run_root / "pause-request.json").exists())
             stored = json.loads(status_path.read_text(encoding="utf-8"))
             self.assertEqual(stored["pid"], 84)
+
+    def test_foreground_resume_keeps_service_chain_attached(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed-full"
+            run_root.mkdir(parents=True)
+            status_path = run_root / "status.json"
+            (root / "runs/current.json").write_text(
+                json.dumps(
+                    {"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}
+                ),
+                encoding="utf-8",
+            )
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "run_id": "fixed-full",
+                        "mode": "full",
+                        "state": "paused",
+                        "pid": 42,
+                        "expected_work_units": 222,
+                        "complete_work_units": 82,
+                        "failed_work_units": 0,
+                        "resume_count": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "pause-request.json").write_text("{}", encoding="utf-8")
+            terminal = {"state": "measured-complete", "run_id": "fixed-full"}
+            runtime = {"output_root": "runs"}
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value=runtime,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=False,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.preflight",
+                    return_value={"state": "ready", "blockers": []},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.canary_gate_status",
+                    return_value={"ready": True},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.run_validation",
+                    return_value=terminal,
+                ) as run,
+                patch(
+                    "fidb_poc.machine_validation_runner._spawn_validation"
+                ) as spawn,
+            ):
+                resumed = resume_validation(root, foreground=True)
+
+            self.assertEqual(resumed, terminal)
+            run.assert_called_once_with(root, "full", DEFAULT_RUNTIME, "fixed-full")
+            spawn.assert_not_called()
+            self.assertFalse((run_root / "pause-request.json").exists())
+            queued = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(queued["state"], "queued")
+            self.assertEqual(queued["resume_count"], 3)
 
     def test_runtime_status_marks_a_missing_process_interrupted(self):
         with tempfile.TemporaryDirectory() as temporary:

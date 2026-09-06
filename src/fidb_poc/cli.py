@@ -280,6 +280,12 @@ def _machine_validation_main(argv: list[str]) -> int:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
         if command == "start":
             child.add_argument("--run-id")
+        if command == "resume":
+            child.add_argument(
+                "--foreground",
+                action="store_true",
+                help="keep the resumed run attached for a service-chain handoff",
+            )
         if command in {"run", "analyze-hashes", "qualify-matcher", "_worker"}:
             child.add_argument("--run-id", required=True)
         if command == "analyze-hashes":
@@ -365,7 +371,11 @@ def _machine_validation_main(argv: list[str]) -> int:
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "resume":
-            document = resume_validation(arguments.project_root, arguments.runtime)
+            document = resume_validation(
+                arguments.project_root,
+                arguments.runtime,
+                foreground=arguments.foreground,
+            )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
         if arguments.command == "run":

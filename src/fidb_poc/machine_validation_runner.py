@@ -3058,6 +3058,8 @@ def requeue_failed_validation(
 def resume_validation(
     project_root: str | Path,
     runtime_path: str | Path = DEFAULT_RUNTIME,
+    *,
+    foreground: bool = False,
 ) -> dict[str, object]:
     root = Path(project_root).resolve()
     runtime = load_runtime(root, runtime_path)
@@ -3099,6 +3101,8 @@ def resume_validation(
     queued.pop("error", None)
     queued.pop("report_path", None)
     _atomic_json(status_path, queued)
+    if foreground:
+        return run_validation(root, mode, runtime_path, run_id)
     log_path = status_path.parent / "run.log"
     process = _spawn_validation(root, runtime_path, mode, run_id, log_path)
     queued["pid"] = process.pid
