@@ -1036,6 +1036,36 @@ def preflight(
     }
 
 
+def _resolve_link_qualification(
+    root: Path,
+    run_id: str,
+    evidence: Mapping[str, object] | None = None,
+) -> tuple[dict[str, object], dict[str, object] | None, dict[str, object] | None]:
+    """Resolve the mandatory pre-Ghidra link gate without duplicating its audit."""
+
+    from .machine_validation_links import (
+        compile_link_qualification,
+        link_qualification_admission,
+        link_qualification_status,
+        load_link_qualification,
+    )
+
+    authority = load_link_qualification(root)
+    if run_id in authority["admission"]["grandfather_run_ids"]:
+        admission = link_qualification_admission(root, run_id, _evidence=evidence)
+        return admission, None, None
+    plan = compile_link_qualification(root, _evidence=evidence)
+    status = link_qualification_status(root, _plan=plan)
+    admission = link_qualification_admission(
+        root,
+        run_id,
+        _evidence=evidence,
+        _plan=plan,
+        _status=status,
+    )
+    return admission, plan, status
+
+
 def _run_root(root: Path, runtime: Mapping[str, object], run_id: str) -> Path:
     if not run_id or any(
         character
@@ -1436,6 +1466,7 @@ def _prepare_position(
     run_root: Path,
     position: int,
     mode: str,
+    requested_folds: Iterable[str] | None = None,
 ) -> int:
     units = {int(unit["position"]): unit for unit in evidence["manifest"]["work_unit"]}
     routes = {route.id: route for route in evidence["configuration"].routes}
@@ -1454,7 +1485,12 @@ def _prepare_position(
     route = routes[str(unit["route_id"])]
     treatment = treatments[str(unit["treatment_id"])]
     unit_root = _unit_result_path(run_root, unit, position).parent
-    folds = sorted(canary_folds[position]) if mode == "canary" else ["A", "B"]
+    if requested_folds is None:
+        folds = sorted(canary_folds[position]) if mode == "canary" else ["A", "B"]
+    else:
+        folds = sorted(set(requested_folds))
+        if not folds or any(fold not in {"A", "B"} for fold in folds):
+            raise ValueError("validation preparation folds must be A and/or B")
     for fold in folds:
         checkpoint = _load_fold_checkpoint(
             _fold_checkpoint_path(unit_root, fold),
@@ -2317,12 +2353,29 @@ def run_validation(
     if evidence["blockers"]:
         raise ValueError("; ".join(evidence["blockers"]))
     runtime = evidence["runtime"]
-    output_root = _inside(root, str(runtime["output_root"]), "validation output")
-    output_root.mkdir(parents=True, exist_ok=True)
     if run_id is None:
         run_id = f'{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}-{mode}'
     run_root = _run_root(root, runtime, run_id)
+    admission, qualification_plan, qualification_status = _resolve_link_qualification(
+        root, run_id, evidence
+    )
+    if not admission["ready"]:
+        raise ValueError(
+            "machine-validation link qualification is not satisfied: "
+            + "; ".join(str(value) for value in admission.get("blockers", []))
+        )
+    output_root = _inside(root, str(runtime["output_root"]), "validation output")
+    output_root.mkdir(parents=True, exist_ok=True)
     run_root.mkdir(parents=True, exist_ok=True)
+    if qualification_plan is None:
+        _atomic_json(
+            run_root / "link-qualification.json",
+            {
+                "schema_version": "fidb-machine-validation-link-reuse/v1",
+                **admission,
+                "recorded_at": _now(),
+            },
+        )
     current_path = output_root / "current.json"
     lock = output_root / ".runner.lock"
     descriptor = None
@@ -2406,6 +2459,17 @@ def run_validation(
             positions - _terminal_positions(run_root, mode, units, positions)
         )
         pending = _cost_aware_positions(run_root, units, pending, mode)
+        if qualification_plan is not None:
+            from .machine_validation_links import reuse_qualified_links
+
+            reuse_qualified_links(
+                root,
+                evidence,
+                run_root,
+                set(pending),
+                _plan=qualification_plan,
+                _status=qualification_status,
+            )
         shutil.rmtree(run_root / "claims", ignore_errors=True)
         _atomic_json(
             run_root / "scheduling-order.json",
@@ -3080,6 +3144,12 @@ def resume_validation(
     pre = preflight(root, runtime_path)
     if pre["state"] != "ready":
         raise ValueError("; ".join(pre["blockers"]))
+    admission, _plan, _status = _resolve_link_qualification(root, run_id)
+    if not admission["ready"]:
+        raise ValueError(
+            "machine-validation link qualification is not satisfied: "
+            + "; ".join(str(value) for value in admission.get("blockers", []))
+        )
     if mode == "full" and not canary_gate_status(root, runtime_path)["ready"]:
         raise ValueError(
             "full machine validation requires a completed canary for the current "
@@ -3163,6 +3233,12 @@ def start_validation(
         raise ValueError(
             f"machine-validation run id already exists: {run_id}; "
             "resume its checkpoint or choose a new immutable run id"
+        )
+    admission, _plan, _status = _resolve_link_qualification(root, run_id)
+    if not admission["ready"]:
+        raise ValueError(
+            "machine-validation link qualification is not satisfied: "
+            + "; ".join(str(value) for value in admission.get("blockers", []))
         )
     run_root.mkdir(parents=True, exist_ok=True)
     log_path = run_root / "run.log"

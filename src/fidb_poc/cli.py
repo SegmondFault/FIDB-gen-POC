@@ -244,6 +244,7 @@ def _machine_validation_main(argv: list[str]) -> int:
         "requeue-failed",
         "resume",
         "run",
+        "qualify-links",
         "analyze-hashes",
         "qualify-matcher",
         "run-matcher",
@@ -266,6 +267,12 @@ def _machine_validation_main(argv: list[str]) -> int:
                 type=Path,
                 default=Path("validation/machine-validation-hash-schedule.toml"),
             )
+        elif command == "qualify-links":
+            child.add_argument(
+                "--qualification",
+                type=Path,
+                default=Path("validation/machine-validation-link-qualification.toml"),
+            )
         else:
             child.add_argument(
                 "--runtime",
@@ -276,6 +283,10 @@ def _machine_validation_main(argv: list[str]) -> int:
             mode = child.add_mutually_exclusive_group()
             mode.add_argument("--write", action="store_true")
             mode.add_argument("--check", action="store_true")
+        if command == "qualify-links":
+            mode = child.add_mutually_exclusive_group()
+            mode.add_argument("--execute", action="store_true")
+            mode.add_argument("--status", action="store_true")
         if command in {"start", "run", "_worker"}:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
         if command == "start":
@@ -342,6 +353,31 @@ def _machine_validation_main(argv: list[str]) -> int:
         )
         from .machine_validation_hashes import analyze_hashes, scheduled_hash_analysis
 
+        if arguments.command == "qualify-links":
+            from .machine_validation_links import (
+                compile_link_qualification,
+                link_qualification_status,
+                run_link_qualification,
+            )
+
+            if arguments.execute:
+                document = run_link_qualification(
+                    arguments.project_root, arguments.qualification
+                )
+                success = document["state"] == "qualified"
+            elif arguments.status:
+                document = link_qualification_status(
+                    arguments.project_root, arguments.qualification
+                )
+                success = bool(document["satisfied"])
+            else:
+                document = compile_link_qualification(
+                    arguments.project_root, arguments.qualification
+                )
+                document.pop("_evidence", None)
+                success = True
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0 if success else 1
         if arguments.command == "preflight":
             document = preflight(arguments.project_root, arguments.runtime)
             print(json.dumps(document, indent=2, sort_keys=True))

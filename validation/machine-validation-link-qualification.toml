@@ -1,0 +1,22 @@
+schema_version = "fidb-machine-validation-link-qualification/v1"
+id = "c10-all-width-link-qualification-v1"
+state = "defined-disarmed"
+runtime = "validation/machine-validation-runtime.toml"
+output_root = "qualification/evidence/machine-validation-links"
+
+[execution]
+workers = 4
+batch_size = 4
+identical_failure_limit = 4
+
+[admission]
+require_for_new_runs = true
+grandfather_run_ids = ["c10-shared-image-symbolic-v2-full"]
+
+[reuse]
+mode = "hardlink-or-copy"
+verify_sha256 = true
+
+[safety]
+execute_target_binaries = false
+retain_failure_evidence = true

@@ -576,6 +576,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     return_value={"ready": True},
                 ),
                 patch(
+                    "fidb_poc.machine_validation_runner._resolve_link_qualification",
+                    return_value=({"ready": True}, None, None),
+                ),
+                patch(
                     "fidb_poc.machine_validation_runner._spawn_validation",
                     return_value=process,
                 ),
@@ -635,6 +639,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 patch(
                     "fidb_poc.machine_validation_runner.canary_gate_status",
                     return_value={"ready": True},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._resolve_link_qualification",
+                    return_value=({"ready": True}, None, None),
                 ),
                 patch(
                     "fidb_poc.machine_validation_runner.run_validation",
@@ -1241,6 +1249,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     },
                 ),
                 patch(
+                    "fidb_poc.machine_validation_runner._resolve_link_qualification",
+                    return_value=({"ready": True}, None, None),
+                ),
+                patch(
                     "fidb_poc.machine_validation_runner._spawn_validation",
                     return_value=SimpleNamespace(pid=42),
                 ),
@@ -1258,6 +1270,46 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 ],
                 "full",
             )
+
+    def test_new_run_is_not_created_when_link_qualification_is_unsatisfied(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = {"validation_id": "validation", "output_root": "runs"}
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.preflight",
+                    return_value={"state": "ready", "blockers": []},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.runtime_status",
+                    return_value={"state": "not-started"},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.canary_gate_status",
+                    return_value={"ready": True},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value=runtime,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._resolve_link_qualification",
+                    return_value=(
+                        {
+                            "ready": False,
+                            "blockers": ["four link cells failed"],
+                        },
+                        None,
+                        None,
+                    ),
+                ),
+                patch("fidb_poc.machine_validation_runner._spawn_validation") as spawn,
+            ):
+                with self.assertRaisesRegex(ValueError, "four link cells failed"):
+                    start_validation(root, "full", run_id="future-full")
+
+            self.assertFalse((root / "runs/future-full").exists())
+            spawn.assert_not_called()
 
     def test_terminal_validation_uses_shared_scoped_retention(self):
         policy = SimpleNamespace(
