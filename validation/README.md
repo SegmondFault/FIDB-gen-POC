@@ -102,6 +102,40 @@ uv run fidb-poc machine-validation start --project-root . --mode full \
   --run-id c10-shared-image-symbolic-v2-full
 ```
 
+Every new source-validation run also requires the all-width link qualification
+defined by `machine-validation-link-qualification.toml`. This is a separate,
+disarmed pre-Ghidra stage: it resolves each exact route and treatment, links and
+audits both folds, and creates the stripped query image for all 444 fold cells.
+It does not import a program into Ghidra and never executes a target binary.
+
+```sh
+# Compile and inspect the exact 444-cell qualification plan.
+uv run fidb-poc machine-validation qualify-links --project-root .
+
+# Run it explicitly; the command stops after four identical failures.
+uv run fidb-poc machine-validation qualify-links --project-root . --execute
+
+# Verify the sealed receipt and every retained truth/query digest.
+uv run fidb-poc machine-validation qualify-links --project-root . --status
+```
+
+The input digest binds the validation authority, fold assignment, exact width,
+toolchain and recipe authorities, archive population, link/query policies and
+implementation. Evidence lives below the digest-named directory in
+`qualification/evidence/machine-validation-links/`. A successful seal is
+therefore reusable only for precisely the inputs it qualified. New runs
+hardlink those prepared images when possible and fall back to a byte-for-byte
+copy; partial run-local folds are preserved rather than overwritten.
+
+The circuit breaker schedules at most four new fold cells at once. Four
+matching normalized failure fingerprints open it, retain the individual error
+and partial link evidence, and leave the rest untouched. Fix the cause and run
+the same command again; successful cells are not repeated and failed evidence
+is not cleared. The existing checkpoint
+`c10-shared-image-symbolic-v2-full` is the sole explicit grandfathered run,
+because changing its already-pinned preparation authority would discard valid
+completed work. This exception permits only resume of that exact run ID.
+
 Active runs checkpoint each fold as well as every completed width identity.
 Pause stops the worker process groups (including Ghidra children), preserves
 completed results and releases the run lock. Resume keeps the same run ID and

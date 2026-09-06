@@ -411,6 +411,39 @@ production queue drained. Start a canary before a full run. A canary qualifies
 the full run only when its report pins the current runtime digest, query-copy
 policy and reference-index schema.
 
+Before any **new** source-validation run, execute the separate all-width link
+gate in `validation/machine-validation-link-qualification.toml`:
+
+```sh
+uv run fidb-poc machine-validation qualify-links --project-root .
+uv run fidb-poc machine-validation qualify-links --project-root . --execute
+uv run fidb-poc machine-validation qualify-links --project-root . --status
+```
+
+The first command is read-only planning, the second performs link/strip/audit
+work without Ghidra, and the third re-hashes every retained truth/query output
+and verifies the content-addressed seal. Admission is fail-closed. The gate
+tests all 222 exact identities in both folds (444 link cells), rather than a
+representative architecture sample, because the previous runtime failures were
+specific to versioned route lookup and queued-vs-runtime toolchain identity.
+Do not replace this with a tiny canary.
+
+Four matching reason-coded failure fingerprints open the circuit before more
+width is claimed. Inspect `report.json` beneath the digest directory in
+`qualification/evidence/machine-validation-links/`, fix the authority or link
+defect, and execute the same qualification again. It resumes around successful
+cells and preserves every failed attempt; never delete or edit the report to
+force admission. Qualified linked images are hardlinked or copied into the new
+run and revalidated there before Ghidra begins, so the gate is normally saved
+work rather than additional repeated wall time.
+
+`c10-shared-image-symbolic-v2-full` is the only grandfathered run ID. It already
+has a valid 82/222 checkpoint under a pinned runtime and is allowed to resume
+without retroactively changing that evidence. Do not add another exception to
+make a failed new run start. A new runtime, width, recipe, archive population,
+fold assignment, link policy or relevant implementation creates a different
+input digest and requires a fresh seal.
+
 ### Native-FID owner campaign
 
 Use `machine-validation run-matcher`, not `analyze-hashes`, when the question is
@@ -476,6 +509,23 @@ The control panel polls `/api/v1/machine-validation/run`, not the full compiled
 authority endpoint. Keep that lightweight runtime path: compiling the complete
 2,220-input view measured roughly 2.2 seconds and is suitable for explicit or
 periodic authority refresh, not a five-second progress poll.
+
+The 2026-09-06 coordinator fan/timeout incident was two bugs amplifying one
+another. The authority response embedded all 2,271 noisy-hash rows and grew to
+14.4 MiB, beyond the API's 8 MiB and browser proxy's 2 MiB bounds. The rejected
+initial `Promise.all` left client caches empty, so open tabs recomputed the most
+expensive authority projections on every poll. Keep authority's noisy-hash
+projection summary-only and fetch the bounded row view from `/noisy-hashes`.
+`validation/noisy-hashes.toml` controls the visible row limit; full evidence and
+its population digest remain on disk and are not truncated.
+
+Ledger-backed snapshot and timing projections are cached only while the SQLite
+main/WAL size and modification identity are unchanged. Do not replace that key
+with a time-only cache: queue mutations must invalidate it immediately. Also do
+not raise transport limits to conceal an accidental unbounded projection. If
+the coordinator is hot while no batch is active, time each derived endpoint,
+check response status/size, and distinguish anonymous RSS from Linux file cache
+before blaming a JVM or memory leak.
 
 Pause machine validation through its own control, not by restarting the API
 service. The parent stops each worker process group (including Ghidra), retains
