@@ -183,9 +183,7 @@ def build_library_fidb(
                 manager.removeUserFile(fid_file)
 
 
-def export_fid_signatures(
-    fidb: Path, output: Path, language: str
-) -> dict[str, int]:
+def export_fid_signatures(fidb: Path, output: Path, language: str) -> dict[str, int]:
     """Export deterministic function-level matching identities from a FIDB.
 
     A packed FIDB's byte hash identifies its container, not its matching
@@ -467,6 +465,221 @@ def assess_fidb(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
+
+
+def _unsigned_hash(value: int) -> str:
+    return format(int(value) & ((1 << 64) - 1), "016x")
+
+
+def _portable_candidate_id(record, library) -> str:
+    """Return a path-independent identity shared by oracle and portable rows."""
+
+    fields = (
+        str(library.getLibraryFamilyName()),
+        str(library.getLibraryVersion()),
+        str(library.getLibraryVariant()),
+        str(record.getDomainPath()),
+        str(int(record.getEntryPoint()) & ((1 << 64) - 1)),
+        str(record.getName()),
+        _unsigned_hash(record.getFullHash()),
+        _unsigned_hash(record.getSpecificHash()),
+    )
+    import hashlib
+
+    return hashlib.sha256("\0".join(fields).encode("utf-8")).hexdigest()
+
+
+def export_fid_oracle_input(
+    project_dir: Path,
+    project_name: str,
+    program_path: str,
+    fidbs: list[Path],
+    output: Path,
+) -> dict[str, object]:
+    """Export native ``FidProgramSeeker`` decisions and their exact score inputs.
+
+    This is a qualification boundary, not a second hash implementation. Ghidra
+    supplies the hashes, call-family relations, candidate records and oracle
+    decisions. The resulting immutable document can be replayed by both the CPU
+    and WGPU portable scorers without a JVM.
+    """
+
+    from ghidra.feature.fid.db import FidFileManager
+    from ghidra.feature.fid.service import FidProgramSeeker, FidService
+    from java.io import File
+
+    if not fidbs:
+        raise ValueError("native FID oracle requires at least one database")
+    for path in fidbs:
+        if not path.is_file():
+            raise ValueError(f"native FID oracle database is missing: {path}")
+
+    service = FidService()
+    monitor = pyghidra.task_monitor()
+    functions_output: list[dict[str, object]] = []
+    with pyghidra.open_project(project_dir, project_name) as project:
+        with pyghidra.program_context(project, program_path) as program:
+            manager = FidFileManager.getInstance()
+            manager.load()
+            for item in manager.getFidFiles():
+                item.setActive(False)
+            attached = []
+            query = None
+            try:
+                for path in fidbs:
+                    item = manager.addUserFidFile(File(str(path.resolve())))
+                    item.setActive(True)
+                    attached.append(item)
+                query = manager.openFidQueryService(program.getLanguage(), False)
+                native_by_address: dict[str, list[dict[str, object]]] = {}
+                native_results = service.processProgram(
+                    program, query, service.getDefaultScoreThreshold(), monitor
+                )
+                for result in native_results:
+                    matches = []
+                    for match in result.matches or []:
+                        record = match.getFunctionRecord()
+                        library = match.getLibraryRecord()
+                        matches.append(
+                            {
+                                "candidate_id": _portable_candidate_id(record, library),
+                                "owner": (
+                                    f"{library.getLibraryFamilyName()}@"
+                                    f"{library.getLibraryVersion()}"
+                                ),
+                                "name": str(record.getName()),
+                                "score": float(match.getOverallScore()),
+                                "primary_score": float(
+                                    match.getPrimaryFunctionCodeUnitScore()
+                                ),
+                                "child_score": float(
+                                    match.getChildFunctionCodeUnitScore()
+                                ),
+                                "parent_score": float(
+                                    match.getParentFunctionCodeUnitScore()
+                                ),
+                                "match_mode": str(match.getPrimaryFunctionMatchMode()),
+                            }
+                        )
+                    native_by_address[str(result.function.getEntryPoint())] = sorted(
+                        matches, key=lambda row: str(row["candidate_id"])
+                    )
+
+                functions = program.getFunctionManager().getFunctionsNoStubs(True)
+                for function in functions:
+                    monitor.checkCancelled()
+                    hashes = service.hashFunction(function)
+                    if hashes is None:
+                        continue
+                    # HashFamily deduplicates relations by full hash. Mirror
+                    # that exactly; summing addresses here over-counts common
+                    # callees/callers and was caught by the native oracle.
+                    children_by_hash = {}
+                    for relation in FidProgramSeeker.getChildren(function, True):
+                        related_hash = service.hashFunction(relation)
+                        if related_hash is not None:
+                            children_by_hash[int(related_hash.getFullHash())] = (
+                                related_hash
+                            )
+                    children = list(children_by_hash.values())
+                    parents_by_hash = {}
+                    for relation in FidProgramSeeker.getParents(function, True):
+                        related_hash = service.hashFunction(relation)
+                        if related_hash is not None:
+                            parents_by_hash[int(related_hash.getFullHash())] = (
+                                related_hash
+                            )
+                    parents = list(parents_by_hash.values())
+                    candidate_rows = []
+                    for record in query.findFunctionsByFullHash(hashes.getFullHash()):
+                        library = query.getLibraryForFunction(record)
+                        child_units = sum(
+                            int(item.getCodeUnitSize())
+                            for item in children
+                            if query.getSuperiorFullRelation(record, item)
+                        )
+                        parent_units = (
+                            sum(
+                                int(item.getCodeUnitSize())
+                                for item in parents
+                                if query.getInferiorFullRelation(item, record)
+                            )
+                            if len(parents) < 500
+                            else 0
+                        )
+                        candidate_rows.append(
+                            {
+                                "candidate_id": _portable_candidate_id(record, library),
+                                "owner": (
+                                    f"{library.getLibraryFamilyName()}@"
+                                    f"{library.getLibraryVersion()}"
+                                ),
+                                "name": str(record.getName()),
+                                "full_hash": _unsigned_hash(record.getFullHash()),
+                                "specific_hash": _unsigned_hash(
+                                    record.getSpecificHash()
+                                ),
+                                "specific_hash_additional_size": int(
+                                    record.getSpecificHashAdditionalSize()
+                                ),
+                                "code_unit_size": int(record.getCodeUnitSize()),
+                                "child_code_units": child_units,
+                                "parent_code_units": parent_units,
+                                "auto_pass": bool(record.autoPass()),
+                                "auto_fail": bool(record.autoFail()),
+                                "force_specific": bool(record.isForceSpecific()),
+                                "force_relation": bool(record.isForceRelation()),
+                            }
+                        )
+                    address = str(function.getEntryPoint())
+                    functions_output.append(
+                        {
+                            "address": address,
+                            "function_name": str(function.getName()),
+                            "full_hash": _unsigned_hash(hashes.getFullHash()),
+                            "specific_hash": _unsigned_hash(hashes.getSpecificHash()),
+                            "specific_hash_additional_size": int(
+                                hashes.getSpecificHashAdditionalSize()
+                            ),
+                            "code_unit_size": int(hashes.getCodeUnitSize()),
+                            "candidates": sorted(
+                                candidate_rows,
+                                key=lambda row: str(row["candidate_id"]),
+                            ),
+                            "native_matches": native_by_address.get(address, []),
+                        }
+                    )
+            finally:
+                if query is not None:
+                    query.close()
+                for item in attached:
+                    manager.removeUserFile(item)
+
+            document = {
+                "schema_version": "fidb-portable-fid-input/v1",
+                "oracle": "ghidra-fid-program-seeker",
+                "language_id": str(program.getLanguageID()),
+                "compiler_spec_id": str(program.getCompilerSpec().getCompilerSpecID()),
+                "score_threshold": float(service.getDefaultScoreThreshold()),
+                "medium_code_unit_limit": int(
+                    service.getMediumHashCodeUnitLengthLimit()
+                ),
+                "functions": sorted(
+                    functions_output, key=lambda row: str(row["address"])
+                ),
+            }
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(f".{output.name}.part")
+    temporary.unlink(missing_ok=True)
+    try:
+        temporary.write_text(
+            json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        temporary.replace(output)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return document
 
 
 def export_raw_fidbf(packed: Path, output: Path) -> Path:
