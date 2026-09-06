@@ -454,6 +454,15 @@ the compact report; drill-down reads bounded full/specific/complete populations
 and affected owners. A future schema change gets a new sidecar, never an in-place
 reinterpretation of this evidence.
 
+Routine native-FID cases execute only the `selected` backend from
+`validation/fid-matching.toml`—currently `cpu-portable-fid-v1`—and compare it
+with the native oracle already required for the measurement. Do not restore
+per-case CPU/WGPU dual execution. `qualify-matcher` is the explicit backend
+equivalence operation and is the only normal reason to execute both paths.
+The independent bulk exact-hash analyser continues to select WGPU through
+`performance/hash-analysis.toml`; it also runs both paths only when explicitly
+given `--qualify-backend`.
+
 Do not simplify the v3 reference index back to a flat occurrence table. The
 first compatibility-aware canary expanded repeated signatures across every
 build occurrence: one Android fold remained in SQLite matching for more than

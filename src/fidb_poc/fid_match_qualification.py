@@ -193,6 +193,33 @@ def _annotate_truth(
     }
 
 
+def _portable_executions(
+    oracle: Mapping[str, object],
+    authority: Mapping[str, object],
+    *,
+    compare_backends: bool,
+) -> list[dict[str, object]]:
+    """Run both backends for qualification or one reviewed backend routinely."""
+
+    backend_ids = (
+        [str(row["id"]) for row in authority["backend"]]
+        if compare_backends
+        else [str(authority["selected"])]
+    )
+    executions = []
+    for backend_id in backend_ids:
+        backend = authority["backends"][backend_id]
+        execution = (
+            match_gpu(oracle, authority)
+            if backend["device"] == "gpu"
+            else match_cpu(oracle, authority)
+        )
+        if execution.get("backend") != backend_id:
+            raise ValueError("portable FID backend returned the wrong identity")
+        executions.append(execution)
+    return executions
+
+
 def qualify_retained_validation(
     project_root: str | Path,
     run_id: str,
@@ -203,8 +230,9 @@ def qualify_retained_validation(
     authority_path: str | Path = "validation/fid-matching.toml",
     output_root: str | Path = "qualification/evidence",
     reuse_oracle: bool = False,
+    compare_backends: bool = True,
 ) -> dict[str, object]:
-    """Qualify CPU and WGPU against one retained, reviewed validation unit."""
+    """Run native FID and either qualify all or verify the selected backend."""
 
     if position < 1 or fold not in {"A", "B"}:
         raise ValueError("FID matcher qualification position/fold is invalid")
@@ -294,18 +322,22 @@ def qualify_retained_validation(
         )
     _annotate_truth(root, oracle, fold_root, signature_paths, query_binary)
     _atomic_json(oracle_path, oracle)
-    cpu = match_cpu(oracle, authority)
-    gpu = match_gpu(oracle, authority)
+    executions = _portable_executions(
+        oracle,
+        authority,
+        compare_backends=compare_backends,
+    )
     classification = classify_matches(oracle, evidence["cohort"])
-    cpu_path = destination / "cpu-output.json"
-    gpu_path = destination / "gpu-output.json"
-    _atomic_json(cpu_path, cpu)
-    _atomic_json(gpu_path, gpu)
+    execution_paths = []
+    for execution in executions:
+        device = str(authority["backends"][execution["backend"]]["device"])
+        path = destination / f"{device}-output.json"
+        _atomic_json(path, execution)
+        execution_paths.append(path)
     classification_path = destination / "classification.json"
     _atomic_json(classification_path, classification)
     comparisons = [
-        compare_with_oracle(oracle, cpu, authority),
-        compare_with_oracle(oracle, gpu, authority),
+        compare_with_oracle(oracle, execution, authority) for execution in executions
     ]
     state = (
         "qualified"
@@ -316,6 +348,12 @@ def qualify_retained_validation(
         "schema_version": QUALIFICATION_SCHEMA,
         "state": state,
         "scope": "ghidra-fid-candidate-scoring-and-winner-selection",
+        "execution_policy": (
+            "qualification-all-backends"
+            if compare_backends
+            else "selected-backend-only"
+        ),
+        "selected_backend": authority["selected"],
         "case": {
             "validation_id": runtime["validation_id"],
             "run_id": run_id,
@@ -358,7 +396,7 @@ def qualify_retained_validation(
                 "output_path": str(path.relative_to(root)),
                 "output_sha256": _sha256(path),
             }
-            for execution, path in ((cpu, cpu_path), (gpu, gpu_path))
+            for execution, path in zip(executions, execution_paths, strict=True)
         ],
         "comparisons": comparisons,
         "classification": {

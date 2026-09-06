@@ -182,8 +182,11 @@ uv run fidb-poc machine-validation run-matcher --project-root . --mode full
 uv run fidb-poc machine-validation scheduled-matcher --project-root .
 ```
 
-Each case retains the native oracle input, CPU and WGPU decisions, comparison,
-truth attribution and per-hash observations. A terminal campaign compacts those
+Each routine case retains the native oracle input, the selected portable CPU
+decision, its oracle comparison, truth attribution and per-hash observations.
+CPU/WGPU dual execution is reserved for the explicit `qualify-matcher`
+operation; the checked-in qualification receipt is reused by normal campaigns.
+A terminal campaign compacts those
 observations into `full-hash-evidence.sqlite3`. The sidecar retains full,
 specific and complete hash populations by compatible scope and owner, including
 TP/FP/FN counts and shared, ambiguous and incorrect-confident attribution

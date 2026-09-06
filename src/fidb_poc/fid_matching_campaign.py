@@ -116,10 +116,12 @@ def load_campaign(
         or not 1 <= int(execution["workers"]) <= 16
     ):
         raise ValueError("FID matching execution policy is invalid")
-    if any(execution[name] is not True for name in execution if name != "workers"):
-        raise ValueError(
-            "FID matching execution policy must preserve comparison and resume"
-        )
+    if (
+        not isinstance(execution["compare_cpu_and_gpu"], bool)
+        or execution["finish_started"] is not True
+        or execution["resume_completed_cases"] is not True
+    ):
+        raise ValueError("FID matching execution policy is invalid")
     canary = document["canary"]
     if (
         set(canary)
@@ -822,6 +824,7 @@ def worker_cases(
                 runtime_path=str(campaign["runtime"]),
                 authority_path=str(campaign["matching_authority"]),
                 output_root=relative_output,
+                compare_backends=bool(campaign["execution"]["compare_cpu_and_gpu"]),
             )
         except Exception as error:
             failed += 1

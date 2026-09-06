@@ -17,6 +17,7 @@ from fidb_poc.fid_matching_campaign import (
 )
 from fidb_poc.fid_match_qualification import (
     _linker_truth_intervals,
+    _portable_executions,
     _symbol_address_bias,
 )
 
@@ -30,8 +31,35 @@ class FidMatchingCampaignTests(unittest.TestCase):
     def test_campaign_freezes_all_c10_function_owner_cases(self):
         self.assertEqual(len(_expected_cases(self.campaign, "canary")), 4)
         self.assertEqual(len(_expected_cases(self.campaign, "full")), 444)
+        self.assertFalse(self.campaign["execution"]["compare_cpu_and_gpu"])
         self.assertTrue(self.campaign["safety"]["require_no_active_production_jobs"])
         self.assertFalse(self.campaign["safety"]["execute_target_binaries"])
+
+    def test_routine_campaign_executes_only_the_selected_backend(self):
+        authority = {
+            "selected": "cpu-portable-fid-v1",
+            "backend": [
+                {"id": "cpu-portable-fid-v1"},
+                {"id": "gpu-portable-fid-v1"},
+            ],
+            "backends": {
+                "cpu-portable-fid-v1": {"device": "cpu"},
+                "gpu-portable-fid-v1": {"device": "gpu"},
+            },
+        }
+        selected = {"backend": "cpu-portable-fid-v1"}
+        with (
+            patch(
+                "fidb_poc.fid_match_qualification.match_cpu",
+                return_value=selected,
+            ) as cpu,
+            patch("fidb_poc.fid_match_qualification.match_gpu") as gpu,
+        ):
+            executions = _portable_executions({}, authority, compare_backends=False)
+
+        self.assertEqual(executions, [selected])
+        cpu.assert_called_once()
+        gpu.assert_not_called()
 
     def test_schedule_opens_only_in_the_reviewed_window(self):
         timezone = ZoneInfo("Europe/Luxembourg")
