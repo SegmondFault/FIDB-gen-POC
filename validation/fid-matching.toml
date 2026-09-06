@@ -1,0 +1,36 @@
+schema_version = "fidb-portable-fid-matching/v1"
+selected = "cpu-portable-fid-v1"
+
+[semantics]
+candidate_key = "full_hash"
+score_threshold = 14.6
+medium_code_unit_limit = 24
+specific_constant_weight = 0.67
+maximum_parents_for_score = 500
+force_relation_uses = "child"
+winner_policy = "all-equal-highest-score"
+
+[oracle]
+implementation = "ghidra-fid-program-seeker"
+require_zero_decision_mismatches = true
+score_max_float32_ulps = 1
+
+[evidence]
+retain_candidate_scores = true
+retain_native_decisions = true
+retain_portable_decisions = true
+retain_mismatches = true
+maximum_mismatch_rows = 1000
+
+[[backend]]
+id = "cpu-portable-fid-v1"
+device = "cpu"
+implementation = "python-float32-fid-score"
+state = "qualified-equivalent"
+
+[[backend]]
+id = "gpu-portable-fid-v1"
+device = "gpu"
+implementation = "wgpu-float32-fid-score"
+state = "qualified-equivalent"
+allowed_adapter_types = ["IntegratedGPU", "DiscreteGPU"]
