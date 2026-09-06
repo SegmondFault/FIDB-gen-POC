@@ -19,6 +19,9 @@ max_failure_rows = 20000
 checkpoint_every_units = 1
 retain_ghidra_projects_on_failure = true
 retain_ghidra_projects_on_success = false
+worker_startup_attempts = 5
+worker_startup_retry_seconds = 2
+continue_after_cell_failure = true
 
 [canary]
 positions = [1, 145, 175]

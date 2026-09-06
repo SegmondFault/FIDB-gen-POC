@@ -15,6 +15,8 @@ from fidb_poc.machine_validation_runner import (
     _link_composite,
     _post_validation_retention,
     _query_index,
+    _resolve_worker_evidence,
+    _worker,
     _width_openssl_signatures,
     _zero_control_flow_lines,
     canary_gate_status,
@@ -23,6 +25,7 @@ from fidb_poc.machine_validation_runner import (
     resume_validation,
     runtime_status,
     start_validation,
+    TransientEvidenceError,
 )
 from fidb_poc.machine_validation_hashes import (
     ANALYSIS_ENGINE,
@@ -47,6 +50,8 @@ class MachineValidationRunnerTests(unittest.TestCase):
 
         self.assertEqual(runtime["validation_id"], "c-top10-cohort-001")
         self.assertEqual(runtime["execution"]["workers"], 4)
+        self.assertEqual(runtime["execution"]["worker_startup_attempts"], 5)
+        self.assertTrue(runtime["execution"]["continue_after_cell_failure"])
         self.assertFalse(runtime["safety"]["execute_target_binaries"])
         self.assertEqual(runtime["canary"]["positions"], [1, 145, 175])
 
@@ -632,6 +637,100 @@ class MachineValidationRunnerTests(unittest.TestCase):
             archived = result.parent / "attempts/result-001.json"
             self.assertEqual(
                 json.loads(archived.read_text(encoding="utf-8"))["error"], "link"
+            )
+
+    def test_worker_retries_transient_evidence_resolution(self):
+        runtime = {
+            "execution": {
+                "worker_startup_attempts": 3,
+                "worker_startup_retry_seconds": 2,
+            }
+        }
+        evidence = {"runtime": runtime}
+        with (
+            patch(
+                "fidb_poc.machine_validation_runner.load_runtime",
+                return_value=runtime,
+            ),
+            patch(
+                "fidb_poc.machine_validation_runner.resolve_evidence",
+                side_effect=[TransientEvidenceError("locked"), evidence],
+            ) as resolve,
+            patch("fidb_poc.machine_validation_runner.time.sleep") as sleep,
+        ):
+            resolved = _resolve_worker_evidence(Path("/project"), "runtime.toml")
+
+        self.assertIs(resolved, evidence)
+        self.assertEqual(resolve.call_count, 2)
+        sleep.assert_called_once_with(2)
+
+    def test_worker_records_a_failed_cell_then_continues_its_shard(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "runs").mkdir()
+            (root / "runs/reference-index.sqlite3").touch()
+            route = SimpleNamespace(id="route")
+            treatment = SimpleNamespace(id="treatment")
+            execution = {
+                "jvm_initial_heap_mib": 256,
+                "jvm_max_heap_mib": 1024,
+                "jvm_active_processors": 1,
+                "continue_after_cell_failure": True,
+            }
+            evidence = {
+                "runtime": {
+                    "output_root": "runs",
+                    "ghidra_headless": "/bin/true",
+                    "execution": execution,
+                    "canary": {"folds_by_position": []},
+                },
+                "configuration": SimpleNamespace(
+                    routes=[route], treatments=[treatment]
+                ),
+                "manifest": {
+                    "work_unit": [
+                        {
+                            "position": position,
+                            "route_id": "route",
+                            "profile_id": "profile",
+                            "treatment_id": "treatment",
+                        }
+                        for position in (1, 2)
+                    ],
+                    "execution": {"harness_mode": LINK_HARNESS_POLICY},
+                },
+                "status": {
+                    "randomization": {
+                        "fold_a": ["openssl@3.5.8"],
+                        "fold_b": ["other@1"],
+                        "canonical_ids": ["openssl@3.5.8", "other@1"],
+                    }
+                },
+                "archives": {},
+            }
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner._resolve_worker_evidence",
+                    return_value=evidence,
+                ),
+                patch(
+                    "fidb_poc.pipeline.find_ghidra", return_value=(None, root)
+                ),
+                patch("fidb_poc.pipeline.ghidra_environment", return_value={}),
+                patch("fidb_poc.ghidra_fid.ensure_started"),
+                patch(
+                    "fidb_poc.machine_validation_runner._rebuild_openssl_archives",
+                    side_effect=RuntimeError("fixture failure"),
+                ) as rebuild,
+            ):
+                result = _worker(root, "runtime.toml", "run", [1, 2], "full")
+
+            self.assertEqual(result, 1)
+            self.assertEqual(rebuild.call_count, 2)
+            results = sorted((root / "runs/run/units").glob("*/result.json"))
+            self.assertEqual(len(results), 2)
+            self.assertTrue(
+                all(json.loads(path.read_text())["state"] == "failed" for path in results)
             )
 
     def test_elf_composite_retries_hidden_stack_check_with_target_stub(self):

@@ -40,6 +40,10 @@ REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 PAUSE_REQUEST_NAME = "pause-request.json"
 
+
+class TransientEvidenceError(ValueError):
+    """The evidence authority could not be read consistently yet."""
+
 _OBJDUMP_INSTRUCTION = re.compile(
     r"^\s*[0-9a-f]+:\s+(?:(?:[0-9a-f]{2,16})\s+)+"
     r"(?P<mnemonic>[a-z][a-z0-9.]*)\s*(?P<operands>.*)$",
@@ -212,6 +216,9 @@ def load_runtime(
         "checkpoint_every_units",
         "retain_ghidra_projects_on_failure",
         "retain_ghidra_projects_on_success",
+        "worker_startup_attempts",
+        "worker_startup_retry_seconds",
+        "continue_after_cell_failure",
     }:
         raise ValueError("machine-validation execution policy has unexpected fields")
     if set(canary) != {
@@ -237,9 +244,15 @@ def load_runtime(
         "minimum_distinct_hashes",
         "max_failure_rows",
         "checkpoint_every_units",
+        "worker_startup_attempts",
+        "worker_startup_retry_seconds",
     ):
         if type(execution[field]) is not int or execution[field] < 1:
             raise ValueError(f"machine-validation execution.{field} must be positive")
+    if type(execution["continue_after_cell_failure"]) is not bool:
+        raise ValueError(
+            "machine-validation execution.continue_after_cell_failure must be boolean"
+        )
     if safety["execute_target_binaries"] is not False:
         raise ValueError("machine-validation must never execute target binaries")
     for field in (
@@ -449,7 +462,24 @@ def resolve_evidence(
     manifest = _manifest(root, runtime)
     status = compile_machine_validation(root)
     if not status["readiness"]["eligible"]:
-        raise ValueError("machine-validation cohort is no longer eligible")
+        unavailable = {
+            name: source.get("detail", source.get("state"))
+            for name, source in status.get("evidence_sources", {}).items()
+            if isinstance(source, dict)
+            and source.get("state") == "temporarily-unavailable"
+        }
+        detail = "; ".join(
+            str(value) for value in status["readiness"].get("blockers", [])
+        )
+        message = "machine-validation cohort is no longer eligible"
+        if detail:
+            message += f": {detail}"
+        if unavailable:
+            message += "; temporarily unavailable evidence: " + ", ".join(
+                f"{name}={value}" for name, value in sorted(unavailable.items())
+            )
+            raise TransientEvidenceError(message)
+        raise ValueError(message)
     cohort = set(status["randomization"]["canonical_ids"])
     expected = {
         (owner, str(unit["route_id"]), str(unit["treatment_id"]))
@@ -520,6 +550,24 @@ def resolve_evidence(
         },
         "blockers": blockers,
     }
+
+
+def _resolve_worker_evidence(
+    root: Path, runtime_path: str | Path
+) -> dict[str, object]:
+    """Resolve worker authority with bounded retries for transient ledger reads."""
+
+    runtime = load_runtime(root, runtime_path)
+    attempts = int(runtime["execution"]["worker_startup_attempts"])
+    delay = int(runtime["execution"]["worker_startup_retry_seconds"])
+    for attempt in range(1, attempts + 1):
+        try:
+            return resolve_evidence(root, runtime_path)
+        except TransientEvidenceError:
+            if attempt == attempts:
+                raise
+            time.sleep(delay)
+    raise AssertionError("bounded worker evidence resolution did not terminate")
 
 
 def resolve_hash_analysis_evidence(
@@ -1108,7 +1156,7 @@ def _worker(
     mode: str,
 ) -> int:
     root = Path(project_root).resolve()
-    evidence = resolve_evidence(root, runtime_path)
+    evidence = _resolve_worker_evidence(root, runtime_path)
     run_root = _run_root(root, evidence["runtime"], run_id)
     index = (
         _inside(root, str(evidence["runtime"]["output_root"]), "validation output")
@@ -1142,6 +1190,7 @@ def _worker(
         ghidra_home,
         ghidra_environment(run_root / f"worker-{os.getpid()}" / "ghidra-user"),
     )
+    failed_positions = 0
     for position in positions:
         unit = units[position]
         unit_root = (
@@ -1341,8 +1390,10 @@ def _worker(
                     "folds": fold_results,
                 },
             )
-            return 1
-    return 0
+            failed_positions += 1
+            if not execution["continue_after_cell_failure"]:
+                return 1
+    return int(failed_positions > 0)
 
 
 def _aggregate(
