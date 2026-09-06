@@ -75,6 +75,51 @@ def _hash_evidence_summary(row: object) -> dict[str, object]:
     return {field: row.get(field) for field in fields}
 
 
+def _construct_validity(
+    document: Mapping[str, object], hash_types: list[object]
+) -> dict[str, object]:
+    recorded = document.get("construct_validity")
+    if isinstance(recorded, dict):
+        return recorded
+    complete = next(
+        (
+            row
+            for row in hash_types
+            if isinstance(row, dict) and row.get("hash_type") == "complete"
+        ),
+        {},
+    )
+    libraries = complete.get("libraries", []) if isinstance(complete, dict) else []
+    by_owner = []
+    for row in libraries if isinstance(libraries, list) else []:
+        if not isinstance(row, dict):
+            continue
+        recovered = int(row.get("reference_observations", 0)) - int(
+            row.get("missed_observations", 0)
+        )
+        missed = int(row.get("missed_observations", 0))
+        denominator = recovered + missed
+        by_owner.append(
+            {
+                "id": str(row.get("owner") or ""),
+                "true_positives": recovered,
+                "false_negatives": missed,
+                "false_negative_rate": missed / denominator if denominator else None,
+            }
+        )
+    return {
+        "state": "construct-validity-unresolved",
+        "recall_claim": "harness-conditional-not-intrinsic-fid-recall",
+        "reference_unit": "per-library-archive-function",
+        "query_unit": "five-library-linked-composite-function",
+        "route_false_negative_rate_spread": None,
+        "by_route": [],
+        "by_treatment": [],
+        "by_owner": by_owner,
+        "legacy_projection": True,
+    }
+
+
 def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
     reports: list[dict[str, object]] = []
     for path in sorted(root.glob(report_glob)):
@@ -113,6 +158,17 @@ def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
                 "method_authority": document.get("method_authority"),
                 "corpus_index": document.get("corpus_index"),
                 "gpu_comparison": document.get("gpu_comparison"),
+                "lookup_backend": document.get("lookup_backend"),
+                "pipeline_job": document.get("pipeline_job")
+                or {
+                    "id": "hash-discrimination",
+                    "kind": "validation-postprocess",
+                    "state": "legacy-evidence-published",
+                    "materialized_with_batch": False,
+                    "required_for_run_completion": False,
+                    "stages": [],
+                },
+                "construct_validity": _construct_validity(document, hash_types),
                 "decision_contract": document.get("decision_contract"),
                 "confusion_matrix": matrix,
                 "rates": _rates(matrix),
@@ -156,12 +212,29 @@ def compile_validation_observatory(
         {
             key: value
             for key, value in row.items()
-            if key not in {"hash_evidence", "hash_type_detail", "failures"}
+            if key
+            not in {
+                "hash_evidence",
+                "hash_type_detail",
+                "failures",
+                "construct_validity",
+            }
         }
         for row in reports
     ]
-    for summary in run_summaries:
+    for summary, report in zip(run_summaries, reports, strict=True):
         summary["hash_evidence"] = summary.pop("hash_evidence_summary")
+        construct = report["construct_validity"]
+        summary["construct_validity"] = {
+            key: construct.get(key)
+            for key in (
+                "state",
+                "recall_claim",
+                "route_false_negative_rate_spread",
+                "legacy_projection",
+            )
+            if construct.get(key) is not None
+        }
     detail = None
     if selected is not None:
         detail = {

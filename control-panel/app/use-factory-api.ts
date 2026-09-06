@@ -1359,7 +1359,7 @@ export type MachineValidationRun = {
   validation_id?: string;
   run_id: string | null;
   mode: 'canary' | 'full' | null;
-  state: 'not-started' | 'queued' | 'preparing-index' | 'running' | 'pausing' | 'paused' | 'interrupted' | 'complete' | 'failed' | 'invalid';
+  state: 'not-started' | 'queued' | 'preparing-index' | 'running' | 'pausing' | 'paused' | 'interrupted' | 'postprocessing' | 'postprocess-failed' | 'retaining' | 'complete' | 'failed' | 'invalid';
   pid?: number | null;
   worker_pids?: number[];
   started_at?: string | null;
@@ -1372,6 +1372,14 @@ export type MachineValidationRun = {
   failed_work_units: number;
   report_path?: string;
   error?: string;
+  postprocess_job?: {
+    id: string;
+    kind: string;
+    state: string;
+    materialized_with_batch?: boolean;
+    required_for_run_completion: boolean;
+    stages: Array<{ id: string; state: string }>;
+  };
 };
 
 export type MachineValidationCanaryGate = {
@@ -1472,6 +1480,33 @@ export type ValidationObservatoryRun = {
     mismatches: number | null;
     performance?: Record<string, number | null>;
   } | null;
+  lookup_backend?: {
+    selected: string;
+    implementation: string;
+    device: 'cpu' | 'gpu';
+    scope: string;
+    requested_mode: 'auto' | 'cpu' | 'gpu';
+    fallback_reason: string | null;
+  } | null;
+  pipeline_job?: {
+    id: string;
+    kind: string;
+    state: string;
+    materialized_with_batch: boolean;
+    required_for_run_completion: boolean;
+    stages: Array<{ id: string; state: string }>;
+  };
+  construct_validity?: {
+    state: string;
+    recall_claim: string;
+    reference_unit?: string;
+    query_unit?: string;
+    route_false_negative_rate_spread?: number | null;
+    legacy_projection?: boolean;
+    by_route?: Array<HashMissStratum>;
+    by_treatment?: Array<HashMissStratum>;
+    by_owner?: Array<HashMissStratum>;
+  };
   confusion_matrix: {
     unit?: string;
     true_positives: number;
@@ -1504,6 +1539,13 @@ export type ValidationObservatoryRun = {
   performance?: Record<string, number | string>;
 };
 
+export type HashMissStratum = {
+  id: string;
+  true_positives: number;
+  false_negatives: number;
+  false_negative_rate: number | null;
+};
+
 export type ValidationObservatory = {
   schema_version: 'fidb-validation-observatory/v1';
   generated_at: string;
@@ -1526,6 +1568,46 @@ export type ValidationObservatory = {
     failures: MachineValidationFailure[];
     decision_contract?: Record<string, string>;
   }) | null;
+};
+
+export type HashAnalysisBackendStatus = {
+  schema_version: 'fidb-hash-backend-status/v1';
+  authority_path: string;
+  authority_sha256: string;
+  requested_mode: 'auto' | 'cpu' | 'gpu';
+  effective_backend: {
+    id: string;
+    state: string;
+    implementation: string;
+    device: 'cpu' | 'gpu';
+    scope: string;
+  };
+  fallback_reason: string | null;
+  performance: {
+    schema_version: string;
+    mode: 'auto' | 'cpu' | 'gpu';
+    allow_gpu: boolean;
+    fallback_to_cpu: boolean;
+    authority_path: string;
+    authority_sha256: string;
+  };
+  gpu: {
+    allowed: boolean;
+    runtime_available: boolean;
+    authoritative: boolean;
+    wgpu_installed: boolean;
+    detected_devices: Array<{ name: string; vendor_id: string; device_id: string }>;
+    backend: Record<string, unknown> | null;
+    qualification: {
+      state?: string;
+      report_path: string;
+      report_sha256?: string;
+      mismatches?: number;
+      device?: Record<string, unknown>;
+      performance?: Record<string, number | null>;
+    } | null;
+  };
+  backends: Array<Record<string, unknown>>;
 };
 
 export type MachineValidationLive = {
@@ -1576,6 +1658,17 @@ export type MachineValidation = {
   };
   queries: { primary_projections: string[] };
   metrics: { required: string[] };
+  hash_discrimination_job: {
+    id: string;
+    kind: string;
+    automatic: boolean;
+    required_for_run_completion: boolean;
+    method_authority: string;
+    corpus_authority: string;
+    backend_authority: string;
+    stages: string[];
+    outputs: string[];
+  };
   planning: {
     estimate_class: string;
     central_wall_hours: number;
@@ -2365,6 +2458,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [ecologicalValidation, setEcologicalValidation] = useState<EcologicalValidation | null>(null);
   const [noisyHashes, setNoisyHashes] = useState<NoisyHashStatus | null>(null);
   const [validationObservatory, setValidationObservatory] = useState<ValidationObservatory | null>(null);
+  const [hashAnalysisBackend, setHashAnalysisBackend] = useState<HashAnalysisBackendStatus | null>(null);
   const [retention, setRetention] = useState<RetentionStatus | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
@@ -2383,7 +2477,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const lastCapabilityRead = useRef(0);
   const workloadActive = Boolean(
     machineValidation
-    && ['queued', 'preparing-index', 'running', 'pausing'].includes(machineValidation.run.state),
+    && ['queued', 'preparing-index', 'running', 'pausing', 'postprocessing', 'retaining'].includes(machineValidation.run.state),
   ) || Boolean(
     snapshot
     && (snapshot.counts.leased > 0 || snapshot.counts.running > 0),
@@ -2450,12 +2544,13 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult] = await Promise.all([
+        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult, hashBackendResult] = await Promise.all([
           json<FactoryCapabilities>('capabilities'),
           json<FactoryAuthority>('authority'),
           json<LaneInventory>('lane-inventory'),
           json<RetentionStatus>('retention'),
           json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
+          json<HashAnalysisBackendStatus>('hash-analysis-backend'),
         ]);
         capabilityCache.current = capabilityResult;
         authorityCache.current = authorityResult;
@@ -2468,13 +2563,15 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setNoisyHashes(authorityResult.noisy_hashes);
         setRetention(retentionResult);
         setValidationObservatory(observatoryResult);
+        setHashAnalysisBackend(hashBackendResult);
       } else {
-        const [machineResult, ecologicalResult, noisyResult, retentionResult, observatoryResult] = await Promise.all([
+        const [machineResult, ecologicalResult, noisyResult, retentionResult, observatoryResult, hashBackendResult] = await Promise.all([
           json<MachineValidationLive>('machine-validation/run'),
           json<EcologicalValidation>('ecological-validation'),
           json<NoisyHashStatus>('noisy-hashes'),
           json<RetentionStatus>('retention'),
           json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
+          json<HashAnalysisBackendStatus>('hash-analysis-backend'),
         ]);
         setMachineValidation(current => current ? {
           ...current,
@@ -2485,6 +2582,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setNoisyHashes(noisyResult);
         setRetention(retentionResult);
         setValidationObservatory(observatoryResult);
+        setHashAnalysisBackend(hashBackendResult);
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
@@ -2748,6 +2846,26 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
+  const setHashAnalysisMode = useCallback(async (mode: 'auto' | 'cpu' | 'gpu') => {
+    setBusyAction('hash-analysis-mode');
+    try {
+      const result = await json<HashAnalysisBackendStatus>('hash-analysis-backend/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      setHashAnalysisBackend(result);
+      setError(null);
+      return result;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Hash backend setting failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
   return {
     connection,
     snapshot,
@@ -2758,6 +2876,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     ecologicalValidation,
     noisyHashes,
     validationObservatory,
+    hashAnalysisBackend,
     retention,
     events,
     timings,
@@ -2784,6 +2903,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     runEcological,
     runMachineValidation,
     selectValidationRun,
+    setHashAnalysisMode,
     pauseMachineValidation: () => controlMachineValidation('pause'),
     resumeMachineValidation: () => controlMachineValidation('resume'),
     decideNoisyHash,

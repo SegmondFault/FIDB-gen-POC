@@ -36,6 +36,7 @@ from .ecological_validation import (
     start_ecological_case,
 )
 from .hash_discrimination import compile_hash_discrimination
+from .hash_gpu_trial import compile_hash_backend_status, save_hash_performance_mode
 from .machine_validation import compile_machine_validation
 from .machine_validation_runner import (
     canary_gate_status as machine_validation_canary_gate_status,
@@ -83,6 +84,7 @@ _GET_PATHS = {
     "/api/v1/machine-validation/run",
     "/api/v1/validation-observatory",
     "/api/v1/hash-discrimination",
+    "/api/v1/hash-analysis-backend",
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
 }
@@ -98,6 +100,7 @@ _POST_PATHS = {
     "/api/v1/machine-validation/pause",
     "/api/v1/machine-validation/resume",
     "/api/v1/noisy-hashes/decision",
+    "/api/v1/hash-analysis-backend/mode",
     "/api/v1/retention/plan",
     "/api/v1/retention/apply",
 }
@@ -827,6 +830,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/hash-analysis-backend":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "hash analysis backend takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                compile_hash_backend_status(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
         if path == "/api/v1/retention":
             if query:
                 raise ApiError(
@@ -1092,6 +1109,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 signature_id,
                 state,
                 reason,
+            )
+            self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
+        elif path == "/api/v1/hash-analysis-backend/mode":
+            self._only_fields(document, {"mode"})
+            mode = document.get("mode")
+            if mode not in {"auto", "cpu", "gpu"}:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-hash-analysis-mode",
+                    "mode must be auto, cpu or gpu",
+                )
+            result = save_hash_performance_mode(
+                self.api_server.config.project_root, str(mode)
             )
             self._json_response(HTTPStatus.OK, result, origin=origin)
             return

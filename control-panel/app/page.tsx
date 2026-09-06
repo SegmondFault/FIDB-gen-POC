@@ -865,7 +865,9 @@ function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiSta
     : 0;
   const runNotAttempted = Math.max(0, runExpected - run.complete_work_units - run.failed_work_units);
   const runOutstanding = Math.max(0, runExpected - run.complete_work_units);
-  const runActive = ['queued', 'preparing-index', 'running', 'pausing'].includes(run.state);
+  const runPauseable = ['queued', 'preparing-index', 'running', 'pausing'].includes(run.state);
+  const runActive = ['queued', 'preparing-index', 'running', 'pausing', 'postprocessing', 'retaining'].includes(run.state);
+  const runRecoveryRequired = run.state === 'postprocess-failed';
   const runResumable = ['paused', 'interrupted', 'failed'].includes(run.state)
     && runExpected > run.complete_work_units;
   const currentBatch = validation.id === liveValidation?.id;
@@ -900,7 +902,7 @@ function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiSta
     ['B', validation.randomization.fold_b],
   ] as const;
   return <div className="view-stack machine-validation-view">
-    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Machine validation" action={<div className="view-intro-actions"><UnderConstruction />{currentBatch && runActive && <button className="secondary-action" onClick={pauseRun} disabled={run.state === 'pausing' || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-pause' || run.state === 'pausing' ? '⏸ Pausing…' : '⏸ Pause'}</button>}{currentBatch && runResumable && <button className="primary-action" onClick={resumeRun} disabled={factory.busyAction !== null}>{factory.busyAction === 'machine-validation-resume' ? '▶ Resuming…' : '▶ Resume'}</button>}<button className="secondary-action" onClick={() => startRun('canary')} disabled={!currentBatch || !validation.readiness.eligible || runActive || runResumable || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-canary' ? 'Starting…' : 'Run canary'}</button><button className="primary-action" onClick={() => startRun('full')} disabled={!currentBatch || !validation.readiness.eligible || !validation.canary_gate.ready || runActive || runResumable || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-full' ? 'Starting…' : 'Run full validation'}</button><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
+    <ViewIntro kicker="CONTINUOUS MACHINE-LED VALIDATION" title="Machine validation" action={<div className="view-intro-actions"><UnderConstruction />{currentBatch && runPauseable && <button className="secondary-action" onClick={pauseRun} disabled={run.state === 'pausing' || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-pause' || run.state === 'pausing' ? '⏸ Pausing…' : '⏸ Pause'}</button>}{currentBatch && runResumable && <button className="primary-action" onClick={resumeRun} disabled={factory.busyAction !== null}>{factory.busyAction === 'machine-validation-resume' ? '▶ Resuming…' : '▶ Resume'}</button>}<button className="secondary-action" onClick={() => startRun('canary')} disabled={!currentBatch || !validation.readiness.eligible || runActive || runResumable || runRecoveryRequired || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-canary' ? 'Starting…' : 'Run canary'}</button><button className="primary-action" onClick={() => startRun('full')} disabled={!currentBatch || !validation.readiness.eligible || !validation.canary_gate.ready || runActive || runResumable || runRecoveryRequired || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-full' ? 'Starting…' : 'Run full validation'}</button><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
 
     <section className="panel validation-batch-panel">
       <header><h3>Validation batches</h3><span>SEALED COHORTS · ATOMIC EVIDENCE</span></header>
@@ -924,6 +926,7 @@ function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiSta
       <header><h3>Current execution</h3><span className={`validation-state ${run.state === 'complete' ? 'ready' : runActive || runResumable ? 'waiting' : ''}`}>{run.state.replaceAll('-', ' ')}</span></header>
       <div className="validation-run-strip"><article><span>MODE / RUN</span><strong>{run.mode?.toUpperCase() ?? '—'}</strong><small>{run.run_id ?? 'no run admitted'}</small></article><article><span>SEALED</span><strong>{run.complete_work_units} / {runExpected || '—'}</strong><small>{runOutstanding} unresolved</small></article><article><span>FAILED</span><strong>{run.failed_work_units}</strong><small>retained for retry</small></article><article><span>WORKERS</span><strong>{runActive ? run.worker_pids?.length ?? 0 : 0}</strong><small>{run.state === 'paused' ? 'checkpointed and quiet' : 'isolated processes'}</small></article><article><span>CANARY</span><strong>{validation.canary_gate.ready ? 'PASS' : 'REQUIRED'}</strong><small>{validation.canary_gate.run_id ?? 'runtime unqualified'}</small></article><article><span>TIME</span><strong>{run.started_at ? new Date(run.started_at).toLocaleTimeString() : '—'}</strong><small>{run.paused_at ? `paused ${new Date(run.paused_at).toLocaleTimeString()}` : run.finished_at ? `finished ${new Date(run.finished_at).toLocaleTimeString()}` : 'local time'}</small></article></div>
       <div className="validation-progress"><span style={{ width: `${runPercent}%` }} /><b>{runPercent}% sealed · {run.complete_work_units} complete · {run.failed_work_units} failed · {runNotAttempted} not attempted</b></div>
+      {run.postprocess_job && <div className="validation-postprocess-strip"><strong>{run.postprocess_job.id}</strong>{run.postprocess_job.stages.map(stage => <span className={stage.state} key={stage.id}>{stage.id.replaceAll('-', ' ')} <b>{stage.state}</b></span>)}</div>}
       {run.error && <div className="validation-blockers"><span>! {run.error}</span></div>}
     </section>
 
@@ -1059,6 +1062,17 @@ function HashPopulationTail({ rows }: { rows: HashTypeAnalysis[] }) {
   </div>;
 }
 
+function HashLibraryPopulation({ row }: { row: HashTypeAnalysis }) {
+  const libraries = [...(row.libraries ?? [])]
+    .sort((left, right) => right.multi_owner_values - left.multi_owner_values || right.missed_observations - left.missed_observations)
+    .slice(0, 10);
+  const maximum = Math.max(1, ...libraries.map(library => library.multi_owner_values));
+  return <div className="hash-library-population">
+    <header><span>LIBRARY</span><span>AMBIGUOUS {row.hash_type.toUpperCase()} VALUES</span><span>MISSES</span><span>EXACT FP</span></header>
+    {libraries.map(library => <article key={library.owner}><strong>{library.owner}</strong><div><i style={{ width: `${(library.multi_owner_values / maximum) * 100}%` }} /><b>{library.multi_owner_values.toLocaleString()} · {observedPercent(library.ambiguous_fraction)}</b></div><span>{library.missed_observations.toLocaleString()}</span><span>{library.exact_false_positive_observations.toLocaleString()}</span></article>)}
+  </div>;
+}
+
 function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
   const observatory = factory.validationObservatory;
   const selected = observatory?.selected;
@@ -1078,6 +1092,8 @@ function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
         return <button key={run.key} className={run.key === observatory.selected_run_key ? 'active' : ''} onClick={() => void factory.selectValidationRun(run.key)}><p><span>{run.validation_id}</span><strong>{run.run_id}</strong><small>{run.finished_at ? new Date(run.finished_at).toLocaleString() : 'time unavailable'}</small></p><b>{observedPercent(byType.full?.multi_owner_fraction)}</b><b>{observedPercent(byType.specific?.multi_owner_fraction)}</b><b>{observedPercent(byType.complete?.multi_owner_fraction)}</b><b>{observedPercent(run.rates.false_positive_rate)}</b><b>{observedPercent(run.rates.true_positive_rate)}</b></button>;
       })}</div></div>
       {selected && matrix && <>
+        <div className="validation-job-chain"><span>BATCH <b>{selected.validation_id}</b></span><i>→</i><span>BUILD + ANALYSE <b>222 WIDTH UNITS</b></span><i>→</i><span>HASH JOB <b>{selected.pipeline_job?.state.replaceAll('-', ' ') ?? 'evidence published'}</b></span><i>→</i><span>CORPUS <b>{selected.corpus_index ? `G${selected.corpus_index.ordinal}` : '—'}</b></span><i>→</i><span>RETENTION <b>{selected.pipeline_job?.stages.find(stage => stage.id === 'retention')?.state ?? 'recorded separately'}</b></span></div>
+        <div className="construct-validity-alert"><strong>FNR is harness-conditional</strong><span>{selected.construct_validity?.reference_unit?.replaceAll('-', ' ') ?? 'per library archive functions'} → {selected.construct_validity?.query_unit?.replaceAll('-', ' ') ?? 'five library linked composite functions'}</span><b>{selected.construct_validity?.route_false_negative_rate_spread === null || selected.construct_validity?.route_false_negative_rate_spread === undefined ? 'ROUTE DIAGNOSTIC NOT RETAINED IN THIS LEGACY REPORT' : `${observedPercent(selected.construct_validity.route_false_negative_rate_spread)} ROUTE SPREAD`}</b></div>
         <div className="observatory-outcomes">
           <article><span>TP</span><strong>{matrix.true_positives.toLocaleString()}</strong><small>{observedPercent(selected.rates.true_positive_rate)} recall</small></article>
           <article><span>FP</span><strong>{matrix.false_positives.toLocaleString()}</strong><small>{observedPercent(selected.rates.false_positive_rate)} FPR</small></article>
@@ -1086,13 +1102,14 @@ function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
           <article><span>PRECISION</span><strong>{observedPercent(selected.rates.precision)}</strong><small>single-signature assertions</small></article>
           <article><span>METHOD</span><strong>{selected.method_authority?.id ?? 'legacy'}</strong><small>{selected.method_authority?.sha256?.slice(0, 12) ?? 'unpinned'} · report {selected.report_sha256.slice(0, 12)}</small></article>
           {selected.corpus_index && <article><span>CORPUS GENERATION</span><strong>G{selected.corpus_index.ordinal}</strong><small>{selected.corpus_index.owners} owners · {selected.corpus_index.signatures.toLocaleString()} signatures</small></article>}
-          {selected.gpu_comparison && <article><span>GPU CROSS-CHECK</span><strong>{selected.gpu_comparison.state.toUpperCase()}</strong><small>{selected.gpu_comparison.mismatches ?? '—'} mismatches · {typeof selected.gpu_comparison.performance?.probe_speedup === 'number' ? `${selected.gpu_comparison.performance.probe_speedup.toFixed(2)}× packed-probe speedup` : 'candidate timing unavailable'} · CPU authoritative</small></article>}
+          {selected.lookup_backend && <article><span>LOOKUP BACKEND</span><strong>{selected.lookup_backend.device.toUpperCase()}</strong><small>{selected.lookup_backend.selected} · {selected.lookup_backend.scope.replaceAll('-', ' ')}</small></article>}
+          {!selected.lookup_backend && selected.gpu_comparison && <article><span>GPU QUALIFICATION</span><strong>{selected.gpu_comparison.state.toUpperCase()}</strong><small>{selected.gpu_comparison.mismatches ?? '—'} mismatches · {typeof selected.gpu_comparison.performance?.probe_speedup === 'number' ? `${selected.gpu_comparison.performance.probe_speedup.toFixed(2)}× packed-probe speedup` : 'candidate timing unavailable'} · legacy dual run</small></article>}
         </div>
         <div className="hash-type-comparison">{hashTypes.map(row => <button key={row.hash_type} className={row.hash_type === activeType?.hash_type ? 'active' : ''} onClick={() => setSelectedHashType(row.hash_type)}><span>{row.hash_type.toUpperCase()}</span><strong>{row.multi_owner_values.toLocaleString()}</strong><small>multi-owner / {row.distinct_values.toLocaleString()} values</small><dl><div><dt>AMBIGUOUS</dt><dd>{observedPercent(row.multi_owner_fraction)}</dd></div><div><dt>OWNER LINKS</dt><dd>{row.ambiguous_owner_links.toLocaleString()}</dd></div><div><dt>MAX OWNERS</dt><dd>{row.maximum_distinct_owners}</dd></div><div><dt>RESOLVED BY COMPLETE</dt><dd>{row.complete_disambiguated_owner_signatures.toLocaleString()}</dd></div></dl></button>)}</div>
       </>}
     </section>
 
-    {selected && hashTypes.length > 0 && <section className="panel hash-population-panel"><header><h3>Cross-library prevalence tail</h3><span>LOG VALUES × DISTINCT OWNERS</span></header><HashPopulationTail rows={hashTypes} /></section>}
+    {activeType && <section className="panel hash-population-panel"><header><h3>{activeType.hash_type} hash population</h3><span>PREVALENCE TAIL × CONTRIBUTING LIBRARIES</span></header><div className="hash-population-map"><HashPopulationTail rows={[activeType]} /><HashLibraryPopulation row={activeType} /></div></section>}
 
     {activeType && <section className="hdi-method-grid hash-drill-grid">
       <article className="panel hash-ambiguity-panel"><header><h3>{activeType.hash_type} hash ambiguity</h3><span>{activeType.top_ambiguous?.length ?? 0} VISIBLE</span></header><div>{activeType.top_ambiguous?.map(row => <details key={`${row.scope}-${row.language}-${row.value}`}><summary><code>{row.value}</code><strong>{row.distinct_owners} owners</strong><span>{row.reference_observations.toLocaleString()} observations</span><em>EXPAND</em></summary><section><p><span>OWNERS</span><strong>{row.owners.join(' · ')}</strong></p><p><span>COMPATIBILITY</span><strong>{row.scope} · {row.language}</strong></p><p><span>EXACT VARIANTS</span><strong>{row.exact_signature_variants.toLocaleString()}</strong></p><p><span>EXACT FP OBS.</span><strong>{row.exact_false_positive_observations.toLocaleString()}</strong></p></section></details>)}{!activeType.top_ambiguous?.length && <div className="operational-empty"><strong>No multi-owner values</strong><small>This hash type did not repeat across owners in the selected run.</small></div>}</div></article>
@@ -2014,6 +2031,7 @@ function PerformanceView({ factory }: { factory: FactoryApiState }) {
     {factory.authority?.performance_profiles
       ? <PerformanceProfilesPanel catalog={factory.authority.performance_profiles} capabilities={factory.capabilities} snapshot={factory.snapshot} />
       : <section className="panel"><div className="empty-state"><span>◇</span><strong>Performance authority unavailable</strong><p>Reconnect the local API to load the reviewed TOML profiles.</p></div></section>}
+    <HashAnalysisBackendPanel factory={factory} />
   </div>;
 }
 
@@ -2323,6 +2341,38 @@ function PerformanceProfilesPanel({ catalog, capabilities, snapshot }: { catalog
     </div>
     <div className="performance-profile-tabs">{catalog.profiles.map(profile => <button key={profile.id} className={profile.id === selected.id ? 'active' : ''} onClick={() => setSelectedId(profile.id)}><strong>{profile.label}</strong><small>{profile.settings.worker_mode === 'automatic' ? 'auto workers' : `${profile.settings.workers} workers`} · {profile.host.memory_mib ? `${Math.round(profile.host.memory_mib / 1024)} GiB` : 'portable'}</small></button>)}</div>
     <div className="performance-profile-detail"><header><div><span className={`evidence-badge ${qualificationTone}`}>{selected.qualification.replaceAll('-', ' ')}</span><h4>{selected.label}</h4><p>{selected.description}</p></div><button onClick={() => void copyCommand()}>{copied ? 'Copied' : 'Copy preview command'}</button></header><div><article><span>CELL WORKERS</span><strong>{effective?.workers ?? 'AUTO'}</strong><small>{selected.id === 'auto' ? 'resolved now; frozen into run evidence' : 'independent long-lived JVM processes'}</small></article><article><span>BUILD JOBS / CELL</span><strong>{effective?.build_jobs_per_cell ?? selected.settings.build_jobs_per_cell}</strong><small>nested compiler parallelism</small></article><article><span>JVM HEAP CEILING</span><strong>{effective?.ghidra_heap_mib ? `${effective.ghidra_heap_mib} MiB` : 'ERGONOMIC'}</strong><small>maximum, not reserved allocation</small></article><article><span>GHIDRA CORE LIMIT</span><strong>{effective?.ghidra_core_limit ?? 'HOST'}</strong><small>per embedded JVM</small></article></div><footer><p>{selected.guidance}</p><code>{command}</code>{selected.evidence_path && <small>{selected.evidence_path}</small>}</footer></div>
+  </section>;
+}
+
+function HashAnalysisBackendPanel({ factory }: { factory: FactoryApiState }) {
+  const backend = factory.hashAnalysisBackend;
+  const [message, setMessage] = useState('');
+  if (!backend) return <section className="panel"><div className="empty-state compact"><span>◇</span><strong>Hash backend unavailable</strong><p>Reconnect the local API to read performance/hash-analysis.toml.</p></div></section>;
+  const qualification = backend.gpu.qualification;
+  const performance = qualification?.performance;
+  const speedup = typeof performance?.probe_speedup === 'number'
+    ? `${performance.probe_speedup.toFixed(2)}×`
+    : '—';
+  const setMode = async (mode: 'auto' | 'cpu' | 'gpu') => {
+    setMessage(`Saving ${mode} mode…`);
+    try {
+      const result = await factory.setHashAnalysisMode(mode);
+      setMessage(`${result.requested_mode.toUpperCase()} → ${result.effective_backend.device.toUpperCase()} · ${result.effective_backend.id}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Backend setting failed.');
+    }
+  };
+  return <section className="panel hash-backend-panel">
+    <header><div><span>HASH LOOKUP BACKEND</span><h3>{backend.effective_backend.id}</h3></div><code>{backend.performance.authority_path}</code></header>
+    <div className="hash-backend-metrics">
+      <article><span>DETECTED</span><strong>{backend.gpu.runtime_available ? 'WGPU + GPU' : 'CPU'}</strong><small>{backend.gpu.detected_devices.map(device => `${device.name} ${device.vendor_id}:${device.device_id}`).join(' · ') || 'no DRM GPU exposed'}</small></article>
+      <article><span>REQUESTED → EFFECTIVE</span><strong>{backend.requested_mode.toUpperCase()} → {backend.effective_backend.device.toUpperCase()}</strong><small>{backend.fallback_reason ?? 'no fallback'}</small></article>
+      <article><span>QUALIFICATION</span><strong>{backend.gpu.authoritative ? '0 MISMATCHES' : (qualification?.state ?? 'UNQUALIFIED').toUpperCase()}</strong><small>{qualification?.report_path ?? 'no qualification receipt'}</small></article>
+      <article><span>PACKED LOOKUP</span><strong>{speedup}</strong><small>3,025,703 C10 queries · GPU probe versus CPU packed probe</small></article>
+      <article><span>SCOPE</span><strong>EXACT LOOKUP</strong><small>{backend.effective_backend.scope.replaceAll('-', ' ')}</small></article>
+    </div>
+    <div className="hash-backend-controls"><div>{(['auto', 'gpu', 'cpu'] as const).map(mode => <button key={mode} className={backend.requested_mode === mode ? 'active' : ''} onClick={() => void setMode(mode)} disabled={factory.busyAction !== null}>{mode.toUpperCase()}</button>)}</div><p>{message || 'AUTO uses the qualified GPU lookup when available. CPU is the fail-safe fallback. Backend comparison runs only during explicit qualification.'}</p></div>
+    <p className="hash-backend-boundary"><strong>GPU boundary:</strong> exact comparison of completed hash records only. Compilation, linking, binary construction, Ghidra analysis and FID generation always stay on the canonical CPU/toolchain path.</p>
   </section>;
 }
 

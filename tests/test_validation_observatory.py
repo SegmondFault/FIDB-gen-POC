@@ -98,7 +98,16 @@ class ValidationObservatoryTests(unittest.TestCase):
             self.assertEqual(result["selected"]["corpus_index"]["ordinal"], 2)
             self.assertEqual(result["selected"]["gpu_comparison"]["mismatches"], 0)
             self.assertEqual(
-                result["selected"]["hash_type_analysis"][0]["top_ambiguous"][0]["value"],
+                result["selected"]["construct_validity"]["recall_claim"],
+                "harness-conditional-not-intrinsic-fid-recall",
+            )
+            self.assertTrue(
+                result["selected"]["construct_validity"]["legacy_projection"]
+            )
+            self.assertEqual(
+                result["selected"]["hash_type_analysis"][0]["top_ambiguous"][0][
+                    "value"
+                ],
                 "01",
             )
             self.assertNotIn("top_noisy", result["runs"][0]["hash_evidence"])
