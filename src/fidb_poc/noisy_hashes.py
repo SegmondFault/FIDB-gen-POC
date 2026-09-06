@@ -20,12 +20,43 @@ NOISY_HASH_STATUS_SCHEMA = "fidb-noisy-hash-status/v1"
 NOISY_HASH_DECISION_SCHEMA = "fidb-noisy-hash-decision/v1"
 DEFAULT_AUTHORITY = Path("validation/noisy-hashes.toml")
 _SIGNATURE_ID = re.compile(r"^noise-[0-9a-f]{24}$")
-_TOP_LEVEL = {"schema_version", "id", "label", "state", "sources", "classification", "management", "display"}
+_TOP_LEVEL = {
+    "schema_version",
+    "id",
+    "label",
+    "state",
+    "sources",
+    "classification",
+    "management",
+    "display",
+}
 _SECTIONS = {
-    "sources": {"machine_evidence_glob", "ecological_report_glob", "route_registry", "lane_registry", "decision_glob"},
-    "classification": {"candidate_min_collisions", "confirmed_min_collisions", "confirmed_min_distinct_runs", "high_risk_min_distinct_owners", "grouping_key"},
-    "management": {"default_state", "allowed_states", "quarantine_effect", "automatic_deletion", "require_reason"},
-    "display": {"max_evidence_rows_per_hash", "show_single_observation_candidates"},
+    "sources": {
+        "machine_evidence_glob",
+        "ecological_report_glob",
+        "route_registry",
+        "lane_registry",
+        "decision_glob",
+    },
+    "classification": {
+        "candidate_min_collisions",
+        "confirmed_min_collisions",
+        "confirmed_min_distinct_runs",
+        "high_risk_min_distinct_owners",
+        "grouping_key",
+    },
+    "management": {
+        "default_state",
+        "allowed_states",
+        "quarantine_effect",
+        "automatic_deletion",
+        "require_reason",
+    },
+    "display": {
+        "max_evidence_rows_per_hash",
+        "max_hash_rows",
+        "show_single_observation_candidates",
+    },
 }
 
 
@@ -43,10 +74,16 @@ def load_noisy_hash_authority(
     root = Path(project_root).expanduser().resolve()
     path = _inside(root, str(authority), "noisy-hash authority")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if set(document) != _TOP_LEVEL or document.get("schema_version") != NOISY_HASH_SCHEMA:
+    if (
+        set(document) != _TOP_LEVEL
+        or document.get("schema_version") != NOISY_HASH_SCHEMA
+    ):
         raise ValueError("noisy-hash authority has unsupported fields or schema")
     for section, fields in _SECTIONS.items():
-        if not isinstance(document.get(section), dict) or set(document[section]) != fields:
+        if (
+            not isinstance(document.get(section), dict)
+            or set(document[section]) != fields
+        ):
             raise ValueError(f"noisy-hash {section} has unexpected fields")
     classification = document["classification"]
     management = document["management"]
@@ -55,12 +92,14 @@ def load_noisy_hash_authority(
         document["state"] != "active-observation"
         or classification["grouping_key"] != "query-sublane-plus-complete-fid-signature"
         or classification["candidate_min_collisions"] != 1
-        or classification["confirmed_min_collisions"] < classification["candidate_min_collisions"]
+        or classification["confirmed_min_collisions"]
+        < classification["candidate_min_collisions"]
         or classification["confirmed_min_distinct_runs"] < 2
         or management["default_state"] != "observe"
         or management["automatic_deletion"] is not False
         or management["require_reason"] is not True
         or display["max_evidence_rows_per_hash"] < 1
+        or display["max_hash_rows"] < 1
     ):
         raise ValueError("noisy-hash trust policy is unsupported")
     expected_states = ["observe", "quarantine", "reviewed-shared", "cleared"]
@@ -76,7 +115,9 @@ def load_noisy_hash_authority(
     }
 
 
-def _route_scopes(root: Path, lane_registry_path: str, route_registry_path: str) -> dict[str, str]:
+def _route_scopes(
+    root: Path, lane_registry_path: str, route_registry_path: str
+) -> dict[str, str]:
     registry = load_lane_registry(
         _inside(root, lane_registry_path, "lane registry"),
         root / "targets/registry.toml",
@@ -89,11 +130,20 @@ def _route_scopes(root: Path, lane_registry_path: str, route_registry_path: str)
     routes = tomllib.loads(
         _inside(root, route_registry_path, "route registry").read_text(encoding="utf-8")
     ).get("route", [])
-    exact = {str(row["id"]): target_scope.get(str(row["target_id"]), f'target:{row["target_id"]}') for row in routes}
+    exact = {
+        str(row["id"]): target_scope.get(
+            str(row["target_id"]), f'target:{row["target_id"]}'
+        )
+        for row in routes
+    }
     return exact
 
 
-def _scope_for_failure(failure: Mapping[str, object], report: Mapping[str, object], routes: Mapping[str, str]) -> str:
+def _scope_for_failure(
+    failure: Mapping[str, object],
+    report: Mapping[str, object],
+    routes: Mapping[str, str],
+) -> str:
     probe = report.get("probe")
     if isinstance(probe, dict) and isinstance(probe.get("sublane_id"), str):
         return str(probe["sublane_id"])
@@ -106,7 +156,9 @@ def _scope_for_failure(failure: Mapping[str, object], report: Mapping[str, objec
     return f"route:{route}"
 
 
-def _decision_files(root: Path, pattern: str, allowed_states: set[str]) -> dict[str, dict[str, object]]:
+def _decision_files(
+    root: Path, pattern: str, allowed_states: set[str]
+) -> dict[str, dict[str, object]]:
     decisions: dict[str, dict[str, object]] = {}
     for path in sorted(root.glob(pattern)):
         if not path.is_file() or path.is_symlink():
@@ -130,6 +182,8 @@ def _decision_files(root: Path, pattern: str, allowed_states: set[str]) -> dict[
 def compile_noisy_hashes(
     project_root: str | Path,
     authority: str | Path = DEFAULT_AUTHORITY,
+    *,
+    max_hash_rows: int | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     config = load_noisy_hash_authority(root, authority)
@@ -163,8 +217,7 @@ def compile_noisy_hashes(
                 continue
             evidence_databases_scanned += 1
             run_id = metadata.get("source_run_id", path.parent.name)
-            for row in connection.execute(
-                """
+            for row in connection.execute("""
                 SELECT scope, language, full_hash, specific_hash,
                        additional_size, code_size, owner, route_id,
                        treatment_id, query_function, evidence_path
@@ -172,8 +225,7 @@ def compile_noisy_hashes(
                 WHERE outcome='fp'
                 ORDER BY scope, full_hash, specific_hash, additional_size,
                          code_size, owner, route_id, treatment_id
-                """
-            ):
+                """):
                 signature = (
                     f'{row["full_hash"]}:{row["specific_hash"]}:'
                     f'{row["additional_size"]}:{row["code_size"]}'
@@ -181,7 +233,15 @@ def compile_noisy_hashes(
                 scope = str(row["scope"])
                 group = groups.setdefault(
                     (scope, signature),
-                    {"scope": scope, "signature": signature, "runs": set(), "owners": set(), "sources": set(), "evidence": [], "collisions": 0},
+                    {
+                        "scope": scope,
+                        "signature": signature,
+                        "runs": set(),
+                        "owners": set(),
+                        "sources": set(),
+                        "evidence": [],
+                        "collisions": 0,
+                    },
                 )
                 group["runs"].add(run_id)
                 group["owners"].add(str(row["owner"]))
@@ -198,7 +258,9 @@ def compile_noisy_hashes(
                             "route_id": str(row["route_id"]),
                             "compiler_id": str(row["route_id"]),
                             "treatment_id": str(row["treatment_id"]),
-                            "evidence_path": str(row["evidence_path"] or path.relative_to(root)),
+                            "evidence_path": str(
+                                row["evidence_path"] or path.relative_to(root)
+                            ),
                         }
                     )
         except sqlite3.Error:
@@ -218,7 +280,10 @@ def compile_noisy_hashes(
             reports_scanned += 1
             run_id = str(report.get("case_id") or report.get("id") or path.parent.name)
             for failure in report.get("failures", []):
-                if not isinstance(failure, dict) or failure.get("failure_type") != "collision":
+                if (
+                    not isinstance(failure, dict)
+                    or failure.get("failure_type") != "collision"
+                ):
                     continue
                 signature = str(failure.get("signature") or "")
                 if not signature:
@@ -226,10 +291,20 @@ def compile_noisy_hashes(
                 scope = _scope_for_failure(failure, report, routes)
                 group = groups.setdefault(
                     (scope, signature),
-                    {"scope": scope, "signature": signature, "runs": set(), "owners": set(), "sources": set(), "evidence": [], "collisions": 0},
+                    {
+                        "scope": scope,
+                        "signature": signature,
+                        "runs": set(),
+                        "owners": set(),
+                        "sources": set(),
+                        "evidence": [],
+                        "collisions": 0,
+                    },
                 )
                 group["runs"].add(run_id)
-                owner = str(failure.get("owner") or failure.get("candidate_owner") or "unknown")
+                owner = str(
+                    failure.get("owner") or failure.get("candidate_owner") or "unknown"
+                )
                 group["owners"].add(owner)
                 group["sources"].add(source_kind)
                 group["collisions"] += 1
@@ -240,11 +315,14 @@ def compile_noisy_hashes(
                             "run_id": run_id,
                             "owner": owner,
                             "library_id": failure.get("library_id") or owner,
-                            "function_id": failure.get("function_id") or failure.get("target_function") or "",
+                            "function_id": failure.get("function_id")
+                            or failure.get("target_function")
+                            or "",
                             "route_id": failure.get("route_id") or "",
                             "compiler_id": failure.get("compiler_id") or "",
                             "treatment_id": failure.get("treatment_id") or "",
-                            "evidence_path": failure.get("evidence_path") or str(path.relative_to(root)),
+                            "evidence_path": failure.get("evidence_path")
+                            or str(path.relative_to(root)),
                         }
                     )
     rows: list[dict[str, object]] = []
@@ -267,7 +345,11 @@ def compile_noisy_hashes(
             else "review"
         )
         decision = decisions.get(signature_id)
-        disposition = str(decision["state"]) if decision else str(config["management"]["default_state"])
+        disposition = (
+            str(decision["state"])
+            if decision
+            else str(config["management"]["default_state"])
+        )
         rows.append(
             {
                 "signature_id": signature_id,
@@ -294,10 +376,25 @@ def compile_noisy_hashes(
             str(row["signature_id"]),
         )
     )
-    summary = {
-        "observed_hashes": len(rows),
-        "candidate_noisy": sum(row["classification"] == "candidate-noisy" for row in rows),
-        "confirmed_noisy": sum(row["classification"] == "confirmed-noisy" for row in rows),
+    total_hashes = len(rows)
+    row_limit = (
+        int(config["display"]["max_hash_rows"])
+        if max_hash_rows is None
+        else max_hash_rows
+    )
+    if type(row_limit) is not int or row_limit < 0:
+        raise ValueError("noisy-hash max_hash_rows must be a non-negative integer")
+    returned_rows = rows[:row_limit]
+    full_summary = {
+        "observed_hashes": total_hashes,
+        "returned_hashes": total_hashes,
+        "hash_rows_truncated": 0,
+        "candidate_noisy": sum(
+            row["classification"] == "candidate-noisy" for row in rows
+        ),
+        "confirmed_noisy": sum(
+            row["classification"] == "confirmed-noisy" for row in rows
+        ),
         "quarantined": sum(row["disposition"] == "quarantine" for row in rows),
         "reviewed_shared": sum(row["disposition"] == "reviewed-shared" for row in rows),
         "cleared": sum(row["disposition"] == "cleared" for row in rows),
@@ -313,11 +410,23 @@ def compile_noisy_hashes(
         "authority_sha256": config["authority_sha256"],
         "classification": config["classification"],
         "management": config["management"],
-        "summary": summary,
+        "summary": full_summary,
         "hashes": rows,
     }
-    digest = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), default=list).encode()).hexdigest()
-    return {**body, "status_digest": digest}
+    digest = hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":"), default=list).encode()
+    ).hexdigest()
+    response_summary = {
+        **full_summary,
+        "returned_hashes": len(returned_rows),
+        "hash_rows_truncated": total_hashes - len(returned_rows),
+    }
+    return {
+        **body,
+        "summary": response_summary,
+        "hashes": returned_rows,
+        "status_digest": digest,
+    }
 
 
 def save_noisy_hash_decision(
@@ -330,7 +439,7 @@ def save_noisy_hash_decision(
     authority: str | Path = DEFAULT_AUTHORITY,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
-    status = compile_noisy_hashes(root, authority)
+    status = compile_noisy_hashes(root, authority, max_hash_rows=2**31 - 1)
     matches = [row for row in status["hashes"] if row["signature_id"] == signature_id]
     if len(matches) != 1:
         raise ValueError("signature_id is not present in the current noisy-hash ledger")
@@ -338,7 +447,11 @@ def save_noisy_hash_decision(
         raise ValueError("unsupported noisy-hash disposition")
     if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
         raise ValueError("decision reason must contain 1-500 characters")
-    if not isinstance(reviewed_by, str) or not reviewed_by.strip() or len(reviewed_by) > 100:
+    if (
+        not isinstance(reviewed_by, str)
+        or not reviewed_by.strip()
+        or len(reviewed_by) > 100
+    ):
         raise ValueError("reviewed_by must contain 1-100 characters")
     row = matches[0]
     document = {
@@ -369,7 +482,9 @@ def save_noisy_hash_decision(
             "",
         ]
     )
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{signature_id}.", suffix=".tmp", dir=decision_root)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{signature_id}.", suffix=".tmp", dir=decision_root
+    )
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:

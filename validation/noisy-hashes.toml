@@ -26,4 +26,5 @@ require_reason = true
 
 [display]
 max_evidence_rows_per_hash = 100
+max_hash_rows = 50
 show_single_observation_candidates = true

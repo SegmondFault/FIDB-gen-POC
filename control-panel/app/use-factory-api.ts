@@ -1995,6 +1995,8 @@ export type NoisyHashStatus = {
   };
   summary: {
     observed_hashes: number;
+    returned_hashes: number;
+    hash_rows_truncated: number;
     candidate_noisy: number;
     confirmed_noisy: number;
     quarantined: number;
@@ -2606,13 +2608,14 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult, hashBackendResult] = await Promise.all([
+        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult, hashBackendResult, noisyResult] = await Promise.all([
           json<FactoryCapabilities>('capabilities'),
           json<FactoryAuthority>('authority'),
           json<LaneInventory>('lane-inventory'),
           json<RetentionStatus>('retention'),
           json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
           json<HashAnalysisBackendStatus>('hash-analysis-backend'),
+          json<NoisyHashStatus>('noisy-hashes'),
         ]);
         capabilityCache.current = capabilityResult;
         authorityCache.current = authorityResult;
@@ -2622,7 +2625,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setMachineValidation(authorityResult.machine_validations[0] ?? null);
         setLaneInventory(laneInventoryResult);
         setEcologicalValidation(authorityResult.ecological_validation);
-        setNoisyHashes(authorityResult.noisy_hashes);
+        setNoisyHashes(noisyResult);
         setRetention(retentionResult);
         setValidationObservatory(observatoryResult);
         setHashAnalysisBackend(hashBackendResult);

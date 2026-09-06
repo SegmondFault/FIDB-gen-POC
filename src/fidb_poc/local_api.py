@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import ipaddress
 import json
 import logging
 from pathlib import Path
 import socket
+from threading import Lock
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Mapping, Sequence
@@ -360,7 +362,53 @@ class _ApiServer(ThreadingHTTPServer):
         handler: type[BaseHTTPRequestHandler],
     ) -> None:
         self.config = config
+        self._ledger_projection_lock = Lock()
+        self._ledger_projection_cache: dict[
+            str, tuple[tuple[tuple[str, int, int], ...], object]
+        ] = {}
         super().__init__(server_address, handler)
+
+    def _ledger_generation(self) -> tuple[tuple[str, int, int], ...]:
+        paths = (
+            self.config.state_path,
+            Path(f"{self.config.state_path}-wal"),
+        )
+        generation = []
+        for path in paths:
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                generation.append((path.name, -1, -1))
+            else:
+                generation.append((path.name, stat.st_mtime_ns, stat.st_size))
+        return tuple(generation)
+
+    def cached_ledger_projection(self, key: str, build: Callable[[], object]) -> object:
+        """Reuse an expensive read model until SQLite or its WAL changes."""
+
+        # Unit request fixtures construct the server without __init__. Keep the
+        # cache local to that fixture while production always takes the normal
+        # initialized path above.
+        if not hasattr(self, "_ledger_projection_lock"):
+            self._ledger_projection_lock = Lock()
+            self._ledger_projection_cache = {}
+        generation = self._ledger_generation()
+        with self._ledger_projection_lock:
+            cached = self._ledger_projection_cache.get(key)
+            if cached is not None and cached[0] == generation:
+                result = cached[1]
+            else:
+                result = build()
+                if self._ledger_generation() == generation:
+                    self._ledger_projection_cache[key] = (generation, result)
+            if isinstance(result, dict) and "generated_at" in result:
+                return {
+                    **result,
+                    "generated_at": datetime.now(timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+            return result
 
 
 class _Ipv6ApiServer(_ApiServer):
@@ -932,11 +980,14 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         "invalid-query",
                         "snapshot detail must be full or control-panel",
                     )
-                result = _public_snapshot(
-                    coordinator,
-                    raw == "true",
-                    self.api_server.config.max_timing_limit,
-                    detail=detail,
+                result = self.api_server.cached_ledger_projection(
+                    f"snapshot:{raw}:{detail}",
+                    lambda: _public_snapshot(
+                        coordinator,
+                        raw == "true",
+                        self.api_server.config.max_timing_limit,
+                        detail=detail,
+                    ),
                 )
             elif path == "/api/v1/timings":
                 unknown = set(query) - {"limit"}
@@ -961,7 +1012,10 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         "timing limit must be "
                         f"1-{self.api_server.config.max_timing_limit}",
                     )
-                result = coordinator.timings(limit=limit)
+                result = self.api_server.cached_ledger_projection(
+                    f"timings:{limit}",
+                    lambda: coordinator.timings(limit=limit),
+                )
             else:
                 unknown = set(query) - {"after", "limit"}
                 if unknown or any(len(values) != 1 for values in query.values()):

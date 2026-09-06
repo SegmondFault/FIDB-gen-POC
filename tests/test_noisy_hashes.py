@@ -52,6 +52,8 @@ class NoisyHashTests(unittest.TestCase):
     def test_recurring_cross_run_collision_is_confirmed_and_manageable(self):
         status = compile_noisy_hashes(self.root)
         self.assertEqual(status["summary"]["confirmed_noisy"], 1)
+        self.assertEqual(status["summary"]["returned_hashes"], 1)
+        self.assertEqual(status["summary"]["hash_rows_truncated"], 0)
         row = status["hashes"][0]
         self.assertEqual(row["scope"], "linux-x86-elf64")
         self.assertEqual(row["collisions"], 4)
@@ -67,18 +69,28 @@ class NoisyHashTests(unittest.TestCase):
         )
         self.assertEqual(updated["summary"]["quarantined"], 1)
         self.assertEqual(updated["hashes"][0]["disposition"], "quarantine")
-        decision = self.root / f'validation/noisy-hash-decisions/{row["signature_id"]}.toml'
+        decision = (
+            self.root / f'validation/noisy-hash-decisions/{row["signature_id"]}.toml'
+        )
         self.assertTrue(decision.is_file())
+
+    def test_transport_limit_preserves_full_population_digest_and_counts(self):
+        full = compile_noisy_hashes(self.root)
+        summary_only = compile_noisy_hashes(self.root, max_hash_rows=0)
+
+        self.assertEqual(summary_only["hashes"], [])
+        self.assertEqual(summary_only["summary"]["observed_hashes"], 1)
+        self.assertEqual(summary_only["summary"]["returned_hashes"], 0)
+        self.assertEqual(summary_only["summary"]["hash_rows_truncated"], 1)
+        self.assertEqual(summary_only["status_digest"], full["status_digest"])
 
     def test_machine_hash_evidence_reads_every_fp_observation(self):
         evidence = (
-            self.root
-            / "artifacts/validation-runs/cohort/run/hash-evidence.sqlite3"
+            self.root / "artifacts/validation-runs/cohort/run/hash-evidence.sqlite3"
         )
         evidence.parent.mkdir(parents=True)
         connection = sqlite3.connect(evidence)
-        connection.executescript(
-            """
+        connection.executescript("""
             CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE hash_observation(
                 scope TEXT, language TEXT, full_hash TEXT, specific_hash TEXT,
@@ -87,8 +99,7 @@ class NoisyHashTests(unittest.TestCase):
                 query_address TEXT, query_function TEXT,
                 corpus_function TEXT, evidence_path TEXT
             );
-            """
-        )
+            """)
         connection.executemany(
             "INSERT INTO metadata VALUES (?,?)",
             [
@@ -101,9 +112,21 @@ class NoisyHashTests(unittest.TestCase):
             "INSERT INTO hash_observation VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             [
                 (
-                    "linux|ELF|lang", "lang", "aa", "bb", 1, 20, "fp",
-                    owner, "route", "treatment", "A", "1000", "query",
-                    "corpus", "reference.jsonl",
+                    "linux|ELF|lang",
+                    "lang",
+                    "aa",
+                    "bb",
+                    1,
+                    20,
+                    "fp",
+                    owner,
+                    "route",
+                    "treatment",
+                    "A",
+                    "1000",
+                    "query",
+                    "corpus",
+                    "reference.jsonl",
                 )
                 for owner in ("wrong-a@1", "wrong-b@2")
             ],
@@ -112,7 +135,9 @@ class NoisyHashTests(unittest.TestCase):
         connection.close()
 
         status = compile_noisy_hashes(self.root)
-        machine = next(row for row in status["hashes"] if row["scope"] == "linux|ELF|lang")
+        machine = next(
+            row for row in status["hashes"] if row["scope"] == "linux|ELF|lang"
+        )
 
         self.assertEqual(status["summary"]["evidence_databases_scanned"], 1)
         self.assertEqual(machine["collisions"], 2)

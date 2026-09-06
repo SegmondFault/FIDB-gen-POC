@@ -745,7 +745,11 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             }
         )
     ecological_validation = compile_ecological_validation(root)
-    noisy_hashes = compile_noisy_hashes(root)
+    # The authority catalog carries the complete noisy-hash summary and digest,
+    # while the dedicated endpoint serves the TOML-bounded ranked working set.
+    # Embedding every evidence-heavy row made the catalog exceed both API
+    # transport bounds and forced every browser poll to compile it again.
+    noisy_hashes = compile_noisy_hashes(root, max_hash_rows=0)
     hash_discrimination = compile_hash_discrimination(
         root,
         _machine_validation=machine_validations[0],

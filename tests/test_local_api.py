@@ -218,6 +218,29 @@ class LocalApiTests(unittest.TestCase):
         self.assertIsNone(document["throughput"])
         self.assertIsNone(document["eta"])
 
+    def test_ledger_projection_cache_reuses_and_invalidates_by_sqlite_generation(self):
+        self.state.parent.mkdir(parents=True, exist_ok=True)
+        self.state.write_bytes(b"generation-one")
+        server = object.__new__(_ApiServer)
+        server.config = self.config
+        calls = []
+
+        def build():
+            calls.append(len(calls) + 1)
+            return {"generated_at": "old", "value": calls[-1]}
+
+        first = server.cached_ledger_projection("timings:200", build)
+        second = server.cached_ledger_projection("timings:200", build)
+        self.assertEqual(first["value"], 1)
+        self.assertEqual(second["value"], 1)
+        self.assertNotEqual(second["generated_at"], "old")
+        self.assertEqual(calls, [1])
+
+        self.state.write_bytes(b"generation-two-is-different")
+        third = server.cached_ledger_projection("timings:200", build)
+        self.assertEqual(third["value"], 2)
+        self.assertEqual(calls, [1, 2])
+
     def test_timings_endpoint_returns_measured_spans_and_bounded_history(self):
         lease = self.claim_synced_job()
         with Coordinator(self.state, self.root) as coordinator:

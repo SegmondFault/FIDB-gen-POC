@@ -447,6 +447,13 @@ published raw or compact database. That downstream admission filter must be
 implemented and verified before quarantine is treated as operationally
 enforced.
 
+The complete population remains in the evidence databases. The API returns
+the ranked working set bounded by `display.max_hash_rows` in
+`noisy-hashes.toml`, alongside exact `observed_hashes`, `returned_hashes` and
+`hash_rows_truncated` counts. The authority catalog embeds only the complete
+summary and population digest. This keeps browser refreshes below the fixed
+transport limit without presenting a truncated list as the whole ledger.
+
 ## Hash Discrimination Index
 
 The noisy-hash ledger is one input to the broader Hash Discrimination system.
