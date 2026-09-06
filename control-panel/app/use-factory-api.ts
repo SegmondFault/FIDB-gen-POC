@@ -130,6 +130,9 @@ export type CoordinatorSnapshot = {
   attempts_truncated?: boolean;
   stage_attempts_total?: number;
   stage_attempts_truncated?: boolean;
+  result_jobs_total?: number;
+  result_jobs_included?: number;
+  result_jobs_truncated?: boolean;
   snapshot_detail?: 'full' | 'control-panel';
 };
 

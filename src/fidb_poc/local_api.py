@@ -68,6 +68,7 @@ MAX_RESPONSE_BODY_BYTES = 8 * 1024 * 1024
 DEFAULT_EVENT_LIMIT = 100
 MAX_EVENT_LIMIT = 500
 CONTROL_PANEL_HISTORY_LIMIT = 200
+CONTROL_PANEL_RESULT_LIMIT = 200
 
 _GET_PATHS = {
     "/api/v1/health",
@@ -280,6 +281,20 @@ def _public_snapshot(
         if isinstance(job, dict):
             job.pop("lease_token", None)
     if detail == "control-panel":
+        result_jobs = [
+            job
+            for job in result.get("jobs", [])
+            if isinstance(job, dict) and isinstance(job.get("result"), dict)
+        ]
+        retained_result_ids = {
+            str(attempt["job_id"])
+            for attempt in result.get("attempts", [])
+            if isinstance(attempt, dict) and attempt.get("job_id")
+        }
+        for job in reversed(result_jobs):
+            if len(retained_result_ids) >= CONTROL_PANEL_RESULT_LIMIT:
+                break
+            retained_result_ids.add(str(job["job_id"]))
         compact_jobs = []
         public_job_fields = (
             "job_id",
@@ -308,10 +323,18 @@ def _public_snapshot(
                     if field in job_result
                 }
                 if isinstance(job_result, dict)
+                and str(job.get("job_id")) in retained_result_ids
                 else None
             )
             compact_jobs.append(compact)
         result["jobs"] = compact_jobs
+        result["result_jobs_total"] = len(result_jobs)
+        result["result_jobs_included"] = sum(
+            row["result"] is not None for row in compact_jobs
+        )
+        result["result_jobs_truncated"] = (
+            result["result_jobs_included"] < result["result_jobs_total"]
+        )
         result["snapshot_detail"] = detail
     return result
 

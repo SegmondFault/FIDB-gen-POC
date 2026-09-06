@@ -2801,7 +2801,8 @@ function EvidenceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) {
     });
   });
   return <div className="view-stack">
-    <ViewIntro kicker="SEALED PROVENANCE" title="Artifacts & provenance" action={<button className="secondary-action" disabled>{snapshot ? `${artifacts.length} artifacts` : 'Coordinator offline'}</button>} />
+    <ViewIntro kicker="SEALED PROVENANCE" title="Artifacts & provenance" action={<button className="secondary-action" disabled>{snapshot ? `${artifacts.length} preview artifacts` : 'Coordinator offline'}</button>} />
+    {snapshot?.result_jobs_truncated && <div className="inline-warning">Showing artifact details for {snapshot.result_jobs_included?.toLocaleString()} recent jobs. Queue state and build coverage still include all {snapshot.result_jobs_total?.toLocaleString()} completed jobs.</div>}
     <div className="evidence-layout">
       <section className="panel artifact-list"><div className="panel-header"><h3>Sealed artifacts</h3><span className="plan-state">LIVE</span></div>
         {artifacts.map(artifact => <button className="artifact-row" key={`${artifact.job.job_id}-${artifact.kind}`}><span className="file-glyph">{artifact.kind.toUpperCase()}</span><div><strong>{artifact.path.split('/').pop()}</strong><small>{artifact.job.base_cell}</small></div><span>{artifact.kind === 'fidbf' ? 'Raw FID export' : artifact.kind === 'fidb' ? 'FID database' : 'Provenance seal'}</span><code>{artifact.sha256.slice(0, 16)}…</code><b>→</b></button>)}
