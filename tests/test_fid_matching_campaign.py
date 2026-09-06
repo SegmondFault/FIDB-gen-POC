@@ -68,7 +68,11 @@ class FidMatchingCampaignTests(unittest.TestCase):
     def test_status_exposes_qualification_and_pending_cases(self):
         status = campaign_status(self.root)
         self.assertEqual(status["qualification"]["state"], "qualified")
+        self.assertEqual(status["canary"]["state"], "pending")
+        self.assertEqual(status["canary"]["failures"], [])
+        self.assertIsNone(status["canary"]["oracle"]["canary_passed"])
         self.assertEqual(status["canary"]["progress"]["expected_cases"], 4)
+        self.assertEqual(status["canary"]["progress"]["pending_cases"], 4)
         self.assertEqual(status["full"]["progress"]["expected_cases"], 444)
 
     def test_status_rejects_a_stale_saved_canary(self):

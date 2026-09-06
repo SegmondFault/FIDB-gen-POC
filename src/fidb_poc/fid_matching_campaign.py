@@ -216,6 +216,7 @@ def _aggregate(
     expected = _expected_cases(campaign, mode)
     summaries = []
     failures = []
+    pending = 0
     matrix = {
         "true_positives": 0,
         "false_positives": 0,
@@ -229,18 +230,17 @@ def _aggregate(
         path = _case_summary_path(root, campaign, position, fold)
         if not path.is_file():
             failure_path = path.with_name("failure.json")
-            failures.append(
-                {
-                    "case": f"{position}:{fold}",
-                    "error": (
-                        json.loads(failure_path.read_text(encoding="utf-8")).get(
-                            "error", "not attempted"
-                        )
-                        if failure_path.is_file()
-                        else "not attempted"
-                    ),
-                }
-            )
+            if failure_path.is_file():
+                failures.append(
+                    {
+                        "case": f"{position}:{fold}",
+                        "error": json.loads(
+                            failure_path.read_text(encoding="utf-8")
+                        ).get("error", "failed without an error message"),
+                    }
+                )
+            else:
+                pending += 1
             continue
         summary = json.loads(path.read_text(encoding="utf-8"))
         if summary.get("state") != "qualified":
@@ -263,13 +263,23 @@ def _aggregate(
         and mismatch_count == 0
         and truth_coverage >= float(campaign["canary"]["minimum_truth_coverage"])
     )
-    state = (
-        "qualified"
-        if mode == "canary" and canary_passed
+    if mode == "canary" and canary_passed:
+        state = "qualified"
+    elif mode == "full" and complete and mismatch_count == 0:
+        state = "measured-complete"
+    elif failures or mismatch_count:
+        state = "incomplete-or-failed"
+    elif summaries:
+        state = "partial"
+    else:
+        state = "pending"
+    stage_state = (
+        "complete"
+        if complete
         else (
-            "measured-complete"
-            if mode == "full" and complete and mismatch_count == 0
-            else "incomplete-or-failed"
+            "failed"
+            if failures or mismatch_count
+            else "partial" if summaries else "pending"
         )
     )
     matching = load_matching_authority(root, str(campaign["matching_authority"]))
@@ -305,31 +315,29 @@ def _aggregate(
         "pipeline_job": {
             "id": "native-fid-hash-discrimination",
             "kind": "validation-postprocess",
-            "state": "complete" if complete else "incomplete",
+            "state": stage_state,
             "materialized_with_batch": True,
             "required_for_run_completion": True,
             "stages": [
-                {"id": "native-oracle", "state": "complete" if complete else "running"},
-                {"id": "portable-cpu", "state": "complete" if complete else "running"},
-                {"id": "portable-wgpu", "state": "complete" if complete else "running"},
-                {
-                    "id": "owner-classification",
-                    "state": "complete" if complete else "pending",
-                },
-                {
-                    "id": "hash-population",
-                    "state": "complete" if complete else "pending",
-                },
+                {"id": "native-oracle", "state": stage_state},
+                {"id": "portable-cpu", "state": stage_state},
+                {"id": "portable-wgpu", "state": stage_state},
+                {"id": "owner-classification", "state": stage_state},
+                {"id": "hash-population", "state": stage_state},
             ],
         },
         "progress": {
             "expected_cases": len(expected),
             "complete_cases": len(summaries),
-            "failed_or_pending_cases": len(expected) - len(summaries),
+            "failed_cases": len(failures),
+            "pending_cases": pending,
+            "failed_or_pending_cases": len(failures) + pending,
         },
         "oracle": {
             "decision_mismatches": mismatch_count,
-            "canary_passed": canary_passed if mode == "canary" else None,
+            "canary_passed": (
+                canary_passed if mode == "canary" and complete else None
+            ),
         },
         "truth": {
             "labelled_functions": truth_labelled,
