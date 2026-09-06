@@ -275,6 +275,12 @@ def _machine_validation_main(argv: list[str]) -> int:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
         if command in {"run", "analyze-hashes", "_worker"}:
             child.add_argument("--run-id", required=True)
+        if command == "analyze-hashes":
+            child.add_argument(
+                "--qualify-backend",
+                action="store_true",
+                help="run the explicitly admitted canonical/candidate backend comparison",
+            )
         if command == "_worker":
             child.add_argument("--positions", required=True)
     arguments = parser.parse_args(argv)
@@ -331,6 +337,7 @@ def _machine_validation_main(argv: list[str]) -> int:
                 arguments.project_root,
                 arguments.run_id,
                 runtime_path=arguments.runtime,
+                qualify_backend=arguments.qualify_backend,
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0 if document["state"] == "measured-complete" else 1

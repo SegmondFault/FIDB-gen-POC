@@ -19,6 +19,18 @@ negative_population = "query-signatures-crossed-with-opposite-fold-libraries"
 same_fold_sharing = "multi-owner-ambiguity-not-false-positive"
 library_acceptance_threshold = "none"
 
+[construct]
+reference_unit = "per-library-archive-function"
+query_unit = "five-library-linked-composite-function"
+recall_claim = "harness-conditional-not-intrinsic-fid-recall"
+known_transformations = [
+  "linker-symbol-selection",
+  "weak-and-comdat-coalescing",
+  "relaxation-thunks-and-veneers",
+  "function-boundary-recovery",
+]
+require_route_and_owner_diagnostics = true
+
 [component.full]
 fields = ["full_hash"]
 

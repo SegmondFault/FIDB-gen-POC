@@ -67,20 +67,54 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     additional_size INTEGER, code_size INTEGER, owner TEXT,
                     function_name TEXT, evidence_path TEXT, identity_count INTEGER
                 );
-                """
-            )
+                """)
             connection.executemany(
                 "INSERT INTO reference_identity VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
-                    ("x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4, "one@1", "r1", "t1", "one", "one.jsonl"),
-                    ("x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4, "one@1", "r2", "t2", "one", "two.jsonl"),
+                    (
+                        "x86:LE:64:default",
+                        "linux",
+                        "ELF",
+                        "01",
+                        "02",
+                        3,
+                        4,
+                        "one@1",
+                        "r1",
+                        "t1",
+                        "one",
+                        "one.jsonl",
+                    ),
+                    (
+                        "x86:LE:64:default",
+                        "linux",
+                        "ELF",
+                        "01",
+                        "02",
+                        3,
+                        4,
+                        "one@1",
+                        "r2",
+                        "t2",
+                        "one",
+                        "two.jsonl",
+                    ),
                 ],
             )
             connection.execute(
                 "INSERT INTO reference_owner_signature VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
-                    "x86:LE:64:default", "linux", "ELF", "01", "02", 3, 4,
-                    "one@1", "one", "one.jsonl", 2,
+                    "x86:LE:64:default",
+                    "linux",
+                    "ELF",
+                    "01",
+                    "02",
+                    3,
+                    4,
+                    "one@1",
+                    "one",
+                    "one.jsonl",
+                    2,
                 ),
             )
             connection.commit()
@@ -150,16 +184,80 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     route_id TEXT, treatment_id TEXT, function_name TEXT,
                     evidence_path TEXT
                 )
-                """
-            )
+                """)
             reference.executemany(
                 "INSERT INTO reference_identity VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
-                    ("lang", "linux", "ELF", "01", "a", 0, 10, "one", "r", "t", "one-hit", "one.jsonl"),
-                    ("lang", "linux", "ELF", "04", "d", 0, 40, "one", "r", "t", "one-miss", "one.jsonl"),
-                    ("lang", "linux", "ELF", "05", "e", 0, 50, "two", "r", "t", "two-miss", "two.jsonl"),
-                    ("lang", "linux", "ELF", "02", "b", 0, 20, "three", "r", "t", "wrong-owner", "three.jsonl"),
-                    ("lang", "linux", "ELF", "01", "z", 0, 99, "three", "r", "t", "full-only-peer", "three.jsonl"),
+                    (
+                        "lang",
+                        "linux",
+                        "ELF",
+                        "01",
+                        "a",
+                        0,
+                        10,
+                        "one",
+                        "r",
+                        "t",
+                        "one-hit",
+                        "one.jsonl",
+                    ),
+                    (
+                        "lang",
+                        "linux",
+                        "ELF",
+                        "04",
+                        "d",
+                        0,
+                        40,
+                        "one",
+                        "r",
+                        "t",
+                        "one-miss",
+                        "one.jsonl",
+                    ),
+                    (
+                        "lang",
+                        "linux",
+                        "ELF",
+                        "05",
+                        "e",
+                        0,
+                        50,
+                        "two",
+                        "r",
+                        "t",
+                        "two-miss",
+                        "two.jsonl",
+                    ),
+                    (
+                        "lang",
+                        "linux",
+                        "ELF",
+                        "02",
+                        "b",
+                        0,
+                        20,
+                        "three",
+                        "r",
+                        "t",
+                        "wrong-owner",
+                        "three.jsonl",
+                    ),
+                    (
+                        "lang",
+                        "linux",
+                        "ELF",
+                        "01",
+                        "z",
+                        0,
+                        99,
+                        "three",
+                        "r",
+                        "t",
+                        "full-only-peer",
+                        "three.jsonl",
+                    ),
                 ],
             )
             reference.commit()
@@ -296,20 +394,22 @@ class MachineValidationRunnerTests(unittest.TestCase):
             _window_open(schedule, afternoon),
             (True, "c10-reanalysis-2026-09-05-afternoon"),
         )
-        self.assertEqual(
-            _window_open(schedule, overnight), (True, "normal-overnight")
-        )
+        self.assertEqual(_window_open(schedule, overnight), (True, "normal-overnight"))
         self.assertEqual(_window_open(schedule, closed), (False, None))
 
     def test_single_hash_method_is_versioned_and_safe(self):
         method = load_hash_method(self.root)
 
         self.assertEqual(method["id"], "single-hash-ground-truth-v1")
+        self.assertEqual(set(method["component"]), {"full", "specific", "complete"})
         self.assertEqual(
-            set(method["component"]), {"full", "specific", "complete"}
+            method["classification"]["library_acceptance_threshold"], "none"
         )
-        self.assertEqual(method["classification"]["library_acceptance_threshold"], "none")
         self.assertFalse(method["safety"]["start_jvms"])
+        self.assertEqual(
+            method["construct"]["recall_claim"],
+            "harness-conditional-not-intrinsic-fid-recall",
+        )
         self.assertEqual(len(method["authority_sha256"]), 64)
 
     def test_canary_gate_rejects_stale_runtime_and_accepts_exact_contract(self):
@@ -389,8 +489,14 @@ class MachineValidationRunnerTests(unittest.TestCase):
             )
             runtime = {"output_root": "runs"}
             with (
-                patch("fidb_poc.machine_validation_runner.load_runtime", return_value=runtime),
-                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=True),
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value=runtime,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=True,
+                ),
             ):
                 pausing = pause_validation(root, actor="test")
             self.assertEqual(pausing["state"], "pausing")
@@ -401,11 +507,26 @@ class MachineValidationRunnerTests(unittest.TestCase):
             status_path.write_text(json.dumps(paused), encoding="utf-8")
             process = Mock(pid=84)
             with (
-                patch("fidb_poc.machine_validation_runner.load_runtime", return_value=runtime),
-                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=False),
-                patch("fidb_poc.machine_validation_runner.preflight", return_value={"state": "ready", "blockers": []}),
-                patch("fidb_poc.machine_validation_runner.canary_gate_status", return_value={"ready": True}),
-                patch("fidb_poc.machine_validation_runner._spawn_validation", return_value=process),
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value=runtime,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=False,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.preflight",
+                    return_value={"state": "ready", "blockers": []},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.canary_gate_status",
+                    return_value={"ready": True},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._spawn_validation",
+                    return_value=process,
+                ),
             ):
                 resumed = resume_validation(root)
             self.assertEqual(resumed["state"], "queued")
@@ -428,16 +549,26 @@ class MachineValidationRunnerTests(unittest.TestCase):
             (run_root / "status.json").write_text(
                 json.dumps(
                     {
-                        "run_id": "fixed", "mode": "full", "state": "running",
-                        "pid": 42, "worker_pids": [43], "complete_work_units": 3,
+                        "run_id": "fixed",
+                        "mode": "full",
+                        "state": "running",
+                        "pid": 42,
+                        "worker_pids": [43],
+                        "complete_work_units": 3,
                         "failed_work_units": 0,
                     }
                 ),
                 encoding="utf-8",
             )
             with (
-                patch("fidb_poc.machine_validation_runner.load_runtime", return_value={"output_root": "runs"}),
-                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=False),
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value={"output_root": "runs"},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=False,
+                ),
             ):
                 status = runtime_status(root)
             self.assertEqual(status["state"], "interrupted")
@@ -456,16 +587,26 @@ class MachineValidationRunnerTests(unittest.TestCase):
             status_path.write_text(
                 json.dumps(
                     {
-                        "run_id": "fixed", "mode": "full", "state": "failed",
-                        "pid": 42, "expected_work_units": 10, "complete_work_units": 4,
+                        "run_id": "fixed",
+                        "mode": "full",
+                        "state": "failed",
+                        "pid": 42,
+                        "expected_work_units": 10,
+                        "complete_work_units": 4,
                         "failed_work_units": 1,
                     }
                 ),
                 encoding="utf-8",
             )
             with (
-                patch("fidb_poc.machine_validation_runner.load_runtime", return_value={"output_root": "runs"}),
-                patch("fidb_poc.machine_validation_runner._validation_process_active", return_value=False),
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value={"output_root": "runs"},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=False,
+                ),
             ):
                 status = pause_validation(root, actor="test")
             self.assertEqual(status["state"], "paused")
@@ -516,8 +657,6 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(len(calls), 3)
             self.assertIn(str(root / "stack-chk-fail-local.o"), calls[2])
             self.assertIn("validation composite retry", (root / "link.log").read_text())
-
-
 
     def test_terminal_validation_uses_shared_scoped_retention(self):
         policy = SimpleNamespace(

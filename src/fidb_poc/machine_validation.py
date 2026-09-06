@@ -37,6 +37,7 @@ _TOP_LEVEL_FIELDS = {
     "batch",
     "queries",
     "metrics",
+    "hash_discrimination_job",
     "planning",
     "ecological_validation",
 }
@@ -82,6 +83,17 @@ _SECTION_FIELDS = {
     },
     "queries": {"primary_projections"},
     "metrics": {"required"},
+    "hash_discrimination_job": {
+        "id",
+        "kind",
+        "automatic",
+        "required_for_run_completion",
+        "method_authority",
+        "corpus_authority",
+        "backend_authority",
+        "stages",
+        "outputs",
+    },
     "planning": {
         "estimate_class",
         "central_wall_hours",
@@ -240,8 +252,60 @@ def load_machine_validation(
     if ecological["included_in_validation_batch"] is not False:
         raise ValueError("ecological validation must remain outside machine validation")
 
+    hash_job = document["hash_discrimination_job"]
+    if (
+        hash_job["id"] != "hash-discrimination"
+        or hash_job["kind"] != "validation-postprocess"
+        or hash_job["automatic"] is not True
+        or hash_job["required_for_run_completion"] is not True
+    ):
+        raise ValueError(
+            "machine-validation hash discrimination must be an automatic required job"
+        )
+    stages = _strings(hash_job["stages"], "hash_discrimination_job.stages")
+    outputs = _strings(hash_job["outputs"], "hash_discrimination_job.outputs")
+    required_stages = {
+        "classify-signatures",
+        "analyse-hash-populations",
+        "update-corpus-generation",
+        "query-corpus-index",
+        "publish-report",
+        "retention",
+    }
+    required_outputs = {
+        "hash-evidence.sqlite3",
+        "hash-report.json",
+        "corpus-lookup.json",
+        "retention.json",
+    }
+    if set(stages) != required_stages or set(outputs) != required_outputs:
+        raise ValueError(
+            "machine-validation hash discrimination job is missing required stages or outputs"
+        )
+    method_path = _inside(root, str(hash_job["method_authority"]))
+    corpus_path = _inside(root, str(hash_job["corpus_authority"]))
+    backend_path = _inside(root, str(hash_job["backend_authority"]))
+    if (
+        not method_path.is_file()
+        or not corpus_path.is_file()
+        or not backend_path.is_file()
+    ):
+        raise ValueError(
+            "machine-validation hash discrimination authority is unavailable"
+        )
+
+    hash_job = {
+        **hash_job,
+        "method_authority_sha256": hashlib.sha256(method_path.read_bytes()).hexdigest(),
+        "corpus_authority_sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest(),
+        "backend_authority_sha256": hashlib.sha256(
+            backend_path.read_bytes()
+        ).hexdigest(),
+    }
+
     return {
         **document,
+        "hash_discrimination_job": hash_job,
         "authority_path": str(authority_path.relative_to(root)),
         "authority_sha256": hashlib.sha256(authority_path.read_bytes()).hexdigest(),
         "source_pack_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
@@ -609,16 +673,24 @@ def compile_machine_validation(
             "detail": f"{composite_programs} non-executed composites",
         },
         {
-            "id": "single-hash-classification",
-            "label": "Classify every signature",
-            "state": "not-run" if eligible else "blocked",
-            "detail": "TP / FP / TN / FN without a match-count threshold",
+            "id": "hash-discrimination-job",
+            "label": "Hash discrimination postprocess",
+            "state": (
+                "complete"
+                if results["state"] == "measured-complete"
+                else "not-run" if eligible else "blocked"
+            ),
+            "detail": "classification · populations · corpus lookup · report",
         },
         {
-            "id": "machine-report",
-            "label": "Publish machine report",
-            "state": "not-run" if eligible else "blocked",
-            "detail": "accuracy · ambiguity · marginal coverage · cost",
+            "id": "retention",
+            "label": "Retain evidence and collect scratch",
+            "state": (
+                "complete"
+                if results["state"] == "measured-complete"
+                else "not-run" if eligible else "blocked"
+            ),
+            "detail": "required terminal stage of the validation batch",
         },
     ]
     body = {
@@ -635,12 +707,25 @@ def compile_machine_validation(
             "source_pack_sha256": authority["source_pack_sha256"],
             "width": authority["width_authority"],
             "width_compilation_digest": width["compilation_digest"],
+            "hash_method": authority["hash_discrimination_job"]["method_authority"],
+            "hash_method_sha256": authority["hash_discrimination_job"][
+                "method_authority_sha256"
+            ],
+            "corpus_index": authority["hash_discrimination_job"]["corpus_authority"],
+            "corpus_index_sha256": authority["hash_discrimination_job"][
+                "corpus_authority_sha256"
+            ],
+            "hash_backends": authority["hash_discrimination_job"]["backend_authority"],
+            "hash_backends_sha256": authority["hash_discrimination_job"][
+                "backend_authority_sha256"
+            ],
         },
         "randomization": randomization,
         "cohort_policy": authority["cohort_policy"],
         "batch": authority["batch"],
         "queries": authority["queries"],
         "metrics": authority["metrics"],
+        "hash_discrimination_job": authority["hash_discrimination_job"],
         "planning": authority["planning"],
         "ecological_validation": authority["ecological_validation"],
         "summary": {
@@ -697,6 +782,7 @@ def _materialization_digest(status: Mapping[str, object]) -> str:
         "randomization": status["randomization"],
         "batch": status["batch"],
         "queries": status["queries"],
+        "hash_discrimination_job": status["hash_discrimination_job"],
         "width_identities": status["width_identities"],
     }
     canonical = json.dumps(pinned, sort_keys=True, separators=(",", ":")).encode()
@@ -716,7 +802,7 @@ def _render_validation_batch(status: Mapping[str, object]) -> str:
         "execute_target_binaries = false",
         f'authority_path = {_toml_string(str(status["authority_path"]))}',
         f'authority_sha256 = {_toml_string(str(status["authority_sha256"]))}',
-        f'materialization_digest = {_toml_string(_materialization_digest(status))}',
+        f"materialization_digest = {_toml_string(_materialization_digest(status))}",
         "",
         "[summary]",
         f'work_units = {summary["work_units"]}',
@@ -735,6 +821,22 @@ def _render_validation_batch(status: Mapping[str, object]) -> str:
         f'truth_copy = {_toml_string(str(status["batch"]["truth_copy"]))}',
         f'query_copy = {_toml_string(str(status["batch"]["query_copy"]))}',
         f'primary_projections = {_toml_array(status["queries"]["primary_projections"])}',
+        "",
+        "[hash_discrimination_job]",
+        f'id = {_toml_string(str(status["hash_discrimination_job"]["id"]))}',
+        f'kind = {_toml_string(str(status["hash_discrimination_job"]["kind"]))}',
+        'state = "planned-disarmed"',
+        f'automatic = {str(bool(status["hash_discrimination_job"]["automatic"])).lower()}',
+        f'required_for_run_completion = {str(bool(status["hash_discrimination_job"]["required_for_run_completion"])).lower()}',
+        'after = "composite-build-analysis"',
+        f'method_authority = {_toml_string(str(status["hash_discrimination_job"]["method_authority"]))}',
+        f'method_authority_sha256 = {_toml_string(str(status["hash_discrimination_job"]["method_authority_sha256"]))}',
+        f'corpus_authority = {_toml_string(str(status["hash_discrimination_job"]["corpus_authority"]))}',
+        f'corpus_authority_sha256 = {_toml_string(str(status["hash_discrimination_job"]["corpus_authority_sha256"]))}',
+        f'backend_authority = {_toml_string(str(status["hash_discrimination_job"]["backend_authority"]))}',
+        f'backend_authority_sha256 = {_toml_string(str(status["hash_discrimination_job"]["backend_authority_sha256"]))}',
+        f'stages = {_toml_array(status["hash_discrimination_job"]["stages"])}',
+        f'outputs = {_toml_array(status["hash_discrimination_job"]["outputs"])}',
     ]
     for index, identity in enumerate(status["width_identities"], start=1):
         unit_id = f'{identity["route_id"]}:{identity["profile_id"]}'

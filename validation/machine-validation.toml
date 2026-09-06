@@ -92,6 +92,29 @@ required = [
   "retained-bytes",
 ]
 
+[hash_discrimination_job]
+id = "hash-discrimination"
+kind = "validation-postprocess"
+automatic = true
+required_for_run_completion = true
+method_authority = "validation/machine-validation-hash-method.toml"
+corpus_authority = "validation/corpus-hash-index.toml"
+backend_authority = "validation/hash-analysis-backends.toml"
+stages = [
+  "classify-signatures",
+  "analyse-hash-populations",
+  "update-corpus-generation",
+  "query-corpus-index",
+  "publish-report",
+  "retention",
+]
+outputs = [
+  "hash-evidence.sqlite3",
+  "hash-report.json",
+  "corpus-lookup.json",
+  "retention.json",
+]
+
 [planning]
 estimate_class = "code-volume-analogue-unmeasured"
 central_wall_hours = 25.0

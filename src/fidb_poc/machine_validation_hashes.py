@@ -963,6 +963,7 @@ def load_hash_method(
         "label",
         "identity",
         "classification",
+        "construct",
         "component",
         "population",
         "reporting",
@@ -1005,6 +1006,16 @@ def load_hash_method(
         }
     ):
         raise ValueError("hash-analysis method violates the supported safety contract")
+    construct = document["construct"]
+    if (
+        construct.get("reference_unit") != "per-library-archive-function"
+        or construct.get("query_unit") != "five-library-linked-composite-function"
+        or construct.get("recall_claim")
+        != "harness-conditional-not-intrinsic-fid-recall"
+        or construct.get("require_route_and_owner_diagnostics") is not True
+        or not construct.get("known_transformations")
+    ):
+        raise ValueError("hash-analysis construct-validity contract is unsupported")
     top_limit = int(document["reporting"].get("top_ambiguous_per_hash_type", 0))
     if top_limit < 1 or top_limit > 10_000:
         raise ValueError("hash-analysis reporting bound is invalid")
@@ -1015,12 +1026,72 @@ def load_hash_method(
     }
 
 
+def _construct_diagnostics(
+    connection: sqlite3.Connection,
+    construct: Mapping[str, object],
+) -> dict[str, object]:
+    """Summarise where harness-conditional misses concentrate."""
+
+    def rows(sql: str) -> list[dict[str, object]]:
+        values = []
+        for identity, true_positives, false_negatives in connection.execute(sql):
+            recovered = int(true_positives or 0)
+            missed = int(false_negatives or 0)
+            denominator = recovered + missed
+            values.append(
+                {
+                    "id": str(identity),
+                    "true_positives": recovered,
+                    "false_negatives": missed,
+                    "false_negative_rate": (
+                        missed / denominator if denominator else None
+                    ),
+                }
+            )
+        return values
+
+    by_route = rows("""
+        SELECT route_id, SUM(true_positives), SUM(false_negatives)
+        FROM unit_result GROUP BY route_id ORDER BY route_id
+        """)
+    by_treatment = rows("""
+        SELECT treatment_id, SUM(true_positives), SUM(false_negatives)
+        FROM unit_result GROUP BY treatment_id ORDER BY treatment_id
+        """)
+    by_owner = rows("""
+        SELECT owner, SUM(recovered_observations), SUM(missed_observations)
+        FROM hash_signature_owner GROUP BY owner ORDER BY owner
+        """)
+    observed_route_rates = [
+        float(row["false_negative_rate"])
+        for row in by_route
+        if row["false_negative_rate"] is not None
+    ]
+    route_spread = (
+        max(observed_route_rates) - min(observed_route_rates)
+        if observed_route_rates
+        else None
+    )
+    return {
+        "state": "construct-validity-unresolved",
+        "recall_claim": construct["recall_claim"],
+        "reference_unit": construct["reference_unit"],
+        "query_unit": construct["query_unit"],
+        "known_transformations": construct["known_transformations"],
+        "route_false_negative_rate_spread": route_spread,
+        "by_route": by_route,
+        "by_treatment": by_treatment,
+        "by_owner": by_owner,
+    }
+
+
 def analyze_hashes(
     project_root: str | Path,
     run_id: str,
     *,
     runtime_path: str | Path = "validation/machine-validation-runtime.toml",
     method_path: str | Path = DEFAULT_HASH_METHOD,
+    qualify_backend: bool = False,
 ) -> dict[str, object]:
     """Create a reproducible single-hash report from one sealed validation run."""
 
@@ -1032,7 +1103,11 @@ def analyze_hashes(
         load_corpus_hash_authority,
         update_corpus_hash_index,
     )
-    from .hash_gpu_trial import run_gpu_comparison
+    from .hash_gpu_trial import (
+        compile_hash_backend_status,
+        run_gpu_comparison,
+        run_selected_lookup,
+    )
 
     analysis_started_ns = time.monotonic_ns()
     root = Path(project_root).expanduser().resolve()
@@ -1041,6 +1116,23 @@ def analyze_hashes(
     corpus_authority = load_corpus_hash_authority(root)
     resolution_started_ns = time.monotonic_ns()
     evidence = resolve_hash_analysis_evidence(root, runtime_path)
+    job_contract = evidence["manifest"].get("hash_discrimination_job", {})
+    if method["authority_path"] != job_contract.get(
+        "method_authority"
+    ) or corpus_authority["authority_path"] != job_contract.get("corpus_authority"):
+        raise ValueError(
+            "hash-analysis authorities do not match the materialized batch job"
+        )
+    backend_path = str(
+        job_contract.get("backend_authority", "validation/hash-analysis-backends.toml")
+    )
+    backend_status = compile_hash_backend_status(root, backend_authority=backend_path)
+    selected_backend = backend_status["effective_backend"]
+    backend_authority = {
+        "authority_path": backend_status["authority_path"],
+        "authority_sha256": backend_status["authority_sha256"],
+        "comparison_policy": "explicit-qualification-only",
+    }
     resolution_wall_ns = time.monotonic_ns() - resolution_started_ns
     output_root = (root / str(runtime["output_root"])).resolve()
     run_root = (output_root / run_id).resolve()
@@ -1049,7 +1141,7 @@ def analyze_hashes(
     status_path = run_root / "status.json"
     status = json.loads(status_path.read_text(encoding="utf-8"))
     if (
-        status.get("state") != "complete"
+        status.get("state") not in {"complete", "postprocessing", "postprocess-failed"}
         or status.get("mode") != "full"
         or int(status.get("complete_work_units", 0))
         != int(status.get("expected_work_units", -1))
@@ -1062,6 +1154,9 @@ def analyze_hashes(
     source_digest = hashlib.sha256()
     source_digest.update(_sha256(source_report).encode("ascii"))
     source_digest.update(str(method["authority_sha256"]).encode("ascii"))
+    # Lookup execution is downstream of the scientific classification.  Keep
+    # CPU/GPU performance preferences out of this evidence identity so an
+    # operational backend switch cannot invalidate or fork TP/FP/TN/FN data.
     reference_path = output_root / "reference-index.sqlite3"
     if not reference_path.is_file():
         raise ValueError("machine-validation reference index is unavailable")
@@ -1110,6 +1205,30 @@ def analyze_hashes(
     if database_path.is_file() and report_path.is_file():
         try:
             existing = json.loads(report_path.read_text(encoding="utf-8"))
+            if (
+                qualify_backend
+                and existing.get("schema_version") == HASH_REPORT_SCHEMA
+                and existing.get("state") == "measured-complete"
+                and existing.get("corpus_index", {}).get("authority_sha256")
+                == corpus_authority["authority_sha256"]
+            ):
+                comparison_path = run_root / "gpu-comparison.json"
+                comparison = run_gpu_comparison(
+                    root,
+                    corpus_result=existing["corpus_index"],
+                    output_path=comparison_path.relative_to(root),
+                    authority=corpus_authority,
+                )
+                return {
+                    **existing,
+                    "backend_qualification": {
+                        "state": comparison["state"],
+                        "report_path": str(comparison_path.relative_to(root)),
+                        "candidate_backend": comparison["candidate_backend"],
+                        "mismatches": comparison.get("mismatches"),
+                        "performance": comparison.get("performance"),
+                    },
+                }
             if (
                 existing.get("schema_version") == HASH_REPORT_SCHEMA
                 and existing.get("state") == "measured-complete"
@@ -1226,6 +1345,7 @@ def analyze_hashes(
             """).fetchone()
         top_noisy = _summary_rows(output, noisy=True, limit=500)
         top_low_information = _summary_rows(output, noisy=False, limit=500)
+        construct_diagnostics = _construct_diagnostics(output, method["construct"])
     finally:
         reference.close()
         output.close()
@@ -1237,12 +1357,29 @@ def analyze_hashes(
         run_id=run_id,
     )
     gpu_report_path = run_root / "gpu-comparison.json"
-    gpu_comparison = run_gpu_comparison(
-        root,
-        corpus_result=corpus_result,
-        output_path=gpu_report_path.relative_to(root),
-        authority=corpus_authority,
-    )
+    gpu_comparison = None
+    lookup_report_path = run_root / "corpus-lookup.json"
+    if qualify_backend:
+        gpu_comparison = run_gpu_comparison(
+            root,
+            corpus_result=corpus_result,
+            output_path=gpu_report_path.relative_to(root),
+            authority=corpus_authority,
+        )
+        corpus_lookup = {
+            "state": "qualification-only",
+            "backend": gpu_comparison["candidate_backend"],
+            "report_path": str(gpu_report_path.relative_to(root)),
+            "performance": gpu_comparison.get("performance", {}),
+        }
+    else:
+        corpus_lookup = run_selected_lookup(
+            root,
+            corpus_result=corpus_result,
+            output_path=lookup_report_path.relative_to(root),
+            authority=corpus_authority,
+            backend_status=backend_status,
+        )
     matrix = {
         "unit": DECISION_UNIT,
         "true_positives": int(matrix_row[0] or 0),
@@ -1263,6 +1400,40 @@ def analyze_hashes(
             "sha256": method["authority_sha256"],
             "algorithm_id": method["reproducibility"]["algorithm_id"],
         },
+        "lookup_backend": {
+            "selected": selected_backend["id"],
+            "implementation": selected_backend["implementation"],
+            "device": selected_backend["device"],
+            "scope": selected_backend["scope"],
+            "authority_path": backend_authority["authority_path"],
+            "authority_sha256": backend_authority["authority_sha256"],
+            "comparison_policy": backend_authority["comparison_policy"],
+            "requested_mode": backend_status["requested_mode"],
+            "fallback_reason": backend_status["fallback_reason"],
+            "performance_authority_path": backend_status["performance"][
+                "authority_path"
+            ],
+            "performance_authority_sha256": backend_status["performance"][
+                "authority_sha256"
+            ],
+        },
+        "pipeline_job": {
+            "id": str(job_contract.get("id", "hash-discrimination")),
+            "kind": str(job_contract.get("kind", "validation-postprocess")),
+            "required_for_run_completion": bool(
+                job_contract.get("required_for_run_completion", True)
+            ),
+            "materialized_with_batch": bool(job_contract),
+            "state": "evidence-published",
+            "stages": [
+                {"id": "classify-signatures", "state": "complete"},
+                {"id": "analyse-hash-populations", "state": "complete"},
+                {"id": "update-corpus-generation", "state": "complete"},
+                {"id": "query-corpus-index", "state": "complete"},
+                {"id": "publish-report", "state": "complete"},
+                {"id": "retention", "state": "pending"},
+            ],
+        },
         "decision_contract": {
             "unit": DECISION_UNIT,
             "positive_population": "exact signatures belonging to libraries present in the composite fold",
@@ -1273,6 +1444,7 @@ def analyze_hashes(
             "true_negative": "query signature absent from an opposite-fold owner",
             "same_fold_sharing": "retained as multi-owner ambiguity, not labelled false",
         },
+        "construct_validity": construct_diagnostics,
         "confusion_matrix": matrix,
         "failure_summary": {
             "collisions": matrix["false_positives"],
@@ -1297,15 +1469,20 @@ def analyze_hashes(
             **corpus_result,
             "authority_sha256": corpus_authority["authority_sha256"],
         },
-        "gpu_comparison": {
-            "state": gpu_comparison["state"],
-            "scope": gpu_comparison["scope"],
-            "report_path": str(gpu_report_path.relative_to(root)),
-            "candidate_backend": gpu_comparison["candidate_backend"],
-            "publish_from": gpu_comparison["publish_from"],
-            "mismatches": gpu_comparison.get("mismatches"),
-            "performance": gpu_comparison.get("performance"),
-        },
+        "gpu_comparison": (
+            {
+                "state": gpu_comparison["state"],
+                "scope": gpu_comparison["scope"],
+                "report_path": str(gpu_report_path.relative_to(root)),
+                "candidate_backend": gpu_comparison["candidate_backend"],
+                "publish_from": gpu_comparison["publish_from"],
+                "mismatches": gpu_comparison.get("mismatches"),
+                "performance": gpu_comparison.get("performance"),
+            }
+            if gpu_comparison is not None
+            else None
+        ),
+        "corpus_lookup": corpus_lookup,
         "failures": [
             {
                 "failure_type": "collision",
@@ -1345,8 +1522,13 @@ def analyze_hashes(
             "evidence_resolution_wall_time_ns": resolution_wall_ns,
             "classification_wall_time_ns": classification_wall_ns,
             "population_analysis_wall_time_ns": population_wall_ns,
-            "gpu_trial_wall_time_ns": gpu_comparison.get("performance", {}).get(
-                "total_trial_wall_time_ns"
+            "gpu_trial_wall_time_ns": (
+                gpu_comparison.get("performance", {}).get("total_trial_wall_time_ns")
+                if gpu_comparison is not None
+                else None
+            ),
+            "corpus_lookup_wall_time_ns": corpus_lookup.get("performance", {}).get(
+                "total_wall_time_ns"
             ),
             "total_wall_time_ns": time.monotonic_ns() - analysis_started_ns,
         },
@@ -1363,6 +1545,7 @@ def analyze_hashes(
             "database_sha256": report["hash_evidence"]["database_sha256"],
             "finished_at": report["finished_at"],
         },
+        "postprocess_job": report["pipeline_job"],
     }
     _atomic_json(status_path, updated_status)
     return report
@@ -1484,7 +1667,7 @@ def scheduled_hash_analysis(
         except (OSError, ValueError, json.JSONDecodeError):
             continue
         if (
-            status.get("state") == "complete"
+            status.get("state") in {"complete", "postprocess-failed"}
             and status.get("mode") == "full"
             and int(status.get("complete_work_units", 0))
             == int(status.get("expected_work_units", -1))
@@ -1547,6 +1730,17 @@ def scheduled_hash_analysis(
             )
             if retention.get(key) is not None
         }
+        final_status["state"] = "complete"
+        final_status["finished_at"] = _now()
+        if final_status.get("postprocess_job"):
+            final_status["postprocess_job"] = {
+                **final_status["postprocess_job"],
+                "state": "complete",
+                "stages": [
+                    {**stage, "state": "complete"}
+                    for stage in final_status["postprocess_job"].get("stages", [])
+                ],
+            }
         _atomic_json(status_path, final_status)
         return {
             "state": "complete",

@@ -28,7 +28,6 @@ from .c_width import compile_c_width, materialize_width_configuration
 from .machine_validation import compile_machine_validation
 from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_profile
 
-
 RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
@@ -51,7 +50,11 @@ def _sha256(path: Path) -> str:
 
 
 def _inside(root: Path, value: str, label: str) -> Path:
-    path = (root / value).expanduser().resolve() if not Path(value).is_absolute() else Path(value).resolve()
+    path = (
+        (root / value).expanduser().resolve()
+        if not Path(value).is_absolute()
+        else Path(value).resolve()
+    )
     if path != root and root not in path.parents:
         raise ValueError(f"{label} escapes the project root: {value}")
     return path
@@ -99,12 +102,19 @@ def _validation_process_active(pid: object, run_id: str) -> bool:
     process = Path("/proc") / str(pid)
     try:
         fields = (process / "stat").read_text(encoding="utf-8").split()
-        command = (process / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", errors="replace")
+        command = (
+            (process / "cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode("utf-8", errors="replace")
+        )
     except OSError:
         return False
     return (
-        len(fields) > 2 and fields[2] != "Z"
-        and "machine-validation" in command and run_id in command
+        len(fields) > 2
+        and fields[2] != "Z"
+        and "machine-validation" in command
+        and run_id in command
     )
 
 
@@ -161,49 +171,115 @@ def load_runtime(project_root: str | Path, authority: str | Path = DEFAULT_RUNTI
     canary = document["canary"]
     safety = document["safety"]
     if set(execution) != {
-        "workers", "build_jobs_per_cell", "jvm_initial_heap_mib", "jvm_max_heap_mib",
-        "jvm_active_processors", "minimum_distinct_hashes", "max_failure_rows",
-        "checkpoint_every_units", "retain_ghidra_projects_on_failure",
+        "workers",
+        "build_jobs_per_cell",
+        "jvm_initial_heap_mib",
+        "jvm_max_heap_mib",
+        "jvm_active_processors",
+        "minimum_distinct_hashes",
+        "max_failure_rows",
+        "checkpoint_every_units",
+        "retain_ghidra_projects_on_failure",
         "retain_ghidra_projects_on_success",
     }:
         raise ValueError("machine-validation execution policy has unexpected fields")
-    if set(canary) != {"positions", "folds_by_position", "minimum_distinct_hashes", "require_formats"}:
+    if set(canary) != {
+        "positions",
+        "folds_by_position",
+        "minimum_distinct_hashes",
+        "require_formats",
+    }:
         raise ValueError("machine-validation canary policy has unexpected fields")
     if set(safety) != {
-        "execute_target_binaries", "require_production_queue_drained",
-        "minimum_free_disk_gib", "minimum_available_memory_gib",
+        "execute_target_binaries",
+        "require_production_queue_drained",
+        "minimum_free_disk_gib",
+        "minimum_available_memory_gib",
     }:
         raise ValueError("machine-validation safety policy has unexpected fields")
-    for field in ("workers", "build_jobs_per_cell", "jvm_initial_heap_mib", "jvm_max_heap_mib", "jvm_active_processors", "minimum_distinct_hashes", "max_failure_rows", "checkpoint_every_units"):
+    for field in (
+        "workers",
+        "build_jobs_per_cell",
+        "jvm_initial_heap_mib",
+        "jvm_max_heap_mib",
+        "jvm_active_processors",
+        "minimum_distinct_hashes",
+        "max_failure_rows",
+        "checkpoint_every_units",
+    ):
         if type(execution[field]) is not int or execution[field] < 1:
             raise ValueError(f"machine-validation execution.{field} must be positive")
     if safety["execute_target_binaries"] is not False:
         raise ValueError("machine-validation must never execute target binaries")
-    for field in ("manifest", "schedule", "output_root", "ledger", "source_archive", "openssl_width_report"):
+    for field in (
+        "manifest",
+        "schedule",
+        "output_root",
+        "ledger",
+        "source_archive",
+        "openssl_width_report",
+    ):
         _inside(root, str(document[field]), field)
     headless = Path(str(document["ghidra_headless"])).resolve()
     if not headless.is_file() or not os.access(headless, os.X_OK):
-        raise ValueError(f"configured Ghidra headless launcher is unavailable: {headless}")
-    return {**document, "authority_path": str(path.relative_to(root)), "authority_sha256": _sha256(path)}
+        raise ValueError(
+            f"configured Ghidra headless launcher is unavailable: {headless}"
+        )
+    return {
+        **document,
+        "authority_path": str(path.relative_to(root)),
+        "authority_sha256": _sha256(path),
+    }
 
 
 def _configuration(root: Path, recipe: str = "openssl@3.5.8"):
     catalog = load_toolchain_pack_catalog(root)
     width = compile_c_width(root, "c-width-v2", _catalog=catalog)
-    route_plan = resolve_toolchain_profile(root, str(width["toolchain_profile"]), _catalog=catalog)
+    route_plan = resolve_toolchain_profile(
+        root, str(width["toolchain_profile"]), _catalog=catalog
+    )
     return materialize_width_configuration(root, recipe, route_plan, _catalog=catalog)
 
 
 def _manifest(root: Path, runtime: Mapping[str, object]) -> dict[str, object]:
     path = _inside(root, str(runtime["manifest"]), "validation manifest")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if document.get("schema_version") != "fidb-machine-validation-batch/v1" or document.get("id") != runtime["validation_id"]:
+    if (
+        document.get("schema_version") != "fidb-machine-validation-batch/v1"
+        or document.get("id") != runtime["validation_id"]
+    ):
         raise ValueError("machine-validation manifest identity does not match runtime")
-    if document.get("state") != "materialized-disarmed" or document.get("execute_target_binaries") is not False:
-        raise ValueError("machine-validation manifest is not safely materialized and disarmed")
+    if (
+        document.get("state") != "materialized-disarmed"
+        or document.get("execute_target_binaries") is not False
+    ):
+        raise ValueError(
+            "machine-validation manifest is not safely materialized and disarmed"
+        )
     units = document.get("work_unit")
     if not isinstance(units, list) or len(units) != 222:
-        raise ValueError("machine-validation manifest must contain exactly 222 work units")
+        raise ValueError(
+            "machine-validation manifest must contain exactly 222 work units"
+        )
+    hash_job = document.get("hash_discrimination_job")
+    if (
+        not isinstance(hash_job, dict)
+        or hash_job.get("id") != "hash-discrimination"
+        or hash_job.get("kind") != "validation-postprocess"
+        or hash_job.get("state") != "planned-disarmed"
+        or hash_job.get("automatic") is not True
+        or hash_job.get("required_for_run_completion") is not True
+        or hash_job.get("after") != "composite-build-analysis"
+    ):
+        raise ValueError(
+            "machine-validation manifest lacks the required hash-discrimination job"
+        )
+    for field in ("method_authority", "corpus_authority", "backend_authority"):
+        authority_path = _inside(root, str(hash_job.get(field, "")), field)
+        if not authority_path.is_file() or _sha256(authority_path) != hash_job.get(
+            f"{field}_sha256"
+        ):
+            raise ValueError(f"machine-validation {field} is unavailable or stale")
     return document
 
 
@@ -283,14 +359,20 @@ def _production_evidence(
     return archives, signatures
 
 
-def _width_openssl_signatures(root: Path, runtime: Mapping[str, object], expected: set[tuple[str, str, str]]) -> dict:
-    report_path = _inside(root, str(runtime["openssl_width_report"]), "OpenSSL width report")
+def _width_openssl_signatures(
+    root: Path, runtime: Mapping[str, object], expected: set[tuple[str, str, str]]
+) -> dict:
+    report_path = _inside(
+        root, str(runtime["openssl_width_report"]), "OpenSSL width report"
+    )
     report = json.loads(report_path.read_text(encoding="utf-8"))
     expected_digests: dict[tuple[str, str], str] = {}
     for replay in report.get("replay_results", []):
         for cell in replay.get("cells", []):
             if cell.get("status") == "complete":
-                expected_digests[(str(cell["route_id"]), str(cell["treatment_id"]))] = str(cell["fid_signatures_sha256"])
+                expected_digests[(str(cell["route_id"]), str(cell["treatment_id"]))] = (
+                    str(cell["fid_signatures_sha256"])
+                )
     base = report_path.parent / "replay-01"
     result = {}
     for key in expected:
@@ -303,12 +385,20 @@ def _width_openssl_signatures(root: Path, runtime: Mapping[str, object], expecte
         name = f"openssl-3.5.8-{route}-{treatment}.fid-signatures.jsonl"
         matches = list(base.glob(f"group-*/artifacts/libs/fid-signatures/{name}"))
         if len(matches) != 1 or _sha256(matches[0]) != digest:
-            raise ValueError(f"OpenSSL width signature evidence is unavailable or changed for {route}:{treatment}")
-        result[key] = {"path": matches[0], "sha256": digest, "source": str(matches[0].relative_to(root))}
+            raise ValueError(
+                f"OpenSSL width signature evidence is unavailable or changed for {route}:{treatment}"
+            )
+        result[key] = {
+            "path": matches[0],
+            "sha256": digest,
+            "source": str(matches[0].relative_to(root)),
+        }
     return result
 
 
-def resolve_evidence(project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
+def resolve_evidence(
+    project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTIME
+) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     runtime = load_runtime(root, runtime_path)
     manifest = _manifest(root, runtime)
@@ -346,14 +436,23 @@ def resolve_evidence(project_root: str | Path, runtime_path: str | Path = DEFAUL
     if missing_signatures:
         blockers.append(f"{len(missing_signatures)} signature inputs are missing")
     if unrecoverable:
-        blockers.append(f"{len(unrecoverable)} static archive inputs are missing and unrecoverable")
+        blockers.append(
+            f"{len(unrecoverable)} static archive inputs are missing and unrecoverable"
+        )
     if missing_tools:
-        blockers.append(f"{len(set(missing_tools))} work units lack executable reviewed tools")
-    if runtime["safety"]["require_production_queue_drained"] and not _queue_drained(root, runtime):
+        blockers.append(
+            f"{len(set(missing_tools))} work units lack executable reviewed tools"
+        )
+    if runtime["safety"]["require_production_queue_drained"] and not _queue_drained(
+        root, runtime
+    ):
         blockers.append("production queue is not drained")
     if free_disk < int(runtime["safety"]["minimum_free_disk_gib"]) * 1024**3:
         blockers.append("free disk is below the reviewed safety floor")
-    if available_memory < int(runtime["safety"]["minimum_available_memory_gib"]) * 1024**3:
+    if (
+        available_memory
+        < int(runtime["safety"]["minimum_available_memory_gib"]) * 1024**3
+    ):
         blockers.append("available memory is below the reviewed safety floor")
     return {
         "runtime": runtime,
@@ -480,9 +579,9 @@ def _strip_tool(route) -> Path:
     compiler_name = Path(route.compiler[0]).name
     candidates = []
     if compiler_name.endswith("-gcc"):
-        candidates.append(directory / f'{compiler_name[:-4]}-strip')
+        candidates.append(directory / f"{compiler_name[:-4]}-strip")
     if compiler_name.endswith("-clang"):
-        candidates.append(directory / f'{compiler_name[:-6]}-strip')
+        candidates.append(directory / f"{compiler_name[:-6]}-strip")
     candidates.extend((directory / "llvm-strip", directory / "strip"))
     for path in candidates:
         if path.is_file() and os.access(path, os.X_OK):
@@ -524,18 +623,33 @@ def _link_composite(route, archives: list[Path], output: Path, truth_map: Path) 
         )
         compiled = subprocess.run(
             [*route.compiler, "-c", "-x", "assembler", str(source), "-o", str(support)],
-            text=True, capture_output=True, timeout=120, check=False,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
         )
-        log += "\n--- validation stack-check support ---\n" + compiled.stdout + compiled.stderr
+        log += (
+            "\n--- validation stack-check support ---\n"
+            + compiled.stdout
+            + compiled.stderr
+        )
         if compiled.returncode == 0 and support.is_file():
             output.unlink(missing_ok=True)
             result = subprocess.run(
-                command([support]), text=True, capture_output=True, timeout=900, check=False
+                command([support]),
+                text=True,
+                capture_output=True,
+                timeout=900,
+                check=False,
             )
-            log += "\n--- validation composite retry ---\n" + result.stdout + result.stderr
+            log += (
+                "\n--- validation composite retry ---\n" + result.stdout + result.stderr
+            )
     (output.parent / "link.log").write_text(log, encoding="utf-8")
     if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
-        raise RuntimeError(f"composite link failed for {route.id}: {result.stderr[-2000:]}")
+        raise RuntimeError(
+            f"composite link failed for {route.id}: {result.stderr[-2000:]}"
+        )
     return output
 
 
@@ -548,24 +662,39 @@ def _read_signature_rows(path: Path) -> Iterable[dict[str, object]]:
             yield row
 
 
-def build_reference_index(project_root: str | Path, evidence: Mapping[str, object], run_root: Path) -> Path:
+def build_reference_index(
+    project_root: str | Path, evidence: Mapping[str, object], run_root: Path
+) -> Path:
     root = Path(project_root).resolve()
     path = run_root / "reference-index.sqlite3"
     input_digest = hashlib.sha256(
         json.dumps(
-            sorted((list(key), value["sha256"]) for key, value in evidence["signatures"].items()),
+            sorted(
+                (list(key), value["sha256"])
+                for key, value in evidence["signatures"].items()
+            ),
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
     if path.is_file():
         connection = sqlite3.connect(path)
         try:
-            row = connection.execute("SELECT value FROM metadata WHERE key='input_digest'").fetchone()
-            schema = connection.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
+            row = connection.execute(
+                "SELECT value FROM metadata WHERE key='input_digest'"
+            ).fetchone()
+            schema = connection.execute(
+                "SELECT value FROM metadata WHERE key='schema_version'"
+            ).fetchone()
             count = connection.execute(
                 "SELECT COUNT(*) FROM reference_owner_signature"
             ).fetchone()[0]
-            if row and row[0] == input_digest and schema and schema[0] == REFERENCE_INDEX_SCHEMA and count > 0:
+            if (
+                row
+                and row[0] == input_digest
+                and schema
+                and schema[0] == REFERENCE_INDEX_SCHEMA
+                and count > 0
+            ):
                 return path
         except sqlite3.Error:
             pass
@@ -640,10 +769,14 @@ def build_reference_index(project_root: str | Path, evidence: Mapping[str, objec
             FROM reference_identity
             GROUP BY target_os, binary_format, language, full_hash, specific_hash,
                      additional_size, code_size, owner
-            """
+            """)
+        connection.execute(
+            "INSERT INTO metadata VALUES ('schema_version',?)",
+            (REFERENCE_INDEX_SCHEMA,),
         )
-        connection.execute("INSERT INTO metadata VALUES ('schema_version',?)", (REFERENCE_INDEX_SCHEMA,))
-        connection.execute("INSERT INTO metadata VALUES ('input_digest',?)", (input_digest,))
+        connection.execute(
+            "INSERT INTO metadata VALUES ('input_digest',?)", (input_digest,)
+        )
         connection.execute("INSERT INTO metadata VALUES ('rows',?)", (str(inserted),))
         connection.commit()
     finally:
@@ -668,14 +801,25 @@ def _query_index(
                 specific_hash TEXT, additional_size INTEGER, code_size INTEGER
             );
         """)
-        rows = [(
-            str(row.get("address", "")), str(row.get("function_name", "")),
-            str(row.get("ghidra_language_id", row.get("language", ""))),
-            str(row["full_hash"]), str(row["specific_hash"]),
-            int(row["specific_hash_additional_size"]), int(row["code_unit_size"]),
-        ) for row in _read_signature_rows(query_path)]
-        connection.executemany("INSERT INTO query_signature VALUES (?,?,?,?,?,?,?)", rows)
-        exact_clause = "" if include_exact else """
+        rows = [
+            (
+                str(row.get("address", "")),
+                str(row.get("function_name", "")),
+                str(row.get("ghidra_language_id", row.get("language", ""))),
+                str(row["full_hash"]),
+                str(row["specific_hash"]),
+                int(row["specific_hash_additional_size"]),
+                int(row["code_unit_size"]),
+            )
+            for row in _read_signature_rows(query_path)
+        ]
+        connection.executemany(
+            "INSERT INTO query_signature VALUES (?,?,?,?,?,?,?)", rows
+        )
+        exact_clause = (
+            ""
+            if include_exact
+            else """
             AND (
                 reference.identity_count > 1
                 OR NOT EXISTS (
@@ -693,6 +837,7 @@ def _query_index(
                 )
             )
         """
+        )
         parameters = () if include_exact else (route_id, treatment_id)
         matches: dict[str, set[str]] = defaultdict(set)
         examples: dict[str, dict[str, str]] = {}
@@ -709,23 +854,42 @@ def _query_index(
             WHERE 1=1 {exact_clause}
         """
         for row in connection.execute(sql, (target_os, binary_format, *parameters)):
-            address, query_name, owner, corpus_name, evidence_path, full_hash, specific_hash, additional, size = row
+            (
+                address,
+                query_name,
+                owner,
+                corpus_name,
+                evidence_path,
+                full_hash,
+                specific_hash,
+                additional,
+                size,
+            ) = row
             signature = f"{full_hash}:{specific_hash}:{additional}:{size}"
             matches[str(owner)].add(f"{address}:{signature}")
-            examples.setdefault(str(owner), {
-                "function_id": str(query_name or address), "signature": signature,
-                "candidate_owner": str(owner), "evidence_path": str(evidence_path),
-                "corpus_function": str(corpus_name),
-            })
+            examples.setdefault(
+                str(owner),
+                {
+                    "function_id": str(query_name or address),
+                    "signature": signature,
+                    "candidate_owner": str(owner),
+                    "evidence_path": str(evidence_path),
+                    "corpus_function": str(corpus_name),
+                },
+            )
         return matches, examples
     finally:
         connection.close()
 
 
-def _rebuild_openssl_archives(root: Path, evidence: Mapping[str, object], route, treatment, worker_root: Path) -> dict[str, object]:
+def _rebuild_openssl_archives(
+    root: Path, evidence: Mapping[str, object], route, treatment, worker_root: Path
+) -> dict[str, object]:
     from .pipeline import build_library, detect_project, extract_source
 
-    source_archive = _inside(root, str(evidence["runtime"]["source_archive"]), "OpenSSL source archive")
+    source_archive = _inside(
+        root, str(evidence["runtime"]["source_archive"]), "OpenSSL source archive"
+    )
     configuration = evidence["configuration"]
     library = configuration.libraries[0]
     marker = worker_root / "source-root.txt"
@@ -741,30 +905,58 @@ def _rebuild_openssl_archives(root: Path, evidence: Mapping[str, object], route,
     detection = detect_project(library, source_root)
     work = worker_root / "work"
     record, _objects = build_library(
-        library, route, treatment, detection, source_root, work, worker_root / "logs",
-        build_jobs_per_cell=int(evidence["runtime"]["execution"]["build_jobs_per_cell"]),
+        library,
+        route,
+        treatment,
+        detection,
+        source_root,
+        work,
+        worker_root / "logs",
+        build_jobs_per_cell=int(
+            evidence["runtime"]["execution"]["build_jobs_per_cell"]
+        ),
     )
     if record.status != "built":
         raise RuntimeError(record.error or "OpenSSL archive reconstruction failed")
-    paths = [(work.parent / value).resolve() for value in record.static_archive_path.split(";")]
-    return {"paths": paths, "sha256": record.static_archive_sha256.split(";"), "source": "validation-rebuild"}
+    paths = [
+        (work.parent / value).resolve()
+        for value in record.static_archive_path.split(";")
+    ]
+    return {
+        "paths": paths,
+        "sha256": record.static_archive_sha256.split(";"),
+        "source": "validation-rebuild",
+    }
 
 
-def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, positions: list[int], mode: str) -> int:
+def _worker(
+    project_root: str | Path,
+    runtime_path: str | Path,
+    run_id: str,
+    positions: list[int],
+    mode: str,
+) -> int:
     root = Path(project_root).resolve()
     evidence = resolve_evidence(root, runtime_path)
     run_root = _run_root(root, evidence["runtime"], run_id)
-    index = _inside(root, str(evidence["runtime"]["output_root"]), "validation output") / "reference-index.sqlite3"
+    index = (
+        _inside(root, str(evidence["runtime"]["output_root"]), "validation output")
+        / "reference-index.sqlite3"
+    )
     if not index.is_file():
         raise ValueError("machine-validation reference index is absent")
     configuration = evidence["configuration"]
     routes = {route.id: route for route in configuration.routes}
     treatments = {treatment.id: treatment for treatment in configuration.treatments}
     units = {int(unit["position"]): unit for unit in evidence["manifest"]["work_unit"]}
-    fold_map = {"A": evidence["status"]["randomization"]["fold_a"], "B": evidence["status"]["randomization"]["fold_b"]}
+    fold_map = {
+        "A": evidence["status"]["randomization"]["fold_a"],
+        "B": evidence["status"]["randomization"]["fold_b"],
+    }
     canary_folds = defaultdict(set)
     for item in evidence["runtime"]["canary"]["folds_by_position"]:
-        position, fold = str(item).split(":", 1); canary_folds[int(position)].add(fold)
+        position, fold = str(item).split(":", 1)
+        canary_folds[int(position)].add(fold)
     os.environ["GHIDRA_HEADLESS"] = str(evidence["runtime"]["ghidra_headless"])
     execution = evidence["runtime"]["execution"]
     os.environ["_JAVA_OPTIONS"] = (
@@ -773,11 +965,19 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
     )
     from . import ghidra_fid
     from .pipeline import find_ghidra, ghidra_environment
+
     _headless, ghidra_home = find_ghidra()
-    ghidra_fid.ensure_started(ghidra_home, ghidra_environment(run_root / f"worker-{os.getpid()}" / "ghidra-user"))
+    ghidra_fid.ensure_started(
+        ghidra_home,
+        ghidra_environment(run_root / f"worker-{os.getpid()}" / "ghidra-user"),
+    )
     for position in positions:
         unit = units[position]
-        unit_root = run_root / "units" / f"{position:03d}-{unit['route_id']}-{unit['treatment_id']}"
+        unit_root = (
+            run_root
+            / "units"
+            / f"{position:03d}-{unit['route_id']}-{unit['treatment_id']}"
+        )
         result_path = unit_root / "result.json"
         if result_path.is_file():
             previous = json.loads(result_path.read_text(encoding="utf-8"))
@@ -798,33 +998,69 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
                     key = (owner, route.id, treatment.id)
                     item = evidence["archives"].get(key)
                     if item is None:
-                        item = _rebuild_openssl_archives(root, evidence, route, treatment, run_root / f"worker-{os.getpid()}" / "openssl")
+                        item = _rebuild_openssl_archives(
+                            root,
+                            evidence,
+                            route,
+                            treatment,
+                            run_root / f"worker-{os.getpid()}" / "openssl",
+                        )
                         evidence["archives"][key] = item
                     archive_items.append((owner, item))
                 truth = {
                     "schema_version": "fidb-machine-validation-truth-map/v1",
-                    "fold": fold, "owners": owners, "route_id": route.id,
+                    "fold": fold,
+                    "owners": owners,
+                    "route_id": route.id,
                     "treatment_id": treatment.id,
                     "archives": [
-                        {"owner": owner, "paths": [str(path.relative_to(root)) for path in item["paths"]], "sha256": item["sha256"]}
+                        {
+                            "owner": owner,
+                            "paths": [
+                                str(path.relative_to(root)) for path in item["paths"]
+                            ],
+                            "sha256": item["sha256"],
+                        }
                         for owner, item in archive_items
                     ],
                 }
                 _atomic_json(fold_root / "truth-map.json", truth)
                 suffix = ".dll" if route.binary_format == "PE/COFF" else ".elf"
                 truth_binary = fold_root / f"truth{suffix}"
-                archives = [path for _owner, item in archive_items for path in item["paths"]]
+                archives = [
+                    path for _owner, item in archive_items for path in item["paths"]
+                ]
                 _link_composite(route, archives, truth_binary, fold_root / "link.map")
                 query_binary = fold_root / f"query{suffix}"
                 result = subprocess.run(
-                    [str(_strip_tool(route)), "--strip-debug", str(truth_binary), "-o", str(query_binary)],
-                    text=True, capture_output=True, timeout=300, check=False,
+                    [
+                        str(_strip_tool(route)),
+                        "--strip-debug",
+                        str(truth_binary),
+                        "-o",
+                        str(query_binary),
+                    ],
+                    text=True,
+                    capture_output=True,
+                    timeout=300,
+                    check=False,
                 )
                 if result.returncode != 0 or not query_binary.is_file():
-                    raise RuntimeError(f"query-copy creation failed for {route.id}: {result.stderr[-2000:]}")
-                project_parent = run_root / f"worker-{os.getpid()}" / "projects" / f"{position:03d}-{fold}"
+                    raise RuntimeError(
+                        f"query-copy creation failed for {route.id}: {result.stderr[-2000:]}"
+                    )
+                project_parent = (
+                    run_root
+                    / f"worker-{os.getpid()}"
+                    / "projects"
+                    / f"{position:03d}-{fold}"
+                )
                 project_dir, program_path = ghidra_fid.analyze_target(
-                    query_binary, project_parent, "composite", route.ghidra_language, route.ghidra_compiler_spec
+                    query_binary,
+                    project_parent,
+                    "composite",
+                    route.ghidra_language,
+                    route.ghidra_compiler_spec,
                 )
                 query_signatures = fold_root / "query-signatures.jsonl"
                 signature_summary = ghidra_fid.export_program_signatures(
@@ -839,46 +1075,90 @@ def _worker(project_root: str | Path, runtime_path: str | Path, run_id: str, pos
                     route.binary_format,
                     mode == "canary",
                 )
-                threshold = int(evidence["runtime"]["canary" if mode == "canary" else "execution"]["minimum_distinct_hashes"])
-                positive = {owner for owner, values in matches.items() if len(values) >= threshold}
+                threshold = int(
+                    evidence["runtime"]["canary" if mode == "canary" else "execution"][
+                        "minimum_distinct_hashes"
+                    ]
+                )
+                positive = {
+                    owner
+                    for owner, values in matches.items()
+                    if len(values) >= threshold
+                }
                 cohort = set(evidence["status"]["randomization"]["canonical_ids"])
-                present = set(owners); absent = cohort - present
+                present = set(owners)
+                absent = cohort - present
                 failures = []
                 for owner in sorted(absent & positive):
-                    failures.append({"failure_type": "collision", "library_id": owner, **examples[owner]})
+                    failures.append(
+                        {
+                            "failure_type": "collision",
+                            "library_id": owner,
+                            **examples[owner],
+                        }
+                    )
                 for owner in sorted(present - positive):
-                    failures.append({
-                        "failure_type": "miss", "library_id": owner, "function_id": "",
-                        "signature": "", "candidate_owner": "", "evidence_path": str(query_signatures.relative_to(root)),
-                    })
-                fold_results.append({
-                    "fold": fold, "binary_format": route.binary_format,
-                    "query_sha256": _sha256(query_binary), "truth_sha256": _sha256(truth_binary),
-                    "signature_summary": signature_summary,
-                    "owner_match_counts": {owner: len(matches.get(owner, set())) for owner in sorted(cohort)},
-                    "positive_owners": sorted(positive),
-                    "confusion_matrix": {
-                        "true_positives": len(present & positive), "false_positives": len(absent & positive),
-                        "true_negatives": len(absent - positive), "false_negatives": len(present - positive),
-                    },
-                    "failures": failures,
-                })
+                    failures.append(
+                        {
+                            "failure_type": "miss",
+                            "library_id": owner,
+                            "function_id": "",
+                            "signature": "",
+                            "candidate_owner": "",
+                            "evidence_path": str(query_signatures.relative_to(root)),
+                        }
+                    )
+                fold_results.append(
+                    {
+                        "fold": fold,
+                        "binary_format": route.binary_format,
+                        "query_sha256": _sha256(query_binary),
+                        "truth_sha256": _sha256(truth_binary),
+                        "signature_summary": signature_summary,
+                        "owner_match_counts": {
+                            owner: len(matches.get(owner, set()))
+                            for owner in sorted(cohort)
+                        },
+                        "positive_owners": sorted(positive),
+                        "confusion_matrix": {
+                            "true_positives": len(present & positive),
+                            "false_positives": len(absent & positive),
+                            "true_negatives": len(absent - positive),
+                            "false_negatives": len(present - positive),
+                        },
+                        "failures": failures,
+                    }
+                )
                 if not execution["retain_ghidra_projects_on_success"]:
                     shutil.rmtree(project_parent, ignore_errors=True)
             document = {
-                "schema_version": UNIT_RESULT_SCHEMA, "state": "complete", "mode": mode,
-                "position": position, "route_id": route.id, "profile_id": unit["profile_id"],
-                "treatment_id": treatment.id, "started_at": _now(),
-                "wall_time_ns": time.monotonic_ns() - started_ns, "folds": fold_results,
+                "schema_version": UNIT_RESULT_SCHEMA,
+                "state": "complete",
+                "mode": mode,
+                "position": position,
+                "route_id": route.id,
+                "profile_id": unit["profile_id"],
+                "treatment_id": treatment.id,
+                "started_at": _now(),
+                "wall_time_ns": time.monotonic_ns() - started_ns,
+                "folds": fold_results,
             }
             _atomic_json(result_path, document)
         except Exception as error:
-            _atomic_json(result_path, {
-                "schema_version": UNIT_RESULT_SCHEMA, "state": "failed", "mode": mode,
-                "position": position, "route_id": route.id, "treatment_id": treatment.id,
-                "wall_time_ns": time.monotonic_ns() - started_ns,
-                "error": f"{type(error).__name__}: {error}", "folds": fold_results,
-            })
+            _atomic_json(
+                result_path,
+                {
+                    "schema_version": UNIT_RESULT_SCHEMA,
+                    "state": "failed",
+                    "mode": mode,
+                    "position": position,
+                    "route_id": route.id,
+                    "treatment_id": treatment.id,
+                    "wall_time_ns": time.monotonic_ns() - started_ns,
+                    "error": f"{type(error).__name__}: {error}",
+                    "folds": fold_results,
+                },
+            )
             return 1
     return 0
 
@@ -895,10 +1175,18 @@ def _aggregate(
     results = []
     for path in sorted((run_root / "units").glob("*/result.json")):
         row = json.loads(path.read_text(encoding="utf-8"))
-        if row.get("mode") == mode and int(row.get("position", -1)) in expected_positions:
+        if (
+            row.get("mode") == mode
+            and int(row.get("position", -1)) in expected_positions
+        ):
             results.append(row)
     failed = [row for row in results if row.get("state") == "failed"]
-    matrix = {"true_positives": 0, "false_positives": 0, "true_negatives": 0, "false_negatives": 0}
+    matrix = {
+        "true_positives": 0,
+        "false_positives": 0,
+        "true_negatives": 0,
+        "false_negatives": 0,
+    }
     failures = []
     wall_time_ns = 0
     for row in results:
@@ -907,16 +1195,28 @@ def _aggregate(
             for key in matrix:
                 matrix[key] += int(fold["confusion_matrix"][key])
             for failure in fold.get("failures", []):
-                failures.append({
-                    **failure, "route_id": str(row["route_id"]),
-                    "compiler_id": str(row["route_id"]), "treatment_id": str(row["treatment_id"]),
-                })
-    complete_positions = {int(row["position"]) for row in results if row.get("state") == "complete"}
+                failures.append(
+                    {
+                        **failure,
+                        "route_id": str(row["route_id"]),
+                        "compiler_id": str(row["route_id"]),
+                        "treatment_id": str(row["treatment_id"]),
+                    }
+                )
+    complete_positions = {
+        int(row["position"]) for row in results if row.get("state") == "complete"
+    }
     complete = not failed and complete_positions == expected_positions
     report = {
-        "schema_version": "fidb-machine-validation-canary/v1" if mode == "canary" else "fidb-machine-validation-report/v1",
-        "validation_id": validation_id, "state": "measured-complete" if complete else "failed",
-        "mode": mode, "finished_at": _now(),
+        "schema_version": (
+            "fidb-machine-validation-canary/v1"
+            if mode == "canary"
+            else "fidb-machine-validation-report/v1"
+        ),
+        "validation_id": validation_id,
+        "state": "measured-complete" if complete else "failed",
+        "mode": mode,
+        "finished_at": _now(),
         "runtime_authority": runtime["authority_path"],
         "runtime_authority_sha256": runtime["authority_sha256"],
         "reference_index_schema": REFERENCE_INDEX_SCHEMA,
@@ -1019,7 +1319,12 @@ def _post_validation_retention(
         }
 
 
-def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME, run_id: str | None = None) -> dict[str, object]:
+def run_validation(
+    project_root: str | Path,
+    mode: str,
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+    run_id: str | None = None,
+) -> dict[str, object]:
     if mode not in {"canary", "full"}:
         raise ValueError("machine-validation mode must be canary or full")
     root = Path(project_root).resolve()
@@ -1060,15 +1365,44 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
     resume_count = int(prior_status.get("resume_count", 0))
     complete_count, failed_count = _result_counts(run_root, mode)
     pause_request = run_root / PAUSE_REQUEST_NAME
-    _atomic_json(current_path, {"run_id": run_id, "path": str(status_path.relative_to(root))})
-    _atomic_json(status_path, {
-        "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
-        "run_id": run_id, "mode": mode, "state": "preparing-index", "pid": os.getpid(),
-        "started_at": started, "attempt_started_at": attempt_started,
-        "resume_count": resume_count, "finished_at": None,
-        "expected_work_units": len(positions),
-        "complete_work_units": complete_count, "failed_work_units": failed_count,
-    })
+    hash_job = evidence["manifest"]["hash_discrimination_job"]
+    postprocess_job = (
+        {
+            "id": str(hash_job["id"]),
+            "kind": str(hash_job["kind"]),
+            "state": "planned",
+            "materialized_with_batch": True,
+            "required_for_run_completion": True,
+            "stages": [
+                {"id": str(stage), "state": "pending"} for stage in hash_job["stages"]
+            ],
+        }
+        if mode == "full"
+        else None
+    )
+    postprocess_started = False
+    _atomic_json(
+        current_path, {"run_id": run_id, "path": str(status_path.relative_to(root))}
+    )
+    _atomic_json(
+        status_path,
+        {
+            "schema_version": RUN_STATUS_SCHEMA,
+            "validation_id": runtime["validation_id"],
+            "run_id": run_id,
+            "mode": mode,
+            "state": "preparing-index",
+            "pid": os.getpid(),
+            "started_at": started,
+            "attempt_started_at": attempt_started,
+            "resume_count": resume_count,
+            "finished_at": None,
+            "expected_work_units": len(positions),
+            "complete_work_units": complete_count,
+            "failed_work_units": failed_count,
+            "postprocess_job": postprocess_job,
+        },
+    )
     try:
         index = build_reference_index(root, evidence, output_root)
         if mode == "full":
@@ -1086,12 +1420,29 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             log_path = run_root / f"worker-{index:02d}.log"
             with log_path.open("ab", buffering=0) as log:
                 process = subprocess.Popen(
-                    [sys.executable, "-m", "fidb_poc.cli", "machine-validation", "_worker",
-                     "--project-root", str(root), "--runtime", str(runtime_path),
-                     "--run-id", run_id, "--mode", mode,
-                     "--positions", ",".join(map(str, shard))],
-                    cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                    start_new_session=True, close_fds=True,
+                    [
+                        sys.executable,
+                        "-m",
+                        "fidb_poc.cli",
+                        "machine-validation",
+                        "_worker",
+                        "--project-root",
+                        str(root),
+                        "--runtime",
+                        str(runtime_path),
+                        "--run-id",
+                        run_id,
+                        "--mode",
+                        mode,
+                        "--positions",
+                        ",".join(map(str, shard)),
+                    ],
+                    cwd=root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                    close_fds=True,
                 )
             processes.append(process)
         pause_requested = False
@@ -1099,40 +1450,84 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             documents = _result_documents(run_root, mode)
             if pause_request.is_file():
                 pause_requested = True
-                _atomic_json(status_path, {
-                    "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
-                    "run_id": run_id, "mode": mode, "state": "pausing", "pid": os.getpid(),
-                    "worker_pids": [process.pid for process in processes], "started_at": started,
-                    "attempt_started_at": attempt_started, "resume_count": resume_count,
-                    "finished_at": None, "expected_work_units": len(positions),
-                    "complete_work_units": sum(row.get("state") == "complete" for row in documents),
-                    "failed_work_units": sum(row.get("state") == "failed" for row in documents),
-                })
+                _atomic_json(
+                    status_path,
+                    {
+                        "schema_version": RUN_STATUS_SCHEMA,
+                        "validation_id": runtime["validation_id"],
+                        "run_id": run_id,
+                        "mode": mode,
+                        "state": "pausing",
+                        "pid": os.getpid(),
+                        "worker_pids": [process.pid for process in processes],
+                        "started_at": started,
+                        "attempt_started_at": attempt_started,
+                        "resume_count": resume_count,
+                        "finished_at": None,
+                        "expected_work_units": len(positions),
+                        "complete_work_units": sum(
+                            row.get("state") == "complete" for row in documents
+                        ),
+                        "failed_work_units": sum(
+                            row.get("state") == "failed" for row in documents
+                        ),
+                        "postprocess_job": postprocess_job,
+                    },
+                )
                 _terminate_worker_groups(processes)
                 break
-            _atomic_json(status_path, {
-                "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
-                "run_id": run_id, "mode": mode, "state": "running", "pid": os.getpid(),
-                "worker_pids": [process.pid for process in processes], "started_at": started,
-                "attempt_started_at": attempt_started, "resume_count": resume_count,
-                "finished_at": None, "expected_work_units": len(positions),
-                "complete_work_units": sum(row.get("state") == "complete" for row in documents),
-                "failed_work_units": sum(row.get("state") == "failed" for row in documents),
-            })
+            _atomic_json(
+                status_path,
+                {
+                    "schema_version": RUN_STATUS_SCHEMA,
+                    "validation_id": runtime["validation_id"],
+                    "run_id": run_id,
+                    "mode": mode,
+                    "state": "running",
+                    "pid": os.getpid(),
+                    "worker_pids": [process.pid for process in processes],
+                    "started_at": started,
+                    "attempt_started_at": attempt_started,
+                    "resume_count": resume_count,
+                    "finished_at": None,
+                    "expected_work_units": len(positions),
+                    "complete_work_units": sum(
+                        row.get("state") == "complete" for row in documents
+                    ),
+                    "failed_work_units": sum(
+                        row.get("state") == "failed" for row in documents
+                    ),
+                    "postprocess_job": postprocess_job,
+                },
+            )
             time.sleep(5)
         if pause_requested:
             complete_count, failed_count = _result_counts(run_root, mode)
             paused = {
-                "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
-                "run_id": run_id, "mode": mode, "state": "paused", "pid": os.getpid(),
-                "worker_pids": [], "started_at": started, "attempt_started_at": attempt_started,
-                "resume_count": resume_count, "finished_at": None, "paused_at": _now(),
-                "expected_work_units": len(positions), "complete_work_units": complete_count,
+                "schema_version": RUN_STATUS_SCHEMA,
+                "validation_id": runtime["validation_id"],
+                "run_id": run_id,
+                "mode": mode,
+                "state": "paused",
+                "pid": os.getpid(),
+                "worker_pids": [],
+                "started_at": started,
+                "attempt_started_at": attempt_started,
+                "resume_count": resume_count,
+                "finished_at": None,
+                "paused_at": _now(),
+                "expected_work_units": len(positions),
+                "complete_work_units": complete_count,
                 "failed_work_units": failed_count,
+                "postprocess_job": postprocess_job,
             }
             _atomic_json(status_path, paused)
             return paused
-        minimum = int(runtime["canary" if mode == "canary" else "execution"]["minimum_distinct_hashes"])
+        minimum = int(
+            runtime["canary" if mode == "canary" else "execution"][
+                "minimum_distinct_hashes"
+            ]
+        )
         report = _aggregate(
             run_root,
             str(runtime["validation_id"]),
@@ -1142,14 +1537,21 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             int(runtime["execution"]["max_failure_rows"]),
             runtime,
         )
-        report_path = run_root / ("canary-report.json" if mode == "canary" else "report.json")
+        report_path = run_root / (
+            "canary-report.json" if mode == "canary" else "report.json"
+        )
         _atomic_json(report_path, report)
+        full_postprocess = report["state"] == "measured-complete" and mode == "full"
         completed_status = {
             "schema_version": RUN_STATUS_SCHEMA,
             "validation_id": runtime["validation_id"],
             "run_id": run_id,
             "mode": mode,
-            "state": "complete" if report["state"] == "measured-complete" else "failed",
+            "state": (
+                "postprocessing"
+                if full_postprocess
+                else "complete" if report["state"] == "measured-complete" else "failed"
+            ),
             "pid": os.getpid(),
             "worker_pids": [process.pid for process in processes],
             "started_at": started,
@@ -1160,14 +1562,34 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             "complete_work_units": report["metrics"]["complete_work_units"],
             "failed_work_units": report["metrics"]["failed_work_units"],
             "report_path": str(report_path.relative_to(root)),
+            "postprocess_job": (
+                {
+                    **postprocess_job,
+                    "state": "running",
+                    "stages": [
+                        {
+                            **stage,
+                            "state": (
+                                "running"
+                                if stage["id"] == "classify-signatures"
+                                else "pending"
+                            ),
+                        }
+                        for stage in postprocess_job["stages"]
+                    ],
+                }
+                if full_postprocess and postprocess_job
+                else postprocess_job
+            ),
         }
         _atomic_json(status_path, completed_status)
-        if report["state"] == "measured-complete" and mode == "full":
+        if full_postprocess:
             # Keep report.json as evidence of the superseded thresholded
             # implementation.  The status-bound scientific report is rebuilt
             # from every retained signature with no acceptance threshold.
             from .machine_validation_hashes import analyze_hashes
 
+            postprocess_started = True
             report = analyze_hashes(root, run_id, runtime_path=runtime_path)
             completed_status = json.loads(status_path.read_text(encoding="utf-8"))
         if report["state"] == "measured-complete":
@@ -1175,12 +1597,45 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             # this lock exists. Release it only after the terminal report and
             # status are durable, then record the independent cleanup outcome.
             lock.unlink(missing_ok=True)
+            retaining_status = {
+                **completed_status,
+                "state": "retaining",
+            }
+            if retaining_status.get("postprocess_job"):
+                retaining_status["postprocess_job"] = {
+                    **retaining_status["postprocess_job"],
+                    "state": "running",
+                    "stages": [
+                        {
+                            **stage,
+                            "state": (
+                                "running" if stage["id"] == "retention" else "complete"
+                            ),
+                        }
+                        for stage in retaining_status["postprocess_job"]["stages"]
+                    ],
+                }
+            _atomic_json(status_path, retaining_status)
             retention = _post_validation_retention(root, runtime, run_id)
             _atomic_json(run_root / "retention.json", retention)
+            final_status = {
+                **retaining_status,
+                "state": "complete",
+                "finished_at": _now(),
+            }
+            if final_status.get("postprocess_job"):
+                final_status["postprocess_job"] = {
+                    **final_status["postprocess_job"],
+                    "state": "complete",
+                    "stages": [
+                        {**stage, "state": "complete"}
+                        for stage in final_status["postprocess_job"]["stages"]
+                    ],
+                }
             _atomic_json(
                 status_path,
                 {
-                    **completed_status,
+                    **final_status,
                     "retention": {
                         key: retention.get(key)
                         for key in (
@@ -1197,32 +1652,75 @@ def run_validation(project_root: str | Path, mode: str, runtime_path: str | Path
             )
         return report
     except Exception as error:
-        _atomic_json(status_path, {
-            "schema_version": RUN_STATUS_SCHEMA, "validation_id": runtime["validation_id"],
-            "run_id": run_id, "mode": mode, "state": "failed", "pid": os.getpid(),
-            "started_at": started, "finished_at": _now(), "expected_work_units": len(positions),
-            "attempt_started_at": attempt_started, "resume_count": resume_count,
-            "complete_work_units": _result_counts(run_root, mode)[0],
-            "failed_work_units": max(1, _result_counts(run_root, mode)[1]),
-            "error": f"{type(error).__name__}: {error}",
-        })
+        failed_state = "postprocess-failed" if postprocess_started else "failed"
+        _atomic_json(
+            status_path,
+            {
+                "schema_version": RUN_STATUS_SCHEMA,
+                "validation_id": runtime["validation_id"],
+                "run_id": run_id,
+                "mode": mode,
+                "state": failed_state,
+                "pid": os.getpid(),
+                "started_at": started,
+                "finished_at": _now(),
+                "expected_work_units": len(positions),
+                "attempt_started_at": attempt_started,
+                "resume_count": resume_count,
+                "complete_work_units": _result_counts(run_root, mode)[0],
+                "failed_work_units": max(1, _result_counts(run_root, mode)[1]),
+                "error": f"{type(error).__name__}: {error}",
+                "postprocess_job": (
+                    {
+                        **postprocess_job,
+                        "state": "failed",
+                        "error": f"{type(error).__name__}: {error}",
+                    }
+                    if postprocess_started and postprocess_job
+                    else postprocess_job
+                ),
+            },
+        )
         raise
     finally:
         lock.unlink(missing_ok=True)
 
 
-def runtime_status(project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
+def runtime_status(
+    project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTIME
+) -> dict[str, object]:
     root = Path(project_root).resolve()
     runtime = load_runtime(root, runtime_path)
-    current = _inside(root, str(runtime["output_root"]), "validation output") / "current.json"
+    current = (
+        _inside(root, str(runtime["output_root"]), "validation output") / "current.json"
+    )
     if not current.is_file():
-        return {"state": "not-started", "run_id": None, "mode": None, "complete_work_units": 0, "failed_work_units": 0}
+        return {
+            "state": "not-started",
+            "run_id": None,
+            "mode": None,
+            "complete_work_units": 0,
+            "failed_work_units": 0,
+        }
     pointer = json.loads(current.read_text(encoding="utf-8"))
     status_path = _inside(root, str(pointer["path"]), "validation run status")
     if not status_path.is_file():
-        return {"state": "invalid", "run_id": pointer.get("run_id"), "mode": None, "complete_work_units": 0, "failed_work_units": 0}
+        return {
+            "state": "invalid",
+            "run_id": pointer.get("run_id"),
+            "mode": None,
+            "complete_work_units": 0,
+            "failed_work_units": 0,
+        }
     status = json.loads(status_path.read_text(encoding="utf-8"))
-    if status.get("state") in {"queued", "preparing-index", "running", "pausing"}:
+    if status.get("state") in {
+        "queued",
+        "preparing-index",
+        "running",
+        "pausing",
+        "postprocessing",
+        "retaining",
+    }:
         run_id = str(status.get("run_id") or "")
         if not _validation_process_active(status.get("pid"), run_id):
             status = {**status, "state": "interrupted", "worker_pids": []}
@@ -1230,7 +1728,9 @@ def runtime_status(project_root: str | Path, runtime_path: str | Path = DEFAULT_
 
 
 def _current_status_path(root: Path, runtime: Mapping[str, object]) -> Path:
-    current = _inside(root, str(runtime["output_root"]), "validation output") / "current.json"
+    current = (
+        _inside(root, str(runtime["output_root"]), "validation output") / "current.json"
+    )
     if not current.is_file():
         raise ValueError("machine validation has no current run")
     pointer = json.loads(current.read_text(encoding="utf-8"))
@@ -1262,11 +1762,27 @@ def _spawn_validation(
 ) -> subprocess.Popen[bytes]:
     with log_path.open("ab", buffering=0) as log:
         return subprocess.Popen(
-            [sys.executable, "-m", "fidb_poc.cli", "machine-validation", "run",
-             "--project-root", str(root), "--runtime", str(runtime_path),
-             "--mode", mode, "--run-id", run_id],
-            cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-            start_new_session=True, close_fds=True,
+            [
+                sys.executable,
+                "-m",
+                "fidb_poc.cli",
+                "machine-validation",
+                "run",
+                "--project-root",
+                str(root),
+                "--runtime",
+                str(runtime_path),
+                "--mode",
+                mode,
+                "--run-id",
+                run_id,
+            ],
+            cwd=root,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
         )
 
 
@@ -1373,10 +1889,23 @@ def start_validation(project_root: str | Path, mode: str, runtime_path: str | Pa
     if pre["state"] != "ready":
         raise ValueError("; ".join(pre["blockers"]))
     current = runtime_status(root, runtime_path)
-    if current.get("state") in {"preparing-index", "running", "queued", "pausing"}:
+    if current.get("state") in {
+        "preparing-index",
+        "running",
+        "queued",
+        "pausing",
+        "postprocessing",
+        "retaining",
+    }:
         raise ValueError("machine validation is already running")
+    if current.get("state") == "postprocess-failed":
+        raise ValueError(
+            "recover the completed run's required hash-discrimination job before starting another run"
+        )
     if current.get("state") in {"paused", "interrupted"}:
-        raise ValueError("resume or explicitly retire the checkpointed machine-validation run")
+        raise ValueError(
+            "resume or explicitly retire the checkpointed machine-validation run"
+        )
     if mode == "full" and not canary_gate_status(root, runtime_path)["ready"]:
         raise ValueError(
             "full machine validation requires a completed canary for the current "
@@ -1415,4 +1944,10 @@ def start_validation(project_root: str | Path, mode: str, runtime_path: str | Pa
     queued = json.loads(status_path.read_text(encoding="utf-8"))
     queued["pid"] = process.pid
     _atomic_json(status_path, queued)
-    return {"state": "queued", "run_id": run_id, "mode": mode, "pid": process.pid, "log_path": str(log_path.relative_to(root))}
+    return {
+        "state": "queued",
+        "run_id": run_id,
+        "mode": mode,
+        "pid": process.pid,
+        "log_path": str(log_path.relative_to(root)),
+    }

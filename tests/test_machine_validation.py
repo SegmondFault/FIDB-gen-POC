@@ -42,7 +42,12 @@ class MachineValidationTests(unittest.TestCase):
             status["results"]["confusion_matrix"]["unit"],
             "complete-fid-signature-owner-assertion",
         )
-        self.assertIsNone(status["results"]["confusion_matrix"]["true_positives"])
+        if status["results"]["state"] == "measured-complete":
+            self.assertGreater(
+                status["results"]["confusion_matrix"]["true_positives"], 0
+            )
+        else:
+            self.assertIsNone(status["results"]["confusion_matrix"]["true_positives"])
 
     def test_incomplete_cohort_cannot_materialize(self):
         with self.assertRaisesRegex(ValueError, "not eligible"):
@@ -63,6 +68,15 @@ class MachineValidationTests(unittest.TestCase):
         manifest = tomllib.loads(document["rendered_manifest"])
         self.assertEqual(manifest["state"], "materialized-disarmed")
         self.assertEqual(len(manifest["work_unit"]), 222)
+        self.assertEqual(
+            manifest["hash_discrimination_job"]["state"], "planned-disarmed"
+        )
+        self.assertTrue(
+            manifest["hash_discrimination_job"]["required_for_run_completion"]
+        )
+        self.assertIn(
+            "query-corpus-index", manifest["hash_discrimination_job"]["stages"]
+        )
         self.assertEqual(manifest["summary"]["composite_programs"], 444)
         self.assertEqual(len(manifest["materialization_digest"]), 64)
         self.assertEqual(

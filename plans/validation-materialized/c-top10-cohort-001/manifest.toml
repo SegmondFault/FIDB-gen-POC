@@ -6,8 +6,8 @@ automatic_scheduling = true
 production_queue_mutation = false
 execute_target_binaries = false
 authority_path = "validation/machine-validation.toml"
-authority_sha256 = "a5dbce059c58d8f30d4bb6a70f2327d68fb9ad4862759b1c75811ecc2e062d2c"
-materialization_digest = "1e8beb58d24bc136d1c29a191c651cf9f648406755131d1969b15f7d5169f574"
+authority_sha256 = "9218a8849b2cdcb7ebadf8423fc433d8b4bdc7712969aeb6b247335e7b8668b8"
+materialization_digest = "23c41dd72d9ff2eef78fa4c6882632f3e9a193a62d3eb33a146830e721499236"
 
 [summary]
 work_units = 222
@@ -25,7 +25,23 @@ input_strategy = "rebuild-from-reviewed-recipes"
 harness_mode = "whole-archive-link-map"
 truth_copy = "unstripped-with-link-map"
 query_copy = "debug-stripped-symbol-indexed"
-primary_projections = ["correct-fold-exact-identity-withheld", "opposite-fold", "complete-owner-labelled-candidate-db"]
+primary_projections = ["exact-signature-present-owner", "exact-signature-opposite-fold-owner", "complete-signature-owner-evidence-ledger"]
+
+[hash_discrimination_job]
+id = "hash-discrimination"
+kind = "validation-postprocess"
+state = "planned-disarmed"
+automatic = true
+required_for_run_completion = true
+after = "composite-build-analysis"
+method_authority = "validation/machine-validation-hash-method.toml"
+method_authority_sha256 = "72047ad2167f82694597ad426746a43c5cc44f6493346485d462ae0f78867e57"
+corpus_authority = "validation/corpus-hash-index.toml"
+corpus_authority_sha256 = "fa7cc7fd470c68997fd3903f6a61dab1db25eefeb17901ff80aecd476dab81a2"
+backend_authority = "validation/hash-analysis-backends.toml"
+backend_authority_sha256 = "849daf1840f750d32a637c7e59cd43526ddd6dce788dfcf8924233a05893d6c7"
+stages = ["classify-signatures", "analyse-hash-populations", "update-corpus-generation", "query-corpus-index", "publish-report", "retention"]
+outputs = ["hash-evidence.sqlite3", "hash-report.json", "corpus-lookup.json", "retention.json"]
 
 [[work_unit]]
 position = 1
