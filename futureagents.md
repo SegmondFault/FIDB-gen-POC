@@ -380,15 +380,21 @@ hash-level confusion analysis, and the retained evidence is required to repair
 that analysis without recompilation or another Ghidra run. Failed validation
 runs are quarantined, not opportunistically cleaned.
 
-The canonical C10 scientific result is `hash-report.json`, not the older
-`report.json`. The latter accepted a whole library after five distinct matches;
-that confused the operator's blocks-of-five design with a detection threshold.
-Never resurrect that threshold. Run
+The corrected exact-tuple survival diagnostic is `hash-report.json`, not the
+older `report.json`. The latter accepted a whole library after five distinct
+matches; that confused the operator's blocks-of-five design with a detection
+threshold. Never resurrect that threshold. Run
 `fidb-poc machine-validation analyze-hashes --run-id <sealed-full-run>` to
 classify complete FID signatures against exact route/treatment references.
 `hash-evidence.sqlite3` is the durable source for noisy-hash and low-information
 analysis. TP/FP/FN observations are explicit; TN is reconstructed from
 `unit_result.query_distinct_signatures * five withheld owners - FP`.
+
+Do not report that diagnostic's FN rate as native FID recall. It compares raw
+complete tuples and bypasses Ghidra's candidate scoring, relation weights,
+force-specific rules, thresholds and winner selection. The canonical detector
+validation is the separately versioned native-FID owner campaign governed by
+`validation/fid-matching.toml` and `validation/fid-matching-run.toml`.
 
 The first production dry-run selected 973 actions and 257,415,636,119 apparent
 bytes but estimated 1,041.553 seconds, above the 600-second automatic ceiling.
@@ -404,6 +410,44 @@ preflight must resolve all 2,220 exact signature inputs and must see the
 production queue drained. Start a canary before a full run. A canary qualifies
 the full run only when its report pins the current runtime digest, query-copy
 policy and reference-index schema.
+
+### Native-FID owner campaign
+
+Use `machine-validation run-matcher`, not `analyze-hashes`, when the question is
+whether Ghidra FID accepts the correct or an incorrect library owner. Its atomic
+decision is one link-attributed query function against one of the ten candidate
+owners. One function therefore contributes one positive decision and nine
+negative decisions. Unresolved truth remains evidence but cannot enter the
+confusion matrix.
+
+The CPU and WGPU backends reproduce Ghidra `FidProgramSeeker`; they do not
+invent a replacement similarity rule. Qualification requires exact owner
+decisions and at most one float32 ULP of score drift. Ghidra remains the oracle.
+The receipt `validation/evidence/portable-fid-c10-canary-v1.json` qualified both
+backends on a retained case with zero decision mismatches. CPU was faster on
+that small case because GPU dispatch dominated, so equivalence is not evidence
+that WGPU will win every workload.
+
+The scheduled campaign is `c10-native-fid-methodology-v1`. Its four-case canary
+must cover both folds, reach 80% truth attribution and have zero oracle
+mismatches before the full 444 cases can start. The full campaign uses four
+workers with explicit JVM limits inherited from
+`validation/machine-validation-runtime.toml`. It refuses active production
+jobs, never executes target binaries, never starts a compiler and never mutates
+the production queue.
+
+The timer is `fidb-fid-matching-campaign.timer`, at 00:00 Europe/Luxembourg.
+It intentionally uses `Persistent=false`; otherwise enabling it during the day
+could immediately run the missed midnight trigger. A case already admitted may
+finish after 05:30. Check `campaign_status` and the four canary reports before
+allowing automatic chaining; never hand-create a success receipt.
+
+Each case retains native oracle input, portable outputs, truth attribution and
+hash observations. Completion writes `full-hash-evidence.sqlite3` and a compact
+report consumed by the validation observatory. Preserve both. Normal GUI reads
+the compact report; drill-down reads bounded full/specific/complete populations
+and affected owners. A future schema change gets a new sidecar, never an in-place
+reinterpretation of this evidence.
 
 Do not simplify the v3 reference index back to a flat occurrence table. The
 first compatibility-aware canary expanded repeated signatures across every

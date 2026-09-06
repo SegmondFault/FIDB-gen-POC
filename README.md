@@ -209,7 +209,17 @@ The materialised batch also contains a required `hash-discrimination`
 postprocess job. A full run is terminal only after signature classification,
 population analysis, incremental corpus admission, exact lookup, report
 publication and retention have all completed.
-The analysis method is frozen in
+That exact-tuple survival analysis is a construct diagnostic, not native Ghidra
+FID recall: it does not apply candidate scoring, relation weights or winner
+selection. The detector-level C10 methodology is separately frozen in
+[`validation/fid-matching.toml`](validation/fid-matching.toml), qualified
+against native Ghidra on CPU and WGPU, and scheduled by
+[`validation/fid-matching-run.toml`](validation/fid-matching-run.toml). It
+classifies each link-attributed query function against every candidate library
+owner, retains the resulting per-hash evidence, and publishes its compact full
+report to the same Hash discrimination observatory.
+
+The exact-tuple analysis method is frozen in
 [`validation/machine-validation-hash-method.toml`](validation/machine-validation-hash-method.toml).
 Each immutable run now records separate full-hash, specific-hash and complete
 FID-signature population evidence, including cross-library prevalence, owner

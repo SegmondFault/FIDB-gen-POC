@@ -3,7 +3,7 @@ Description=Admit the native-FID C10 methodology in the overnight window
 
 [Timer]
 OnCalendar=*-*-* 00:00:00 Europe/Luxembourg
-Persistent=true
+Persistent=false
 AccuracySec=1s
 Unit=fidb-fid-matching-campaign.service
 

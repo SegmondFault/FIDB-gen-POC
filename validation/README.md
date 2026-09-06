@@ -46,8 +46,8 @@ record a non-empty justification, and list 2--9 pinned libraries. The same
 seeded ranking makes a balanced split; an odd final cohort differs by one
 library between folds. This exception is explicit and visible in the GUI.
 
-Completed validation reports use one complete FID signature paired with one
-library owner as the atomic assertion. There is no five-match or other
+The retained exact-tuple diagnostic uses one complete FID signature paired with
+one library owner as its atomic assertion. There is no five-match or other
 library-acceptance threshold. For each exact route and treatment, signatures
 from the five libraries present in the composite define the positive
 population; query signatures checked against the five withheld libraries define
@@ -66,9 +66,12 @@ TN is exactly reproducible from each fold's query-signature count and withheld
 owner count. This avoids materialising millions of negative non-matches without
 changing the denominator.
 
-The earlier `report.json` remains immutable historical evidence of the
-superseded five-signature library-level experiment. It is not an input to the
-hash-discrimination ledger.
+This comparison measures exact signature survival and sharing. It does not
+model Ghidra's candidate scoring, relation weights, force-specific rules or
+winner selection and therefore is not a native FID recall measurement. The
+earlier `report.json` remains immutable historical evidence of the superseded
+five-signature library-level experiment. Neither report is an input to the
+native-FID confusion matrix.
 
 FN is a harness-conditional observation. The positive reference unit is a
 function recovered from one library archive; the query unit is a function
@@ -139,9 +142,62 @@ Incomplete and failed runs remain quarantined whole. `units/`, the cohort
 reference index and terminal reports remain available for threshold-free
 per-hash reanalysis.
 
-## Scheduled single-hash analysis
+## Native FID owner validation
 
-`machine-validation-hash-schedule.toml` admits the corrected analysis during a
+`fid-matching.toml` freezes a portable implementation of Ghidra
+`FidProgramSeeker` candidate lookup, float32 scoring, relation handling,
+thresholding and equal-winner selection. The native Ghidra implementation is
+the oracle. Both the CPU and WGPU implementations must reproduce every oracle
+owner decision and remain within one float32 ULP for each score.
+
+The decision unit is one **query function × candidate library owner**. Linker
+map attribution supplies the expected owner; an unambiguous reference name is
+the bounded fallback. Unresolved functions are retained but excluded from TP,
+FP, TN and FN. For every labelled query function, the expected owner contributes
+one TP or FN decision and each of the other nine C10 owners contributes one FP
+or TN decision. This directly measures the detector users will run; it does not
+infer detection from raw tuple equality.
+
+The qualification receipt in
+`evidence/portable-fid-c10-canary-v1.json` records zero decision mismatches for
+CPU and hardware WGPU against the native oracle. Its one retained x86-64/GCC 12
+case is an implementation qualification, not the C10 result. At that small
+scale CPU completed the portable scoring faster because GPU dispatch dominated.
+Backend selection therefore remains measured and configurable rather than
+assuming that a qualified GPU is always faster.
+
+`fid-matching-run.toml` schedules the C10 campaign. Four cases spanning both
+folds and route classes form the fail-closed canary. Only a canary with at least
+80% truth coverage and zero oracle mismatches chains into the 444-case full
+run. Four long-lived campaign slots use the heap and processor bounds in
+`machine-validation-runtime.toml`. No target executable is run, no compiler is
+started, and the production queue is never mutated.
+
+```sh
+uv run fidb-poc machine-validation qualify-matcher --project-root . \
+  --run-id 20260904T152653Z-full --position 1 --fold B
+uv run fidb-poc machine-validation run-matcher --project-root . --mode canary
+uv run fidb-poc machine-validation run-matcher --project-root . --mode full
+uv run fidb-poc machine-validation scheduled-matcher --project-root .
+```
+
+Each case retains the native oracle input, CPU and WGPU decisions, comparison,
+truth attribution and per-hash observations. A terminal campaign compacts those
+observations into `full-hash-evidence.sqlite3`. The sidecar retains full,
+specific and complete hash populations by compatible scope and owner, including
+TP/FP/FN counts and shared, ambiguous and incorrect-confident attribution
+categories. The full report is ingested by `/api/v1/validation-observatory`, so
+the Hash discrimination page gains its population tail, noisy hashes and
+library drill-down without opening all case evidence during normal refresh.
+
+The user timer starts admission at 00:00 Europe/Luxembourg. `Persistent=false`
+is intentional: installing or enabling it after midnight must not immediately
+launch a missed heavy run. Work admitted inside the 00:00–05:30 window is
+allowed to finish.
+
+## Legacy exact-tuple analysis
+
+`machine-validation-hash-schedule.toml` admits the exact-tuple diagnostic during a
 one-off 13:45–18:15 Europe/Luxembourg window on 2026-09-05 and during the normal
 00:00–05:30 nightly window. A started pass finishes after the admission window
 closes. The scheduler selects only the latest sealed full run lacking a current
@@ -152,7 +208,7 @@ nothing is pending:
 uv run fidb-poc machine-validation scheduled-hashes --project-root .
 ```
 
-The corrected pass reuses the 444 retained fold exports from the sealed full
+The diagnostic pass reuses the 444 retained fold exports from the sealed full
 run. Its `unit-local-reference-v1` engine verifies signature inputs without
 rehashing retained static archives, loads the ten exact owner references once
 per route/treatment, and reuses that bounded table for both folds. Match, miss
