@@ -287,6 +287,19 @@ def _aggregate(
         )
     )
     matching = load_matching_authority(root, str(campaign["matching_authority"]))
+    portable_stages = (
+        [
+            {"id": f"portable-{row['device']}", "state": stage_state}
+            for row in matching["backend"]
+        ]
+        if campaign["execution"]["compare_cpu_and_gpu"]
+        else [
+            {
+                "id": f"portable-{matching['backends'][matching['selected']]['device']}",
+                "state": stage_state,
+            }
+        ]
+    )
     return {
         "schema_version": REPORT_SCHEMA,
         "campaign_id": campaign["id"],
@@ -324,8 +337,7 @@ def _aggregate(
             "required_for_run_completion": True,
             "stages": [
                 {"id": "native-oracle", "state": stage_state},
-                {"id": "portable-cpu", "state": stage_state},
-                {"id": "portable-wgpu", "state": stage_state},
+                *portable_stages,
                 {"id": "owner-classification", "state": stage_state},
                 {"id": "hash-population", "state": stage_state},
             ],

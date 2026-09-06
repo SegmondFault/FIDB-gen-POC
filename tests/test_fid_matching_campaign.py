@@ -35,6 +35,17 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertTrue(self.campaign["safety"]["require_no_active_production_jobs"])
         self.assertFalse(self.campaign["safety"]["execute_target_binaries"])
 
+        status = campaign_status(self.root)
+        self.assertEqual(
+            [stage["id"] for stage in status["canary"]["pipeline_job"]["stages"]],
+            [
+                "native-oracle",
+                "portable-cpu",
+                "owner-classification",
+                "hash-population",
+            ],
+        )
+
     def test_routine_campaign_executes_only_the_selected_backend(self):
         authority = {
             "selected": "cpu-portable-fid-v1",
@@ -183,6 +194,15 @@ class FidMatchingCampaignTests(unittest.TestCase):
                     return_value={
                         "authority_path": "matching.toml",
                         "authority_sha256": "new-method",
+                        "selected": "cpu-portable-fid-v1",
+                        "backend": [
+                            {"id": "cpu-portable-fid-v1", "device": "cpu"},
+                            {"id": "gpu-portable-fid-v1", "device": "gpu"},
+                        ],
+                        "backends": {
+                            "cpu-portable-fid-v1": {"device": "cpu"},
+                            "gpu-portable-fid-v1": {"device": "gpu"},
+                        },
                     },
                 ),
             ):
