@@ -1,0 +1,19 @@
+schema_version = "fidb-hash-analysis-backends/v1"
+selected = "gpu-wgpu-packed-probe-v1"
+comparison_policy = "explicit-qualification-only"
+require_zero_mismatches_for_promotion = true
+
+[[backend]]
+id = "cpu-packed-probe-v1"
+state = "qualified-fallback"
+implementation = "numpy-sorted-packed-probe"
+device = "cpu"
+scope = "packed-complete-signature-exact-probe"
+
+[[backend]]
+id = "gpu-wgpu-packed-probe-v1"
+state = "qualified-authoritative"
+implementation = "wgpu-packed-exact-probe"
+device = "gpu"
+scope = "packed-complete-signature-exact-probe"
+qualification_report = "validation/evidence/c10-wgpu-packed-probe-v1.json"

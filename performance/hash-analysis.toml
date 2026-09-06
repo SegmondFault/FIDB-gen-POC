@@ -1,0 +1,4 @@
+schema_version = "fidb-hash-analysis-performance/v1"
+mode = "auto"
+allow_gpu = true
+fallback_to_cpu = true

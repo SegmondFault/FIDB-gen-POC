@@ -1,0 +1,27 @@
+{
+  "candidate_backend": "gpu-wgpu-packed-probe-v1",
+  "canonical_backend": "cpu-sqlite",
+  "device": {
+    "adapter_type": "IntegratedGPU",
+    "backend_type": "Vulkan",
+    "description": "Mesa 26.2.1-arch3.1",
+    "device": "AMD Radeon 8060S Graphics (RADV STRIX_HALO)",
+    "vendor": "radv"
+  },
+  "generation_digest": "ca585d0c287bcbfb6dfb23163692c65ad28e6a7aab633764b20c0d91514f4ded",
+  "matched_queries": 1401112,
+  "mismatches": 0,
+  "performance": {
+    "cpu_packed_probe_wall_time_ns": 1580267657,
+    "gpu_end_to_end_probe_wall_time_ns": 477557017,
+    "packing_wall_time_ns": 8110334521,
+    "probe_speedup": 3.309065935052526,
+    "total_trial_wall_time_ns": 10266731610
+  },
+  "query_signatures": 3025703,
+  "reference_signatures": 1401112,
+  "schema_version": "fidb-hash-backend-qualification-receipt/v1",
+  "scope": "packed-complete-signature-exact-probe",
+  "source_report_sha256": "be9b0128d33a6335a6c3f9aaf3fd4420bb32a8261d6190f9e51bb5440391cc64",
+  "state": "equivalent"
+}
