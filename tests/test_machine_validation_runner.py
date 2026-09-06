@@ -419,7 +419,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
         )
         self.assertEqual(len(method["authority_sha256"]), 64)
 
-    def test_canary_gate_rejects_stale_runtime_and_accepts_exact_contract(self):
+    def test_canary_gate_rejects_stale_contract_and_accepts_operational_changes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "runs"
@@ -429,6 +429,9 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 json.dumps(
                     {
                         "state": "measured-complete",
+                        "schema_version": "fidb-machine-validation-canary/v1",
+                        "validation_id": "validation",
+                        "mode": "canary",
                         "runtime_authority_sha256": "old",
                         "reference_index_schema": REFERENCE_INDEX_SCHEMA,
                         "link_harness_policy": "old-harness",
@@ -440,6 +443,17 @@ class MachineValidationRunnerTests(unittest.TestCase):
             runtime = {
                 "output_root": "runs",
                 "authority_sha256": "current",
+                "validation_id": "validation",
+                "manifest": "manifest.toml",
+                "source_archive": "source.tar.gz",
+                "openssl_width_report": "width.json",
+                "ghidra_headless": "/opt/ghidra/analyzeHeadless",
+                "canary": {
+                    "positions": [1, 2, 3],
+                    "folds_by_position": ["1:A"],
+                    "minimum_distinct_hashes": 1,
+                    "require_formats": ["ELF"],
+                },
             }
             with patch(
                 "fidb_poc.machine_validation_runner.load_runtime",
@@ -455,10 +469,19 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     json.dumps(
                         {
                             "state": "measured-complete",
-                            "runtime_authority_sha256": "current",
+                            "schema_version": "fidb-machine-validation-canary/v1",
+                            "validation_id": "validation",
+                            "mode": "canary",
+                            "runtime_authority_sha256": "older-operational-policy",
                             "reference_index_schema": REFERENCE_INDEX_SCHEMA,
                             "link_harness_policy": LINK_HARNESS_POLICY,
                             "query_copy_policy": QUERY_COPY_POLICY,
+                            "metrics": {
+                                "expected_work_units": 3,
+                                "complete_work_units": 3,
+                                "failed_work_units": 0,
+                                "minimum_distinct_hashes": 1,
+                            },
                         }
                     ),
                     encoding="utf-8",
@@ -467,6 +490,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
 
             self.assertTrue(accepted["ready"])
             self.assertEqual(accepted["run_id"], current.parent.name)
+            self.assertTrue(accepted["legacy_contract"])
 
     def test_pause_and_resume_preserve_the_current_run_identity(self):
         with tempfile.TemporaryDirectory() as temporary:

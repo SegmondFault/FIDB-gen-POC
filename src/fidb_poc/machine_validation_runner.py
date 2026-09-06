@@ -1588,6 +1588,7 @@ def _aggregate(
         "finished_at": _now(),
         "runtime_authority": runtime["authority_path"],
         "runtime_authority_sha256": runtime["authority_sha256"],
+        "canary_contract_sha256": _canary_contract_sha256(runtime),
         "reference_index_schema": REFERENCE_INDEX_SCHEMA,
         "link_harness_policy": LINK_HARNESS_POLICY,
         "query_copy_policy": QUERY_COPY_POLICY,
@@ -1609,6 +1610,47 @@ def _aggregate(
     return report
 
 
+def _canary_contract_sha256(runtime: Mapping[str, object]) -> str:
+    """Hash inputs which can change canary meaning, excluding operations tuning."""
+
+    contract = {
+        "validation_id": runtime.get("validation_id"),
+        "manifest": runtime.get("manifest"),
+        "source_archive": runtime.get("source_archive"),
+        "openssl_width_report": runtime.get("openssl_width_report"),
+        "ghidra_headless": runtime.get("ghidra_headless"),
+        "canary": runtime.get("canary"),
+        "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+        "link_harness_policy": LINK_HARNESS_POLICY,
+        "query_copy_policy": QUERY_COPY_POLICY,
+    }
+    canonical = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _legacy_canary_contract_matches(
+    document: Mapping[str, object], runtime: Mapping[str, object]
+) -> bool:
+    """Recognise pre-contract-digest canaries by every retained semantic field."""
+
+    metrics = document.get("metrics")
+    canary = runtime.get("canary")
+    if not isinstance(metrics, dict) or not isinstance(canary, dict):
+        return False
+    expected = len(canary.get("positions", []))
+    return (
+        document.get("canary_contract_sha256") is None
+        and document.get("schema_version") == "fidb-machine-validation-canary/v1"
+        and document.get("validation_id") == runtime.get("validation_id")
+        and document.get("mode") == "canary"
+        and metrics.get("expected_work_units") == expected
+        and metrics.get("complete_work_units") == expected
+        and metrics.get("failed_work_units") == 0
+        and metrics.get("minimum_distinct_hashes")
+        == canary.get("minimum_distinct_hashes")
+    )
+
+
 def canary_gate_status(
     project_root: str | Path,
     runtime_path: str | Path = DEFAULT_RUNTIME,
@@ -1617,6 +1659,7 @@ def canary_gate_status(
 
     root = Path(project_root).resolve()
     runtime = load_runtime(root, runtime_path)
+    contract_sha256 = _canary_contract_sha256(runtime)
     output_root = _inside(root, str(runtime["output_root"]), "validation output")
     reports = sorted(
         output_root.glob("*-canary/canary-report.json"),
@@ -1635,9 +1678,13 @@ def canary_gate_status(
                 "report_path": str(path.relative_to(root)),
                 "state": document.get("state", "invalid"),
             }
+        semantic_contract_matches = (
+            document.get("canary_contract_sha256") == contract_sha256
+            or _legacy_canary_contract_matches(document, runtime)
+        )
         if (
             document.get("state") == "measured-complete"
-            and document.get("runtime_authority_sha256") == runtime["authority_sha256"]
+            and semantic_contract_matches
             and document.get("reference_index_schema") == REFERENCE_INDEX_SCHEMA
             and document.get("link_harness_policy") == LINK_HARNESS_POLICY
             and document.get("query_copy_policy") == QUERY_COPY_POLICY
@@ -1648,6 +1695,8 @@ def canary_gate_status(
                 "run_id": path.parent.name,
                 "report_path": str(path.relative_to(root)),
                 "runtime_authority_sha256": runtime["authority_sha256"],
+                "canary_contract_sha256": contract_sha256,
+                "legacy_contract": document.get("canary_contract_sha256") is None,
             }
     return {
         "ready": False,
@@ -1655,6 +1704,7 @@ def canary_gate_status(
         "run_id": None if latest is None else latest["run_id"],
         "report_path": None if latest is None else latest["report_path"],
         "runtime_authority_sha256": runtime["authority_sha256"],
+        "canary_contract_sha256": contract_sha256,
     }
 
 

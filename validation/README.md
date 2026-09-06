@@ -130,7 +130,10 @@ abandon the rest of a shard. These settings are operational safety bounds, not
 permission to weaken a failed link audit or discard its evidence.
 
 The full run is rejected unless the latest successful canary records the exact
-runtime-authority digest, query-copy policy and reference-index schema in use.
+scientific canary-contract digest, query-copy policy and reference-index schema
+in use. Worker counts, polling, retries and timeout bounds remain visible in the
+runtime authority but do not change that digest or invalidate a successful
+harness canary.
 The reference index stores exact identity presence separately from one
 owner/signature row. Query lookup is deliberately query-first against that
 primary key; reversing the join order recreates a many-occurrence intermediate
