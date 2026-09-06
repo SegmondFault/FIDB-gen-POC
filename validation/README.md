@@ -118,6 +118,12 @@ uv run fidb-poc machine-validation analyze-hashes --project-root . \
   --run-id 20260904T152653Z-full
 ```
 
+Interactive resume detaches after it has started the runner. Service chains use
+`machine-validation resume --foreground` instead: the command remains attached
+until source analysis, hash post-processing and retention finish, and returns a
+non-zero status unless the run reaches `measured-complete`. This prevents the
+native-FID canary from racing an incomplete source run.
+
 The control panel exposes the same two bounded API operations. An active status
 whose recorded parent process is absent is reported as `interrupted` and can be
 resumed explicitly; PID reuse cannot make an unrelated process resumable.
@@ -271,6 +277,15 @@ zero. Every linked ELF or PE/COFF image is disassembled before Ghidra analysis;
 the unit fails if the audit finds a direct call, jump or branch to zero. Native
 truth attribution measures and records Ghidra's image-base bias against the
 retained symbol table before applying linker-map intervals.
+
+Some GMP ARM32 and i686 Android archives contain non-PIC assembly and cannot be
+placed in a strict shared image. The linker now retries only the recognised
+Android 32-bit `R_ARM_ABS32`/`R_386_32` failure with `-z notext`. The audit
+records `linker_compatibility = "android-32-text-relocations"` and
+`text_relocations_permitted = true`; the same zero-target control-flow audit
+remains mandatory. Other targets and other link failures remain strict. This
+is a validation-image accommodation, not permission to relabel or rebuild the
+sealed production archives.
 
 On the same x86-64/GCC 12 fold used by the bounded diagnostic, correct-owner
 full-hash candidate survival increased from 1,886/2,493 (75.65%) to

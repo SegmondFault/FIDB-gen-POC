@@ -166,6 +166,14 @@ campaign. The single-hash backend is selected by
 `performance/hash-analysis.toml`; normal execution does not run the CPU/GPU
 equivalence trial. Every later command is skipped if an earlier command fails.
 
+The checkpointed source run was paused again after staged linking exposed a
+bounded Android 32-bit GMP incompatibility. The dated
+`fidb-c10-repaired-validation-resume-20260907.timer` resumes it at 00:00
+Europe/Luxembourg. Its service uses foreground resume so the source run, its
+required hash/retention stages, and the native-FID canary/full passes remain one
+ordered fail-closed chain. `Persistent=false` prevents a late installation from
+starting heavy work outside the intended night.
+
 Review the copied environment file.  The API reuses it rather than introducing
 a second operator environment.  Starting the API is safe while the queue is
 disarmed: API synchronization, inspection, pause, and resume do not change the

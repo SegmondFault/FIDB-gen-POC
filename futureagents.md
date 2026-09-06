@@ -607,6 +607,25 @@ immutable receipt below `requeues/`. The 2026-09-06 repair requeued positions
 19, 22, 23, 26, 27, 30, 31, 34, 35, 63, 70, 120 and 121. The first nine were
 the ARM `bic` audit error; the last four were interrupted by the operator pause.
 
+The next staged preparation pass exposed 24 deterministic failures before any
+new JVM started: fold B contains GMP, whose Android ARM32 and i686 archives use
+non-PIC assembly. All six treatments failed on both 32-bit Android routes for
+NDK r27d and r29. Do not report this as a random 24/128 validation failure rate.
+The canonical linker remains strict first and permits `-z notext` only after a
+recognised Android 32-bit `R_ARM_ABS32` or `R_386_32` diagnostic. Each fallback
+is explicit in `link-audit.json`; direct control flow to address zero still
+fails the cell. Real-link probes for both architectures passed that audit.
+When the current baseline is sealed, extend the next canary generation to put
+fold B through both Android 32-bit architectures. Changing the runtime TOML
+mid-run would invalidate existing prepared-fold authority, so do not do it to
+the checkpointed C10 campaign.
+
+For an ordered systemd chain, use `machine-validation resume --foreground`.
+Detached `resume` is for an interactive operator and must not be followed
+immediately by a dependent matcher command. Foreground resume returns failure
+unless the source run reaches `measured-complete`, allowing systemd to suppress
+later `ExecStart` stages safely.
+
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field
 `delta_owner` table. SQLite chose `SCAN delta_owner LEFT-JOIN`; the attempt was

@@ -5,11 +5,10 @@ After=local-fs.target
 [Service]
 Type=oneshot
 WorkingDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified
-ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation run --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --runtime validation/machine-validation-runtime.toml --mode full --run-id c10-shared-image-symbolic-v2-full
+ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation resume --foreground --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --runtime validation/machine-validation-runtime.toml
 ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation run-matcher --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --matcher-campaign validation/fid-matching-run.toml --mode canary
 ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation run-matcher --project-root /home/fidb-operator/Projects/circl/FIDB-POC-unified --matcher-campaign validation/fid-matching-run.toml --mode full
 Nice=5
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6
 TimeoutStartSec=infinity
-
