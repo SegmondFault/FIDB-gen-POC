@@ -12,7 +12,9 @@ from fidb_poc.machine_validation_runner import (
     QUERY_COPY_POLICY,
     REFERENCE_INDEX_SCHEMA,
     _archive_failed_result,
+    _fold_checkpoint_path,
     _link_composite,
+    _load_fold_checkpoint,
     _post_validation_retention,
     _query_index,
     _resolve_worker_evidence,
@@ -20,6 +22,7 @@ from fidb_poc.machine_validation_runner import (
     _terminal_positions,
     _timed_out_position,
     _worker,
+    _write_fold_checkpoint,
     _width_openssl_signatures,
     _zero_control_flow_lines,
     canary_gate_status,
@@ -668,6 +671,29 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 json.loads(archived.read_text(encoding="utf-8"))["error"], "link"
             )
 
+    def test_fold_checkpoint_reuses_only_the_exact_scientific_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            unit = Path(temporary) / "unit"
+            path = _fold_checkpoint_path(unit, "A")
+            result = {"fold": "A", "query_sha256": "query", "failures": []}
+            identity = {
+                "mode": "full",
+                "position": 17,
+                "route_id": "linux-x86-64-gcc-13",
+                "treatment_id": "optimization_o2",
+                "fold": "A",
+                "runtime_authority_sha256": "authority",
+            }
+
+            _write_fold_checkpoint(path, result, **identity)
+
+            self.assertEqual(_load_fold_checkpoint(path, **identity), result)
+            self.assertIsNone(
+                _load_fold_checkpoint(
+                    path, **{**identity, "runtime_authority_sha256": "changed"}
+                )
+            )
+
     def test_worker_retries_transient_evidence_resolution(self):
         runtime = {
             "execution": {
@@ -709,6 +735,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
             evidence = {
                 "runtime": {
                     "output_root": "runs",
+                    "authority_sha256": "authority",
                     "ghidra_headless": "/bin/true",
                     "execution": execution,
                     "canary": {"folds_by_position": []},
@@ -742,9 +769,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     "fidb_poc.machine_validation_runner._resolve_worker_evidence",
                     return_value=evidence,
                 ),
-                patch(
-                    "fidb_poc.pipeline.find_ghidra", return_value=(None, root)
-                ),
+                patch("fidb_poc.pipeline.find_ghidra", return_value=(None, root)),
                 patch("fidb_poc.pipeline.ghidra_environment", return_value={}),
                 patch("fidb_poc.ghidra_fid.ensure_started"),
                 patch(
@@ -759,7 +784,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
             results = sorted((root / "runs/run/units").glob("*/result.json"))
             self.assertEqual(len(results), 2)
             self.assertTrue(
-                all(json.loads(path.read_text())["state"] == "failed" for path in results)
+                all(
+                    json.loads(path.read_text())["state"] == "failed"
+                    for path in results
+                )
             )
 
     def test_worker_progress_only_times_out_an_active_cell(self):
@@ -779,9 +807,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
             )
 
             self.assertIsNone(_timed_out_position(run_root, 42, 30, 30_000_000_000))
-            self.assertEqual(
-                _timed_out_position(run_root, 42, 30, 31_000_000_000), 17
-            )
+            self.assertEqual(_timed_out_position(run_root, 42, 30, 31_000_000_000), 17)
             progress.write_text(
                 json.dumps({"state": "idle", "position": 17}), encoding="utf-8"
             )

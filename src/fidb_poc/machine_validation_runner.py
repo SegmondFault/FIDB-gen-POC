@@ -36,6 +36,7 @@ from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_prof
 RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
+FOLD_RESULT_SCHEMA = "fidb-machine-validation-fold-result/v1"
 REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 PAUSE_REQUEST_NAME = "pause-request.json"
@@ -43,6 +44,7 @@ PAUSE_REQUEST_NAME = "pause-request.json"
 
 class TransientEvidenceError(ValueError):
     """The evidence authority could not be read consistently yet."""
+
 
 _OBJDUMP_INSTRUCTION = re.compile(
     r"^\s*[0-9a-f]+:\s+(?:(?:[0-9a-f]{2,16})\s+)+"
@@ -116,6 +118,74 @@ def _result_counts(run_root: Path, mode: str) -> tuple[int, int]:
     return (
         sum(row.get("state") == "complete" for row in documents),
         sum(row.get("state") == "failed" for row in documents),
+    )
+
+
+def _fold_checkpoint_path(unit_root: Path, fold: str) -> Path:
+    return unit_root / f"fold-{fold}" / "fold-result.json"
+
+
+def _load_fold_checkpoint(
+    path: Path,
+    *,
+    mode: str,
+    position: int,
+    route_id: str,
+    treatment_id: str,
+    fold: str,
+    runtime_authority_sha256: str,
+) -> dict[str, object] | None:
+    """Return a completed fold only when its full scientific identity matches."""
+
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    expected = {
+        "schema_version": FOLD_RESULT_SCHEMA,
+        "state": "complete",
+        "mode": mode,
+        "position": position,
+        "route_id": route_id,
+        "treatment_id": treatment_id,
+        "fold": fold,
+        "runtime_authority_sha256": runtime_authority_sha256,
+    }
+    if any(document.get(key) != value for key, value in expected.items()):
+        return None
+    result = document.get("result")
+    if not isinstance(result, dict) or result.get("fold") != fold:
+        return None
+    return result
+
+
+def _write_fold_checkpoint(
+    path: Path,
+    result: Mapping[str, object],
+    *,
+    mode: str,
+    position: int,
+    route_id: str,
+    treatment_id: str,
+    fold: str,
+    runtime_authority_sha256: str,
+) -> None:
+    _atomic_json(
+        path,
+        {
+            "schema_version": FOLD_RESULT_SCHEMA,
+            "state": "complete",
+            "mode": mode,
+            "position": position,
+            "route_id": route_id,
+            "treatment_id": treatment_id,
+            "fold": fold,
+            "runtime_authority_sha256": runtime_authority_sha256,
+            "completed_at": _now(),
+            "result": dict(result),
+        },
     )
 
 
@@ -681,9 +751,7 @@ def resolve_evidence(
     }
 
 
-def _resolve_worker_evidence(
-    root: Path, runtime_path: str | Path
-) -> dict[str, object]:
+def _resolve_worker_evidence(root: Path, runtime_path: str | Path) -> dict[str, object]:
     """Resolve worker authority with bounded retries for transient ledger reads."""
 
     runtime = load_runtime(root, runtime_path)
@@ -1344,6 +1412,21 @@ def _worker(
         try:
             for fold in folds:
                 fold_root = unit_root / f"fold-{fold}"
+                checkpoint_path = _fold_checkpoint_path(unit_root, fold)
+                checkpoint = _load_fold_checkpoint(
+                    checkpoint_path,
+                    mode=mode,
+                    position=position,
+                    route_id=route.id,
+                    treatment_id=treatment.id,
+                    fold=fold,
+                    runtime_authority_sha256=str(
+                        evidence["runtime"]["authority_sha256"]
+                    ),
+                )
+                if checkpoint is not None:
+                    fold_results.append(checkpoint)
+                    continue
                 owners = list(fold_map[fold])
                 archive_items = []
                 for owner in owners:
@@ -1469,28 +1552,39 @@ def _worker(
                             "evidence_path": str(query_signatures.relative_to(root)),
                         }
                     )
-                fold_results.append(
-                    {
-                        "fold": fold,
-                        "binary_format": route.binary_format,
-                        "link_harness_policy": LINK_HARNESS_POLICY,
-                        "link_audit": link_audit,
-                        "query_sha256": _sha256(query_binary),
-                        "truth_sha256": _sha256(truth_binary),
-                        "signature_summary": signature_summary,
-                        "owner_match_counts": {
-                            owner: len(matches.get(owner, set()))
-                            for owner in sorted(cohort)
-                        },
-                        "positive_owners": sorted(positive),
-                        "confusion_matrix": {
-                            "true_positives": len(present & positive),
-                            "false_positives": len(absent & positive),
-                            "true_negatives": len(absent - positive),
-                            "false_negatives": len(present - positive),
-                        },
-                        "failures": failures,
-                    }
+                fold_result = {
+                    "fold": fold,
+                    "binary_format": route.binary_format,
+                    "link_harness_policy": LINK_HARNESS_POLICY,
+                    "link_audit": link_audit,
+                    "query_sha256": _sha256(query_binary),
+                    "truth_sha256": _sha256(truth_binary),
+                    "signature_summary": signature_summary,
+                    "owner_match_counts": {
+                        owner: len(matches.get(owner, set()))
+                        for owner in sorted(cohort)
+                    },
+                    "positive_owners": sorted(positive),
+                    "confusion_matrix": {
+                        "true_positives": len(present & positive),
+                        "false_positives": len(absent & positive),
+                        "true_negatives": len(absent - positive),
+                        "false_negatives": len(present - positive),
+                    },
+                    "failures": failures,
+                }
+                fold_results.append(fold_result)
+                _write_fold_checkpoint(
+                    checkpoint_path,
+                    fold_result,
+                    mode=mode,
+                    position=position,
+                    route_id=route.id,
+                    treatment_id=treatment.id,
+                    fold=fold,
+                    runtime_authority_sha256=str(
+                        evidence["runtime"]["authority_sha256"]
+                    ),
                 )
                 if not execution["retain_ghidra_projects_on_success"]:
                     shutil.rmtree(project_parent, ignore_errors=True)
@@ -1678,10 +1772,9 @@ def canary_gate_status(
                 "report_path": str(path.relative_to(root)),
                 "state": document.get("state", "invalid"),
             }
-        semantic_contract_matches = (
-            document.get("canary_contract_sha256") == contract_sha256
-            or _legacy_canary_contract_matches(document, runtime)
-        )
+        semantic_contract_matches = document.get(
+            "canary_contract_sha256"
+        ) == contract_sha256 or _legacy_canary_contract_matches(document, runtime)
         if (
             document.get("state") == "measured-complete"
             and semantic_contract_matches
@@ -1965,14 +2058,15 @@ def run_validation(
                             "validation cell exceeded the configured supervisor timeout",
                         )
                         attempt = (
-                            _prior_supervisor_attempts(result_path, "cell-timeout")
-                            + 1
+                            _prior_supervisor_attempts(result_path, "cell-timeout") + 1
                         )
-                        if attempt < int(
-                            runtime["execution"]["cell_timeout_attempts"]
-                        ) and json.loads(result_path.read_text(encoding="utf-8")).get(
-                            "reason_code"
-                        ) == "cell-timeout":
+                        if (
+                            attempt < int(runtime["execution"]["cell_timeout_attempts"])
+                            and json.loads(result_path.read_text(encoding="utf-8")).get(
+                                "reason_code"
+                            )
+                            == "cell-timeout"
+                        ):
                             _archive_failed_result(result_path)
                 if process.poll() is not None and not worker["handled"]:
                     worker_positions = list(worker["positions"])
