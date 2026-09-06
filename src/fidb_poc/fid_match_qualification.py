@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 from typing import Mapping
@@ -94,11 +96,58 @@ def _linker_truth_intervals(
     return sorted(set(intervals))
 
 
+def _symbol_address_bias(
+    query_binary: Path, functions: list[dict[str, object]]
+) -> dict[str, int]:
+    """Measure Ghidra's import bias against retained symbols in the query image."""
+
+    nm = shutil.which("llvm-nm") or shutil.which("nm")
+    if nm is None:
+        raise ValueError("truth attribution requires llvm-nm or nm")
+    result = subprocess.run(
+        [nm, "-S", "--defined-only", str(query_binary)],
+        text=True,
+        capture_output=True,
+        timeout=300,
+        check=False,
+    )
+    if result.returncode:
+        raise ValueError(f"could not inspect query symbols: {result.stderr[-1000:]}")
+    symbols: dict[str, set[int]] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 4:
+            try:
+                address = int(fields[0], 16)
+            except ValueError:
+                continue
+            symbols.setdefault(fields[-1], set()).add(address)
+    differences = Counter()
+    for function in functions:
+        addresses = symbols.get(str(function.get("function_name", "")), set())
+        if len(addresses) != 1:
+            continue
+        try:
+            ghidra_address = int(str(function["address"]), 16)
+        except (KeyError, ValueError):
+            continue
+        differences[ghidra_address - next(iter(addresses))] += 1
+    if not differences:
+        raise ValueError("could not establish Ghidra-to-linker address bias")
+    bias, supporting_symbols = differences.most_common(1)[0]
+    return {
+        "bytes": bias,
+        "supporting_symbols": supporting_symbols,
+        "observed_biases": len(differences),
+    }
+
+
 def _annotate_truth(
     root: Path,
     oracle: dict[str, object],
     fold_root: Path,
     signature_paths: Mapping[str, Path],
+    query_binary: Path,
 ) -> None:
     truth = json.loads((fold_root / "truth-map.json").read_text(encoding="utf-8"))
     owners = [str(owner) for owner in truth["owners"]]
@@ -107,9 +156,10 @@ def _annotate_truth(
         for name in _signature_names(signature_paths[owner]):
             owner_by_name.setdefault(name, set()).add(owner)
     intervals = _linker_truth_intervals(root, truth, fold_root / "link.map")
+    address_bias = _symbol_address_bias(query_binary, oracle["functions"])
     for function in oracle["functions"]:
         try:
-            address = int(str(function["address"]), 16)
+            address = int(str(function["address"]), 16) - address_bias["bytes"]
         except ValueError:
             address = -1
         interval_owners = {
@@ -139,6 +189,7 @@ def _annotate_truth(
             else None
         ),
         "linker_intervals": len(intervals),
+        "ghidra_to_linker_address_bias": address_bias,
     }
 
 
@@ -158,6 +209,7 @@ def qualify_retained_validation(
     if position < 1 or fold not in {"A", "B"}:
         raise ValueError("FID matcher qualification position/fold is invalid")
     from . import ghidra_fid
+    from .machine_validation import LINK_HARNESS_POLICY
     from .machine_validation_runner import load_runtime, resolve_hash_analysis_evidence
     from .pipeline import find_ghidra, ghidra_environment
 
@@ -178,6 +230,14 @@ def qualify_retained_validation(
         raise ValueError("retained validation unit is not complete")
     route_id = str(result["route_id"])
     treatment_id = str(result["treatment_id"])
+    fold_results = [row for row in result.get("folds", []) if row.get("fold") == fold]
+    if len(fold_results) != 1:
+        raise ValueError("retained validation fold result is unavailable")
+    fold_result = fold_results[0]
+    if fold_result.get("link_harness_policy") != LINK_HARNESS_POLICY:
+        raise ValueError("retained validation fold uses a stale link harness")
+    if fold_result.get("link_audit", {}).get("direct_zero_control_flow_count") != 0:
+        raise ValueError("retained validation fold failed its link audit")
     routes = {route.id: route for route in evidence["configuration"].routes}
     route = routes[route_id]
     fold_root = matches[0].parent / f"fold-{fold}"
@@ -232,7 +292,7 @@ def qualify_retained_validation(
         oracle = ghidra_fid.export_fid_oracle_input(
             project_dir, "oracle", program_path, fidbs, oracle_path
         )
-    _annotate_truth(root, oracle, fold_root, signature_paths)
+    _annotate_truth(root, oracle, fold_root, signature_paths, query_binary)
     _atomic_json(oracle_path, oracle)
     cpu = match_cpu(oracle, authority)
     gpu = match_gpu(oracle, authority)
@@ -269,6 +329,7 @@ def qualify_retained_validation(
             "ghidra_compiler_spec_id": route.ghidra_compiler_spec,
             "query_path": str(query_binary.relative_to(root)),
             "query_sha256": _sha256(query_binary),
+            "link_harness_policy": LINK_HARNESS_POLICY,
             "fidb_count": len(fidbs),
             "fidb_sha256": [_sha256(path) for path in fidbs],
         },

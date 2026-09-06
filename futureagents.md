@@ -535,6 +535,34 @@ and function-recovery construct effects. Future reports retain route,
 treatment and owner FN strata. Preserve the raw observations and run a bounded
 archive-to-executable control before accepting or rejecting the recall result.
 
+The replacement validation harness is
+`whole-archive-shared-image-symbolic-v2`. ELF composites are non-executed
+shared images linked with `--whole-archive` and `-Bsymbolic`; the former
+entry-zero executable and `--unresolved-symbols=ignore-all` combination is
+forbidden. Every fold retains `link-audit.json`, and a direct call, jump or
+branch to address zero fails the unit before Ghidra analysis. PE/COFF uses its
+reviewed DLL link but passes the same post-link audit. Do not weaken this audit
+to make a route green.
+
+Ghidra imports shared images at an image base that need not equal linker-map
+addresses. Native truth attribution therefore measures a symbol-supported
+Ghidra-to-linker bias and records it in `oracle-input.json`; do not hard-code
+the x86 observation of `0x100000` for another format or route. A bounded x86
+control improved correct-owner full-hash candidate survival from 75.65% to
+98.72% and native recall from 71.20% to 94.88% (2,370 TP, 128 FN, one FP,
+22,481 TN). The repaired canonical canary also audited x86 ELF, Android
+AArch64 ELF and Windows PE/COFF with zero direct-to-zero transfers.
+
+`validation/fid-matching-run.toml` pins the required harness. Campaign status
+reports its source-harness preflight, and campaign admission refuses a missing,
+stale or failed fold. The old `20260904T152653Z-full` source is intentionally
+blocked for native matching; never edit its retained result files to make them
+appear current. Run a new full machine-validation source campaign under the
+current manifest, then admit native matching against that new immutable run.
+Use `scripts/trace_fid_misses.py --rebuild-composite --native-oracle` for
+bounded investigations rather than launching the 444-case campaign while a
+construction defect is unresolved.
+
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field
 `delta_owner` table. SQLite chose `SCAN delta_owner LEFT-JOIN`; the attempt was

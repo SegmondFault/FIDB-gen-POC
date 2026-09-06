@@ -208,6 +208,7 @@ composite with:
 uv run python scripts/trace_fid_misses.py \
   --run-id 20260904T152653Z-full --position 1 --fold B \
   --function 'gettext@1.0:_libintl_find_domain' \
+  --rebuild-composite --native-oracle \
   --output qualification/evidence/fid-fn-trace
 ```
 
@@ -229,13 +230,39 @@ control, then changed in the five-library composite while its 198-byte,
 losses before FID scoring, not evidence that the score threshold rejected the
 correct library.
 
-The current portable matcher correctly reproduces the native decision for the
+The portable matcher correctly reproduces the native decision for the
 signatures it is given; it cannot rescue a correct reference candidate that is
-absent from the full-hash bucket. Before treating a complete campaign as real
-executable recall, replace the unresolved-at-zero synthetic link, add
-executable-shaped reference evidence or another construct-valid control, and
-gate the canary on archive-to-query full-hash survival as a separately reported
-stage.
+absent from the full-hash bucket.
+
+### Repaired shared-image harness
+
+The current harness links ELF composites as non-executed shared images with
+`--whole-archive` and `-Bsymbolic`. It no longer creates an entry-zero
+executable or permits unresolved symbols to become direct calls to address
+zero. Every linked ELF or PE/COFF image is disassembled before Ghidra analysis;
+the unit fails if the audit finds a direct call, jump or branch to zero. Native
+truth attribution measures and records Ghidra's image-base bias against the
+retained symbol table before applying linker-map intervals.
+
+On the same x86-64/GCC 12 fold used by the bounded diagnostic, correct-owner
+full-hash candidate survival increased from 1,886/2,493 (75.65%) to
+2,466/2,498 (98.72%). The native Ghidra owner oracle then measured 2,370 TP,
+128 FN, one FP and 22,481 TN: 94.88% recall, 99.96% specificity and 99.96%
+precision. All eight originally selected trace functions retained their
+reference full hash in both the repaired one-library and five-library links.
+
+The canonical repaired-harness canary completed four folds covering x86-64
+ELF, AArch64 Android ELF and x86-64 PE/COFF with zero audited transfers to
+address zero. A native-FID campaign now refuses any source fold that lacks the
+current harness identity or its successful link audit. Historical C10 source
+evidence remains immutable and cannot be reused for the replacement campaign;
+produce a new full validation source run first.
+
+The remaining x86 miss population is real under this controlled construction,
+but not yet ecological recall. Of 2,498 labelled query functions, 32 have no
+correct-owner full-hash candidate and 96 have a correct candidate but are not
+accepted as the correct owner. Preserve those populations separately when
+tuning candidate coverage, relationship scoring or size thresholds.
 
 ## Legacy exact-tuple analysis
 

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from fidb_poc.machine_validation_runner import (
+    LINK_HARNESS_POLICY,
     QUERY_COPY_POLICY,
     REFERENCE_INDEX_SCHEMA,
     _archive_failed_result,
@@ -15,6 +16,7 @@ from fidb_poc.machine_validation_runner import (
     _post_validation_retention,
     _query_index,
     _width_openssl_signatures,
+    _zero_control_flow_lines,
     canary_gate_status,
     load_runtime,
     pause_validation,
@@ -52,8 +54,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
             root = Path(temporary)
             index = root / "reference.sqlite3"
             connection = sqlite3.connect(index)
-            connection.executescript(
-                """
+            connection.executescript("""
                 CREATE TABLE reference_identity(
                     language TEXT, target_os TEXT, binary_format TEXT,
                     full_hash TEXT, specific_hash TEXT,
@@ -143,9 +144,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(len(withheld["one@1"]), 1)
             connection = sqlite3.connect(index)
             connection.execute("DELETE FROM reference_identity WHERE route_id='r2'")
-            connection.execute(
-                "UPDATE reference_owner_signature SET identity_count=1"
-            )
+            connection.execute("UPDATE reference_owner_signature SET identity_count=1")
             connection.commit()
             connection.close()
             withheld, _ = _query_index(index, query, "r1", "t1", "linux", "ELF", False)
@@ -175,8 +174,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
             root = Path(temporary)
             index = root / "reference.sqlite3"
             reference = sqlite3.connect(index)
-            reference.execute(
-                """
+            reference.execute("""
                 CREATE TABLE reference_identity(
                     language TEXT, target_os TEXT, binary_format TEXT,
                     full_hash TEXT, specific_hash TEXT,
@@ -369,9 +367,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(result["true_negatives"], 2)
             self.assertEqual(result["false_negatives"], 2)
             self.assertEqual(result["unattributed_query_signatures"], 2)
-            self.assertEqual(
-                outcomes, {"fn": 2, "fp": 1, "tp": 1, "unattributed": 2}
-            )
+            self.assertEqual(outcomes, {"fn": 2, "fp": 1, "tp": 1, "unattributed": 2})
             self.assertEqual(hash_types["full"]["multi_owner_values"], 1)
             self.assertEqual(hash_types["specific"]["multi_owner_values"], 0)
             self.assertEqual(hash_types["complete"]["multi_owner_values"], 0)
@@ -424,6 +420,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
                         "state": "measured-complete",
                         "runtime_authority_sha256": "old",
                         "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+                        "link_harness_policy": "old-harness",
                         "query_copy_policy": QUERY_COPY_POLICY,
                     }
                 ),
@@ -449,6 +446,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
                             "state": "measured-complete",
                             "runtime_authority_sha256": "current",
                             "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+                            "link_harness_policy": LINK_HARNESS_POLICY,
                             "query_copy_policy": QUERY_COPY_POLICY,
                         }
                     ),
@@ -467,7 +465,9 @@ class MachineValidationRunnerTests(unittest.TestCase):
             status_path = run_root / "status.json"
             current = root / "runs/current.json"
             current.write_text(
-                json.dumps({"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}),
+                json.dumps(
+                    {"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}
+                ),
                 encoding="utf-8",
             )
             status_path.write_text(
@@ -617,11 +617,15 @@ class MachineValidationRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             result = Path(temporary) / "unit/result.json"
             result.parent.mkdir()
-            result.write_text(json.dumps({"state": "failed", "error": "link"}), encoding="utf-8")
+            result.write_text(
+                json.dumps({"state": "failed", "error": "link"}), encoding="utf-8"
+            )
             _archive_failed_result(result)
             self.assertFalse(result.exists())
             archived = result.parent / "attempts/result-001.json"
-            self.assertEqual(json.loads(archived.read_text(encoding="utf-8"))["error"], "link")
+            self.assertEqual(
+                json.loads(archived.read_text(encoding="utf-8"))["error"], "link"
+            )
 
     def test_elf_composite_retries_hidden_stack_check_with_target_stub(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -650,13 +654,51 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 binary_format="ELF",
                 compiler=("/toolchain/bin/powerpc-gcc",),
             )
-            with patch("fidb_poc.machine_validation_runner.subprocess.run", side_effect=run):
-                linked = _link_composite(route, [archive], output, root / "link.map")
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.subprocess.run",
+                    side_effect=run,
+                ),
+                patch("fidb_poc.machine_validation_runner._audit_linked_image"),
+            ):
+                linked = _link_composite(
+                    route,
+                    [archive],
+                    output,
+                    root / "link.map",
+                    harness_mode=LINK_HARNESS_POLICY,
+                )
 
             self.assertEqual(linked, output)
             self.assertEqual(len(calls), 3)
             self.assertIn(str(root / "stack-chk-fail-local.o"), calls[2])
+            self.assertIn("-shared", calls[2])
+            self.assertIn("-Wl,-Bsymbolic", calls[2])
+            self.assertNotIn("-Wl,-e,0", calls[2])
+            self.assertNotIn("-Wl,--unresolved-symbols=ignore-all", calls[2])
             self.assertIn("validation composite retry", (root / "link.log").read_text())
+
+    def test_zero_address_control_flow_is_detected_across_instruction_sets(self):
+        lines = [
+            "  4010: e8 eb bf ff ff call 0 <missing>",
+            "  1004: 97ffff00 bl 0 <missing>",
+            "  2008: 0c000000 jal 0 <missing>",
+            "  300c: e8 6f 00 00 call 3080 <present>",
+            "  4010: ff 10 call *(%rax)",
+        ]
+
+        self.assertEqual(len(_zero_control_flow_lines(lines)), 3)
+
+    def test_composite_rejects_stale_harness_authority_before_linking(self):
+        route = SimpleNamespace(id="route", binary_format="ELF", compiler=("cc",))
+        with self.assertRaisesRegex(ValueError, "unsupported validation harness"):
+            _link_composite(
+                route,
+                [],
+                Path("output"),
+                Path("link.map"),
+                harness_mode="whole-archive-link-map",
+            )
 
     def test_terminal_validation_uses_shared_scoped_retention(self):
         policy = SimpleNamespace(

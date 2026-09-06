@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import shutil
 import sqlite3
@@ -25,16 +26,25 @@ import tomllib
 from typing import Iterable, Mapping
 
 from .c_width import compile_c_width, materialize_width_configuration
-from .machine_validation import compile_machine_validation
+from .machine_validation import (
+    LINK_HARNESS_POLICY,
+    QUERY_COPY_POLICY,
+    compile_machine_validation,
+)
 from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_profile
 
 RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
 REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
-QUERY_COPY_POLICY = "debug-stripped-symbol-indexed"
 DEFAULT_RUNTIME = Path("validation/machine-validation-runtime.toml")
 PAUSE_REQUEST_NAME = "pause-request.json"
+
+_ZERO_CONTROL_FLOW = re.compile(
+    r"\b(?:callq?|j(?:mpq?|alr?)|b[a-z]{0,4}(?:\.[a-z0-9]+)?|jsr)"
+    r"\s+(?:#)?(?:0x)?0(?:\s|<|$)",
+    re.IGNORECASE,
+)
 
 
 def _now() -> str:
@@ -62,7 +72,9 @@ def _inside(root: Path, value: str, label: str) -> Path:
 
 def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}-", suffix=".tmp", dir=path.parent)
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{path.name}-", suffix=".tmp", dir=path.parent
+    )
     temporary = Path(name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
@@ -156,14 +168,25 @@ def _archive_failed_result(result_path: Path) -> None:
     result_path.replace(attempts / f"result-{attempt:03d}.json")
 
 
-def load_runtime(project_root: str | Path, authority: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
+def load_runtime(
+    project_root: str | Path, authority: str | Path = DEFAULT_RUNTIME
+) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     path = _inside(root, str(authority), "machine-validation runtime")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
     expected = {
-        "schema_version", "validation_id", "manifest", "schedule", "output_root",
-        "ledger", "source_archive", "openssl_width_report", "ghidra_headless",
-        "execution", "canary", "safety",
+        "schema_version",
+        "validation_id",
+        "manifest",
+        "schedule",
+        "output_root",
+        "ledger",
+        "source_archive",
+        "openssl_width_report",
+        "ghidra_headless",
+        "execution",
+        "canary",
+        "safety",
     }
     if set(document) != expected or document.get("schema_version") != RUNTIME_SCHEMA:
         raise ValueError("machine-validation runtime has unsupported fields or schema")
@@ -308,15 +331,13 @@ def _production_evidence(
     connection = sqlite3.connect(f"file:{ledger}?mode=ro", uri=True, timeout=5)
     connection.row_factory = sqlite3.Row
     try:
-        rows = connection.execute(
-            """
+        rows = connection.execute("""
             SELECT jobs.job_id, jobs.result_json, cells.cell_json
             FROM jobs
             JOIN resolved_cells AS cells
               ON cells.plan_digest = jobs.plan_digest AND cells.cell_id = jobs.base_cell_id
             WHERE jobs.active = 1 AND jobs.state = 'complete'
-            """
-        )
+            """)
         for row in rows:
             cell = json.loads(row["cell_json"])
             recipe = cell.get("recipe", {})
@@ -335,18 +356,34 @@ def _production_evidence(
                 if _sha256(seal_path) != result["seal"]["sha256"]:
                     raise ValueError(f"cell seal digest mismatch for {row['job_id']}")
                 seal = json.loads(seal_path.read_text(encoding="utf-8"))
-                archive_paths = [attempt / value for value in str(seal["evidence"]["static_archive_path"]).split(";")]
-                archive_digests = str(seal["evidence"]["static_archive_sha256"]).split(";")
-                if len(archive_paths) != len(archive_digests) or any(not path.is_file() for path in archive_paths):
-                    raise ValueError(f"retained static archives are incomplete for {key}")
-                if any(_sha256(path) != digest for path, digest in zip(archive_paths, archive_digests, strict=True)):
-                    raise ValueError(f"retained static archive digest mismatch for {key}")
+                archive_paths = [
+                    attempt / value
+                    for value in str(seal["evidence"]["static_archive_path"]).split(";")
+                ]
+                archive_digests = str(seal["evidence"]["static_archive_sha256"]).split(
+                    ";"
+                )
+                if len(archive_paths) != len(archive_digests) or any(
+                    not path.is_file() for path in archive_paths
+                ):
+                    raise ValueError(
+                        f"retained static archives are incomplete for {key}"
+                    )
+                if any(
+                    _sha256(path) != digest
+                    for path, digest in zip(archive_paths, archive_digests, strict=True)
+                ):
+                    raise ValueError(
+                        f"retained static archive digest mismatch for {key}"
+                    )
                 archives[key] = {
                     "paths": archive_paths,
                     "sha256": archive_digests,
                     "source": str(attempt.relative_to(root)),
                 }
-            signature_files = list((attempt / "artifacts/libs/fid-signatures").glob("*.jsonl"))
+            signature_files = list(
+                (attempt / "artifacts/libs/fid-signatures").glob("*.jsonl")
+            )
             if len(signature_files) != 1 or not signature_files[0].is_file():
                 raise ValueError(f"retained signature evidence is incomplete for {key}")
             signatures[key] = {
@@ -408,10 +445,13 @@ def resolve_evidence(
     cohort = set(status["randomization"]["canonical_ids"])
     expected = {
         (owner, str(unit["route_id"]), str(unit["treatment_id"]))
-        for owner in cohort for unit in manifest["work_unit"]
+        for owner in cohort
+        for unit in manifest["work_unit"]
     }
     archives, signatures = _production_evidence(root, runtime, cohort)
-    signatures.update(_width_openssl_signatures(root, runtime, expected - set(signatures)))
+    signatures.update(
+        _width_openssl_signatures(root, runtime, expected - set(signatures))
+    )
     missing_signatures = expected - set(signatures)
     missing_archives = expected - set(archives)
     reconstructable = {key for key in missing_archives if key[0] == "openssl@3.5.8"}
@@ -554,7 +594,9 @@ def _available_memory_bytes() -> int:
     return fields.get("MemAvailable", 0)
 
 
-def preflight(project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
+def preflight(
+    project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTIME
+) -> dict[str, object]:
     evidence = resolve_evidence(project_root, runtime_path)
     runtime = evidence["runtime"]
     return {
@@ -569,7 +611,11 @@ def preflight(project_root: str | Path, runtime_path: str | Path = DEFAULT_RUNTI
 
 
 def _run_root(root: Path, runtime: Mapping[str, object], run_id: str) -> Path:
-    if not run_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for character in run_id):
+    if not run_id or any(
+        character
+        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+        for character in run_id
+    ):
         raise ValueError("machine-validation run id is not a safe path component")
     return _inside(root, f'{runtime["output_root"]}/{run_id}', "validation run")
 
@@ -589,24 +635,119 @@ def _strip_tool(route) -> Path:
     raise ValueError(f"no strip tool found beside compiler for {route.id}")
 
 
-def _link_composite(route, archives: list[Path], output: Path, truth_map: Path) -> Path:
+def _companion_tool(route, name: str) -> Path:
+    compiler = Path(route.compiler[0])
+    compiler_name = compiler.name
+    candidates = []
+    if compiler_name.endswith("-gcc"):
+        candidates.append(compiler.with_name(f"{compiler_name[:-4]}-{name}"))
+    candidates.extend(
+        (
+            compiler.parent / f"llvm-{name}",
+            compiler.parent / name,
+        )
+    )
+    for command in (f"llvm-{name}", name):
+        if resolved := shutil.which(command):
+            candidates.append(Path(resolved))
+    for path in candidates:
+        if path.is_file() and os.access(path, os.X_OK):
+            return path
+    raise ValueError(f"no {name} tool found for validation route {route.id}")
+
+
+def _zero_control_flow_lines(lines: Iterable[str]) -> list[str]:
+    return [line.strip() for line in lines if _ZERO_CONTROL_FLOW.search(line)]
+
+
+def _audit_linked_image(
+    route,
+    output: Path,
+    audit_path: Path,
+    harness_mode: str,
+) -> dict[str, object]:
+    objdump = _companion_tool(route, "objdump")
+    result = subprocess.run(
+        [str(objdump), "-d", str(output)],
+        text=True,
+        capture_output=True,
+        timeout=300,
+        check=False,
+    )
+    hits = _zero_control_flow_lines(result.stdout.splitlines())
+    audit = {
+        "schema_version": "fidb-validation-link-audit/v1",
+        "harness_mode": harness_mode,
+        "route_id": route.id,
+        "binary_format": route.binary_format,
+        "image_kind": "shared-object" if route.binary_format == "ELF" else "dll",
+        "artifact": str(output),
+        "artifact_sha256": _sha256(output),
+        "objdump": str(objdump),
+        "objdump_returncode": result.returncode,
+        "direct_zero_control_flow_count": len(hits),
+        "direct_zero_control_flow": hits[:20],
+    }
+    _atomic_json(audit_path, audit)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"linked-image audit failed for {route.id}: {result.stderr[-2000:]}"
+        )
+    if hits:
+        raise RuntimeError(
+            f"linked-image audit rejected {route.id}: "
+            f"{len(hits)} direct control-flow transfers target address zero"
+        )
+    return audit
+
+
+def _link_composite(
+    route,
+    archives: list[Path],
+    output: Path,
+    truth_map: Path,
+    *,
+    harness_mode: str,
+) -> Path:
+    if harness_mode != LINK_HARNESS_POLICY:
+        raise ValueError(
+            f"unsupported validation harness {harness_mode!r}; "
+            f"expected {LINK_HARNESS_POLICY!r}"
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
+
     def command(support: list[Path]) -> list[str]:
         if route.binary_format == "PE/COFF":
             return [
-            *route.compiler, "-shared", "-nostdlib", "-Wl,/force:unresolved",
-            "-Wl,/force:multiple", "-Wl,--whole-archive", *map(str, archives),
-            "-Wl,--no-whole-archive", "-o", str(output),
+                *route.compiler,
+                "-shared",
+                "-nostdlib",
+                "-Wl,/force:unresolved",
+                "-Wl,/force:multiple",
+                "-Wl,--whole-archive",
+                *map(str, archives),
+                "-Wl,--no-whole-archive",
+                "-o",
+                str(output),
             ]
         return [
-            *route.compiler, "-nostdlib", "-no-pie", "-Wl,-e,0",
-            "-Wl,--allow-multiple-definition", "-Wl,--unresolved-symbols=ignore-all",
-            f"-Wl,-Map,{truth_map}", *map(str, support),
-            "-Wl,--whole-archive", *map(str, archives),
-            "-Wl,--no-whole-archive", "-o", str(output),
+            *route.compiler,
+            "-shared",
+            "-nostdlib",
+            "-Wl,-Bsymbolic",
+            "-Wl,--allow-multiple-definition",
+            f"-Wl,-Map,{truth_map}",
+            *map(str, support),
+            "-Wl,--whole-archive",
+            *map(str, archives),
+            "-Wl,--no-whole-archive",
+            "-o",
+            str(output),
         ]
 
-    result = subprocess.run(command([]), text=True, capture_output=True, timeout=900, check=False)
+    result = subprocess.run(
+        command([]), text=True, capture_output=True, timeout=900, check=False
+    )
     log = result.stdout + result.stderr
     if (
         result.returncode != 0
@@ -650,6 +791,12 @@ def _link_composite(route, archives: list[Path], output: Path, truth_map: Path) 
         raise RuntimeError(
             f"composite link failed for {route.id}: {result.stderr[-2000:]}"
         )
+    _audit_linked_image(
+        route,
+        output,
+        truth_map.with_name("link-audit.json"),
+        harness_mode,
+    )
     return output
 
 
@@ -736,14 +883,22 @@ def build_reference_index(
             route_authority = routes[route]
             batch = []
             for row in _read_signature_rows(item["path"]):
-                batch.append((
-                    str(row.get("language", row.get("ghidra_language_id", ""))),
-                    route_authority.target_os, route_authority.binary_format,
-                    str(row["full_hash"]), str(row["specific_hash"]),
-                    int(row["specific_hash_additional_size"]), int(row["code_unit_size"]),
-                    owner, route, treatment, str(row.get("name", row.get("function_name", ""))),
-                    str(item["source"]),
-                ))
+                batch.append(
+                    (
+                        str(row.get("language", row.get("ghidra_language_id", ""))),
+                        route_authority.target_os,
+                        route_authority.binary_format,
+                        str(row["full_hash"]),
+                        str(row["specific_hash"]),
+                        int(row["specific_hash_additional_size"]),
+                        int(row["code_unit_size"]),
+                        owner,
+                        route,
+                        treatment,
+                        str(row.get("name", row.get("function_name", ""))),
+                        str(item["source"]),
+                    )
+                )
                 if len(batch) >= 5000:
                     before = connection.total_changes
                     connection.executemany(
@@ -760,8 +915,7 @@ def build_reference_index(
                 )
                 inserted += connection.total_changes - before
             connection.commit()
-        connection.execute(
-            """
+        connection.execute("""
             INSERT INTO reference_owner_signature
             SELECT language, target_os, binary_format, full_hash, specific_hash,
                    additional_size, code_size, owner, MIN(function_name),
@@ -1030,7 +1184,16 @@ def _worker(
                 archives = [
                     path for _owner, item in archive_items for path in item["paths"]
                 ]
-                _link_composite(route, archives, truth_binary, fold_root / "link.map")
+                _link_composite(
+                    route,
+                    archives,
+                    truth_binary,
+                    fold_root / "link.map",
+                    harness_mode=str(evidence["manifest"]["execution"]["harness_mode"]),
+                )
+                link_audit = json.loads(
+                    (fold_root / "link-audit.json").read_text(encoding="utf-8")
+                )
                 query_binary = fold_root / f"query{suffix}"
                 result = subprocess.run(
                     [
@@ -1112,6 +1275,8 @@ def _worker(
                     {
                         "fold": fold,
                         "binary_format": route.binary_format,
+                        "link_harness_policy": LINK_HARNESS_POLICY,
+                        "link_audit": link_audit,
                         "query_sha256": _sha256(query_binary),
                         "truth_sha256": _sha256(truth_binary),
                         "signature_summary": signature_summary,
@@ -1220,6 +1385,7 @@ def _aggregate(
         "runtime_authority": runtime["authority_path"],
         "runtime_authority_sha256": runtime["authority_sha256"],
         "reference_index_schema": REFERENCE_INDEX_SCHEMA,
+        "link_harness_policy": LINK_HARNESS_POLICY,
         "query_copy_policy": QUERY_COPY_POLICY,
         "confusion_matrix": {"unit": "owner-labelled-candidate-decision", **matrix},
         "failure_summary": {
@@ -1228,8 +1394,10 @@ def _aggregate(
         },
         "failures": failures[:max_failure_rows],
         "metrics": {
-            "expected_work_units": len(expected_positions), "complete_work_units": len(complete_positions),
-            "failed_work_units": len(failed), "worker_sum_wall_time_ns": wall_time_ns,
+            "expected_work_units": len(expected_positions),
+            "complete_work_units": len(complete_positions),
+            "failed_work_units": len(failed),
+            "worker_sum_wall_time_ns": wall_time_ns,
             "minimum_distinct_hashes": minimum_hashes,
             "failure_rows_truncated": max(0, len(failures) - max_failure_rows),
         },
@@ -1265,9 +1433,9 @@ def canary_gate_status(
             }
         if (
             document.get("state") == "measured-complete"
-            and document.get("runtime_authority_sha256")
-            == runtime["authority_sha256"]
+            and document.get("runtime_authority_sha256") == runtime["authority_sha256"]
             and document.get("reference_index_schema") == REFERENCE_INDEX_SCHEMA
+            and document.get("link_harness_policy") == LINK_HARNESS_POLICY
             and document.get("query_copy_policy") == QUERY_COPY_POLICY
         ):
             return {
@@ -1351,7 +1519,8 @@ def run_validation(
             os.close(descriptor)
     positions = (
         {int(value) for value in runtime["canary"]["positions"]}
-        if mode == "canary" else {int(unit["position"]) for unit in evidence["manifest"]["work_unit"]}
+        if mode == "canary"
+        else {int(unit["position"]) for unit in evidence["manifest"]["work_unit"]}
     )
     status_path = run_root / "status.json"
     prior_status = {}
@@ -1802,11 +1971,16 @@ def pause_validation(
         status.get("state") == "failed"
         and int(status.get("complete_work_units", 0))
         < int(status.get("expected_work_units", 0))
-        and not _validation_process_active(status.get("pid"), str(status.get("run_id") or ""))
+        and not _validation_process_active(
+            status.get("pid"), str(status.get("run_id") or "")
+        )
     ):
         paused = {
-            **status, "state": "paused", "paused_at": _now(),
-            "pause_actor": actor, "worker_pids": [],
+            **status,
+            "state": "paused",
+            "paused_at": _now(),
+            "pause_actor": actor,
+            "worker_pids": [],
         }
         _atomic_json(status_path, paused)
         return paused
@@ -1824,7 +1998,9 @@ def pause_validation(
         },
     )
     pausing = {
-        **status, "state": "pausing", "pause_requested_at": requested_at,
+        **status,
+        "state": "pausing",
+        "pause_requested_at": requested_at,
         "pause_actor": actor,
     }
     _atomic_json(status_path, pausing)
@@ -1845,7 +2021,9 @@ def resume_validation(
     mode = str(status.get("mode") or "")
     if mode not in {"canary", "full"} or not run_id:
         raise ValueError("machine validation resume identity is invalid")
-    if int(status.get("complete_work_units", 0)) >= int(status.get("expected_work_units", 0)):
+    if int(status.get("complete_work_units", 0)) >= int(
+        status.get("expected_work_units", 0)
+    ):
         raise ValueError("machine validation has no incomplete work to resume")
     if _validation_process_active(status.get("pid"), run_id):
         raise ValueError("machine-validation run process is still active")
@@ -1862,8 +2040,13 @@ def resume_validation(
     (status_path.parent / PAUSE_REQUEST_NAME).unlink(missing_ok=True)
     resume_count = int(status.get("resume_count", 0)) + 1
     queued = {
-        **status, "state": "queued", "pid": None, "worker_pids": [],
-        "finished_at": None, "resumed_at": _now(), "resume_count": resume_count,
+        **status,
+        "state": "queued",
+        "pid": None,
+        "worker_pids": [],
+        "finished_at": None,
+        "resumed_at": _now(),
+        "resume_count": resume_count,
     }
     queued.pop("error", None)
     queued.pop("report_path", None)
@@ -1873,7 +2056,10 @@ def resume_validation(
     queued["pid"] = process.pid
     _atomic_json(status_path, queued)
     return {
-        "state": "queued", "run_id": run_id, "mode": mode, "pid": process.pid,
+        "state": "queued",
+        "run_id": run_id,
+        "mode": mode,
+        "pid": process.pid,
         "resume_count": resume_count,
         "complete_work_units": int(status.get("complete_work_units", 0)),
         "failed_work_units": int(status.get("failed_work_units", 0)),
@@ -1881,7 +2067,9 @@ def resume_validation(
     }
 
 
-def start_validation(project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME) -> dict[str, object]:
+def start_validation(
+    project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME
+) -> dict[str, object]:
     if mode not in {"canary", "full"}:
         raise ValueError("machine-validation mode must be canary or full")
     root = Path(project_root).resolve()

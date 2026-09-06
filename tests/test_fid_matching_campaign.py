@@ -3,18 +3,22 @@ import unittest
 import json
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from fidb_poc.fid_matching_campaign import (
     _expected_cases,
     _publish_hash_evidence,
     _resource_preflight,
+    _source_harness_preflight,
     _window_open,
     campaign_status,
     load_campaign,
 )
-from fidb_poc.fid_match_qualification import _linker_truth_intervals
+from fidb_poc.fid_match_qualification import (
+    _linker_truth_intervals,
+    _symbol_address_bias,
+)
 
 
 class FidMatchingCampaignTests(unittest.TestCase):
@@ -64,6 +68,46 @@ class FidMatchingCampaignTests(unittest.TestCase):
 
         self.assertEqual(result["state"], "blocked")
         self.assertEqual(len(result["blockers"]), 3)
+
+    def test_source_preflight_rejects_stale_and_accepts_audited_harness(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result_path = root / "runs/source/units/001-route/result.json"
+            result_path.parent.mkdir(parents=True)
+            campaign = {
+                **self.campaign,
+                "source_run_id": "source",
+                "runtime": "runtime.toml",
+                "canary": {**self.campaign["canary"], "cases": ["1:B"]},
+            }
+            with patch(
+                "fidb_poc.machine_validation_runner.load_runtime",
+                return_value={"output_root": "runs"},
+            ):
+                result_path.write_text(
+                    json.dumps({"folds": [{"fold": "B"}]}), encoding="utf-8"
+                )
+                stale = _source_harness_preflight(root, campaign, "canary")
+                result_path.write_text(
+                    json.dumps(
+                        {
+                            "folds": [
+                                {
+                                    "fold": "B",
+                                    "link_harness_policy": campaign["methodology"][
+                                        "required_link_harness"
+                                    ],
+                                    "link_audit": {"direct_zero_control_flow_count": 0},
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                ready = _source_harness_preflight(root, campaign, "canary")
+
+            self.assertEqual(stale["state"], "blocked")
+            self.assertEqual(ready["state"], "ready")
 
     def test_status_exposes_qualification_and_pending_cases(self):
         status = campaign_status(self.root)
@@ -133,6 +177,24 @@ class FidMatchingCampaignTests(unittest.TestCase):
                 _linker_truth_intervals(root, truth, link_map),
                 [(0x1000, 0x1020, "sample@1")],
             )
+
+    def test_symbol_address_bias_normalizes_shared_image_imports(self):
+        functions = [
+            {"address": "00101200", "function_name": "one"},
+            {"address": "00101300", "function_name": "two"},
+        ]
+        symbols = "00001200 20 T one\n00001300 30 T two\n"
+        with (
+            patch("fidb_poc.fid_match_qualification.shutil.which", return_value="nm"),
+            patch(
+                "fidb_poc.fid_match_qualification.subprocess.run",
+                return_value=Mock(returncode=0, stdout=symbols, stderr=""),
+            ),
+        ):
+            bias = _symbol_address_bias(Path("query.so"), functions)
+
+        self.assertEqual(bias["bytes"], 0x100000)
+        self.assertEqual(bias["supporting_symbols"], 2)
 
     def test_postprocess_compacts_hash_observations_by_owner(self):
         with tempfile.TemporaryDirectory() as temporary:

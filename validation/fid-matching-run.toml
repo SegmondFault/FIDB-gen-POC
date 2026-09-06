@@ -17,6 +17,7 @@ retain_hash_types = ["full", "specific", "complete"]
 retain_oracle_inputs = true
 retain_backend_outputs = true
 retain_hash_observations = true
+required_link_harness = "whole-archive-shared-image-symbolic-v2"
 
 [execution]
 workers = 4

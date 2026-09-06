@@ -19,6 +19,9 @@ VALIDATION_BATCH_SCHEMA = "fidb-machine-validation-batch/v1"
 VALIDATION_REPORT_SCHEMA = "fidb-machine-validation-hash-report/v1"
 VALIDATION_SCHEDULE_SCHEMA = "fidb-validation-schedule/v1"
 DEFAULT_AUTHORITY = Path("validation/machine-validation.toml")
+LINK_HARNESS_POLICY = "whole-archive-shared-image-symbolic-v2"
+TRUTH_COPY_POLICY = "unstripped-shared-image-with-link-map-and-audit"
+QUERY_COPY_POLICY = "debug-stripped-symbol-indexed"
 
 _TOP_LEVEL_FIELDS = {
     "schema_version",
@@ -244,6 +247,9 @@ def load_machine_validation(
         or batch["production_queue_mutation"] is not False
         or batch["first_run_requires_canary"] is not True
         or batch["execute_target_binaries"] is not False
+        or batch["harness_mode"] != LINK_HARNESS_POLICY
+        or batch["truth_copy"] != TRUTH_COPY_POLICY
+        or batch["query_copy"] != QUERY_COPY_POLICY
     ):
         raise ValueError(
             "machine-validation cannot auto-queue or execute target programs"
@@ -497,8 +503,7 @@ def _validation_results(
         and isinstance(hash_evidence.get("database_sha256"), str)
         and len(hash_evidence["database_sha256"]) == 64
         and all(
-            isinstance(hash_evidence.get(field), int)
-            and hash_evidence[field] >= 0
+            isinstance(hash_evidence.get(field), int) and hash_evidence[field] >= 0
             for field in (
                 "distinct_signatures",
                 "noisy_signatures",

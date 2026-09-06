@@ -6,8 +6,8 @@ automatic_scheduling = true
 production_queue_mutation = false
 execute_target_binaries = false
 authority_path = "validation/machine-validation.toml"
-authority_sha256 = "9218a8849b2cdcb7ebadf8423fc433d8b4bdc7712969aeb6b247335e7b8668b8"
-materialization_digest = "23c41dd72d9ff2eef78fa4c6882632f3e9a193a62d3eb33a146830e721499236"
+authority_sha256 = "f67a908c29c7785b5f83331104a26292378b0209accde84d87be8851ce2a23ef"
+materialization_digest = "aad711ec5180d5f829d93e7adc5683dfe6ef07ddb11960f7b94107eb3dcd4e9a"
 
 [summary]
 work_units = 222
@@ -22,8 +22,8 @@ fold_b = ["gmp@6.3.0", "lz4@1.10.0", "gettext@1.0", "sqlite@3.53.4", "pcre2@10.4
 
 [execution]
 input_strategy = "rebuild-from-reviewed-recipes"
-harness_mode = "whole-archive-link-map"
-truth_copy = "unstripped-with-link-map"
+harness_mode = "whole-archive-shared-image-symbolic-v2"
+truth_copy = "unstripped-shared-image-with-link-map-and-audit"
 query_copy = "debug-stripped-symbol-indexed"
 primary_projections = ["exact-signature-present-owner", "exact-signature-opposite-fold-owner", "complete-signature-owner-evidence-ledger"]
 

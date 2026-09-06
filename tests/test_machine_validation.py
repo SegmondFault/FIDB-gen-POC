@@ -5,6 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fidb_poc.machine_validation import (
+    LINK_HARNESS_POLICY,
+    TRUTH_COPY_POLICY,
     compile_machine_validation,
     compile_validation_batch,
     load_machine_validation,
@@ -79,6 +81,8 @@ class MachineValidationTests(unittest.TestCase):
         )
         self.assertEqual(manifest["summary"]["composite_programs"], 444)
         self.assertEqual(len(manifest["materialization_digest"]), 64)
+        self.assertEqual(manifest["execution"]["harness_mode"], LINK_HARNESS_POLICY)
+        self.assertEqual(manifest["execution"]["truth_copy"], TRUTH_COPY_POLICY)
         self.assertEqual(
             manifest["execution"]["query_copy"],
             "debug-stripped-symbol-indexed",
@@ -94,8 +98,7 @@ class MachineValidationTests(unittest.TestCase):
     def test_live_schedule_state_does_not_invalidate_materialized_manifest(self):
         empty = compile_machine_validation(self.root, evidence_override={})
         pairs = {
-            (row["route_id"], row["treatment_id"])
-            for row in empty["width_identities"]
+            (row["route_id"], row["treatment_id"]) for row in empty["width_identities"]
         }
         evidence = {row["id"]: set(pairs) for row in empty["libraries"]}
         with patch(

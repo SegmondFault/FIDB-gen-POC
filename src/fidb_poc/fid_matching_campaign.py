@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from .fid_match_qualification import qualify_retained_validation
 from .fid_matching import load_matching_authority
+from .machine_validation import LINK_HARNESS_POLICY
 
 CAMPAIGN_SCHEMA = "fidb-fid-matching-campaign/v1"
 STATUS_SCHEMA = "fidb-fid-matching-campaign-status/v1"
@@ -100,6 +101,7 @@ def load_campaign(
         "retain_oracle_inputs": True,
         "retain_backend_outputs": True,
         "retain_hash_observations": True,
+        "required_link_harness": LINK_HARNESS_POLICY,
     }:
         raise ValueError("FID matching campaign methodology is unsupported")
     execution = document["execution"]
@@ -335,9 +337,7 @@ def _aggregate(
         },
         "oracle": {
             "decision_mismatches": mismatch_count,
-            "canary_passed": (
-                canary_passed if mode == "canary" and complete else None
-            ),
+            "canary_passed": (canary_passed if mode == "canary" and complete else None),
         },
         "truth": {
             "labelled_functions": truth_labelled,
@@ -672,6 +672,7 @@ def campaign_status(
         "workers": campaign["execution"]["workers"],
         "schedule": campaign["schedule"],
         "methodology": campaign["methodology"],
+        "source_harness": _source_harness_preflight(root, campaign, "canary"),
         "canary": canary,
         "full": full,
     }
@@ -721,6 +722,65 @@ def _resource_preflight(
     }
 
 
+def _source_harness_preflight(
+    root: Path,
+    campaign: Mapping[str, object],
+    mode: str,
+) -> dict[str, object]:
+    from .machine_validation_runner import load_runtime
+
+    required = str(campaign["methodology"]["required_link_harness"])
+    expected = len(_expected_cases(campaign, mode))
+    try:
+        runtime = load_runtime(root, str(campaign["runtime"]))
+    except (OSError, ValueError) as error:
+        return {
+            "state": "blocked",
+            "required_link_harness": required,
+            "checked_cases": 0,
+            "expected_cases": expected,
+            "blockers": [f"validation runtime is unavailable: {error}"],
+        }
+    run_root = _inside(
+        root,
+        Path(str(runtime["output_root"])) / str(campaign["source_run_id"]),
+        "FID matching source run",
+    )
+    blockers = []
+    checked = 0
+    for position, fold in _expected_cases(campaign, mode):
+        matches = list((run_root / "units").glob(f"{position:03d}-*/result.json"))
+        if len(matches) != 1:
+            blockers.append(f"{position}:{fold} source unit is missing or ambiguous")
+            continue
+        try:
+            result = json.loads(matches[0].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blockers.append(f"{position}:{fold} source result is unreadable")
+            continue
+        fold_results = [
+            row for row in result.get("folds", []) if row.get("fold") == fold
+        ]
+        if len(fold_results) != 1:
+            blockers.append(f"{position}:{fold} source fold evidence is absent")
+            continue
+        evidence = fold_results[0]
+        if evidence.get("link_harness_policy") != required:
+            blockers.append(f"{position}:{fold} uses a stale link harness")
+            continue
+        if evidence.get("link_audit", {}).get("direct_zero_control_flow_count") != 0:
+            blockers.append(f"{position}:{fold} failed its zero-control-flow audit")
+            continue
+        checked += 1
+    return {
+        "state": "ready" if not blockers else "blocked",
+        "required_link_harness": required,
+        "checked_cases": checked,
+        "expected_cases": expected,
+        "blockers": blockers,
+    }
+
+
 def worker_cases(
     project_root: str | Path,
     cases: Iterable[str],
@@ -744,9 +804,11 @@ def worker_cases(
         summary_path = _case_summary_path(root, campaign, position, fold)
         if summary_path.is_file():
             try:
+                previous = json.loads(summary_path.read_text(encoding="utf-8"))
                 if (
-                    json.loads(summary_path.read_text(encoding="utf-8")).get("state")
-                    == "qualified"
+                    previous.get("state") == "qualified"
+                    and previous.get("case", {}).get("link_harness_policy")
+                    == campaign["methodology"]["required_link_harness"]
                 ):
                     continue
             except (OSError, ValueError, json.JSONDecodeError):
@@ -781,6 +843,9 @@ def run_campaign(
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     campaign = load_campaign(root, authority)
+    source = _source_harness_preflight(root, campaign, mode)
+    if source["blockers"]:
+        raise ValueError("; ".join(source["blockers"][:20]))
     if _production_active(root, campaign):
         raise ValueError("production jobs are active; FID matching remains unclaimed")
     resources = _resource_preflight(root, campaign)
@@ -806,6 +871,7 @@ def run_campaign(
             "started_at": started_at,
             "worker_pids": [],
             "resource_preflight": resources,
+            "source_harness_preflight": source,
         },
     )
     processes = []
