@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import Mapping
 
 from .machine_validation_hashes import HASH_REPORT_SCHEMA
+from .fid_matching_campaign import REPORT_SCHEMA as FID_MATCH_REPORT_SCHEMA
 
 VALIDATION_OBSERVATORY_SCHEMA = "fidb-validation-observatory/v1"
 DEFAULT_REPORT_GLOB = "artifacts/validation-runs/*/*/hash-report.json"
+FID_MATCH_REPORT_GLOB = "artifacts/fid-matching-runs/*/full-report.json"
 
 
 def _now() -> str:
@@ -122,7 +124,11 @@ def _construct_validity(
 
 def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
     reports: list[dict[str, object]] = []
-    for path in sorted(root.glob(report_glob)):
+    patterns = [report_glob]
+    if report_glob == DEFAULT_REPORT_GLOB:
+        patterns.append(FID_MATCH_REPORT_GLOB)
+    paths = sorted({path for pattern in patterns for path in root.glob(pattern)})
+    for path in paths:
         if not path.is_file() or path.is_symlink():
             continue
         try:
@@ -131,12 +137,21 @@ def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
             continue
         if (
             not isinstance(document, dict)
-            or document.get("schema_version") != HASH_REPORT_SCHEMA
             or document.get("state") != "measured-complete"
         ):
             continue
-        validation_id = str(document.get("validation_id") or path.parent.parent.name)
-        run_id = str(document.get("run_id") or path.parent.name)
+        schema = document.get("schema_version")
+        if schema not in {HASH_REPORT_SCHEMA, FID_MATCH_REPORT_SCHEMA}:
+            continue
+        native_fid = schema == FID_MATCH_REPORT_SCHEMA
+        validation_id = str(
+            document.get("validation_id")
+            or document.get("campaign_id")
+            or path.parent.parent.name
+        )
+        run_id = str(
+            document.get("run_id") or document.get("source_run_id") or path.parent.name
+        )
         matrix = document.get("confusion_matrix", {})
         if not isinstance(matrix, dict):
             matrix = {}
@@ -168,7 +183,11 @@ def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
                     "required_for_run_completion": False,
                     "stages": [],
                 },
-                "construct_validity": _construct_validity(document, hash_types),
+                "construct_validity": (
+                    document.get("construct_validity")
+                    if native_fid
+                    else _construct_validity(document, hash_types)
+                ),
                 "decision_contract": document.get("decision_contract"),
                 "confusion_matrix": matrix,
                 "rates": _rates(matrix),
@@ -185,7 +204,11 @@ def _read_reports(root: Path, report_glob: str) -> list[dict[str, object]]:
                     row for row in hash_types if isinstance(row, dict)
                 ],
                 "failures": document.get("failures", []),
-                "performance": document.get("performance", {}),
+                "performance": document.get("performance", {})
+                or {
+                    "wall_time_seconds": document.get("wall_time_seconds"),
+                    "workers": document.get("workers"),
+                },
             }
         )
     reports.sort(key=lambda row: (str(row["finished_at"]), str(row["key"])))

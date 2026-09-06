@@ -102,22 +102,32 @@ def load_campaign(
     }:
         raise ValueError("FID matching campaign methodology is unsupported")
     execution = document["execution"]
-    if set(execution) != {
-        "workers",
-        "compare_cpu_and_gpu",
-        "finish_started",
-        "resume_completed_cases",
-    } or not 1 <= int(execution["workers"]) <= 16:
+    if (
+        set(execution)
+        != {
+            "workers",
+            "compare_cpu_and_gpu",
+            "finish_started",
+            "resume_completed_cases",
+        }
+        or not 1 <= int(execution["workers"]) <= 16
+    ):
         raise ValueError("FID matching execution policy is invalid")
     if any(execution[name] is not True for name in execution if name != "workers"):
-        raise ValueError("FID matching execution policy must preserve comparison and resume")
+        raise ValueError(
+            "FID matching execution policy must preserve comparison and resume"
+        )
     canary = document["canary"]
-    if set(canary) != {
-        "cases",
-        "minimum_truth_coverage",
-        "require_zero_decision_mismatches",
-        "auto_chain_full",
-    } or not canary["cases"]:
+    if (
+        set(canary)
+        != {
+            "cases",
+            "minimum_truth_coverage",
+            "require_zero_decision_mismatches",
+            "auto_chain_full",
+        }
+        or not canary["cases"]
+    ):
         raise ValueError("FID matching canary policy is invalid")
     for case in canary["cases"]:
         _parse_case(str(case))
@@ -137,14 +147,18 @@ def load_campaign(
         raise ValueError("FID matching schedule is invalid")
     ZoneInfo(str(schedule["timezone"]))
     for window in schedule["window"]:
-        if set(window) != {
-            "id",
-            "kind",
-            "days",
-            "start",
-            "stop_admitting",
-            "enabled",
-        } or window["kind"] != "weekly":
+        if (
+            set(window)
+            != {
+                "id",
+                "kind",
+                "days",
+                "start",
+                "stop_admitting",
+                "enabled",
+            }
+            or window["kind"] != "weekly"
+        ):
             raise ValueError("FID matching schedule window is unsupported")
         if _clock_minutes(str(window["start"])) == _clock_minutes(
             str(window["stop_admitting"])
@@ -251,10 +265,13 @@ def _aggregate(
     state = (
         "qualified"
         if mode == "canary" and canary_passed
-        else "measured-complete"
-        if mode == "full" and complete and mismatch_count == 0
-        else "incomplete-or-failed"
+        else (
+            "measured-complete"
+            if mode == "full" and complete and mismatch_count == 0
+            else "incomplete-or-failed"
+        )
     )
+    matching = load_matching_authority(root, str(campaign["matching_authority"]))
     return {
         "schema_version": REPORT_SCHEMA,
         "campaign_id": campaign["id"],
@@ -263,6 +280,47 @@ def _aggregate(
         "authority_path": campaign["authority_path"],
         "authority_sha256": campaign["authority_sha256"],
         "source_run_id": campaign["source_run_id"],
+        "workers": campaign["execution"]["workers"],
+        "method_authority": {
+            "id": "native-fid-owner-validation-v1",
+            "path": matching["authority_path"],
+            "sha256": matching["authority_sha256"],
+            "algorithm_id": "native-ghidra-oracle-portable-fid-v1",
+        },
+        "decision_contract": {
+            "true_positive": "native FID accepts the link-attributed library owner",
+            "false_positive": "native FID accepts an owner other than the link-attributed owner",
+            "true_negative": "native FID rejects an incorrect library owner",
+            "false_negative": "native FID does not accept the link-attributed library owner",
+            "unresolved_truth": "retained but excluded from the confusion matrix",
+        },
+        "construct_validity": {
+            "state": "native-fid-owner-ground-truth",
+            "recall_claim": "synthetic-linked-executable-native-fid-recall",
+            "reference_unit": "per-library-fid-function-record",
+            "query_unit": "link-attributed-composite-function",
+            "truth_precedence": campaign["methodology"]["truth_precedence"],
+        },
+        "pipeline_job": {
+            "id": "native-fid-hash-discrimination",
+            "kind": "validation-postprocess",
+            "state": "complete" if complete else "incomplete",
+            "materialized_with_batch": True,
+            "required_for_run_completion": True,
+            "stages": [
+                {"id": "native-oracle", "state": "complete" if complete else "running"},
+                {"id": "portable-cpu", "state": "complete" if complete else "running"},
+                {"id": "portable-wgpu", "state": "complete" if complete else "running"},
+                {
+                    "id": "owner-classification",
+                    "state": "complete" if complete else "pending",
+                },
+                {
+                    "id": "hash-population",
+                    "state": "complete" if complete else "pending",
+                },
+            ],
+        },
         "progress": {
             "expected_cases": len(expected),
             "complete_cases": len(summaries),
@@ -282,6 +340,263 @@ def _aggregate(
     }
 
 
+def _publish_hash_evidence(
+    root: Path,
+    campaign: Mapping[str, object],
+    mode: str,
+    report: dict[str, object],
+) -> None:
+    """Roll retained per-case observations into a compact, queryable sidecar."""
+
+    destination = _campaign_root(root, campaign) / f"{mode}-hash-evidence.sqlite3"
+    temporary = destination.with_suffix(".sqlite3.part")
+    temporary.unlink(missing_ok=True)
+    connection = sqlite3.connect(temporary)
+    observed = 0
+    try:
+        connection.executescript("""
+            PRAGMA journal_mode=OFF;
+            PRAGMA synchronous=OFF;
+            CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+            CREATE TABLE hash_owner(
+                scope TEXT NOT NULL,
+                hash_type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                owner TEXT NOT NULL,
+                observations INTEGER NOT NULL,
+                true_positives INTEGER NOT NULL,
+                false_positives INTEGER NOT NULL,
+                false_negatives INTEGER NOT NULL,
+                shared_code INTEGER NOT NULL,
+                ambiguous_attribution INTEGER NOT NULL,
+                incorrect_confident_attribution INTEGER NOT NULL,
+                PRIMARY KEY(scope, hash_type, value, owner)
+            ) WITHOUT ROWID;
+            """)
+        insert = """
+            INSERT INTO hash_owner VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(scope, hash_type, value, owner) DO UPDATE SET
+              observations=observations+excluded.observations,
+              true_positives=true_positives+excluded.true_positives,
+              false_positives=false_positives+excluded.false_positives,
+              false_negatives=false_negatives+excluded.false_negatives,
+              shared_code=shared_code+excluded.shared_code,
+              ambiguous_attribution=ambiguous_attribution+excluded.ambiguous_attribution,
+              incorrect_confident_attribution=incorrect_confident_attribution+excluded.incorrect_confident_attribution
+        """
+        for position, fold in _expected_cases(campaign, mode):
+            summary_path = _case_summary_path(root, campaign, position, fold)
+            if not summary_path.is_file():
+                continue
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            classification_path = _inside(
+                root,
+                str(summary["classification_path"]),
+                "FID classification evidence",
+            )
+            classification = json.loads(classification_path.read_text(encoding="utf-8"))
+            case = summary["case"]
+            scope = "|".join(
+                (
+                    str(case.get("target_os", "unknown")),
+                    str(case.get("binary_format", "unknown")),
+                    str(case.get("ghidra_language_id", "unknown")),
+                    str(case.get("ghidra_compiler_spec_id", "unknown")),
+                )
+            )
+            rows = []
+            for observation in classification["observations"]:
+                outcome = str(observation["outcome"])
+                category = str(observation["category"])
+                rows.append(
+                    (
+                        scope,
+                        str(observation["hash_type"]),
+                        str(observation["value"]),
+                        str(observation["candidate_owner"]),
+                        1,
+                        int(outcome == "tp"),
+                        int(outcome == "fp"),
+                        int(outcome == "fn"),
+                        int(category == "shared-code-evidence"),
+                        int(category == "ambiguous-attribution"),
+                        int(category == "incorrect-confident-attribution"),
+                    )
+                )
+            connection.executemany(insert, rows)
+            observed += len(rows)
+            connection.commit()
+        connection.executescript("""
+            CREATE TABLE hash_population AS
+            SELECT scope, hash_type, value,
+                   COUNT(*) AS distinct_owners,
+                   SUM(observations) AS observations,
+                   SUM(true_positives) AS true_positives,
+                   SUM(false_positives) AS false_positives,
+                   SUM(false_negatives) AS false_negatives,
+                   SUM(shared_code) AS shared_code,
+                   SUM(ambiguous_attribution) AS ambiguous_attribution,
+                   SUM(incorrect_confident_attribution) AS incorrect_confident_attribution
+            FROM hash_owner GROUP BY scope, hash_type, value;
+            CREATE UNIQUE INDEX hash_population_identity
+            ON hash_population(scope, hash_type, value);
+            CREATE INDEX hash_population_noise
+            ON hash_population(hash_type, false_positives DESC, distinct_owners DESC);
+            """)
+        metadata = {
+            "schema_version": "fidb-portable-fid-hash-evidence/v1",
+            "campaign_id": str(campaign["id"]),
+            "source_run_id": str(campaign["source_run_id"]),
+            "authority_sha256": str(campaign["authority_sha256"]),
+            "observations": str(observed),
+        }
+        connection.executemany(
+            "INSERT INTO metadata VALUES (?,?)", sorted(metadata.items())
+        )
+        connection.commit()
+
+        hash_types = []
+        for hash_type in ("full", "specific", "complete"):
+            population = connection.execute(
+                """
+                SELECT COUNT(*), SUM(distinct_owners=1), SUM(distinct_owners>1),
+                       SUM(distinct_owners),
+                       SUM(CASE WHEN distinct_owners>1 THEN distinct_owners ELSE 0 END),
+                       SUM(observations), SUM(false_positives), MAX(distinct_owners)
+                FROM hash_population WHERE hash_type=?
+                """,
+                (hash_type,),
+            ).fetchone()
+            distinct_values = int(population[0] or 0)
+            noisy_values = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM hash_population
+                    WHERE hash_type=? AND false_positives>0
+                    """,
+                    (hash_type,),
+                ).fetchone()[0]
+            )
+            distribution = [
+                {
+                    "distinct_owners": int(row[0]),
+                    "distinct_values": int(row[1]),
+                    "fraction_of_values": (
+                        int(row[1]) / distinct_values if distinct_values else 0.0
+                    ),
+                }
+                for row in connection.execute(
+                    """
+                    SELECT distinct_owners, COUNT(*) FROM hash_population
+                    WHERE hash_type=? GROUP BY distinct_owners ORDER BY distinct_owners
+                    """,
+                    (hash_type,),
+                )
+            ]
+            top_ambiguous = []
+            for row in connection.execute(
+                """
+                SELECT scope, value, distinct_owners, observations,
+                       false_positives FROM hash_population
+                WHERE hash_type=? AND (distinct_owners>1 OR false_positives>0)
+                ORDER BY false_positives DESC, distinct_owners DESC, observations DESC
+                LIMIT 250
+                """,
+                (hash_type,),
+            ):
+                owners = [
+                    str(value[0])
+                    for value in connection.execute(
+                        """
+                        SELECT owner FROM hash_owner
+                        WHERE scope=? AND hash_type=? AND value=? ORDER BY owner
+                        """,
+                        (row[0], hash_type, row[1]),
+                    )
+                ]
+                top_ambiguous.append(
+                    {
+                        "scope": str(row[0]),
+                        "language": str(row[0]).split("|", 3)[2],
+                        "value": str(row[1]),
+                        "distinct_owners": int(row[2]),
+                        "reference_observations": int(row[3]),
+                        "exact_signature_variants": 1,
+                        "exact_false_positive_observations": int(row[4]),
+                        "owners": owners,
+                    }
+                )
+            libraries = [
+                {
+                    "owner": str(row[0]),
+                    "distinct_values": int(row[1]),
+                    "multi_owner_values": int(row[2]),
+                    "ambiguous_fraction": (
+                        int(row[2]) / int(row[1]) if int(row[1]) else 0.0
+                    ),
+                    "reference_observations": int(row[3]),
+                    "missed_observations": int(row[4]),
+                    "exact_false_positive_observations": int(row[5]),
+                }
+                for row in connection.execute(
+                    """
+                    SELECT owner, COUNT(*),
+                           SUM(population.distinct_owners>1),
+                           SUM(owner.observations), SUM(owner.false_negatives),
+                           SUM(owner.false_positives)
+                    FROM hash_owner AS owner JOIN hash_population AS population
+                      ON population.scope=owner.scope
+                     AND population.hash_type=owner.hash_type
+                     AND population.value=owner.value
+                    WHERE owner.hash_type=? GROUP BY owner ORDER BY owner
+                    """,
+                    (hash_type,),
+                )
+            ]
+            hash_types.append(
+                {
+                    "hash_type": hash_type,
+                    "distinct_values": distinct_values,
+                    "singleton_values": int(population[1] or 0),
+                    "multi_owner_values": int(population[2] or 0),
+                    "multi_owner_fraction": (
+                        int(population[2] or 0) / distinct_values
+                        if distinct_values
+                        else 0.0
+                    ),
+                    "owner_links": int(population[3] or 0),
+                    "ambiguous_owner_links": int(population[4] or 0),
+                    "complete_disambiguated_owner_signatures": 0,
+                    "reference_observations": int(population[5] or 0),
+                    "exact_false_positive_observations": int(population[6] or 0),
+                    "maximum_distinct_owners": int(population[7] or 0),
+                    "false_positive_values": noisy_values,
+                    "distribution": distribution,
+                    "top_ambiguous": top_ambiguous,
+                    "libraries": libraries,
+                }
+            )
+    finally:
+        connection.close()
+    temporary.replace(destination)
+    report["hash_type_analysis"] = hash_types
+    report["hash_evidence"] = {
+        "database_path": str(destination.relative_to(root)),
+        "database_sha256": _sha256(destination),
+        "query_function_owner_observations": observed,
+        "distinct_signatures": next(
+            row["distinct_values"]
+            for row in hash_types
+            if row["hash_type"] == "complete"
+        ),
+        "noisy_signatures": next(
+            row["false_positive_values"]
+            for row in hash_types
+            if row["hash_type"] == "complete"
+        ),
+    }
+
+
 def campaign_status(
     project_root: str | Path, authority: str | Path = DEFAULT_CAMPAIGN
 ) -> dict[str, object]:
@@ -294,8 +609,32 @@ def campaign_status(
         if status_path.is_file()
         else {"state": "scheduled", "mode": None, "started_at": None}
     )
-    canary = _aggregate(root, campaign, "canary")
-    full = _aggregate(root, campaign, "full")
+    canary_path = campaign_root / "canary-report.json"
+    full_path = campaign_root / "full-report.json"
+    matching = load_matching_authority(root, str(campaign["matching_authority"]))
+
+    def current_report(path: Path, mode: str) -> dict[str, object]:
+        report = (
+            json.loads(path.read_text(encoding="utf-8"))
+            if path.is_file()
+            else _aggregate(root, campaign, mode)
+        )
+        method = report.get("method_authority", {})
+        current = (
+            report.get("authority_sha256") == campaign["authority_sha256"]
+            and isinstance(method, dict)
+            and method.get("sha256") == matching["authority_sha256"]
+        )
+        if path.is_file() and not current:
+            return {
+                **report,
+                "state": "stale-authority",
+                "stale_reason": "campaign or matching authority digest changed",
+            }
+        return report
+
+    canary = current_report(canary_path, "canary")
+    full = current_report(full_path, "full")
     qualification_path = _inside(
         root, str(campaign["qualification_evidence"]), "FID matching qualification"
     )
@@ -304,7 +643,6 @@ def campaign_status(
         if qualification_path.is_file()
         else {"state": "absent"}
     )
-    matching = load_matching_authority(root, str(campaign["matching_authority"]))
     if (
         qualification.get("state") == "qualified"
         and qualification.get("authority_sha256") != matching["authority_sha256"]
@@ -352,18 +690,26 @@ def worker_cases(
 ) -> int:
     root = Path(project_root).expanduser().resolve()
     campaign = load_campaign(root, authority)
-    relative_output = (
-        Path(str(campaign["output_root"])) / str(campaign["id"]) / "cases"
+    from .machine_validation_runner import load_runtime
+
+    runtime = load_runtime(root, str(campaign["runtime"]))
+    execution = runtime["execution"]
+    os.environ["_JAVA_OPTIONS"] = (
+        f'-Xms{execution["jvm_initial_heap_mib"]}m '
+        f'-Xmx{execution["jvm_max_heap_mib"]}m '
+        f'-XX:ActiveProcessorCount={execution["jvm_active_processors"]}'
     )
+    relative_output = Path(str(campaign["output_root"])) / str(campaign["id"]) / "cases"
     failed = 0
     for value in cases:
         position, fold = _parse_case(value)
         summary_path = _case_summary_path(root, campaign, position, fold)
         if summary_path.is_file():
             try:
-                if json.loads(summary_path.read_text(encoding="utf-8")).get(
-                    "state"
-                ) == "qualified":
+                if (
+                    json.loads(summary_path.read_text(encoding="utf-8")).get("state")
+                    == "qualified"
+                ):
                     continue
             except (OSError, ValueError, json.JSONDecodeError):
                 pass
@@ -459,13 +805,19 @@ def run_campaign(
         )
         return_codes = [process.wait() for process in processes]
         report = _aggregate(root, campaign, mode)
+        _publish_hash_evidence(root, campaign, mode, report)
         report["worker_return_codes"] = return_codes
-        report["wall_time_seconds"] = time.time() - datetime.fromisoformat(
-            started_at
-        ).timestamp()
+        report["finished_at"] = datetime.now(timezone.utc).isoformat()
+        report["wall_time_seconds"] = (
+            time.time() - datetime.fromisoformat(started_at).timestamp()
+        )
         report_path = campaign_root / f"{mode}-report.json"
         _atomic_json(report_path, report)
-        final_state = "complete" if report["state"] in {"qualified", "measured-complete"} else "failed"
+        final_state = (
+            "complete"
+            if report["state"] in {"qualified", "measured-complete"}
+            else "failed"
+        )
         _atomic_json(
             campaign_root / "status.json",
             {
@@ -484,7 +836,9 @@ def run_campaign(
         lock.unlink(missing_ok=True)
 
 
-def _window_open(campaign: Mapping[str, object], instant: datetime) -> tuple[bool, str | None]:
+def _window_open(
+    campaign: Mapping[str, object], instant: datetime
+) -> tuple[bool, str | None]:
     schedule = campaign["schedule"]
     local = instant.astimezone(ZoneInfo(str(schedule["timezone"])))
     minute = local.hour * 60 + local.minute
@@ -494,7 +848,9 @@ def _window_open(campaign: Mapping[str, object], instant: datetime) -> tuple[boo
             continue
         start = _clock_minutes(str(window["start"]))
         stop = _clock_minutes(str(window["stop_admitting"]))
-        open_now = start <= minute < stop if start < stop else minute >= start or minute < stop
+        open_now = (
+            start <= minute < stop if start < stop else minute >= start or minute < stop
+        )
         if open_now:
             return True, str(window["id"])
     return False, None

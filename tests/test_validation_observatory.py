@@ -119,13 +119,13 @@ class ValidationObservatoryTests(unittest.TestCase):
             self._report(root, "c10", "run-1", "2026-09-01T00:00:00Z", 1)
             self._report(root, "c20", "run-2", "2026-09-02T00:00:00Z", 3)
 
-            result = compile_validation_observatory(
-                root, selected_run="c10:run-1"
-            )
+            result = compile_validation_observatory(root, selected_run="c10:run-1")
 
             self.assertTrue(result["selection_found"])
             self.assertEqual(result["selected_run_key"], "c10:run-1")
-            self.assertEqual(result["selected"]["report_sha256"], result["runs"][0]["report_sha256"])
+            self.assertEqual(
+                result["selected"]["report_sha256"], result["runs"][0]["report_sha256"]
+            )
 
     def test_unknown_run_does_not_fall_back_silently(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -137,6 +137,70 @@ class ValidationObservatoryTests(unittest.TestCase):
             self.assertFalse(result["selection_found"])
             self.assertIsNone(result["selected_run_key"])
             self.assertIsNone(result["selected"])
+
+    def test_native_fid_campaign_becomes_an_observatory_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = (
+                root
+                / "artifacts/fid-matching-runs/c10-native-fid-methodology-v1/full-report.json"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "fidb-fid-matching-campaign-report/v1",
+                        "state": "measured-complete",
+                        "campaign_id": "c10-native-fid-methodology-v1",
+                        "source_run_id": "source-full",
+                        "finished_at": "2026-09-06T04:00:00Z",
+                        "method_authority": {
+                            "id": "native-fid-owner-validation-v1",
+                            "sha256": "method",
+                        },
+                        "construct_validity": {
+                            "state": "native-fid-owner-ground-truth",
+                            "recall_claim": "synthetic-linked-executable-native-fid-recall",
+                        },
+                        "confusion_matrix": {
+                            "true_positives": 9,
+                            "false_positives": 1,
+                            "true_negatives": 89,
+                            "false_negatives": 1,
+                        },
+                        "hash_evidence": {"database_path": "native.sqlite3"},
+                        "hash_type_analysis": [
+                            {
+                                "hash_type": "full",
+                                "distinct_values": 4,
+                                "singleton_values": 3,
+                                "multi_owner_values": 1,
+                                "multi_owner_fraction": 0.25,
+                                "owner_links": 5,
+                                "ambiguous_owner_links": 2,
+                                "complete_disambiguated_owner_signatures": 0,
+                                "reference_observations": 10,
+                                "exact_false_positive_observations": 1,
+                                "maximum_distinct_owners": 2,
+                            }
+                        ],
+                        "failures": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = compile_validation_observatory(root)
+
+            self.assertEqual(result["summary"]["measured_runs"], 1)
+            self.assertEqual(result["selected"]["run_id"], "source-full")
+            self.assertEqual(
+                result["selected"]["rates"]["false_positive_rate"], 0.011111111111111112
+            )
+            self.assertEqual(
+                result["selected"]["construct_validity"]["state"],
+                "native-fid-owner-ground-truth",
+            )
 
 
 if __name__ == "__main__":

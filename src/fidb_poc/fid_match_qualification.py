@@ -126,7 +126,9 @@ def _annotate_truth(
             candidates = interval_owners or name_owners
             basis = "ambiguous" if candidates else "unresolved"
         function["truth_candidates"] = sorted(candidates)
-        function["truth_owner"] = next(iter(candidates)) if len(candidates) == 1 else None
+        function["truth_owner"] = (
+            next(iter(candidates)) if len(candidates) == 1 else None
+        )
         function["truth_basis"] = basis
     oracle["truth"] = {
         "owners": owners,
@@ -207,7 +209,9 @@ def qualify_retained_validation(
     oracle_path = destination / "oracle-input.json"
     if reuse_oracle:
         if not oracle_path.is_file():
-            raise ValueError("replay requested but retained native oracle is unavailable")
+            raise ValueError(
+                "replay requested but retained native oracle is unavailable"
+            )
         oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
     else:
         project_parent = destination / "work" / "project"
@@ -259,6 +263,10 @@ def qualify_retained_validation(
             "fold": fold,
             "route_id": route_id,
             "treatment_id": treatment_id,
+            "target_os": route.target_os,
+            "binary_format": route.binary_format,
+            "ghidra_language_id": route.ghidra_language,
+            "ghidra_compiler_spec_id": route.ghidra_compiler_spec,
             "query_path": str(query_binary.relative_to(root)),
             "query_sha256": _sha256(query_binary),
             "fidb_count": len(fidbs),
