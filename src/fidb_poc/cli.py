@@ -277,6 +277,8 @@ def _machine_validation_main(argv: list[str]) -> int:
             mode.add_argument("--check", action="store_true")
         if command in {"start", "run", "_worker"}:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
+        if command == "start":
+            child.add_argument("--run-id")
         if command in {"run", "analyze-hashes", "qualify-matcher", "_worker"}:
             child.add_argument("--run-id", required=True)
         if command == "analyze-hashes":
@@ -336,7 +338,10 @@ def _machine_validation_main(argv: list[str]) -> int:
             return 0 if document["state"] == "ready" else 1
         if arguments.command == "start":
             document = start_validation(
-                arguments.project_root, arguments.mode, arguments.runtime
+                arguments.project_root,
+                arguments.mode,
+                arguments.runtime,
+                arguments.run_id,
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0
@@ -396,13 +401,20 @@ def _machine_validation_main(argv: list[str]) -> int:
                     arguments.matcher_campaign,
                 )
                 print(json.dumps(document, indent=2, sort_keys=True))
-                return 0 if document["state"] in {"qualified", "measured-complete"} else 1
+                return (
+                    0 if document["state"] in {"qualified", "measured-complete"} else 1
+                )
             if arguments.command == "scheduled-matcher":
                 document = scheduled_campaign(
                     arguments.project_root, arguments.matcher_campaign
                 )
                 print(json.dumps(document, indent=2, sort_keys=True))
-                return 0 if document["state"] not in {"canary-failed", "incomplete-or-failed"} else 1
+                return (
+                    0
+                    if document["state"]
+                    not in {"canary-failed", "incomplete-or-failed"}
+                    else 1
+                )
             return worker_cases(
                 arguments.project_root,
                 arguments.cases.split(","),

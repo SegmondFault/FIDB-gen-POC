@@ -570,7 +570,27 @@ class LocalApiTests(unittest.TestCase):
             )
         self.assertEqual(status, 202)
         self.assertEqual(document, accepted)
-        start.assert_called_once_with(self.root, "canary")
+        start.assert_called_once_with(self.root, "canary", run_id=None)
+
+        with patch(
+            "fidb_poc.local_api.start_machine_validation",
+            return_value={**accepted, "run_id": "planned-full", "mode": "full"},
+        ) as start:
+            status, _document, _ = self.request(
+                "POST",
+                "/api/v1/machine-validation/start",
+                {"mode": "full", "run_id": "planned-full"},
+            )
+        self.assertEqual(status, 202)
+        start.assert_called_once_with(self.root, "full", run_id="planned-full")
+
+        status, document, _ = self.request(
+            "POST",
+            "/api/v1/machine-validation/start",
+            {"mode": "full", "run_id": ""},
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(document["error"]["code"], "invalid-machine-validation-run-id")
 
         status, document, _ = self.request(
             "POST", "/api/v1/machine-validation/start", {"mode": "unsafe"}

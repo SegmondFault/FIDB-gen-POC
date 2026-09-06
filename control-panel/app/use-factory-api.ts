@@ -2769,13 +2769,13 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
-  const runMachineValidation = useCallback(async (mode: 'canary' | 'full') => {
+  const runMachineValidation = useCallback(async (mode: 'canary' | 'full', runId?: string) => {
     setBusyAction(`machine-validation-${mode}`);
     try {
       await json<MachineValidationRun>('machine-validation/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify({ mode, ...(runId ? { run_id: runId } : {}) }),
       });
       await refreshValidation();
     } catch (caught) {

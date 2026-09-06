@@ -2068,7 +2068,10 @@ def resume_validation(
 
 
 def start_validation(
-    project_root: str | Path, mode: str, runtime_path: str | Path = DEFAULT_RUNTIME
+    project_root: str | Path,
+    mode: str,
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+    run_id: str | None = None,
 ) -> dict[str, object]:
     if mode not in {"canary", "full"}:
         raise ValueError("machine-validation mode must be canary or full")
@@ -2099,9 +2102,15 @@ def start_validation(
             "full machine validation requires a completed canary for the current "
             "runtime and reference-index contract"
         )
-    run_id = f'{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}-{mode}'
+    if run_id is None:
+        run_id = f'{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}-{mode}'
     runtime = load_runtime(root, runtime_path)
     run_root = _run_root(root, runtime, run_id)
+    if run_root.exists():
+        raise ValueError(
+            f"machine-validation run id already exists: {run_id}; "
+            "resume its checkpoint or choose a new immutable run id"
+        )
     run_root.mkdir(parents=True, exist_ok=True)
     log_path = run_root / "run.log"
     status_path = run_root / "status.json"

@@ -893,7 +893,10 @@ function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiSta
   const fidCanaryProgress = fidMatching.canary.progress;
   const fidFullProgress = fidMatching.full.progress;
   const startRun = (mode: 'canary' | 'full') => {
-    void factory.runMachineValidation(mode).catch(() => undefined);
+    void factory.runMachineValidation(
+      mode,
+      mode === 'full' ? fidMatching.source_run_id : undefined,
+    ).catch(() => undefined);
   };
   const pauseRun = () => {
     void factory.pauseMachineValidation().catch(() => undefined);

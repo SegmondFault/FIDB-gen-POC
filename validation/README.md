@@ -98,7 +98,8 @@ OpenSSL archives, the drained production ledger, free disk and available RAM:
 ```sh
 uv run fidb-poc machine-validation preflight --project-root .
 uv run fidb-poc machine-validation start --project-root . --mode canary
-uv run fidb-poc machine-validation start --project-root . --mode full
+uv run fidb-poc machine-validation start --project-root . --mode full \
+  --run-id c10-shared-image-symbolic-v2-full
 ```
 
 Active runs are checkpointed after every completed width identity. Pause stops
@@ -257,6 +258,13 @@ address zero. A native-FID campaign now refuses any source fold that lacks the
 current harness identity or its successful link audit. Historical C10 source
 evidence remains immutable and cannot be reused for the replacement campaign;
 produce a new full validation source run first.
+
+The replacement source ID is pinned in `fid-matching-run.toml` as
+`c10-shared-image-symbolic-v2-full`. The control panel passes that exact ID when
+starting the next full validation, and the API/CLI reject path-unsafe or reused
+IDs. Once the source run seals, the native-FID scheduler consumes that same
+immutable run without a manual TOML rewrite. Canary runs retain timestamped IDs
+because they are gates rather than campaign evidence.
 
 The remaining x86 miss population is real under this controlled construction,
 but not yet ecological recall. Of 2,498 labelled query functions, 32 have no

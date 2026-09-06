@@ -557,8 +557,11 @@ AArch64 ELF and Windows PE/COFF with zero direct-to-zero transfers.
 reports its source-harness preflight, and campaign admission refuses a missing,
 stale or failed fold. The old `20260904T152653Z-full` source is intentionally
 blocked for native matching; never edit its retained result files to make them
-appear current. Run a new full machine-validation source campaign under the
-current manifest, then admit native matching against that new immutable run.
+appear current. The replacement source ID is
+`c10-shared-image-symbolic-v2-full`. The GUI passes it to the bounded start API;
+the equivalent CLI operation is `machine-validation start --mode full --run-id
+c10-shared-image-symbolic-v2-full`. Run that source campaign under the current
+manifest, then admit native matching against the same immutable run.
 Use `scripts/trace_fid_misses.py --rebuild-composite --native-oracle` for
 bounded investigations rather than launching the 444-case campaign while a
 construction defect is unresolved.

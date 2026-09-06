@@ -774,9 +774,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "invalid-query",
                     "machine validation takes no query",
                 )
-            result = compile_machine_validation(
-                self.api_server.config.project_root
-            )
+            result = compile_machine_validation(self.api_server.config.project_root)
             result["run"] = machine_validation_runtime_status(
                 self.api_server.config.project_root
             )
@@ -1074,7 +1072,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self._json_response(HTTPStatus.ACCEPTED, result, origin=origin)
             return
         elif path == "/api/v1/machine-validation/start":
-            self._only_fields(document, {"mode"})
+            self._only_fields(document, {"mode", "run_id"})
             mode = document.get("mode")
             if mode not in {"canary", "full"}:
                 raise ApiError(
@@ -1082,10 +1080,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "invalid-machine-validation-mode",
                     "mode must be canary or full",
                 )
+            run_id = document.get("run_id")
+            if run_id is not None and (
+                not isinstance(run_id, str) or not run_id.strip()
+            ):
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-machine-validation-run-id",
+                    "run_id must be a non-empty string when supplied",
+                )
             try:
                 result = start_machine_validation(
                     self.api_server.config.project_root,
                     mode,
+                    run_id=run_id,
                 )
             except ValueError as error:
                 raise ApiError(

@@ -22,6 +22,7 @@ from fidb_poc.machine_validation_runner import (
     pause_validation,
     resume_validation,
     runtime_status,
+    start_validation,
 )
 from fidb_poc.machine_validation_hashes import (
     ANALYSIS_ENGINE,
@@ -563,7 +564,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
             with (
                 patch(
                     "fidb_poc.machine_validation_runner.load_runtime",
-                    return_value={"output_root": "runs"},
+                    return_value={
+                        "validation_id": "validation",
+                        "output_root": "runs",
+                    },
                 ),
                 patch(
                     "fidb_poc.machine_validation_runner._validation_process_active",
@@ -601,7 +605,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
             with (
                 patch(
                     "fidb_poc.machine_validation_runner.load_runtime",
-                    return_value={"output_root": "runs"},
+                    return_value={
+                        "validation_id": "validation",
+                        "output_root": "runs",
+                    },
                 ),
                 patch(
                     "fidb_poc.machine_validation_runner._validation_process_active",
@@ -698,6 +705,48 @@ class MachineValidationRunnerTests(unittest.TestCase):
                 Path("output"),
                 Path("link.map"),
                 harness_mode="whole-archive-link-map",
+            )
+
+    def test_full_start_accepts_one_immutable_planned_run_id(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.preflight",
+                    return_value={"state": "ready", "blockers": []},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.runtime_status",
+                    return_value={"state": "not-started"},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.canary_gate_status",
+                    return_value={"ready": True},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value={
+                        "validation_id": "validation",
+                        "output_root": "runs",
+                    },
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._spawn_validation",
+                    return_value=SimpleNamespace(pid=42),
+                ),
+            ):
+                started = start_validation(root, "full", run_id="planned-full")
+                with self.assertRaisesRegex(ValueError, "run id already exists"):
+                    start_validation(root, "full", run_id="planned-full")
+                with self.assertRaisesRegex(ValueError, "safe path component"):
+                    start_validation(root, "full", run_id="../escape")
+
+            self.assertEqual(started["run_id"], "planned-full")
+            self.assertEqual(
+                json.loads((root / "runs/planned-full/status.json").read_text())[
+                    "mode"
+                ],
+                "full",
             )
 
     def test_terminal_validation_uses_shared_scoped_retention(self):
