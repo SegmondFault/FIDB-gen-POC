@@ -241,6 +241,7 @@ def _machine_validation_main(argv: list[str]) -> int:
         "preflight",
         "start",
         "pause",
+        "requeue-failed",
         "resume",
         "run",
         "analyze-hashes",
@@ -312,6 +313,8 @@ def _machine_validation_main(argv: list[str]) -> int:
             child.add_argument("--cases", required=True)
         if command == "_worker":
             child.add_argument("--positions", required=True)
+        if command == "requeue-failed":
+            child.add_argument("--positions", required=True)
     arguments = parser.parse_args(argv)
     try:
         from .machine_validation import (
@@ -325,6 +328,7 @@ def _machine_validation_main(argv: list[str]) -> int:
             _worker,
             pause_validation,
             preflight,
+            requeue_failed_validation,
             resume_validation,
             run_validation,
             runtime_status,
@@ -348,6 +352,15 @@ def _machine_validation_main(argv: list[str]) -> int:
         if arguments.command == "pause":
             document = pause_validation(
                 arguments.project_root, arguments.runtime, actor="cli"
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
+        if arguments.command == "requeue-failed":
+            document = requeue_failed_validation(
+                arguments.project_root,
+                [int(value) for value in arguments.positions.split(",")],
+                arguments.runtime,
+                actor="cli",
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0

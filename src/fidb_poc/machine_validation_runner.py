@@ -517,22 +517,24 @@ def _prior_supervisor_attempts(result_path: Path, reason_code: str) -> int:
     return count
 
 
-def _archive_failed_result(result_path: Path) -> None:
+def _archive_failed_result(result_path: Path) -> Path | None:
     """Retain concise failure evidence before an explicit resume retries a unit."""
     if not result_path.is_file():
-        return
+        return None
     try:
         document = json.loads(result_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return
+        return None
     if document.get("state") == "complete":
-        return
+        return None
     attempts = result_path.parent / "attempts"
     attempts.mkdir(parents=True, exist_ok=True)
     attempt = 1
     while (attempts / f"result-{attempt:03d}.json").exists():
         attempt += 1
-    result_path.replace(attempts / f"result-{attempt:03d}.json")
+    archived = attempts / f"result-{attempt:03d}.json"
+    result_path.replace(archived)
+    return archived
 
 
 def load_runtime(
@@ -2895,6 +2897,95 @@ def pause_validation(
     }
     _atomic_json(status_path, pausing)
     return pausing
+
+
+def requeue_failed_validation(
+    project_root: str | Path,
+    positions: Iterable[int],
+    runtime_path: str | Path = DEFAULT_RUNTIME,
+    *,
+    actor: str = "operator",
+) -> dict[str, object]:
+    """Preserve failed evidence and make only the named cells resumable."""
+
+    root = Path(project_root).resolve()
+    runtime = load_runtime(root, runtime_path)
+    status_path = _current_status_path(root, runtime)
+    status = runtime_status(root, runtime_path)
+    if status.get("state") not in {"paused", "interrupted", "failed"}:
+        raise ValueError(
+            "machine validation must be stopped before failed cells requeue"
+        )
+    run_id = str(status.get("run_id") or "")
+    if not run_id or _validation_process_active(status.get("pid"), run_id):
+        raise ValueError("machine-validation run process is still active")
+    requested = sorted(set(positions))
+    if not requested or any(
+        type(position) is not int or position < 1 for position in requested
+    ):
+        raise ValueError("failed-cell requeue requires positive positions")
+    run_root = status_path.parent
+    evidence = resolve_evidence(root, runtime_path)
+    units = {int(unit["position"]): unit for unit in evidence["manifest"]["work_unit"]}
+    unknown = sorted(set(requested) - set(units))
+    if unknown:
+        raise ValueError(f"unknown validation positions: {unknown}")
+    candidates = []
+    for position in requested:
+        path = _unit_result_path(run_root, units[position], position)
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"validation position {position} has no failed result"
+            ) from error
+        if result.get("state") != "failed" or result.get("mode") != status.get("mode"):
+            raise ValueError(f"validation position {position} is not failed")
+        candidates.append((position, path, _sha256(path)))
+    archived_rows = []
+    for position, path, digest in candidates:
+        archived = _archive_failed_result(path)
+        if archived is None:
+            raise RuntimeError(f"failed result could not be archived: {position}")
+        archived_rows.append(
+            {
+                "position": position,
+                "result_sha256": digest,
+                "archived_path": str(archived.relative_to(root)),
+            }
+        )
+    receipts = run_root / "requeues"
+    receipt_number = 1
+    while (receipts / f"requeue-{receipt_number:03d}.json").exists():
+        receipt_number += 1
+    receipt_path = receipts / f"requeue-{receipt_number:03d}.json"
+    receipt = {
+        "schema_version": "fidb-machine-validation-requeue/v1",
+        "run_id": run_id,
+        "mode": status["mode"],
+        "actor": actor,
+        "requeued_at": _now(),
+        "positions": requested,
+        "archived_results": archived_rows,
+    }
+    _atomic_json(receipt_path, receipt)
+    complete_count, failed_count = _result_counts(run_root, str(status["mode"]))
+    _atomic_json(
+        status_path,
+        {
+            **status,
+            "state": "paused",
+            "worker_pids": [],
+            "complete_work_units": complete_count,
+            "failed_work_units": failed_count,
+            "last_requeue_receipt": str(receipt_path.relative_to(root)),
+        },
+    )
+    return {
+        **receipt,
+        "receipt_path": str(receipt_path.relative_to(root)),
+        "remaining_failed_work_units": failed_count,
+    }
 
 
 def resume_validation(

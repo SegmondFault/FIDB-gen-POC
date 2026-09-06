@@ -34,6 +34,7 @@ from fidb_poc.machine_validation_runner import (
     canary_gate_status,
     load_runtime,
     pause_validation,
+    requeue_failed_validation,
     resume_validation,
     runtime_status,
     start_validation,
@@ -668,6 +669,64 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(status["state"], "paused")
             self.assertEqual(status["failed_work_units"], 1)
             self.assertEqual(status["pause_actor"], "test")
+
+    def test_failed_cells_are_requeued_with_an_evidence_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed"
+            run_root.mkdir(parents=True)
+            status_path = run_root / "status.json"
+            (root / "runs/current.json").write_text(
+                json.dumps({"run_id": "fixed", "path": "runs/fixed/status.json"}),
+                encoding="utf-8",
+            )
+            status = {
+                "run_id": "fixed",
+                "mode": "full",
+                "state": "paused",
+                "pid": 42,
+                "expected_work_units": 2,
+                "complete_work_units": 1,
+                "failed_work_units": 1,
+            }
+            status_path.write_text(json.dumps(status), encoding="utf-8")
+            unit = {
+                "position": 2,
+                "route_id": "route",
+                "profile_id": "profile",
+                "treatment_id": "treatment",
+            }
+            result = run_root / "units/002-route-treatment/result.json"
+            result.parent.mkdir(parents=True)
+            result.write_text(
+                json.dumps({"state": "failed", "mode": "full", "error": "old"}),
+                encoding="utf-8",
+            )
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value={"output_root": "runs"},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.runtime_status",
+                    return_value=status,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=False,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.resolve_evidence",
+                    return_value={"manifest": {"work_unit": [unit]}},
+                ),
+            ):
+                receipt = requeue_failed_validation(root, [2], actor="test")
+
+            self.assertEqual(receipt["positions"], [2])
+            self.assertEqual(receipt["remaining_failed_work_units"], 0)
+            self.assertFalse(result.exists())
+            self.assertTrue((result.parent / "attempts/result-001.json").is_file())
+            self.assertTrue((run_root / "requeues/requeue-001.json").is_file())
 
     def test_failed_result_is_archived_before_retry(self):
         with tempfile.TemporaryDirectory() as temporary:
