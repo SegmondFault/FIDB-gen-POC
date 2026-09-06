@@ -244,6 +244,10 @@ def _machine_validation_main(argv: list[str]) -> int:
         "resume",
         "run",
         "analyze-hashes",
+        "qualify-matcher",
+        "run-matcher",
+        "scheduled-matcher",
+        "_matcher-worker",
         "scheduled-hashes",
         "_worker",
     ):
@@ -273,7 +277,7 @@ def _machine_validation_main(argv: list[str]) -> int:
             mode.add_argument("--check", action="store_true")
         if command in {"start", "run", "_worker"}:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
-        if command in {"run", "analyze-hashes", "_worker"}:
+        if command in {"run", "analyze-hashes", "qualify-matcher", "_worker"}:
             child.add_argument("--run-id", required=True)
         if command == "analyze-hashes":
             child.add_argument(
@@ -281,6 +285,29 @@ def _machine_validation_main(argv: list[str]) -> int:
                 action="store_true",
                 help="run the explicitly admitted canonical/candidate backend comparison",
             )
+        if command == "qualify-matcher":
+            child.add_argument("--position", type=int, required=True)
+            child.add_argument("--fold", choices=("A", "B"), required=True)
+            child.add_argument(
+                "--reuse-oracle",
+                action="store_true",
+                help="replay the retained native-oracle input without starting Ghidra",
+            )
+            child.add_argument(
+                "--matching-authority",
+                type=Path,
+                default=Path("validation/fid-matching.toml"),
+            )
+        if command in {"run-matcher", "scheduled-matcher", "_matcher-worker"}:
+            child.add_argument(
+                "--matcher-campaign",
+                type=Path,
+                default=Path("validation/fid-matching-run.toml"),
+            )
+        if command == "run-matcher":
+            child.add_argument("--mode", choices=("canary", "full"), required=True)
+        if command == "_matcher-worker":
+            child.add_argument("--cases", required=True)
         if command == "_worker":
             child.add_argument("--positions", required=True)
     arguments = parser.parse_args(argv)
@@ -341,6 +368,46 @@ def _machine_validation_main(argv: list[str]) -> int:
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0 if document["state"] == "measured-complete" else 1
+        if arguments.command == "qualify-matcher":
+            from .fid_match_qualification import qualify_retained_validation
+
+            document = qualify_retained_validation(
+                arguments.project_root,
+                arguments.run_id,
+                position=arguments.position,
+                fold=arguments.fold,
+                runtime_path=arguments.runtime,
+                authority_path=arguments.matching_authority,
+                reuse_oracle=arguments.reuse_oracle,
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0 if document["state"] == "qualified" else 1
+        if arguments.command in {"run-matcher", "scheduled-matcher", "_matcher-worker"}:
+            from .fid_matching_campaign import (
+                run_campaign,
+                scheduled_campaign,
+                worker_cases,
+            )
+
+            if arguments.command == "run-matcher":
+                document = run_campaign(
+                    arguments.project_root,
+                    arguments.mode,
+                    arguments.matcher_campaign,
+                )
+                print(json.dumps(document, indent=2, sort_keys=True))
+                return 0 if document["state"] in {"qualified", "measured-complete"} else 1
+            if arguments.command == "scheduled-matcher":
+                document = scheduled_campaign(
+                    arguments.project_root, arguments.matcher_campaign
+                )
+                print(json.dumps(document, indent=2, sort_keys=True))
+                return 0 if document["state"] not in {"canary-failed", "incomplete-or-failed"} else 1
+            return worker_cases(
+                arguments.project_root,
+                arguments.cases.split(","),
+                arguments.matcher_campaign,
+            )
         if arguments.command == "scheduled-hashes":
             document = scheduled_hash_analysis(
                 arguments.project_root,
@@ -390,7 +457,7 @@ def _machine_validation_main(argv: list[str]) -> int:
         document["check"] = check
         print(json.dumps(document, indent=2, sort_keys=True))
         return 0 if check["state"] != "drifted" else 1
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, PipelineError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

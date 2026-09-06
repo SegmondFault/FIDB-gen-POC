@@ -1,0 +1,48 @@
+schema_version = "fidb-fid-matching-campaign/v1"
+id = "c10-native-fid-methodology-v1"
+state = "scheduled"
+enabled = true
+source_run_id = "20260904T152653Z-full"
+runtime = "validation/machine-validation-runtime.toml"
+matching_authority = "validation/fid-matching.toml"
+qualification_evidence = "validation/evidence/portable-fid-c10-canary-v1.json"
+output_root = "artifacts/fid-matching-runs"
+
+[methodology]
+decision_unit = "query-function-library-owner"
+candidate_semantics = "native-ghidra-fid"
+truth_precedence = ["linker-map", "unique-reference-name"]
+unresolved_truth = "retain-exclude-from-confusion-matrix"
+retain_hash_types = ["full", "specific", "complete"]
+retain_oracle_inputs = true
+retain_backend_outputs = true
+retain_hash_observations = true
+
+[execution]
+workers = 4
+compare_cpu_and_gpu = true
+finish_started = true
+resume_completed_cases = true
+
+[canary]
+cases = ["1:B", "145:B", "175:A", "175:B"]
+minimum_truth_coverage = 0.80
+require_zero_decision_mismatches = true
+auto_chain_full = true
+
+[safety]
+execute_target_binaries = false
+start_compilers = false
+mutate_production_queue = false
+require_no_active_production_jobs = true
+
+[schedule]
+timezone = "Europe/Luxembourg"
+
+[[schedule.window]]
+id = "normal-overnight"
+kind = "weekly"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_admitting = "05:30"
+enabled = true
