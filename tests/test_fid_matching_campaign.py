@@ -7,8 +7,10 @@ from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from fidb_poc.fid_matching_campaign import (
+    _balanced_case_chunks,
     _expected_cases,
     _publish_hash_evidence,
+    _reusable_case,
     _resource_preflight,
     _source_harness_preflight,
     _window_open,
@@ -32,8 +34,60 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertEqual(len(_expected_cases(self.campaign, "canary")), 4)
         self.assertEqual(len(_expected_cases(self.campaign, "full")), 444)
         self.assertFalse(self.campaign["execution"]["compare_cpu_and_gpu"])
+        self.assertEqual(
+            self.campaign["execution"]["scheduling"],
+            "largest-query-first-greedy-v1",
+        )
         self.assertTrue(self.campaign["safety"]["require_no_active_production_jobs"])
         self.assertFalse(self.campaign["safety"]["execute_target_binaries"])
+
+    def test_largest_first_scheduler_balances_periodic_expensive_cases(self):
+        weighted = [
+            (f"{position}:A", 100 if position % 2 == 0 else 10)
+            for position in range(1, 13)
+        ]
+        chunks, loads = _balanced_case_chunks(weighted, 4)
+
+        self.assertEqual(sum(len(chunk) for chunk in chunks), len(weighted))
+        self.assertEqual(max(loads), 200)
+        self.assertEqual(min(loads), 130)
+        for chunk in chunks:
+            weights = [dict(weighted)[case] for case in chunk]
+            self.assertEqual(weights, sorted(weights, reverse=True))
+
+    def test_completed_case_reuse_is_bound_to_matching_authority(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign = {**self.campaign, "output_root": "out"}
+            path = (
+                root
+                / "out"
+                / campaign["id"]
+                / "cases"
+                / f"{campaign['source_run_id']}-001-A"
+                / "summary.json"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "state": "qualified",
+                        "authority_sha256": "old-method",
+                        "case": {
+                            "run_id": campaign["source_run_id"],
+                            "position": 1,
+                            "fold": "A",
+                            "link_harness_policy": campaign["methodology"][
+                                "required_link_harness"
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertFalse(_reusable_case(root, campaign, 1, "A", "new-method"))
+            self.assertTrue(_reusable_case(root, campaign, 1, "A", "old-method"))
 
         status = campaign_status(self.root)
         self.assertEqual(

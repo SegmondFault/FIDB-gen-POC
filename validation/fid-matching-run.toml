@@ -21,6 +21,7 @@ required_link_harness = "whole-archive-shared-image-symbolic-v2"
 
 [execution]
 workers = 4
+scheduling = "largest-query-first-greedy-v1"
 compare_cpu_and_gpu = false
 finish_started = true
 resume_completed_cases = true

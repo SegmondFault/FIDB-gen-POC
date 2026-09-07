@@ -109,11 +109,13 @@ def load_campaign(
         set(execution)
         != {
             "workers",
+            "scheduling",
             "compare_cpu_and_gpu",
             "finish_started",
             "resume_completed_cases",
         }
         or not 1 <= int(execution["workers"]) <= 16
+        or execution["scheduling"] != "largest-query-first-greedy-v1"
     ):
         raise ValueError("FID matching execution policy is invalid")
     if (
@@ -195,6 +197,28 @@ def _expected_cases(campaign: Mapping[str, object], mode: str) -> list[tuple[int
     return [(position, fold) for position in range(1, 223) for fold in ("A", "B")]
 
 
+def _balanced_case_chunks(
+    weighted_cases: Iterable[tuple[str, int]], workers: int
+) -> tuple[list[list[str]], list[int]]:
+    """Deterministically schedule the largest retained queries first.
+
+    Greedy least-loaded bin packing prevents regularly ordered treatments or
+    folds from concentrating expensive cases on one long-lived JVM worker.
+    """
+
+    pending = sorted(weighted_cases, key=lambda row: (-row[1], row[0]))
+    if not pending:
+        return [], []
+    count = min(workers, len(pending))
+    chunks: list[list[str]] = [[] for _ in range(count)]
+    loads = [0 for _ in range(count)]
+    for case, weight in pending:
+        worker = min(range(count), key=lambda index: (loads[index], index))
+        chunks[worker].append(case)
+        loads[worker] += weight
+    return chunks, loads
+
+
 def _campaign_root(root: Path, campaign: Mapping[str, object]) -> Path:
     return _inside(
         root,
@@ -212,6 +236,80 @@ def _case_summary_path(
         / f"{campaign['source_run_id']}-{position:03d}-{fold}"
         / "summary.json"
     )
+
+
+def _reusable_case(
+    root: Path,
+    campaign: Mapping[str, object],
+    position: int,
+    fold: str,
+    method_sha256: str,
+) -> bool:
+    path = _case_summary_path(root, campaign, position, fold)
+    if not path.is_file():
+        return False
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    case = previous.get("case", {})
+    return (
+        previous.get("state") == "qualified"
+        and previous.get("authority_sha256") == method_sha256
+        and case.get("run_id") == campaign["source_run_id"]
+        and int(case.get("position", -1)) == position
+        and case.get("fold") == fold
+        and case.get("link_harness_policy")
+        == campaign["methodology"]["required_link_harness"]
+    )
+
+
+def _scheduled_case_chunks(
+    root: Path,
+    campaign: Mapping[str, object],
+    mode: str,
+) -> tuple[list[list[str]], dict[str, object]]:
+    from .machine_validation_runner import load_runtime
+
+    runtime = load_runtime(root, str(campaign["runtime"]))
+    run_root = _inside(
+        root,
+        Path(str(runtime["output_root"])) / str(campaign["source_run_id"]),
+        "FID matching source run",
+    )
+    method = load_matching_authority(root, str(campaign["matching_authority"]))
+    weighted = []
+    reused = 0
+    for position, fold in _expected_cases(campaign, mode):
+        if _reusable_case(
+            root, campaign, position, fold, str(method["authority_sha256"])
+        ):
+            reused += 1
+            continue
+        matches = list((run_root / "units").glob(f"{position:03d}-*/result.json"))
+        if len(matches) != 1:
+            raise ValueError(f"{position}:{fold} source unit is missing or ambiguous")
+        result = json.loads(matches[0].read_text(encoding="utf-8"))
+        fold_results = [
+            row for row in result.get("folds", []) if row.get("fold") == fold
+        ]
+        if len(fold_results) != 1:
+            raise ValueError(f"{position}:{fold} source fold evidence is absent")
+        weight = int(
+            fold_results[0].get("signature_summary", {}).get("functions_hashed", 0)
+        )
+        if weight < 1:
+            raise ValueError(f"{position}:{fold} source query cost is unavailable")
+        weighted.append((f"{position}:{fold}", weight))
+    chunks, loads = _balanced_case_chunks(
+        weighted, int(campaign["execution"]["workers"])
+    )
+    return chunks, {
+        "policy": campaign["execution"]["scheduling"],
+        "estimated_function_loads": loads,
+        "pending_cases": len(weighted),
+        "reused_cases": reused,
+    }
 
 
 def _aggregate(
@@ -802,6 +900,7 @@ def worker_cases(
 ) -> int:
     root = Path(project_root).expanduser().resolve()
     campaign = load_campaign(root, authority)
+    method = load_matching_authority(root, str(campaign["matching_authority"]))
     from .machine_validation_runner import load_runtime
 
     runtime = load_runtime(root, str(campaign["runtime"]))
@@ -816,17 +915,10 @@ def worker_cases(
     for value in cases:
         position, fold = _parse_case(value)
         summary_path = _case_summary_path(root, campaign, position, fold)
-        if summary_path.is_file():
-            try:
-                previous = json.loads(summary_path.read_text(encoding="utf-8"))
-                if (
-                    previous.get("state") == "qualified"
-                    and previous.get("case", {}).get("link_harness_policy")
-                    == campaign["methodology"]["required_link_harness"]
-                ):
-                    continue
-            except (OSError, ValueError, json.JSONDecodeError):
-                pass
+        if _reusable_case(
+            root, campaign, position, fold, str(method["authority_sha256"])
+        ):
+            continue
         try:
             qualify_retained_validation(
                 root,
@@ -874,9 +966,7 @@ def run_campaign(
     except FileExistsError as error:
         raise ValueError("another FID matching campaign process is active") from error
     os.close(descriptor)
-    cases = [f"{position}:{fold}" for position, fold in _expected_cases(campaign, mode)]
-    workers = min(int(campaign["execution"]["workers"]), len(cases))
-    chunks = [cases[index::workers] for index in range(workers)]
+    chunks, scheduling = _scheduled_case_chunks(root, campaign, mode)
     started_at = datetime.now(timezone.utc).isoformat()
     _atomic_json(
         campaign_root / "status.json",
@@ -887,6 +977,7 @@ def run_campaign(
             "worker_pids": [],
             "resource_preflight": resources,
             "source_harness_preflight": source,
+            "scheduling": scheduling,
         },
     )
     processes = []
@@ -925,12 +1016,14 @@ def run_campaign(
                 "started_at": started_at,
                 "worker_pids": [process.pid for process in processes],
                 "resource_preflight": resources,
+                "scheduling": scheduling,
             },
         )
         return_codes = [process.wait() for process in processes]
         report = _aggregate(root, campaign, mode)
         _publish_hash_evidence(root, campaign, mode, report)
         report["worker_return_codes"] = return_codes
+        report["scheduling"] = scheduling
         report["finished_at"] = datetime.now(timezone.utc).isoformat()
         report["wall_time_seconds"] = (
             time.time() - datetime.fromisoformat(started_at).timestamp()
@@ -952,6 +1045,7 @@ def run_campaign(
                 "worker_pids": [],
                 "report_path": str(report_path.relative_to(root)),
                 "resource_preflight": resources,
+                "scheduling": scheduling,
             },
         )
         return report
