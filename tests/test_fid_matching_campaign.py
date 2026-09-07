@@ -225,7 +225,7 @@ class FidMatchingCampaignTests(unittest.TestCase):
             [stage["id"] for stage in status["canary"]["pipeline_job"]["stages"]],
             [
                 "native-oracle",
-                "portable-cpu",
+                "portable-gpu",
                 "owner-classification",
                 "hash-population",
             ],

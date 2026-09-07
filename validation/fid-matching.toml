@@ -1,5 +1,5 @@
 schema_version = "fidb-portable-fid-matching/v1"
-selected = "cpu-portable-fid-v1"
+selected = "gpu-portable-fid-v1"
 
 [semantics]
 candidate_key = "full_hash"

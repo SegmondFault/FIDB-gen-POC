@@ -499,7 +499,7 @@ and affected owners. A future schema change gets a new sidecar, never an in-plac
 reinterpretation of this evidence.
 
 Routine native-FID cases execute only the `selected` backend from
-`validation/fid-matching.toml`—currently `cpu-portable-fid-v1`—and compare it
+`validation/fid-matching.toml`—currently `gpu-portable-fid-v1`—and compare it
 with the native oracle already required for the measurement. Do not restore
 per-case CPU/WGPU dual execution. `qualify-matcher` is the explicit backend
 equivalence operation and is the only normal reason to execute both paths.
