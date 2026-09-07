@@ -132,7 +132,9 @@ class FidMatchingCampaignTests(unittest.TestCase):
                 "oracle": "ghidra-fid-program-seeker",
                 "language_id": "x86:LE:64:default",
                 "compiler_spec_id": "gcc",
-                "score_threshold": 14.6,
+                # Ghidra serializes the Java float while TOML retains the
+                # shorter decimal spelling of the same policy value.
+                "score_threshold": 14.600000381469727,
                 "medium_code_unit_limit": 24,
                 "functions": [],
             }
@@ -326,7 +328,11 @@ class FidMatchingCampaignTests(unittest.TestCase):
                 json.loads(Path(second).read_text(encoding="utf-8"))["error"], "second"
             )
 
-        status = campaign_status(self.root)
+        with tempfile.TemporaryDirectory() as temporary, patch(
+            "fidb_poc.fid_matching_campaign._campaign_root",
+            return_value=Path(temporary),
+        ):
+            status = campaign_status(self.root)
         self.assertEqual(status["canary"]["state"], "pending")
         self.assertEqual(
             [stage["id"] for stage in status["canary"]["pipeline_job"]["stages"]],
@@ -465,7 +471,11 @@ class FidMatchingCampaignTests(unittest.TestCase):
             self.assertEqual(ready["state"], "ready")
 
     def test_status_exposes_qualification_and_pending_cases(self):
-        status = campaign_status(self.root)
+        with tempfile.TemporaryDirectory() as temporary, patch(
+            "fidb_poc.fid_matching_campaign._campaign_root",
+            return_value=Path(temporary),
+        ):
+            status = campaign_status(self.root)
         self.assertEqual(status["qualification"]["state"], "stale")
         self.assertEqual(status["canary"]["state"], "pending")
         self.assertEqual(status["canary"]["failures"], [])

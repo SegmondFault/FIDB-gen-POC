@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 import time
@@ -45,7 +46,14 @@ def _retained_query_analysis_policy(
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _float32(value: object) -> float:
+    """Canonicalize a policy scalar to Ghidra's Java-float representation."""
+
+    return struct.unpack("!f", struct.pack("!f", float(value)))[0]
 
 
 def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
@@ -116,8 +124,8 @@ def _load_retained_oracle_replay(
         and oracle.get("oracle") == authority["oracle"]["implementation"]
         and oracle.get("language_id") == language_id
         and oracle.get("compiler_spec_id") == compiler_spec_id
-        and float(oracle.get("score_threshold", -1))
-        == float(authority["semantics"]["score_threshold"])
+        and _float32(oracle.get("score_threshold", -1))
+        == _float32(authority["semantics"]["score_threshold"])
         and int(oracle.get("medium_code_unit_limit", -1))
         == int(authority["semantics"]["medium_code_unit_limit"])
         and isinstance(oracle.get("functions"), list)
