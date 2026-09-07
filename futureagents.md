@@ -461,13 +461,20 @@ backends on a retained case with zero decision mismatches. CPU was faster on
 that small case because GPU dispatch dominated, so equivalence is not evidence
 that WGPU will win every workload.
 
-The scheduled campaign is `c10-native-fid-methodology-v1`. Its four-case canary
+The 2026-09-07 `c10-native-fid-methodology-v1` attempt is abandoned evidence,
+not a resumable campaign. It materialised native-oracle JSON per case, reached
+about 59 GiB after only 70 case summaries, and was stopped without deleting its
+evidence. Its replacement is `c10-compact-fid-methodology-v2`. One reusable
+`compact-candidate-index.sqlite3` stores the relationship-complete candidate
+population and routine cases stream through the selected portable scorer.
+Native Ghidra replay is canary-only.
+
+The replacement campaign's four-case canary
 must cover both folds, reach 80% truth attribution and have zero oracle
-mismatches before the full 444 cases can start. The full campaign uses four
-workers with explicit JVM limits inherited from
-`validation/machine-validation-runtime.toml`. It refuses active production
-jobs, never executes target binaries, never starts a compiler and never mutates
-the production queue.
+mismatches before the full 444 cases can start. It must also use the requested
+backend without fallback. The full campaign uses four workers and refuses
+active production jobs, never executes target binaries, never starts a compiler
+and never mutates the production queue.
 
 Do not partition matcher cases by their materialized order. Position, fold and
 treatment are periodic, so naive round-robin assigned 2.21 million estimated
@@ -491,12 +498,30 @@ could immediately run the missed midnight trigger. A case already admitted may
 finish after 05:30. Check `campaign_status` and the four canary reports before
 allowing automatic chaining; never hand-create a success receipt.
 
-Each case retains native oracle input, portable outputs, truth attribution and
-hash observations. Completion writes `full-hash-evidence.sqlite3` and a compact
-report consumed by the validation observatory. Preserve both. Normal GUI reads
-the compact report; drill-down reads bounded full/specific/complete populations
-and affected owners. A future schema change gets a new sidecar, never an in-place
-reinterpretation of this evidence.
+Canary cases retain oracle replay evidence and selected-backend output. Routine
+full cases retain classifications, truth attribution, hash observations and
+compact receipts; they deliberately omit both native-oracle JSON and the raw
+selected-backend decision stream. Completion writes
+`full-hash-evidence.sqlite3` and a compact report consumed by the validation
+observatory. Preserve both. Normal GUI reads the compact report; drill-down
+reads bounded full/specific/complete populations and affected owners. A future
+schema change gets a new sidecar, never an in-place reinterpretation of this
+evidence.
+
+Backend authority is `performance/fid-matching.toml`. The Performance page and
+`/api/v1/fid-matching-backend` expose detected hardware, requested/effective
+mode, canary qualification and fallback state. Changing that TOML invalidates
+the backend canary contract; do not describe an auto fallback as a qualified
+GPU run.
+
+The first compact C10 index measured 4,013,301,760 bytes, about five minutes to
+build and roughly 1.2 GiB indexer RSS on `reference-host`. An earlier implementation
+cached every inspected source in Python and climbed past 2.7 GiB; preserve the
+digest-grouped build that releases each source after insertion. After workers
+exit, cleanup may remove only `worker-scratch/`, legacy
+`compact-index-ghidra-user/` and `cases/*/work` beneath the campaign root. The
+successful canary recovered about 1.5 GiB of scratch while preserving the index
+and sealed evidence.
 
 Routine native-FID cases execute only the `selected` backend from
 `validation/fid-matching.toml`—currently `gpu-portable-fid-v1`—and compare it

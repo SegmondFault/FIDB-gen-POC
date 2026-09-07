@@ -215,9 +215,14 @@ selection. The detector-level C10 methodology is separately frozen in
 [`validation/fid-matching.toml`](validation/fid-matching.toml), qualified
 against native Ghidra on CPU and WGPU, and scheduled by
 [`validation/fid-matching-run.toml`](validation/fid-matching-run.toml). It
+builds one reusable relationship-complete compact SQLite candidate index,
 classifies each link-attributed query function against every candidate library
-owner, retains the resulting per-hash evidence, and publishes its compact full
-report to the same Hash discrimination observatory.
+owner with the selected CPU or WGPU scorer, retains the resulting per-hash
+evidence, and publishes its compact full report to the same Hash discrimination
+observatory. Native Ghidra replay and raw decision streams are retained for the
+fail-closed canary, not duplicated across routine full cases. The Performance
+page exposes the separately configured FID scorer from
+[`performance/fid-matching.toml`](performance/fid-matching.toml).
 
 The exact-tuple analysis method is frozen in
 [`validation/machine-validation-hash-method.toml`](validation/machine-validation-hash-method.toml).

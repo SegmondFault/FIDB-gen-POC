@@ -218,8 +218,11 @@ reviewed bound.
 
 Validation retention verifies the status/report completion contract, the
 single-hash evidence database digest, and the preserved unit results, truth
-maps, query signatures and composite binaries. It may remove only direct-child
-`worker-*` scratch directories.
+maps and query signatures. Once relationship-complete truth is sealed, the
+source runner prunes disposable composite binaries. The native-FID campaign
+separately removes only its reviewed scratch allow-list: `worker-scratch/`,
+legacy `compact-index-ghidra-user/` and `cases/*/work`. It never infers cleanup
+targets from a glob outside the campaign root.
 Incomplete and failed runs remain quarantined whole. `units/`, the cohort
 reference index and terminal reports remain available for threshold-free
 per-hash reanalysis.
@@ -248,10 +251,13 @@ scale CPU completed the portable scoring faster because GPU dispatch dominated.
 Backend selection therefore remains measured and configurable rather than
 assuming that a qualified GPU is always faster.
 
-`fid-matching-run.toml` schedules the C10 campaign. Four cases spanning both
-folds and route classes form the fail-closed canary. Only a canary with at least
-80% truth coverage and zero oracle mismatches chains into the 444-case full
-run. Four long-lived campaign slots use the heap and processor bounds in
+`fid-matching-run.toml` schedules the C10 campaign. One reusable compact SQLite
+index holds the relationship-complete candidate population; routine cases
+stream their sealed query signatures through the selected CPU or WGPU scorer.
+Native Ghidra is replayed only for the four fail-closed canary cases spanning
+both folds and route classes. Only a canary with at least 80% truth coverage,
+zero oracle mismatches, the requested backend and zero fallback chains into the
+444-case full run. Four campaign slots use the bounds in
 `machine-validation-runtime.toml`. No target executable is run, no compiler is
 started, and the production queue is never mutated.
 
@@ -271,10 +277,15 @@ uv run fidb-poc machine-validation run-matcher --project-root . --mode full
 uv run fidb-poc machine-validation scheduled-matcher --project-root .
 ```
 
-Each routine case retains the native oracle input, the selected portable CPU
-decision, its oracle comparison, truth attribution and per-hash observations.
-CPU/WGPU dual execution is reserved for the explicit `qualify-matcher`
-operation; the checked-in qualification receipt is reused by normal campaigns.
+The backend and bounded dispatch settings live in
+`performance/fid-matching.toml`. The Performance page exposes the requested,
+effective and qualified FID scorer independently of the exact-hash analyser.
+The canary retains its replay input, selected-backend decision and oracle
+comparison. Routine full cases retain classifications, truth attribution,
+per-hash observations and summary receipts, but neither native-oracle input nor
+the large raw backend decision stream. CPU/WGPU dual execution is reserved for
+the explicit `qualify-matcher` operation; the checked-in qualification receipt
+is reused by normal campaigns.
 A terminal campaign compacts those
 observations into `full-hash-evidence.sqlite3`. The sidecar retains full,
 specific and complete hash populations by compatible scope and owner, including
