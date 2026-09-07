@@ -757,7 +757,11 @@ from elapsed time alone or apply it architecture-wide.  The separately
 versioned `validation/linked-reference-supervisor.toml` bounds an individual
 task, records a failure receipt, recycles only its long-lived JVM worker, and
 replays the same digest-idempotent shard.  Completed task seals remain valid;
-in-progress attempts and timeout evidence remain on disk.
+in-progress attempts and timeout evidence remain on disk.  Worker count is an
+operational field in that supervisor authority: the first four-worker pass
+measured only 0.61--0.78 CPU cores and 1.9--2.9 GiB RSS per worker on
+`reference-host`, so the checked-in host profile uses six without changing any task
+or generation identity.
 
 Ghidra analyzer child options do not exist in a freshly loaded program's raw
 analysis-options tree until `AutoAnalysisManager.initializeOptions()` has run,

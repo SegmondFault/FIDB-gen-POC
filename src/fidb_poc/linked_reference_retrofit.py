@@ -201,6 +201,7 @@ def load_supervisor_authority(
     document = tomllib.loads(path.read_text(encoding="utf-8"))
     expected = {
         "schema_version",
+        "workers",
         "task_timeout_seconds",
         "task_timeout_retries",
         "termination_grace_seconds",
@@ -213,6 +214,8 @@ def load_supervisor_authority(
         minimum = 0 if name == "task_timeout_retries" else 1
         if type(value) is not int or int(value) < minimum:
             raise ValueError(f"linked-reference supervisor.{name} is invalid")
+    if int(document["workers"]) > 16:
+        raise ValueError("linked-reference supervisor worker count exceeds the bound")
     return {
         **document,
         "authority_path": str(path.relative_to(root)),
@@ -1198,7 +1201,7 @@ def run(
                 result["generation"] = _generation_seal(root, plan)
             return result
         chunks, loads = _balanced_chunks(
-            pending, int(authority["execution"]["workers"])
+            pending, int(supervisor["workers"])
         )
         _atomic_json(
             run_root / "status.json",

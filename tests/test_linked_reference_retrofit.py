@@ -95,6 +95,7 @@ class LinkedReferenceRetrofitTests(unittest.TestCase):
     def test_checked_in_supervisor_bounds_individual_tasks(self) -> None:
         root = Path(__file__).resolve().parents[1]
         supervisor = load_supervisor_authority(root)
+        self.assertEqual(supervisor["workers"], 6)
         self.assertEqual(supervisor["task_timeout_seconds"], 900)
         self.assertEqual(supervisor["task_timeout_retries"], 1)
 

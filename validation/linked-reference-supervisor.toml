@@ -1,4 +1,5 @@
 schema_version = "fidb-linked-reference-supervisor/v1"
+workers = 6
 task_timeout_seconds = 900
 task_timeout_retries = 1
 termination_grace_seconds = 30
