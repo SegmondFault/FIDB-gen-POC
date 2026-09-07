@@ -39,6 +39,7 @@ from fidb_poc.machine_validation_runner import (
     load_runtime,
     pause_validation,
     requeue_failed_validation,
+    resolve_evidence,
     resume_validation,
     runtime_status,
     start_validation,
@@ -203,6 +204,39 @@ class MachineValidationRunnerTests(unittest.TestCase):
             )
 
             self.assertEqual(resolved, {})
+
+    def test_runtime_resolves_the_cohort_authority_pinned_by_its_manifest(self):
+        runtime = {"validation_id": "future-cohort"}
+        manifest = {
+            "authority_path": "validation/future-cohort.toml",
+            "authority_sha256": "a" * 64,
+        }
+        status = {
+            "id": "future-cohort",
+            "authority_sha256": "a" * 64,
+            "readiness": {"eligible": False, "blockers": ["not built"]},
+            "evidence_sources": {},
+        }
+        with (
+            patch(
+                "fidb_poc.machine_validation_runner.load_runtime",
+                return_value=runtime,
+            ),
+            patch(
+                "fidb_poc.machine_validation_runner._manifest",
+                return_value=manifest,
+            ),
+            patch(
+                "fidb_poc.machine_validation_runner.compile_machine_validation",
+                return_value=status,
+            ) as compile_validation,
+        ):
+            with self.assertRaisesRegex(ValueError, "not built"):
+                resolve_evidence(self.root, "future-runtime.toml")
+
+        compile_validation.assert_called_once_with(
+            self.root, "validation/future-cohort.toml"
+        )
 
     def test_single_hash_analysis_has_no_library_acceptance_threshold(self):
         with tempfile.TemporaryDirectory() as temporary:

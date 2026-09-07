@@ -908,7 +908,14 @@ def resolve_evidence(
     root = Path(project_root).expanduser().resolve()
     runtime = load_runtime(root, runtime_path)
     manifest = _manifest(root, runtime)
-    status = compile_machine_validation(root)
+    status = compile_machine_validation(root, str(manifest["authority_path"]))
+    if (
+        status["id"] != runtime["validation_id"]
+        or status["authority_sha256"] != manifest["authority_sha256"]
+    ):
+        raise ValueError(
+            "machine-validation manifest does not bind the selected cohort authority"
+        )
     if not status["readiness"]["eligible"]:
         unavailable = {
             name: source.get("detail", source.get("state"))
