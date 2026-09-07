@@ -1,17 +1,20 @@
 import tempfile
 import unittest
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from fidb_poc.fid_matching_campaign import (
+    _acquire_campaign_lock,
     _balanced_case_chunks,
     _expected_cases,
     _publish_hash_evidence,
     _reusable_case,
     _resource_preflight,
+    _release_campaign_lock,
     _source_harness_preflight,
     _window_open,
     campaign_status,
@@ -88,6 +91,21 @@ class FidMatchingCampaignTests(unittest.TestCase):
 
             self.assertFalse(_reusable_case(root, campaign, 1, "A", "new-method"))
             self.assertTrue(_reusable_case(root, campaign, 1, "A", "old-method"))
+
+    def test_campaign_lock_recovers_automatically_after_owner_exit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / ".campaign.lock"
+            first = _acquire_campaign_lock(path)
+            try:
+                with self.assertRaisesRegex(ValueError, "another FID matching"):
+                    _acquire_campaign_lock(path)
+            finally:
+                _release_campaign_lock(first)
+
+            second = _acquire_campaign_lock(path)
+            _release_campaign_lock(second)
+            owner = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(owner["pid"], os.getpid())
 
         status = campaign_status(self.root)
         self.assertEqual(

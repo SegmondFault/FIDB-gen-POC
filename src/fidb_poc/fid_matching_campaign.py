@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import fcntl
 import hashlib
 import json
 import os
@@ -53,6 +54,35 @@ def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _acquire_campaign_lock(path: Path) -> int:
+    """Acquire a crash-safe process lock and leave an inspectable owner record."""
+
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        os.close(descriptor)
+        raise ValueError("another FID matching campaign process is active") from error
+    payload = json.dumps(
+        {
+            "pid": os.getpid(),
+            "acquired_at": datetime.now(timezone.utc).isoformat(),
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+    os.ftruncate(descriptor, 0)
+    os.write(descriptor, payload)
+    os.fsync(descriptor)
+    return descriptor
+
+
+def _release_campaign_lock(descriptor: int) -> None:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
 
 
 def _clock_minutes(value: str) -> int:
@@ -961,11 +991,7 @@ def run_campaign(
     campaign_root = _campaign_root(root, campaign)
     campaign_root.mkdir(parents=True, exist_ok=True)
     lock = campaign_root / ".campaign.lock"
-    try:
-        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError as error:
-        raise ValueError("another FID matching campaign process is active") from error
-    os.close(descriptor)
+    lock_descriptor = _acquire_campaign_lock(lock)
     chunks, scheduling = _scheduled_case_chunks(root, campaign, mode)
     started_at = datetime.now(timezone.utc).isoformat()
     _atomic_json(
@@ -1052,7 +1078,7 @@ def run_campaign(
     finally:
         for stream in streams:
             stream.close()
-        lock.unlink(missing_ok=True)
+        _release_campaign_lock(lock_descriptor)
 
 
 def _window_open(
