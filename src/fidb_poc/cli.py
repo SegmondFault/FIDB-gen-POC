@@ -414,7 +414,11 @@ def _machine_validation_main(argv: list[str]) -> int:
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             if arguments.foreground:
-                return 0 if document.get("state") == "measured-complete" else 1
+                return (
+                    0
+                    if document.get("state") in {"complete", "measured-complete"}
+                    else 1
+                )
             return 0
         if arguments.command == "run":
             document = run_validation(

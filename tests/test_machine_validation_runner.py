@@ -655,9 +655,7 @@ class MachineValidationRunnerTests(unittest.TestCase):
                     "fidb_poc.machine_validation_runner.run_validation",
                     return_value=terminal,
                 ) as run,
-                patch(
-                    "fidb_poc.machine_validation_runner._spawn_validation"
-                ) as spawn,
+                patch("fidb_poc.machine_validation_runner._spawn_validation") as spawn,
             ):
                 resumed = resume_validation(root, foreground=True)
 
@@ -668,6 +666,91 @@ class MachineValidationRunnerTests(unittest.TestCase):
             queued = json.loads(status_path.read_text(encoding="utf-8"))
             self.assertEqual(queued["state"], "queued")
             self.assertEqual(queued["resume_count"], 3)
+
+    def test_complete_full_resume_is_an_evidence_checked_idempotent_noop(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed-full"
+            run_root.mkdir(parents=True)
+            status_path = run_root / "status.json"
+            (root / "runs/current.json").write_text(
+                json.dumps(
+                    {"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}
+                ),
+                encoding="utf-8",
+            )
+            status = {
+                "run_id": "fixed-full",
+                "mode": "full",
+                "state": "complete",
+                "expected_work_units": 222,
+                "complete_work_units": 222,
+                "failed_work_units": 0,
+                "postprocess_job": {
+                    "state": "complete",
+                    "stages": [{"id": "retention", "state": "complete"}],
+                },
+            }
+            status_path.write_text(json.dumps(status), encoding="utf-8")
+            (run_root / "hash-report.json").write_text(
+                json.dumps({"state": "measured-complete", "run_id": "fixed-full"}),
+                encoding="utf-8",
+            )
+            (run_root / "retention.json").write_text(
+                json.dumps({"state": "complete"}), encoding="utf-8"
+            )
+
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value={"output_root": "runs"},
+                ),
+                patch("fidb_poc.machine_validation_runner.preflight") as preflight,
+                patch("fidb_poc.machine_validation_runner.run_validation") as run,
+            ):
+                replay = resume_validation(root, foreground=True)
+
+            self.assertEqual(replay, status)
+            preflight.assert_not_called()
+            run.assert_not_called()
+
+    def test_complete_full_resume_rejects_missing_terminal_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed-full"
+            run_root.mkdir(parents=True)
+            (root / "runs/current.json").write_text(
+                json.dumps(
+                    {"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "status.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "fixed-full",
+                        "mode": "full",
+                        "state": "complete",
+                        "expected_work_units": 222,
+                        "complete_work_units": 222,
+                        "failed_work_units": 0,
+                        "postprocess_job": {
+                            "state": "complete",
+                            "stages": [{"id": "retention", "state": "complete"}],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "fidb_poc.machine_validation_runner.load_runtime",
+                return_value={"output_root": "runs"},
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "terminal postprocess evidence"
+                ):
+                    resume_validation(root, foreground=True)
 
     def test_postprocess_failure_resumes_from_sealed_cell_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -755,15 +838,11 @@ class MachineValidationRunnerTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                _failed_work_unit_count(
-                    run_root, "full", postprocess_started=True
-                ),
+                _failed_work_unit_count(run_root, "full", postprocess_started=True),
                 0,
             )
             self.assertEqual(
-                _failed_work_unit_count(
-                    run_root, "full", postprocess_started=False
-                ),
+                _failed_work_unit_count(run_root, "full", postprocess_started=False),
                 1,
             )
 
@@ -1271,7 +1350,10 @@ class MachineValidationRunnerTests(unittest.TestCase):
             ("arm", "R_ARM_ABS32"),
             ("i686", "R_386_32"),
         ):
-            with self.subTest(architecture=architecture), tempfile.TemporaryDirectory() as temporary:
+            with (
+                self.subTest(architecture=architecture),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 root = Path(temporary)
                 archive = root / "library.a"
                 archive.write_bytes(b"archive")

@@ -561,7 +561,9 @@ def _latest_explicit_requeue_attempt(result_path: Path) -> int:
         for row in receipt.get("archived_results", []):
             if row.get("position") != position:
                 continue
-            match = re.search(r"/result-(\d+)\.json$", str(row.get("archived_path", "")))
+            match = re.search(
+                r"/result-(\d+)\.json$", str(row.get("archived_path", ""))
+            )
             if match is not None:
                 return int(match.group(1))
         return 0
@@ -1371,9 +1373,7 @@ def _link_composite(
         result = subprocess.run(
             command(
                 support,
-                allow_android_32_text_relocations=(
-                    allow_android_32_text_relocations
-                ),
+                allow_android_32_text_relocations=(allow_android_32_text_relocations),
             ),
             text=True,
             capture_output=True,
@@ -3217,6 +3217,51 @@ def resume_validation(
     runtime = load_runtime(root, runtime_path)
     status_path = _current_status_path(root, runtime)
     status = runtime_status(root, runtime_path)
+    if status.get("state") == "complete":
+        run_id = str(status.get("run_id") or "")
+        mode = str(status.get("mode") or "")
+        expected = int(status.get("expected_work_units", 0))
+        if (
+            mode not in {"canary", "full"}
+            or not run_id
+            or expected < 1
+            or int(status.get("complete_work_units", 0)) != expected
+            or int(status.get("failed_work_units", 0)) != 0
+        ):
+            raise ValueError(
+                "completed machine validation has inconsistent cell evidence"
+            )
+        if mode == "full":
+            postprocess = status.get("postprocess_job", {})
+            stages = (
+                postprocess.get("stages", []) if isinstance(postprocess, dict) else []
+            )
+            if (
+                postprocess.get("state") != "complete"
+                or not stages
+                or any(stage.get("state") != "complete" for stage in stages)
+            ):
+                raise ValueError(
+                    "completed machine validation has incomplete postprocessing"
+                )
+            hash_report_path = status_path.parent / "hash-report.json"
+            retention_path = status_path.parent / "retention.json"
+            try:
+                hash_report = json.loads(hash_report_path.read_text(encoding="utf-8"))
+                retention = json.loads(retention_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                raise ValueError(
+                    "completed machine validation lacks terminal postprocess evidence"
+                ) from error
+            if (
+                hash_report.get("state") != "measured-complete"
+                or hash_report.get("run_id") != run_id
+                or retention.get("state") != "complete"
+            ):
+                raise ValueError(
+                    "completed machine validation terminal evidence is inconsistent"
+                )
+        return status
     postprocess_retry = status.get("state") == "postprocess-failed"
     if status.get("state") not in {
         "paused",
