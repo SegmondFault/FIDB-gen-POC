@@ -39,7 +39,9 @@ AUTHORITY_SCHEMA = "fidb-linked-reference-retrofit/v1"
 PLAN_SCHEMA = "fidb-linked-reference-plan/v1"
 TASK_SEAL_SCHEMA = "fidb-linked-reference-task-seal/v1"
 GENERATION_SEAL_SCHEMA = "fidb-linked-reference-generation-seal/v1"
+SUPERVISOR_SCHEMA = "fidb-linked-reference-supervisor/v1"
 DEFAULT_AUTHORITY = Path("validation/linked-reference-retrofit.toml")
+DEFAULT_SUPERVISOR = Path("validation/linked-reference-supervisor.toml")
 
 
 def _now() -> str:
@@ -184,6 +186,33 @@ def load_authority(
             raise ValueError(f"linked-reference safety.{name} must be positive")
     for field in ("runtime", "output_root"):
         _inside(root, str(document[field]), field)
+    return {
+        **document,
+        "authority_path": str(path.relative_to(root)),
+        "authority_sha256": _sha256(path),
+    }
+
+
+def load_supervisor_authority(
+    project_root: str | Path, supervisor: str | Path = DEFAULT_SUPERVISOR
+) -> dict[str, object]:
+    root = Path(project_root).expanduser().resolve()
+    path = _inside(root, supervisor, "linked-reference supervisor authority")
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    expected = {
+        "schema_version",
+        "task_timeout_seconds",
+        "task_timeout_retries",
+        "termination_grace_seconds",
+        "poll_seconds",
+    }
+    if set(document) != expected or document.get("schema_version") != SUPERVISOR_SCHEMA:
+        raise ValueError("linked-reference supervisor has unsupported fields or schema")
+    for name in expected - {"schema_version"}:
+        value = document[name]
+        minimum = 0 if name == "task_timeout_retries" else 1
+        if type(value) is not int or int(value) < minimum:
+            raise ValueError(f"linked-reference supervisor.{name} is invalid")
     return {
         **document,
         "authority_path": str(path.relative_to(root)),
@@ -542,6 +571,36 @@ def _failure_fingerprint(error: Exception) -> str:
     return hashlib.sha256(message.encode("utf-8")).hexdigest()
 
 
+def _worker_status_path(
+    root: Path, authority: Mapping[str, object], worker_id: str
+) -> Path:
+    return _inside(
+        root,
+        Path(str(authority["output_root"]))
+        / str(authority["id"])
+        / "workers"
+        / _slug(worker_id)
+        / "status.json",
+        "linked-reference worker status",
+    )
+
+
+def _active_task_timed_out(
+    status: Mapping[str, object], *, now: datetime, timeout_seconds: int
+) -> bool:
+    active_task = status.get("active_task")
+    started_at = status.get("active_started_at")
+    if not active_task or not started_at:
+        return False
+    try:
+        started = datetime.fromisoformat(str(started_at))
+    except ValueError:
+        return False
+    if started.tzinfo is None:
+        return False
+    return (now - started).total_seconds() > timeout_seconds
+
+
 def _next_attempt(task_root: Path) -> Path:
     attempts = task_root / "attempts"
     attempts.mkdir(parents=True, exist_ok=True)
@@ -721,6 +780,7 @@ def worker(
     project_root: str | Path,
     task_keys: Iterable[str],
     authority_path: str | Path = DEFAULT_AUTHORITY,
+    worker_id: str | None = None,
 ) -> int:
     from . import ghidra_fid
     from .machine_validation_runner import resolve_hash_analysis_evidence
@@ -745,14 +805,8 @@ def worker(
     )
     runtime = plan["_runtime"]
     os.environ["GHIDRA_HEADLESS"] = str(runtime["ghidra_headless"])
-    worker_root = _inside(
-        root,
-        Path(str(authority["output_root"]))
-        / str(authority["id"])
-        / "workers"
-        / str(os.getpid()),
-        "linked-reference worker root",
-    )
+    stable_worker_id = worker_id or str(os.getpid())
+    worker_root = _worker_status_path(root, authority, stable_worker_id).parent
     worker_root.mkdir(parents=True, exist_ok=True)
     _headless, ghidra_home = find_ghidra()
     ghidra_fid.ensure_started(
@@ -761,6 +815,22 @@ def worker(
     fingerprints: Counter[str] = Counter()
     completed = failed = 0
     for task in selected:
+        active_started_at = _now()
+        _atomic_json(
+            worker_root / "status.json",
+            {
+                "schema_version": "fidb-linked-reference-worker-status/v1",
+                "worker_id": stable_worker_id,
+                "pid": os.getpid(),
+                "state": "running",
+                "completed": completed,
+                "failed": failed,
+                "remaining": len(selected) - completed - failed,
+                "active_task": task["task_key"],
+                "active_started_at": active_started_at,
+                "updated_at": active_started_at,
+            },
+        )
         try:
             _run_task(root, authority, evidence, task)
             completed += 1
@@ -795,11 +865,14 @@ def worker(
             worker_root / "status.json",
             {
                 "schema_version": "fidb-linked-reference-worker-status/v1",
+                "worker_id": stable_worker_id,
                 "pid": os.getpid(),
                 "state": "running",
                 "completed": completed,
                 "failed": failed,
                 "remaining": len(selected) - completed - failed,
+                "active_task": None,
+                "active_started_at": None,
                 "updated_at": _now(),
             },
         )
@@ -807,11 +880,14 @@ def worker(
         worker_root / "status.json",
         {
             "schema_version": "fidb-linked-reference-worker-status/v1",
+            "worker_id": stable_worker_id,
             "pid": os.getpid(),
             "state": "complete" if failed == 0 else "failed-or-partial",
             "completed": completed,
             "failed": failed,
             "remaining": len(selected) - completed - failed,
+            "active_task": None,
+            "active_started_at": None,
             "updated_at": _now(),
         },
     )
@@ -921,10 +997,167 @@ def _generation_seal(root: Path, plan: Mapping[str, object]) -> dict[str, object
     return document
 
 
+def _spawn_worker_process(
+    *,
+    root: Path,
+    authority: Mapping[str, object],
+    worker_id: str,
+    task_keys: Sequence[str],
+    log,
+) -> subprocess.Popen:
+    status_path = _worker_status_path(root, authority, worker_id)
+    _atomic_json(
+        status_path,
+        {
+            "schema_version": "fidb-linked-reference-worker-status/v1",
+            "worker_id": worker_id,
+            "pid": None,
+            "state": "starting",
+            "completed": 0,
+            "failed": 0,
+            "remaining": len(task_keys),
+            "active_task": None,
+            "active_started_at": None,
+            "updated_at": _now(),
+        },
+    )
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "fidb_poc.linked_reference_retrofit",
+            "_worker",
+            "--project-root",
+            str(root),
+            "--authority",
+            str(authority["authority_path"]),
+            "--worker-id",
+            worker_id,
+            "--tasks",
+            ",".join(task_keys),
+        ],
+        cwd=root,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def _read_worker_status(path: Path) -> dict[str, object] | None:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if document.get("schema_version") != "fidb-linked-reference-worker-status/v1":
+        return None
+    return document
+
+
+def _stop_timed_out_process(
+    process: subprocess.Popen, grace_seconds: int
+) -> str:
+    process.terminate()
+    try:
+        process.wait(timeout=grace_seconds)
+        return "terminated"
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        return "killed-after-grace"
+
+
+def _supervise_workers(
+    *,
+    root: Path,
+    plan: Mapping[str, object],
+    chunks: Sequence[Sequence[str]],
+    logs: Sequence[object],
+    supervisor: Mapping[str, object],
+) -> tuple[list[int], list[dict[str, object]]]:
+    authority = plan["_authority"]
+    by_key = {str(task["task_key"]): task for task in plan["tasks"]}
+    worker_ids = [f"worker-{index:02d}" for index in range(1, len(chunks) + 1)]
+    processes = [
+        _spawn_worker_process(
+            root=root,
+            authority=authority,
+            worker_id=worker_id,
+            task_keys=chunk,
+            log=log,
+        )
+        for worker_id, chunk, log in zip(worker_ids, chunks, logs, strict=True)
+    ]
+    return_codes: list[int | None] = [None] * len(processes)
+    timeout_counts: Counter[str] = Counter()
+    timeout_events: list[dict[str, object]] = []
+    while any(process is not None for process in processes):
+        for index, process in enumerate(processes):
+            if process is None:
+                continue
+            return_code = process.poll()
+            if return_code is not None:
+                return_codes[index] = return_code
+                processes[index] = None
+                continue
+            status_path = _worker_status_path(root, authority, worker_ids[index])
+            status = _read_worker_status(status_path)
+            if status is None or not _active_task_timed_out(
+                status,
+                now=datetime.now(timezone.utc),
+                timeout_seconds=int(supervisor["task_timeout_seconds"]),
+            ):
+                continue
+            task_key = str(status["active_task"])
+            task = by_key.get(task_key)
+            if task is None:
+                raise RuntimeError(f"timed-out worker reported unknown task: {task_key}")
+            if _valid_task_seal(root, authority, task) is not None:
+                # The seal is published immediately before the worker clears
+                # its active marker.  Do not misclassify that narrow handoff
+                # window as a timeout.
+                continue
+            action = _stop_timed_out_process(
+                process, int(supervisor["termination_grace_seconds"])
+            )
+            timeout_counts[task_key] += 1
+            event = {
+                "schema_version": "fidb-linked-reference-supervisor-timeout/v1",
+                "reason_code": "task-timeout",
+                "task_key": task_key,
+                "input_sha256": task["input_sha256"],
+                "worker_id": worker_ids[index],
+                "host_pid": process.pid,
+                "active_started_at": status["active_started_at"],
+                "detected_at": _now(),
+                "timeout_seconds": supervisor["task_timeout_seconds"],
+                "action": action,
+                "retry": timeout_counts[task_key],
+                "supervisor_authority_path": supervisor["authority_path"],
+                "supervisor_authority_sha256": supervisor["authority_sha256"],
+            }
+            _archive_failure(root, _task_root(root, authority, task), event)
+            timeout_events.append(event)
+            if timeout_counts[task_key] <= int(supervisor["task_timeout_retries"]):
+                processes[index] = _spawn_worker_process(
+                    root=root,
+                    authority=authority,
+                    worker_id=worker_ids[index],
+                    task_keys=chunks[index],
+                    log=logs[index],
+                )
+            else:
+                return_codes[index] = 124
+                processes[index] = None
+        if any(process is not None for process in processes):
+            time.sleep(int(supervisor["poll_seconds"]))
+    return [int(value) for value in return_codes], timeout_events
+
+
 def run(
     project_root: str | Path,
     mode: str,
     authority_path: str | Path = DEFAULT_AUTHORITY,
+    supervisor_path: str | Path = DEFAULT_SUPERVISOR,
 ) -> dict[str, object]:
     if mode not in {"canary", "full"}:
         raise ValueError("linked-reference run mode must be canary or full")
@@ -934,6 +1167,7 @@ def run(
         raise ValueError("; ".join(readiness["blockers"]))
     plan = compile_plan(root, authority_path)
     authority = plan["_authority"]
+    supervisor = load_supervisor_authority(root, supervisor_path)
     by_key = {str(task["task_key"]): task for task in plan["tasks"]}
     requested = (
         [by_key[str(key)] for key in authority["canary"]["tasks"]]
@@ -980,7 +1214,6 @@ def run(
                 "worker_pids": [],
             },
         )
-        processes = []
         streams = []
         try:
             for index, chunk in enumerate(chunks, start=1):
@@ -988,25 +1221,6 @@ def run(
                     "a", encoding="utf-8"
                 )
                 streams.append(log)
-                process = subprocess.Popen(
-                    [
-                        sys.executable,
-                        "-m",
-                        "fidb_poc.linked_reference_retrofit",
-                        "_worker",
-                        "--project-root",
-                        str(root),
-                        "--authority",
-                        str(authority["authority_path"]),
-                        "--tasks",
-                        ",".join(chunk),
-                    ],
-                    cwd=root,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    start_new_session=True,
-                )
-                processes.append(process)
             _atomic_json(
                 run_root / "status.json",
                 {
@@ -1018,10 +1232,21 @@ def run(
                     "plan_sha256": plan["plan_sha256"],
                     "pending_tasks": len(pending),
                     "estimated_archive_byte_loads": loads,
-                    "worker_pids": [process.pid for process in processes],
+                    "supervisor_authority_path": supervisor["authority_path"],
+                    "supervisor_authority_sha256": supervisor["authority_sha256"],
+                    "worker_ids": [
+                        f"worker-{index:02d}"
+                        for index in range(1, len(chunks) + 1)
+                    ],
                 },
             )
-            return_codes = [process.wait() for process in processes]
+            return_codes, timeout_events = _supervise_workers(
+                root=root,
+                plan=plan,
+                chunks=chunks,
+                logs=streams,
+                supervisor=supervisor,
+            )
         finally:
             for stream in streams:
                 stream.close()
@@ -1030,6 +1255,9 @@ def run(
         result["started_at"] = started_at
         result["finished_at"] = _now()
         result["worker_return_codes"] = return_codes
+        result["supervisor_authority_path"] = supervisor["authority_path"]
+        result["supervisor_authority_sha256"] = supervisor["authority_sha256"]
+        result["supervisor_timeouts"] = timeout_events
         if mode == "full" and result["state"] == "complete":
             result["generation"] = _generation_seal(root, refreshed)
         _atomic_json(run_root / "status.json", result)
@@ -1048,8 +1276,12 @@ def main(argv: list[str] | None = None) -> int:
         child.add_argument("--authority", type=Path, default=DEFAULT_AUTHORITY)
         if command == "run":
             child.add_argument("--mode", choices=("canary", "full"), required=True)
+            child.add_argument(
+                "--supervisor", type=Path, default=DEFAULT_SUPERVISOR
+            )
         if command == "_worker":
             child.add_argument("--tasks", required=True)
+            child.add_argument("--worker-id")
     arguments = parser.parse_args(argv)
     try:
         if arguments.command == "status":
@@ -1057,12 +1289,18 @@ def main(argv: list[str] | None = None) -> int:
         elif arguments.command == "preflight":
             document = preflight(arguments.project_root, arguments.authority)
         elif arguments.command == "run":
-            document = run(arguments.project_root, arguments.mode, arguments.authority)
+            document = run(
+                arguments.project_root,
+                arguments.mode,
+                arguments.authority,
+                arguments.supervisor,
+            )
         else:
             return worker(
                 arguments.project_root,
                 [value for value in arguments.tasks.split(",") if value],
                 arguments.authority,
+                arguments.worker_id,
             )
         print(json.dumps(document, indent=2, sort_keys=True))
         if document.get("state") in {"blocked", "failed", "failed-or-partial"}:

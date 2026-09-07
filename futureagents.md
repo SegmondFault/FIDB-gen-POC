@@ -744,6 +744,21 @@ explicit requeue receipt is the boundary for a fresh
 bounded automatic timeout allowance; older archived failures remain intact but
 no longer spend the new allowance.
 
+The 2026-09-07 linked-reference retrofit initially repeated this exact mistake:
+it read the repaired source-validation result but did not propagate its recorded
+query analysis policy into executable-shaped FID reference construction.
+Position 120 then spent more than 30 minutes in Ghidra while comparable tasks
+finished in roughly two minutes.  The source ledger identifies four affected
+SuperH positions (114, 120, 121 and 126).  Linked-reference planning now maps
+that retained recovery evidence to the distinct
+`ghidra-fid-safe-superh-clear-flow-repair-analyzers-disabled-after-timeout-v1`
+policy and makes it part of those tasks' identities.  Do not infer recovery
+from elapsed time alone or apply it architecture-wide.  The separately
+versioned `validation/linked-reference-supervisor.toml` bounds an individual
+task, records a failure receipt, recycles only its long-lived JVM worker, and
+replays the same digest-idempotent shard.  Completed task seals remain valid;
+in-progress attempts and timeout evidence remain on disk.
+
 Ghidra analyzer child options do not exist in a freshly loaded program's raw
 analysis-options tree until `AutoAnalysisManager.initializeOptions()` has run,
 and option mutation outside a program transaction raises
