@@ -11,7 +11,9 @@ from fidb_poc.fid_compact import (
     _relation_smash,
     build_compact_candidate_index,
     compact_index_status,
+    load_fid_matching_performance,
     match_compact,
+    selected_backend_id,
 )
 from fidb_poc.fid_matching import load_matching_authority
 
@@ -106,6 +108,16 @@ class CompactFidTests(unittest.TestCase):
             self.assertEqual(report["candidates"], 2)
             self.assertEqual(report["relations"], 1)
             self.assertEqual(reused, compact_index_status(destination))
+
+    def test_performance_toml_selects_gpu_with_cpu_fallback(self) -> None:
+        performance = load_fid_matching_performance(self.root)
+
+        self.assertEqual(performance["mode"], "gpu")
+        self.assertTrue(performance["fallback_to_cpu"])
+        self.assertEqual(
+            selected_backend_id(performance, self.authority),
+            "gpu-portable-fid-v1",
+        )
 
     def test_cpu_stream_retains_only_equal_highest_winners(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

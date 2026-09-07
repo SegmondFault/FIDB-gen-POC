@@ -202,7 +202,12 @@ class RetentionTests(unittest.TestCase):
             )
             (fold / "truth.elf").write_bytes(b"truth" + name.encode())
             (fold / "query.elf").write_bytes(b"query" + name.encode())
-            fold_result = {"fold": name}
+            fold_result = {
+                "fold": name,
+                "query_sha256": hashlib.sha256(
+                    (fold / "query.elf").read_bytes()
+                ).hexdigest(),
+            }
             if relationship_evidence:
                 fold_result["signature_summary"] = {
                     "evidence_schema": "fidb-program-signature-evidence/v1",
@@ -505,6 +510,60 @@ class RetentionTests(unittest.TestCase):
         apply_retention_plan(self.root, plan["plan_digest"])
         self.assertTrue(
             (run / "units/001-route-baseline/fold-A/query.elf").is_file()
+        )
+
+    def test_sealed_relationship_backfill_releases_legacy_composites(self) -> None:
+        run = self.add_complete_validation_run(
+            "validation-backfilled", relationship_evidence=False
+        )
+        result_path = run / "units/001-route-baseline/result.json"
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        result["route_id"] = "route"
+        result["treatment_id"] = "baseline"
+        result_path.write_text(json.dumps(result), encoding="utf-8")
+        for fold_result in result["folds"]:
+            fold = run / "units/001-route-baseline" / f"fold-{fold_result['fold']}"
+            evidence = fold / "query-fid-evidence.jsonl"
+            evidence.write_text(
+                json.dumps(
+                    {
+                        "full_hash": "aa",
+                        "specific_hash": "bb",
+                        "children": [],
+                        "parents": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (fold / "relationship-evidence.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "fidb-query-relationship-evidence/v1",
+                        "query_sha256": fold_result["query_sha256"],
+                        "route_id": "route",
+                        "treatment_id": "baseline",
+                        "evidence": {
+                            "schema_version": "fidb-program-signature-evidence/v1",
+                            "path": str(evidence.relative_to(self.root)),
+                            "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest(),
+                            "bytes": evidence.stat().st_size,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+        plan = compile_retention_plan(self.root, scope="machine-validation")
+
+        self.assertEqual(plan["summary"]["validation_composite_files"], 4)
+        write_retention_plan(plan, self.root)
+        apply_retention_plan(self.root, plan["plan_digest"])
+        self.assertFalse(
+            (run / "units/001-route-baseline/fold-A/query.elf").exists()
+        )
+        self.assertTrue(
+            (run / "units/001-route-baseline/fold-A/query-fid-evidence.jsonl").is_file()
         )
 
     def test_incomplete_validation_run_is_quarantined_without_action(self) -> None:

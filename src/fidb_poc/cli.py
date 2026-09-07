@@ -328,6 +328,7 @@ def _machine_validation_main(argv: list[str]) -> int:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
         if command == "_matcher-worker":
             child.add_argument("--cases", required=True)
+            child.add_argument("--mode", choices=("canary", "full"), required=True)
         if command == "_worker":
             child.add_argument("--positions", required=True)
         if command == "requeue-failed":
@@ -483,6 +484,7 @@ def _machine_validation_main(argv: list[str]) -> int:
             return worker_cases(
                 arguments.project_root,
                 arguments.cases.split(","),
+                arguments.mode,
                 arguments.matcher_campaign,
             )
         if arguments.command == "scheduled-hashes":

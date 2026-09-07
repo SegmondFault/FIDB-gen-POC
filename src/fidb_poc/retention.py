@@ -1008,6 +1008,53 @@ def _validation_evidence_record(
                 and signature_summary.get("artifact_bytes") == signatures.stat().st_size
             )
             if not relation_evidence_complete:
+                receipt_path = fold_root / "relationship-evidence.json"
+                if receipt_path.is_file():
+                    receipt = _load_json(
+                        _safe_regular(
+                            policy.root,
+                            receipt_path,
+                            "validation relationship-evidence receipt",
+                        ),
+                        "validation relationship-evidence receipt",
+                    )
+                    relation = receipt.get("evidence", {})
+                    relation_path_value = (
+                        relation.get("path") if isinstance(relation, dict) else None
+                    )
+                    relation_path = (
+                        _safe_regular(
+                            policy.root,
+                            Path(relation_path_value),
+                            "validation relationship evidence",
+                        )
+                        if isinstance(relation_path_value, str)
+                        else None
+                    )
+                    relation_evidence_complete = bool(
+                        receipt.get("schema_version")
+                        == "fidb-query-relationship-evidence/v1"
+                        and receipt.get("query_sha256") == fold.get("query_sha256")
+                        and receipt.get("route_id") == result.get("route_id")
+                        and receipt.get("treatment_id")
+                        == result.get("treatment_id")
+                        and relation.get("schema_version")
+                        == policy.validation_required_signature_evidence_schema
+                        and relation_path is not None
+                        and relation_path.parent == fold_root
+                        and relation.get("sha256") == _sha256(relation_path)
+                        and relation.get("bytes") == relation_path.stat().st_size
+                    )
+                    if relation_evidence_complete:
+                        retain(
+                            receipt_path,
+                            "validation relationship-evidence receipt",
+                        )
+                        retain(
+                            relation_path,
+                            "validation relationship signature evidence",
+                        )
+            if not relation_evidence_complete:
                 composite_prune_blockers.add(
                     "relationship-complete signature evidence is absent or unbound"
                 )

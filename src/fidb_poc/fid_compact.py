@@ -9,6 +9,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import time
+import tomllib
 from typing import Callable, Iterable, Mapping, Sequence
 
 from .fid_matching import _score_inputs, score_rows_cpu, score_rows_gpu
@@ -17,6 +18,8 @@ INDEX_SCHEMA = "fidb-compact-candidate-index/v1"
 QUERY_EVIDENCE_SCHEMA = "fidb-program-signature-evidence/v1"
 FNV_64_PRIME = 1099511628211
 MASK_64 = (1 << 64) - 1
+PERFORMANCE_SCHEMA = "fidb-fid-matching-performance/v1"
+DEFAULT_PERFORMANCE = Path("performance/fid-matching.toml")
 
 CandidateInspector = Callable[[Path], Mapping[str, object]]
 
@@ -24,6 +27,51 @@ CandidateInspector = Callable[[Path], Mapping[str, object]]
 def _sha256(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def load_fid_matching_performance(
+    project_root: str | Path,
+    authority: str | Path = DEFAULT_PERFORMANCE,
+) -> dict[str, object]:
+    root = Path(project_root).expanduser().resolve()
+    path = (root / authority).resolve()
+    if path != root and root not in path.parents:
+        raise ValueError("FID matching performance authority escapes project root")
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    if set(document) != {
+        "schema_version",
+        "mode",
+        "allow_gpu",
+        "fallback_to_cpu",
+        "candidate_chunk_rows",
+        "workgroup_size",
+    } or document.get("schema_version") != PERFORMANCE_SCHEMA:
+        raise ValueError("FID matching performance authority is unsupported")
+    if document["mode"] not in {"auto", "cpu", "gpu"}:
+        raise ValueError("FID matching performance mode is invalid")
+    if type(document["allow_gpu"]) is not bool:
+        raise ValueError("FID matching allow_gpu must be boolean")
+    if document["fallback_to_cpu"] is not True:
+        raise ValueError("FID matching must retain a CPU fallback")
+    if not 1 <= int(document["candidate_chunk_rows"]) <= 4_194_304:
+        raise ValueError("FID matching candidate chunk is outside safe bounds")
+    if not 1 <= int(document["workgroup_size"]) <= 1024:
+        raise ValueError("FID matching WGPU workgroup size is outside safe bounds")
+    return {
+        **document,
+        "authority_path": str(path.relative_to(root)),
+        "authority_sha256": _sha256(path),
+    }
+
+
+def selected_backend_id(
+    performance: Mapping[str, object], authority: Mapping[str, object]
+) -> str:
+    mode = str(performance["mode"])
+    device = "cpu" if mode == "cpu" or not performance["allow_gpu"] else "gpu"
+    return next(
+        str(row["id"]) for row in authority["backend"] if row["device"] == device
+    )
 
 
 def _input_digest(entries: Sequence[Mapping[str, object]]) -> str:

@@ -18,7 +18,11 @@ import tomllib
 from typing import Iterable, Mapping
 from zoneinfo import ZoneInfo
 
-from .fid_match_qualification import qualify_retained_validation
+from .fid_match_qualification import (
+    _fidb_from_signatures,
+    run_compact_retained_validation,
+)
+from .fid_compact import build_compact_candidate_index
 from .fid_matching import load_matching_authority
 from .machine_validation import LINK_HARNESS_POLICY
 
@@ -29,7 +33,8 @@ DEFAULT_CAMPAIGN = Path("validation/fid-matching-run.toml")
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def _inside(root: Path, value: str | Path, label: str) -> Path:
@@ -124,11 +129,11 @@ def load_campaign(
     methodology = document["methodology"]
     if methodology != {
         "decision_unit": "query-function-library-owner",
-        "candidate_semantics": "native-ghidra-fid",
+        "candidate_semantics": "compact-portable-ghidra-fid-v1",
         "truth_precedence": ["linker-map", "unique-reference-name"],
         "unresolved_truth": "retain-exclude-from-confusion-matrix",
         "retain_hash_types": ["full", "specific", "complete"],
-        "retain_oracle_inputs": True,
+        "retain_oracle_inputs": "canary-only",
         "retain_backend_outputs": True,
         "retain_hash_observations": True,
         "required_link_harness": LINK_HARNESS_POLICY,
@@ -140,12 +145,15 @@ def load_campaign(
         != {
             "workers",
             "scheduling",
+            "engine",
+            "performance",
             "compare_cpu_and_gpu",
             "finish_started",
             "resume_completed_cases",
         }
         or not 1 <= int(execution["workers"]) <= 16
         or execution["scheduling"] != "largest-query-first-greedy-v1"
+        or execution["engine"] != "compact-selected-backend-v1"
     ):
         raise ValueError("FID matching execution policy is invalid")
     if (
@@ -159,11 +167,15 @@ def load_campaign(
         set(canary)
         != {
             "cases",
+            "workers",
+            "oracle_replay_campaign_id",
             "minimum_truth_coverage",
             "require_zero_decision_mismatches",
             "auto_chain_full",
         }
         or not canary["cases"]
+        or not 1 <= int(canary["workers"]) <= int(execution["workers"])
+        or not str(canary["oracle_replay_campaign_id"])
     ):
         raise ValueError("FID matching canary policy is invalid")
     for case in canary["cases"]:
@@ -255,6 +267,65 @@ def _campaign_root(root: Path, campaign: Mapping[str, object]) -> Path:
         Path(str(campaign["output_root"])) / str(campaign["id"]),
         "FID matching campaign output",
     )
+
+
+def _compact_index_entries(
+    root: Path, evidence: Mapping[str, object]
+) -> list[dict[str, object]]:
+    entries = []
+    for (owner, route_id, treatment_id), item in sorted(
+        evidence["signatures"].items()
+    ):
+        fidb = _fidb_from_signatures(root, Path(item["path"]))
+        entries.append(
+            {
+                "owner": str(owner),
+                "route_id": str(route_id),
+                "treatment_id": str(treatment_id),
+                "fidb_path": str(fidb),
+                "fidb_sha256": _sha256(fidb),
+            }
+        )
+    return entries
+
+
+def _ensure_compact_candidate_index(
+    root: Path,
+    campaign: Mapping[str, object],
+    evidence: Mapping[str, object],
+    runtime: Mapping[str, object],
+) -> dict[str, object]:
+    """Build the campaign-wide FID index once while peer workers wait."""
+
+    from . import ghidra_fid
+    from .pipeline import find_ghidra, ghidra_environment
+
+    campaign_root = _campaign_root(root, campaign)
+    campaign_root.mkdir(parents=True, exist_ok=True)
+    destination = campaign_root / "compact-candidate-index.sqlite3"
+    lock_path = campaign_root / ".compact-index.lock"
+    descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        entries = _compact_index_entries(root, evidence)
+        ghidra_started = False
+
+        def inspect(path: Path) -> Mapping[str, object]:
+            nonlocal ghidra_started
+            if not ghidra_started:
+                os.environ["GHIDRA_HEADLESS"] = str(runtime["ghidra_headless"])
+                _headless, ghidra_home = find_ghidra()
+                ghidra_fid.ensure_started(
+                    ghidra_home,
+                    ghidra_environment(campaign_root / "compact-index-ghidra-user"),
+                )
+                ghidra_started = True
+            return ghidra_fid.inspect_fid_candidate_source(path)
+
+        return build_compact_candidate_index(entries, destination, inspect)
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def _case_summary_path(
@@ -355,9 +426,12 @@ def _scheduled_case_chunks(
         if weight < 1:
             raise ValueError(f"{position}:{fold} source query cost is unavailable")
         weighted.append((f"{position}:{fold}", weight))
-    chunks, loads = _balanced_case_chunks(
-        weighted, int(campaign["execution"]["workers"])
+    workers = int(
+        campaign["canary"]["workers"]
+        if mode == "canary"
+        else campaign["execution"]["workers"]
     )
+    chunks, loads = _balanced_case_chunks(weighted, workers)
     return chunks, {
         "policy": campaign["execution"]["scheduling"],
         "estimated_function_loads": loads,
@@ -493,22 +567,26 @@ def _aggregate(
         "authority_path": campaign["authority_path"],
         "authority_sha256": campaign["authority_sha256"],
         "source_run_id": campaign["source_run_id"],
-        "workers": campaign["execution"]["workers"],
+        "workers": (
+            campaign["canary"]["workers"]
+            if mode == "canary"
+            else campaign["execution"]["workers"]
+        ),
         "method_authority": {
-            "id": "native-fid-owner-validation-v1",
+            "id": "compact-portable-fid-owner-validation-v1",
             "path": matching["authority_path"],
             "sha256": matching["authority_sha256"],
-            "algorithm_id": "native-ghidra-oracle-portable-fid-v1",
+            "algorithm_id": "compact-index-portable-fid-v1",
         },
         "decision_contract": {
-            "true_positive": "native FID accepts the link-attributed library owner",
-            "false_positive": "native FID accepts an owner other than the link-attributed owner",
-            "true_negative": "native FID rejects an incorrect library owner",
-            "false_negative": "native FID does not accept the link-attributed library owner",
+            "true_positive": "qualified portable FID accepts the link-attributed library owner",
+            "false_positive": "qualified portable FID accepts an owner other than the link-attributed owner",
+            "true_negative": "qualified portable FID rejects an incorrect library owner",
+            "false_negative": "qualified portable FID does not accept the link-attributed library owner",
             "unresolved_truth": "retained but excluded from the confusion matrix",
         },
         "construct_validity": {
-            "state": "native-fid-owner-ground-truth",
+            "state": "native-oracle-qualified-portable-fid-owner-ground-truth",
             "recall_claim": "synthetic-linked-executable-native-fid-recall",
             "reference_unit": "per-library-fid-function-record",
             "query_unit": "link-attributed-composite-function",
@@ -521,7 +599,13 @@ def _aggregate(
             "materialized_with_batch": True,
             "required_for_run_completion": True,
             "stages": [
-                {"id": "native-oracle", "state": stage_state},
+                {"id": "compact-candidate-index", "state": stage_state},
+                {"id": "query-relationship-evidence", "state": stage_state},
+                *(
+                    [{"id": "native-oracle-replay", "state": stage_state}]
+                    if mode == "canary"
+                    else []
+                ),
                 *portable_stages,
                 {"id": "owner-classification", "state": stage_state},
                 {"id": "hash-population", "state": stage_state},
@@ -983,14 +1067,23 @@ def _source_harness_preflight(
 def worker_cases(
     project_root: str | Path,
     cases: Iterable[str],
+    mode: str,
     authority: str | Path = DEFAULT_CAMPAIGN,
 ) -> int:
+    if mode not in {"canary", "full"}:
+        raise ValueError("FID matching worker mode is invalid")
     root = Path(project_root).expanduser().resolve()
     campaign = load_campaign(root, authority)
     method = load_matching_authority(root, str(campaign["matching_authority"]))
-    from .machine_validation_runner import load_runtime
+    from .machine_validation_runner import (
+        load_runtime,
+        resolve_hash_analysis_evidence,
+    )
 
     runtime = load_runtime(root, str(campaign["runtime"]))
+    evidence = resolve_hash_analysis_evidence(
+        root, str(campaign["runtime"])
+    )
     execution = runtime["execution"]
     os.environ["_JAVA_OPTIONS"] = (
         f'-Xms{execution["jvm_initial_heap_mib"]}m '
@@ -998,6 +1091,9 @@ def worker_cases(
         f'-XX:ActiveProcessorCount={execution["jvm_active_processors"]}'
     )
     relative_output = Path(str(campaign["output_root"])) / str(campaign["id"]) / "cases"
+    compact_index = _ensure_compact_candidate_index(
+        root, campaign, evidence, runtime
+    )["path"]
     failed = 0
     for value in cases:
         position, fold = _parse_case(value)
@@ -1013,19 +1109,26 @@ def worker_cases(
             continue
         _archive_prior_case_failure(summary_path)
         try:
-            qualify_retained_validation(
+            replay_root = (
+                root
+                / str(campaign["output_root"])
+                / str(campaign["canary"]["oracle_replay_campaign_id"])
+                / "cases"
+                / f"{campaign['source_run_id']}-{position:03d}-{fold}"
+                if mode == "canary"
+                else None
+            )
+            run_compact_retained_validation(
                 root,
                 str(campaign["source_run_id"]),
                 position=position,
                 fold=fold,
+                candidate_index=str(compact_index),
                 runtime_path=str(campaign["runtime"]),
                 authority_path=str(campaign["matching_authority"]),
+                performance_path=str(campaign["execution"]["performance"]),
                 output_root=relative_output,
-                reuse_oracle=(
-                    summary_path.is_file()
-                    and summary_path.with_name("oracle-input.json").is_file()
-                ),
-                compare_backends=bool(campaign["execution"]["compare_cpu_and_gpu"]),
+                oracle_replay_source=replay_root,
             )
         except Exception as error:
             failed += 1
@@ -1103,6 +1206,8 @@ def run_campaign(
                     str(campaign["authority_path"]),
                     "--cases",
                     ",".join(chunk),
+                    "--mode",
+                    mode,
                 ],
                 cwd=root,
                 stdout=log,

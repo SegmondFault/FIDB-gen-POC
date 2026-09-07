@@ -1,5 +1,5 @@
 schema_version = "fidb-fid-matching-campaign/v1"
-id = "c10-native-fid-methodology-v1"
+id = "c10-compact-fid-methodology-v2"
 state = "scheduled"
 enabled = true
 source_run_id = "c10-shared-image-symbolic-v2-full"
@@ -10,11 +10,11 @@ output_root = "artifacts/fid-matching-runs"
 
 [methodology]
 decision_unit = "query-function-library-owner"
-candidate_semantics = "native-ghidra-fid"
+candidate_semantics = "compact-portable-ghidra-fid-v1"
 truth_precedence = ["linker-map", "unique-reference-name"]
 unresolved_truth = "retain-exclude-from-confusion-matrix"
 retain_hash_types = ["full", "specific", "complete"]
-retain_oracle_inputs = true
+retain_oracle_inputs = "canary-only"
 retain_backend_outputs = true
 retain_hash_observations = true
 required_link_harness = "whole-archive-shared-image-symbolic-v2"
@@ -22,12 +22,16 @@ required_link_harness = "whole-archive-shared-image-symbolic-v2"
 [execution]
 workers = 4
 scheduling = "largest-query-first-greedy-v1"
+engine = "compact-selected-backend-v1"
+performance = "performance/fid-matching.toml"
 compare_cpu_and_gpu = false
 finish_started = true
 resume_completed_cases = true
 
 [canary]
 cases = ["1:B", "145:B", "175:A", "175:B"]
+workers = 1
+oracle_replay_campaign_id = "c10-native-fid-methodology-v1"
 minimum_truth_coverage = 0.80
 require_zero_decision_mismatches = true
 auto_chain_full = true

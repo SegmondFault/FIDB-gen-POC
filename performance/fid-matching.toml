@@ -1,0 +1,6 @@
+schema_version = "fidb-fid-matching-performance/v1"
+mode = "gpu"
+allow_gpu = true
+fallback_to_cpu = true
+candidate_chunk_rows = 262144
+workgroup_size = 256

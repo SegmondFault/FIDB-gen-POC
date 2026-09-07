@@ -554,9 +554,11 @@ def qualification_report(
 
 
 def classify_matches(
-    document: Mapping[str, object], owners: Sequence[str]
+    document: Mapping[str, object],
+    owners: Sequence[str],
+    portable: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Classify native FID owner decisions for functions with frozen truth.
+    """Classify selected FID owner decisions for functions with frozen truth.
 
     One labelled query function contributes one positive owner decision and
     ``len(owners) - 1`` negative owner decisions.  Functions whose provenance
@@ -565,6 +567,14 @@ def classify_matches(
     """
 
     _validate_input(document)
+    portable_by_address = None
+    if portable is not None:
+        rows = portable.get("functions")
+        if not isinstance(rows, list):
+            raise ValueError("portable FID classification decisions are invalid")
+        portable_by_address = {str(row["address"]): row for row in rows}
+        if len(portable_by_address) != len(rows):
+            raise ValueError("portable FID classification addresses are duplicated")
     owner_universe = tuple(sorted(set(str(owner) for owner in owners)))
     if len(owner_universe) < 2:
         raise ValueError("portable FID classification requires multiple owners")
@@ -589,7 +599,13 @@ def classify_matches(
             continue
         labelled += 1
         basis_counts[truth_basis] = basis_counts.get(truth_basis, 0) + 1
-        matches = list(function.get("native_matches", []))
+        if portable_by_address is None:
+            matches = list(function.get("native_matches", []))
+        else:
+            decision = portable_by_address.get(str(function["address"]))
+            if decision is None:
+                raise ValueError("portable FID classification decision is missing")
+            matches = list(decision.get("matches", []))
         by_owner: dict[str, list[Mapping[str, object]]] = {}
         for match in matches:
             by_owner.setdefault(str(match["owner"]), []).append(match)

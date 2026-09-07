@@ -177,6 +177,21 @@ class FidMatchingTests(unittest.TestCase):
         self.assertEqual(classification["truth"]["labelled_functions"], 2)
         self.assertEqual(classification["truth"]["unlabelled_functions"], 2)
 
+    def test_classification_can_use_selected_portable_decisions(self):
+        document = self.document()
+        document["functions"][0]["truth_owner"] = "relation@1"
+        document["functions"][0]["truth_basis"] = "linker-map"
+        portable = match_cpu(document, self.authority)
+
+        classification = classify_matches(
+            document,
+            ["relation@1", "specific@1"],
+            portable,
+        )
+
+        self.assertEqual(classification["confusion_matrix"]["true_positives"], 1)
+        self.assertEqual(classification["confusion_matrix"]["false_negatives"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

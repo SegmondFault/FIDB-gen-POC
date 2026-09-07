@@ -47,6 +47,7 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertEqual(len(_expected_cases(self.campaign, "canary")), 4)
         self.assertEqual(len(_expected_cases(self.campaign, "full")), 444)
         self.assertFalse(self.campaign["execution"]["compare_cpu_and_gpu"])
+        self.assertEqual(self.campaign["canary"]["workers"], 1)
         self.assertEqual(
             self.campaign["execution"]["scheduling"],
             "largest-query-first-greedy-v1",
@@ -326,12 +327,14 @@ class FidMatchingCampaignTests(unittest.TestCase):
             )
 
         status = campaign_status(self.root)
-        self.assertEqual(status["canary"]["state"], "stale-authority")
+        self.assertEqual(status["canary"]["state"], "pending")
         self.assertEqual(
             [stage["id"] for stage in status["canary"]["pipeline_job"]["stages"]],
             [
-                "native-oracle",
-                "portable-cpu",
+                "compact-candidate-index",
+                "query-relationship-evidence",
+                "native-oracle-replay",
+                "portable-gpu",
                 "owner-classification",
                 "hash-population",
             ],
@@ -463,7 +466,7 @@ class FidMatchingCampaignTests(unittest.TestCase):
 
     def test_status_exposes_qualification_and_pending_cases(self):
         status = campaign_status(self.root)
-        self.assertEqual(status["qualification"]["state"], "qualified")
+        self.assertEqual(status["qualification"]["state"], "stale")
         self.assertEqual(status["canary"]["state"], "pending")
         self.assertEqual(status["canary"]["failures"], [])
         self.assertIsNone(status["canary"]["oracle"]["canary_passed"])
