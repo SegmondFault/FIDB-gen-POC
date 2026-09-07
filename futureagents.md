@@ -743,8 +743,22 @@ the checkpointed C10 campaign.
 For an ordered systemd chain, use `machine-validation resume --foreground`.
 Detached `resume` is for an interactive operator and must not be followed
 immediately by a dependent matcher command. Foreground resume returns failure
-unless the source run reaches `measured-complete`, allowing systemd to suppress
-later `ExecStart` stages safely.
+unless the source run reaches `measured-complete` or already has an
+evidence-checked terminal completion, allowing systemd to suppress later
+`ExecStart` stages safely.
+
+A durable chain may be restarted after source validation, hash postprocessing
+and retention are already complete. `resume --foreground` treats that state as
+an idempotent success only after checking 222/222 source cells, zero failures,
+the complete postprocess-stage ledger, a matching measured hash report and a
+complete retention receipt. Missing or inconsistent terminal evidence still
+fails closed; do not special-case it in the systemd unit.
+
+Matcher `.campaign.lock` is a persistent owner record protected by `flock`, not
+an existence sentinel. SIGTERM, a crash or a reboot releases the kernel lock
+automatically even though the inspectable pathname remains. Never delete that
+file merely because it exists, and never restore `O_EXCL` locking: test lock
+ownership by acquiring the advisory lock.
 
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field

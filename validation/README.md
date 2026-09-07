@@ -283,6 +283,13 @@ categories. The full report is ingested by `/api/v1/validation-observatory`, so
 the Hash discrimination page gains its population tail, noisy hashes and
 library drill-down without opening all case evidence during normal refresh.
 
+Campaign exclusivity uses an advisory lock with an inspectable PID/timestamp
+record. The kernel releases ownership if the coordinator is stopped or
+crashes, so the same campaign can resume its sealed cases without manually
+deleting a stale sentinel. Replaying the surrounding systemd chain is also
+safe: a complete source-validation stage is an evidence-checked idempotent
+success, while missing terminal hash or retention evidence still blocks.
+
 The user timer starts admission at 00:00 Europe/Luxembourg. `Persistent=false`
 is intentional: installing or enabling it after midnight must not immediately
 launch a missed heavy run. Work admitted inside the 00:00–05:30 window is
