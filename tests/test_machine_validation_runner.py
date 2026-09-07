@@ -21,7 +21,9 @@ from fidb_poc.machine_validation_runner import (
     _load_prepared_fold,
     _post_validation_retention,
     _prepared_fold_path,
+    _prior_supervisor_attempts,
     _query_index,
+    _query_analysis_policy,
     _resolve_worker_evidence,
     _release_position_claim,
     _release_worker_claims,
@@ -40,6 +42,10 @@ from fidb_poc.machine_validation_runner import (
     runtime_status,
     start_validation,
     TransientEvidenceError,
+)
+from fidb_poc.validation_analysis import (
+    QUERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
 )
 from fidb_poc.machine_validation_hashes import (
     ANALYSIS_ENGINE,
@@ -815,6 +821,62 @@ class MachineValidationRunnerTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(archived.read_text(encoding="utf-8"))["error"], "link"
             )
+
+    def test_explicit_requeue_starts_a_fresh_automatic_timeout_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary) / "run"
+            result = run_root / "units/007-route-treatment/result.json"
+            attempts = result.parent / "attempts"
+            attempts.mkdir(parents=True)
+            for number in (1, 2, 3):
+                (attempts / f"result-{number:03d}.json").write_text(
+                    json.dumps(
+                        {
+                            "state": "failed",
+                            "reason_code": "cell-timeout",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            receipts = run_root / "requeues"
+            receipts.mkdir()
+            (receipts / "requeue-001.json").write_text(
+                json.dumps(
+                    {
+                        "positions": [7],
+                        "archived_results": [
+                            {
+                                "position": 7,
+                                "archived_path": (
+                                    "runs/fixed/units/007-route-treatment/"
+                                    "attempts/result-002.json"
+                                ),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(_prior_supervisor_attempts(result, "cell-timeout"), 1)
+
+    def test_superh_timeout_selects_evidence_recorded_analysis_recovery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = Path(temporary) / "units/007-route-treatment/result.json"
+            attempts = result.parent / "attempts"
+            attempts.mkdir(parents=True)
+            (attempts / "result-001.json").write_text(
+                json.dumps({"state": "failed", "reason_code": "cell-timeout"}),
+                encoding="utf-8",
+            )
+
+            superh = SimpleNamespace(ghidra_language="SuperH4:LE:32:default")
+            x86 = SimpleNamespace(ghidra_language="x86:LE:64:default")
+            self.assertEqual(
+                _query_analysis_policy(result, superh),
+                QUERY_ANALYSIS_RECOVERY_POLICY,
+            )
+            self.assertEqual(_query_analysis_policy(result, x86), QUERY_ANALYSIS_POLICY)
 
     def test_workers_claim_units_exclusively_and_release_only_their_own(self):
         with tempfile.TemporaryDirectory() as temporary:

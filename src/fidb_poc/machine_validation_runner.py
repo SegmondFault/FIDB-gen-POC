@@ -33,6 +33,10 @@ from .machine_validation import (
     compile_machine_validation,
 )
 from .toolchain_packs import load_toolchain_pack_catalog, resolve_toolchain_profile
+from .validation_analysis import (
+    QUERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
+)
 
 RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
@@ -505,9 +509,13 @@ def _supervisor_failure(
 
 
 def _prior_supervisor_attempts(result_path: Path, reason_code: str) -> int:
+    baseline = _latest_explicit_requeue_attempt(result_path)
     attempts = result_path.parent / "attempts"
     count = 0
     for path in attempts.glob("result-*.json"):
+        match = re.fullmatch(r"result-(\d+)\.json", path.name)
+        if match is None or int(match.group(1)) <= baseline:
+            continue
         try:
             result = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -515,6 +523,58 @@ def _prior_supervisor_attempts(result_path: Path, reason_code: str) -> int:
         if result.get("reason_code") == reason_code:
             count += 1
     return count
+
+
+def _latest_explicit_requeue_attempt(result_path: Path) -> int:
+    """Return the archived-attempt boundary of the latest explicit requeue.
+
+    Operator requeue is a reviewed recovery decision.  It preserves all old
+    attempts, but automatic retry allowance must begin again after that
+    boundary rather than being consumed by failures from an earlier run.
+    """
+
+    try:
+        position = int(result_path.parent.name.split("-", 1)[0])
+        run_root = result_path.parents[2]
+    except (IndexError, ValueError):
+        return 0
+    receipts = run_root / "requeues"
+    for receipt_path in sorted(receipts.glob("requeue-*.json"), reverse=True):
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if position not in receipt.get("positions", []):
+            continue
+        for row in receipt.get("archived_results", []):
+            if row.get("position") != position:
+                continue
+            match = re.search(r"/result-(\d+)\.json$", str(row.get("archived_path", "")))
+            if match is not None:
+                return int(match.group(1))
+        return 0
+    return 0
+
+
+def _has_archived_supervisor_failure(result_path: Path, reason_code: str) -> bool:
+    attempts = result_path.parent / "attempts"
+    for path in attempts.glob("result-*.json"):
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if result.get("reason_code") == reason_code:
+            return True
+    return False
+
+
+def _query_analysis_policy(result_path: Path, route: object) -> str:
+    language = str(getattr(route, "ghidra_language", ""))
+    if language.startswith("SuperH4:") and _has_archived_supervisor_failure(
+        result_path, "cell-timeout"
+    ):
+        return QUERY_ANALYSIS_RECOVERY_POLICY
+    return QUERY_ANALYSIS_POLICY
 
 
 def _archive_failed_result(result_path: Path) -> Path | None:
@@ -1877,6 +1937,7 @@ def _worker(
             _archive_failed_result(result_path)
         route = routes[str(unit["route_id"])]
         treatment = treatments[str(unit["treatment_id"])]
+        query_analysis_policy = _query_analysis_policy(result_path, route)
         folds = sorted(canary_folds[position]) if mode == "canary" else ["A", "B"]
         fold_results = []
         started_ns = time.monotonic_ns()
@@ -1952,6 +2013,7 @@ def _worker(
                     "composite",
                     route.ghidra_language,
                     route.ghidra_compiler_spec,
+                    analysis_policy=query_analysis_policy,
                 )
                 query_signatures = fold_root / "query-signatures.jsonl"
                 signature_summary = ghidra_fid.export_program_signatures(
@@ -2003,6 +2065,7 @@ def _worker(
                     "fold": fold,
                     "binary_format": route.binary_format,
                     "link_harness_policy": LINK_HARNESS_POLICY,
+                    "query_analysis_policy": query_analysis_policy,
                     "link_audit": link_audit,
                     "query_sha256": prepared["query_sha256"],
                     "truth_sha256": prepared["truth_sha256"],
@@ -2043,6 +2106,7 @@ def _worker(
                 "route_id": route.id,
                 "profile_id": unit["profile_id"],
                 "treatment_id": treatment.id,
+                "query_analysis_policy": query_analysis_policy,
                 "started_at": _now(),
                 "wall_time_ns": time.monotonic_ns() - started_ns,
                 "folds": fold_results,
@@ -2059,6 +2123,7 @@ def _worker(
                     "position": position,
                     "route_id": route.id,
                     "treatment_id": treatment.id,
+                    "query_analysis_policy": query_analysis_policy,
                     "wall_time_ns": time.monotonic_ns() - started_ns,
                     "error": f"{type(error).__name__}: {error}",
                     "folds": fold_results,
@@ -2101,9 +2166,13 @@ def _aggregate(
     }
     failures = []
     wall_time_ns = 0
+    query_analysis_policies: dict[str, int] = defaultdict(int)
     for row in results:
         wall_time_ns += int(row.get("wall_time_ns", 0))
         for fold in row.get("folds", []):
+            query_analysis_policies[
+                str(fold.get("query_analysis_policy") or QUERY_ANALYSIS_POLICY)
+            ] += 1
             for key in matrix:
                 matrix[key] += int(fold["confusion_matrix"][key])
             for failure in fold.get("failures", []):
@@ -2135,6 +2204,9 @@ def _aggregate(
         "reference_index_schema": REFERENCE_INDEX_SCHEMA,
         "link_harness_policy": LINK_HARNESS_POLICY,
         "query_copy_policy": QUERY_COPY_POLICY,
+        "query_analysis_policy": QUERY_ANALYSIS_POLICY,
+        "query_analysis_recovery_policy": QUERY_ANALYSIS_RECOVERY_POLICY,
+        "query_analysis_policy_folds": dict(sorted(query_analysis_policies.items())),
         "confusion_matrix": {"unit": "owner-labelled-candidate-decision", **matrix},
         "failure_summary": {
             "collisions": sum(row["failure_type"] == "collision" for row in failures),

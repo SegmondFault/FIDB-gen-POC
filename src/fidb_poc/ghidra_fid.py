@@ -17,6 +17,11 @@ from typing import Callable, ContextManager, Mapping
 
 import pyghidra
 
+from .validation_analysis import (
+    QUERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
+)
+
 TimingFactory = Callable[
     [str, str, Mapping[str, object] | None], ContextManager[dict[str, object]]
 ]
@@ -70,6 +75,37 @@ def _configure_fid_safe_analysis(program) -> None:
             options.setBoolean(name, False)
     if options.contains("Scalar Operand References"):
         options.setBoolean("Scalar Operand References", True)
+
+
+def _configure_target_analysis(program, analysis_policy: str) -> None:
+    """Apply a named, evidence-recorded target analysis policy.
+
+    Ghidra 12.1.2 can enter a non-converging ``ClearFlowAndRepairCmd`` loop on
+    some SuperH images while repairing flow after inferred non-returning
+    functions.  The recovery policy retains non-return discovery but disables
+    only that repair step.  Callers select it only after a retained timeout,
+    so the fallback is deterministic and auditable rather than architecture-
+    wide silent drift.
+    """
+
+    if analysis_policy == QUERY_ANALYSIS_POLICY:
+        return
+    if analysis_policy != QUERY_ANALYSIS_RECOVERY_POLICY:
+        raise ValueError(f"unsupported query analysis policy: {analysis_policy}")
+
+    from ghidra.program.model.listing import Program
+
+    options = program.getOptions(Program.ANALYSIS_PROPERTIES)
+    analyzer_name = "Non-Returning Functions - Discovered"
+    option_name = "Repair Flow Damage"
+    if not options.contains(analyzer_name):
+        raise RuntimeError(f"required Ghidra analyzer is unavailable: {analyzer_name}")
+    analyzer_options = options.getOptions(analyzer_name)
+    if not analyzer_options.contains(option_name):
+        raise RuntimeError(
+            f"required Ghidra analyzer option is unavailable: {analyzer_name}.{option_name}"
+        )
+    analyzer_options.setBoolean(option_name, False)
 
 
 def build_library_fidb(
@@ -289,6 +325,7 @@ def analyze_target(
     project_name: str,
     language: str,
     compiler_spec: str | None = None,
+    analysis_policy: str = QUERY_ANALYSIS_POLICY,
 ) -> tuple[Path, str]:
     """Import and analyze an unknown target once, then reuse its project."""
     project_parent.mkdir(parents=True, exist_ok=True)
@@ -308,7 +345,11 @@ def analyze_target(
             )
             with loader.load() as loaded:
                 for item in loaded:
-                    item.apply(lambda program: pyghidra.analyze(program, monitor))
+                    def _analyze(program) -> None:
+                        _configure_target_analysis(program, analysis_policy)
+                        pyghidra.analyze(program, monitor)
+
+                    item.apply(_analyze)
                 loaded.save(monitor)
     return project_parent, program_path
 
