@@ -1,5 +1,47 @@
 # Machine validation
 
+## Integrated cohort lifecycle
+
+`cohort-lifecycle.toml` is the reviewed policy joining future width builds to
+machine validation, hash discrimination, retention and corpus admission. Its
+atomic scientific unit is a completed library cohort, normally ten libraries.
+The scheduler may divide that work into short, resumable execution blocks;
+those blocks do not create new experiments or new fold assignments.
+
+The five/five methodology is unchanged. For every exact route and treatment,
+the runner builds one fold-A composite and one fold-B composite from the
+committed seeded split. The primary TP/FP/TN/FN matrix remains the
+present-fold-versus-withheld-fold experiment. A separate incremental query
+compares the new cohort's signatures with the cumulative admitted corpus for
+noise and discrimination analysis. Cross-corpus observations do not alter the
+primary fold matrix.
+
+New composite runs use `fidb-integrated-query-evidence/v1`. The single Ghidra
+analysis writes one relationship-complete `query-signatures.jsonl` whose
+sealed roles are `exact-signatures` and `fid-relationship-evidence`. The fold
+result binds its schema, analysis policy, byte count and SHA-256. Routine
+matching refuses an integrated result without that seal. Historical C10
+results may use the explicit digest-bound one-time backfill route; future runs
+may not silently pay for a second Ghidra analysis.
+
+`cohorts.toml` binds the next concrete cohorts to their reviewed width batches.
+It currently freezes C11–20 and C21–30, including exact releases, independent
+seeds and derived five/five assignments. Both remain planned and disarmed until
+their complete width evidence is sealed. The longer four-source C80 programme
+inherits the lifecycle policy for every ten-library cohort and its explicit
+final partial cohort, but cannot freeze exact subjects before candidate
+screening.
+
+The admission boundary is fail-closed. Source preparation and recipe
+qualification may continue one cohort ahead. A validation failure pauses
+admission of the next completed width cohort. Validation, hash-discrimination
+and retention evidence are all required, and automatic corpus admission stays
+disabled until scientific thresholds have their own reviewed authority.
+
+The Matrix projects these authorities as separate Width, Validation and
+Admission states. C10 appears as `legacy-run-retrofit`: its current old-path
+execution is preserved and is not reinterpreted as a native integrated run.
+
 `machine-validation.toml` is the reviewed authority for continuous synthetic
 validation of each completed ten-library cohort. It freezes a reproducible
 random five/five split and defines a separate `validation-run` batch. This is

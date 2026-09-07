@@ -209,6 +209,14 @@ The materialised batch also contains a required `hash-discrimination`
 postprocess job. A full run is terminal only after signature classification,
 population analysis, incremental corpus admission, exact lookup, report
 publication and retention have all completed.
+All future cohorts share the reviewed lifecycle in
+[`validation/cohort-lifecycle.toml`](validation/cohort-lifecycle.toml), while
+[`validation/cohorts.toml`](validation/cohorts.toml) binds the next concrete
+C11–20 and C21–30 cohorts. The seeded five/five fold experiment remains the
+primary confusion matrix; cumulative-corpus noise measurement is a separate
+incremental output. Future folds also seal one relationship-complete query
+export for both exact-hash and FID-relation consumers, avoiding a routine
+second Ghidra analysis.
 That exact-tuple survival analysis is a construct diagnostic, not native Ghidra
 FID recall: it does not apply candidate scoring, relation weights or winner
 selection. The detector-level C10 methodology is separately frozen in

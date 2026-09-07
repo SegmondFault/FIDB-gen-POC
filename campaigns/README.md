@@ -43,13 +43,23 @@ Each cohort advances through the same gates:
 8. full-path compile/Ghidra/publication canary;
 9. explicit operator admission;
 10. campaign execution;
-11. scheduled machine validation; and
-12. dry-run-first retention and worker-memory cleanup.
+11. seeded five/five validation-composite construction;
+12. sealed relationship-complete query-evidence export;
+13. primary fold confusion matrix plus separate incremental corpus query;
+14. hash-discrimination update;
+15. dry-run-first retention and worker-memory cleanup; and
+16. explicit corpus-admission review.
 
 Source presence is not recipe readiness. Recipe resolution is not compilation
 qualification. Qualification is not permission to arm. Generated queue chunks
 remain disarmed until an operator reviews the exact identities and the
 full-path canary passes.
+
+The shared policy is `validation/cohort-lifecycle.toml`. Scientific cohorts are
+not scheduler blocks: a ten-library cohort may span many short execution
+windows without changing its seed, folds or report identity. The next concrete
+working cohorts are bound in `validation/cohorts.toml`; later C80 cohorts remain
+structural until candidate screening fixes their actual library identities.
 
 Inspect the complete projection without downloading or executing anything:
 

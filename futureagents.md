@@ -894,3 +894,43 @@ and receipt retain both URLs and the rewrite identity.
 than a unique source tree. Resolving it requires an explicit candidate-screen
 decision about the implementation; silently substituting Mesa changes the
 experimental population.
+
+# Integrated cohort validation
+
+Read `validation/cohort-lifecycle.toml` and `validation/cohorts.toml` before
+preparing or admitting a future cohort. A scientific cohort is not a scheduler
+block. Its subjects, exact width, seed, five/five folds and report identity
+remain fixed even when several short execution windows are needed. Never
+reroll a split to resume work.
+
+The primary machine-validation matrix remains the
+present-fold-versus-withheld-fold experiment. The cumulative admitted-corpus
+comparison is a separate incremental hash-discrimination output; it must not
+alter the primary TP/FP/TN/FN denominator or truth labels. Full-corpus
+revalidation occurs only at reviewed milestones or when an explicit policy
+change requires it.
+
+Future composite results use `fidb-integrated-query-evidence/v1`. One
+relationship-complete `query-signatures.jsonl` is sealed with the roles
+`exact-signatures` and `fid-relationship-evidence`, its schema and analysis
+policy, byte count and SHA-256. The routine matcher must fail closed if that
+seal is absent or inconsistent. Do not restore implicit Ghidra backfill for a
+future integrated cohort. C10 is a named legacy retrofit and is the only
+historical path allowed to use its explicit digest-bound recovery route.
+
+C11–20 and C21–30 are already bound to exact source packs, width batches and
+seeds, but remain disarmed until their width seals exist. Later C80 cohorts are
+structural projections until candidate screening freezes exact identities.
+Recipe and qualification preparation may proceed one cohort ahead; no more
+than one completed unvalidated width cohort may be admitted. A validation
+failure pauses the next cohort. Require terminal validation,
+hash-discrimination and retention evidence before manual corpus admission.
+Automatic corpus admission remains disabled until reviewed threshold TOML is
+added.
+
+Retention may remove composite binaries only after the integrated evidence
+seal and all ledger references verify. Preserve the fold assignment, truth
+map, query-evidence seal, reports, observation database, hash-discrimination
+output, admission decision and timing receipt. The expected 888-to-444 Ghidra
+analysis reduction is a projection until replaced by terminal evidence from a
+future integrated cohort.
