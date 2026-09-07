@@ -93,9 +93,11 @@ def _configure_target_analysis(program, analysis_policy: str) -> None:
     if analysis_policy != QUERY_ANALYSIS_RECOVERY_POLICY:
         raise ValueError(f"unsupported query analysis policy: {analysis_policy}")
 
-    from ghidra.program.model.listing import Program
-
-    options = program.getOptions(Program.ANALYSIS_PROPERTIES)
+    # Analyzer enablement and analyzer-specific child options are registered by
+    # AutoAnalysisManager.initializeOptions().  ``pyghidra.analyze`` normally
+    # performs that initialization, but the recovery setting must be applied
+    # before analysis begins.
+    options = pyghidra.analysis_properties(program)
     analyzer_name = "Non-Returning Functions - Discovered"
     option_name = "Repair Flow Damage"
     if not options.contains(analyzer_name):
@@ -105,7 +107,8 @@ def _configure_target_analysis(program, analysis_policy: str) -> None:
         raise RuntimeError(
             f"required Ghidra analyzer option is unavailable: {analyzer_name}.{option_name}"
         )
-    analyzer_options.setBoolean(option_name, False)
+    with pyghidra.transaction(program, "Configure FIDB target analysis recovery"):
+        analyzer_options.setBoolean(option_name, False)
 
 
 def build_library_fidb(

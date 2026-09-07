@@ -1,6 +1,5 @@
-import sys
-import types
 import unittest
+from contextlib import nullcontext
 from unittest.mock import patch
 
 from fidb_poc.ghidra_fid import _configure_target_analysis
@@ -36,19 +35,24 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
         nested = _Options([repair])
         options = _Options([analyzer])
         options.children[analyzer] = nested
-        program = types.SimpleNamespace(getOptions=lambda _name: options)
+        program = object()
 
-        listing = types.ModuleType("ghidra.program.model.listing")
-        listing.Program = types.SimpleNamespace(ANALYSIS_PROPERTIES="Analysis")
-        modules = {
-            "ghidra": types.ModuleType("ghidra"),
-            "ghidra.program": types.ModuleType("ghidra.program"),
-            "ghidra.program.model": types.ModuleType("ghidra.program.model"),
-            "ghidra.program.model.listing": listing,
-        }
-        with patch.dict(sys.modules, modules):
+        with (
+            patch(
+                "fidb_poc.ghidra_fid.pyghidra.analysis_properties",
+                return_value=options,
+            ) as analysis_properties,
+            patch(
+                "fidb_poc.ghidra_fid.pyghidra.transaction",
+                return_value=nullcontext(),
+            ) as transaction,
+        ):
             _configure_target_analysis(program, QUERY_ANALYSIS_RECOVERY_POLICY)
 
+        analysis_properties.assert_called_once_with(program)
+        transaction.assert_called_once_with(
+            program, "Configure FIDB target analysis recovery"
+        )
         self.assertEqual(nested.values, {repair: False})
 
     def test_unknown_policy_fails_closed(self):
