@@ -14,6 +14,7 @@ from contextlib import nullcontext
 import hashlib
 import json
 from pathlib import Path
+import shutil
 from typing import Callable, ContextManager, Mapping
 
 import pyghidra
@@ -516,6 +517,59 @@ def export_program_signatures(
         "artifact_sha256": output_sha256,
         "artifact_bytes": output.stat().st_size,
     }
+
+
+def _is_missing_project_journal(error: Exception) -> bool:
+    """Recognise the narrow transient seen while reopening a saved project."""
+
+    message = str(error)
+    return "FileNotFoundException" in message and "~journal.dat" in message
+
+
+def analyze_and_export_program_signatures(
+    target: Path,
+    project_parent: Path,
+    project_name: str,
+    language: str,
+    output: Path,
+    compiler_spec: str | None = None,
+    analysis_policy: str = QUERY_ANALYSIS_POLICY,
+    *,
+    maximum_journal_retries: int = 1,
+) -> tuple[Path, str, dict[str, object], int]:
+    """Analyze and export, rebuilding once for Ghidra's missing-journal race.
+
+    The retry is deliberately confined to the observed ``~journal.dat``
+    reopen failure. A rebuilt project is derived from the same immutable
+    target and analysis authority; every other exception remains fail-closed.
+    """
+
+    if maximum_journal_retries < 0:
+        raise ValueError("maximum_journal_retries must not be negative")
+    journal_retries = 0
+    while True:
+        if project_parent.exists():
+            shutil.rmtree(project_parent)
+        project_dir, program_path = analyze_target(
+            target,
+            project_parent,
+            project_name,
+            language,
+            compiler_spec,
+            analysis_policy=analysis_policy,
+        )
+        try:
+            summary = export_program_signatures(
+                project_dir, project_name, program_path, output
+            )
+            return project_dir, program_path, summary, journal_retries
+        except Exception as error:
+            if (
+                journal_retries >= maximum_journal_retries
+                or not _is_missing_project_journal(error)
+            ):
+                raise
+            journal_retries += 1
 
 
 def assess_fidb(

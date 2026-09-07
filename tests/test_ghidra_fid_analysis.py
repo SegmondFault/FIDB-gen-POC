@@ -1,8 +1,11 @@
 import unittest
 from contextlib import nullcontext
+from pathlib import Path
+import tempfile
 from unittest.mock import Mock, patch
 
 from fidb_poc.ghidra_fid import (
+    analyze_and_export_program_signatures,
     _configure_target_analysis,
     _deduplicated_relation_rows,
     _set_registered_analysis_boolean_option,
@@ -30,6 +33,67 @@ class _Options:
 
 
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_missing_project_journal_rebuilds_once_then_exports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "project"
+            parent.mkdir()
+            (parent / "stale").write_text("old", encoding="utf-8")
+            summary = {"evidence_schema": "fidb-program-signature-evidence/v1"}
+            with (
+                patch(
+                    "fidb_poc.ghidra_fid.analyze_target",
+                    return_value=(parent, "/query.elf"),
+                ) as analyze,
+                patch(
+                    "fidb_poc.ghidra_fid.export_program_signatures",
+                    side_effect=[
+                        RuntimeError(
+                            "java.io.FileNotFoundException: compact-query.rep/"
+                            "idata/~journal.dat"
+                        ),
+                        summary,
+                    ],
+                ) as export,
+            ):
+                result = analyze_and_export_program_signatures(
+                    Path(temporary) / "query.elf",
+                    parent,
+                    "compact-query",
+                    "x86:LE:64:default",
+                    Path(temporary) / "query-signatures.jsonl",
+                    "gcc",
+                )
+
+        self.assertEqual(result[2], summary)
+        self.assertEqual(result[3], 1)
+        self.assertEqual(analyze.call_count, 2)
+        self.assertEqual(export.call_count, 2)
+
+    def test_unrecognised_export_error_is_not_retried(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "project"
+            with (
+                patch(
+                    "fidb_poc.ghidra_fid.analyze_target",
+                    return_value=(parent, "/query.elf"),
+                ) as analyze,
+                patch(
+                    "fidb_poc.ghidra_fid.export_program_signatures",
+                    side_effect=RuntimeError("different failure"),
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "different failure"):
+                    analyze_and_export_program_signatures(
+                        Path(temporary) / "query.elf",
+                        parent,
+                        "compact-query",
+                        "x86:LE:64:default",
+                        Path(temporary) / "query-signatures.jsonl",
+                        "gcc",
+                    )
+
+        analyze.assert_called_once()
+
     def test_relation_evidence_is_sorted_and_deduplicated_by_full_hash(self):
         first = Mock()
         first.getEntryPoint.return_value = "1000"

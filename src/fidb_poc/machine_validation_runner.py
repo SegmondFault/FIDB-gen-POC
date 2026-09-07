@@ -2028,17 +2028,17 @@ def _worker(
                     / "projects"
                     / f"{position:03d}-{fold}"
                 )
-                project_dir, program_path = ghidra_fid.analyze_target(
-                    query_binary,
-                    project_parent,
-                    "composite",
-                    route.ghidra_language,
-                    route.ghidra_compiler_spec,
-                    analysis_policy=query_analysis_policy,
-                )
                 query_signatures = fold_root / "query-signatures.jsonl"
-                signature_summary = ghidra_fid.export_program_signatures(
-                    project_dir, "composite", program_path, query_signatures
+                _project_dir, _program_path, signature_summary, journal_retries = (
+                    ghidra_fid.analyze_and_export_program_signatures(
+                        query_binary,
+                        project_parent,
+                        "composite",
+                        route.ghidra_language,
+                        query_signatures,
+                        route.ghidra_compiler_spec,
+                        analysis_policy=query_analysis_policy,
+                    )
                 )
                 if not (
                     signature_summary.get("evidence_schema")
@@ -2059,6 +2059,7 @@ def _worker(
                     "source": "integrated-composite-analysis",
                     "roles": ["exact-signatures", "fid-relationship-evidence"],
                     "query_analysis_policy": query_analysis_policy,
+                    "project_journal_retries": journal_retries,
                 }
                 matches, examples = _query_index(
                     index,

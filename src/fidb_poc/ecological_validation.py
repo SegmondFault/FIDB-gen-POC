@@ -877,16 +877,16 @@ def run_ecological_case(
         environment = ghidra_environment(case_root / "ghidra-user")
         ghidra_fid.ensure_started(ghidra_home, environment)
         project_parent = _inside(root, str(config["analysis"]["project_root"]), "Ghidra project root") / case_id
-        project_dir, program_path = ghidra_fid.analyze_target(
-            binary,
-            project_parent,
-            "target",
-            str(probe["ghidra_language_id"]),
-            str(probe["ghidra_compiler_spec_id"]),
-        )
         signatures_path = case_root / "target-signatures.jsonl"
-        signature_summary = ghidra_fid.export_program_signatures(
-            project_dir, "target", program_path, signatures_path
+        _project_dir, _program_path, signature_summary, _journal_retries = (
+            ghidra_fid.analyze_and_export_program_signatures(
+                binary,
+                project_parent,
+                "target",
+                str(probe["ghidra_language_id"]),
+                signatures_path,
+                str(probe["ghidra_compiler_spec_id"]),
+            )
         )
         signatures = _read_signatures(signatures_path)
         positive, matches, corpus_owners = _corpus_matches(

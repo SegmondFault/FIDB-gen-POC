@@ -380,18 +380,16 @@ def ensure_query_relationship_evidence(
         ghidra_environment(ghidra_user_home or work_root / "ghidra-user"),
     )
     project_parent = work_root / "query-project"
-    if project_parent.exists():
-        shutil.rmtree(project_parent)
-    project_dir, program_path = ghidra_fid.analyze_target(
-        query_binary,
-        project_parent,
-        "compact-query",
-        getattr(route, "ghidra_language"),
-        getattr(route, "ghidra_compiler_spec"),
-        analysis_policy=query_policy,
-    )
-    signature_summary = ghidra_fid.export_program_signatures(
-        project_dir, "compact-query", program_path, output
+    _project_dir, _program_path, signature_summary, journal_retries = (
+        ghidra_fid.analyze_and_export_program_signatures(
+            query_binary,
+            project_parent,
+            "compact-query",
+            getattr(route, "ghidra_language"),
+            output,
+            getattr(route, "ghidra_compiler_spec"),
+            analysis_policy=query_policy,
+        )
     )
     if signature_summary.get("evidence_schema") != (
         "fidb-program-signature-evidence/v1"
@@ -413,7 +411,8 @@ def ensure_query_relationship_evidence(
     }
     _atomic_json(receipt_path, receipt)
     shutil.rmtree(project_parent, ignore_errors=True)
-    return output, signature_summary, "new-backfill"
+    source = "new-backfill-journal-retry" if journal_retries else "new-backfill"
+    return output, signature_summary, source
 
 
 def _portable_executions(
