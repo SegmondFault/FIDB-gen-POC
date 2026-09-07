@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
 from typing import Mapping
 
 from .machine_validation_hashes import HASH_REPORT_SCHEMA
@@ -54,9 +56,175 @@ def _hash_type_summary(row: Mapping[str, object]) -> dict[str, object]:
         "complete_disambiguated_owner_signatures",
         "reference_observations",
         "exact_false_positive_observations",
+        "false_positive_values",
         "maximum_distinct_owners",
     )
     return {field: row.get(field) for field in fields}
+
+
+def _evidence_path(root: Path, value: object) -> Path | None:
+    relative = Path(str(value))
+    if relative.is_absolute() or ".." in relative.parts:
+        return None
+    path = (root / relative).resolve()
+    if not path.is_relative_to(root) or not path.is_file() or path.is_symlink():
+        return None
+    return path
+
+
+def _noise_concentration(
+    root: Path, report: Mapping[str, object]
+) -> dict[str, dict[str, object]]:
+    """Return a bounded FP-concentration curve from immutable hash evidence."""
+
+    evidence = report.get("hash_evidence")
+    if not isinstance(evidence, dict):
+        return {}
+    database = _evidence_path(root, evidence.get("database_path", ""))
+    if database is None:
+        return {}
+    stat = database.stat()
+    return _noise_concentration_database(
+        str(database), stat.st_size, stat.st_mtime_ns
+    )
+
+
+@lru_cache(maxsize=32)
+def _noise_concentration_database(
+    database_path: str, _size: int, _mtime_ns: int
+) -> dict[str, dict[str, object]]:
+    """Read one immutable evidence generation once per API process."""
+
+    connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
+    try:
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "hash_population" in tables:
+            table = "hash_population"
+            value_column = "value"
+            false_positive_column = "false_positives"
+        elif "hash_component_noise" in tables:
+            table = "hash_component_noise"
+            value_column = "component_value"
+            false_positive_column = "exact_false_positive_observations"
+        else:
+            return {}
+        result = {}
+        for hash_type in ("full", "specific", "complete"):
+            population = connection.execute(
+                f"""
+                SELECT COUNT(*), COALESCE(SUM({false_positive_column}), 0)
+                FROM {table}
+                WHERE hash_type=? AND {false_positive_column}>0
+                """,
+                (hash_type,),
+            ).fetchone()
+            noisy_values = int(population[0])
+            false_positives = int(population[1])
+            points = [
+                {
+                    "rank": 0,
+                    "noisy_hash_fraction": 0.0,
+                    "false_positive_fraction": 0.0,
+                    "false_positive_observations": 0,
+                }
+            ]
+            if noisy_values and false_positives:
+                rows = connection.execute(
+                    f"""
+                    WITH ranked AS (
+                      SELECT
+                        ROW_NUMBER() OVER (
+                          ORDER BY {false_positive_column} DESC, {value_column}
+                        ) AS rank,
+                        COUNT(*) OVER () AS noisy_values,
+                        SUM({false_positive_column}) OVER () AS total_false_positives,
+                        SUM({false_positive_column}) OVER (
+                          ORDER BY {false_positive_column} DESC, {value_column}
+                          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS cumulative_false_positives
+                      FROM {table}
+                      WHERE hash_type=? AND {false_positive_column}>0
+                    ), sampled AS (
+                      SELECT rank, noisy_values, total_false_positives,
+                             cumulative_false_positives
+                      FROM ranked WHERE rank=1
+                      UNION
+                      SELECT MAX(rank), MAX(noisy_values),
+                             MAX(total_false_positives),
+                             MAX(cumulative_false_positives)
+                      FROM ranked
+                      GROUP BY CAST(((rank - 1) * 100) / noisy_values AS INTEGER)
+                    )
+                    SELECT rank, noisy_values, total_false_positives,
+                           cumulative_false_positives
+                    FROM sampled ORDER BY rank
+                    """,
+                    (hash_type,),
+                )
+                points.extend(
+                    {
+                        "rank": int(row[0]),
+                        "noisy_hash_fraction": int(row[0]) / int(row[1]),
+                        "false_positive_fraction": int(row[3]) / int(row[2]),
+                        "false_positive_observations": int(row[3]),
+                    }
+                    for row in rows
+                )
+            result[hash_type] = {
+                "noisy_values": noisy_values,
+                "false_positive_observations": false_positives,
+                "concentration": points,
+            }
+        return result
+    except sqlite3.DatabaseError:
+        return {}
+    finally:
+        connection.close()
+
+
+def _with_noise_population(
+    root: Path, report: Mapping[str, object]
+) -> list[dict[str, object]]:
+    """Add population partitions and a bounded curve to selected-run detail."""
+
+    observed = _noise_concentration(root, report)
+    enriched = []
+    for source in report.get("hash_type_detail", []):
+        if not isinstance(source, dict):
+            continue
+        row = dict(source)
+        detail = observed.get(str(row.get("hash_type")), {})
+        distinct = int(row.get("distinct_values", 0))
+        multi_owner = int(row.get("multi_owner_values", 0))
+        noisy = int(detail.get("noisy_values", row.get("false_positive_values", 0)))
+        false_positives = int(
+            detail.get(
+                "false_positive_observations",
+                row.get("exact_false_positive_observations", 0),
+            )
+        )
+        noisy = min(max(noisy, 0), distinct)
+        other_multi_owner = min(max(multi_owner - noisy, 0), distinct - noisy)
+        single_owner = max(distinct - noisy - other_multi_owner, 0)
+        row["false_positive_values"] = noisy
+        row["noise_population"] = {
+            "noisy_values": noisy,
+            "noisy_fraction": _ratio(noisy, distinct),
+            "other_multi_owner_values": other_multi_owner,
+            "other_multi_owner_fraction": _ratio(other_multi_owner, distinct),
+            "single_owner_values": single_owner,
+            "single_owner_fraction": _ratio(single_owner, distinct),
+            "false_positive_observations": false_positives,
+            "false_positive_fraction": 1.0 if false_positives else None,
+        }
+        row["false_positive_concentration"] = detail.get("concentration", [])
+        enriched.append(row)
+    return enriched
 
 
 def _hash_evidence_summary(row: object) -> dict[str, object]:
@@ -263,7 +431,7 @@ def compile_validation_observatory(
         detail = {
             **selected,
             "hash_evidence": selected["hash_evidence"],
-            "hash_type_analysis": selected["hash_type_detail"],
+            "hash_type_analysis": _with_noise_population(root, selected),
         }
         detail.pop("hash_type_detail", None)
         detail.pop("hash_evidence_summary", None)

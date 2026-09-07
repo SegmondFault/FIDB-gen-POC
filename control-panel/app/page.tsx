@@ -1112,6 +1112,59 @@ function HashLibraryPopulation({ row }: { row: HashTypeAnalysis }) {
   </div>;
 }
 
+function HashNoisePopulationGraph({ row }: { row: HashTypeAnalysis }) {
+  type ConcentrationPoint = NonNullable<HashTypeAnalysis['false_positive_concentration']>[number];
+  const population = row.noise_population;
+  const points = row.false_positive_concentration ?? [];
+  if (!population) return null;
+  const width = 620;
+  const height = 205;
+  const left = 42;
+  const right = 18;
+  const top = 18;
+  const bottom = 34;
+  const x = (fraction: number) => left + fraction * (width - left - right);
+  const y = (fraction: number) => top + (1 - fraction) * (height - top - bottom);
+  const closest = (target: number) => points.reduce<ConcentrationPoint | null>((best, point) => !best || Math.abs(point.noisy_hash_fraction - target) < Math.abs(best.noisy_hash_fraction - target) ? point : best, null);
+  const anchors = [0.01, 0.1, 0.25, 0.5].map(target => ({ target, point: closest(target) }));
+  const topTen = closest(0.1);
+  const topHalf = closest(0.5);
+  const segments = [
+    { id: 'noisy', label: 'FP-bearing', values: population.noisy_values, fraction: population.noisy_fraction ?? 0 },
+    { id: 'shared', label: 'multi-owner · 0 FP', values: population.other_multi_owner_values, fraction: population.other_multi_owner_fraction ?? 0 },
+    { id: 'single', label: 'single-owner', values: population.single_owner_values, fraction: population.single_owner_fraction ?? 0 },
+  ];
+  return <section className="panel hash-noise-population-panel">
+    <header><h3>{row.hash_type} noisy hash population</h3><span>POPULATION SHARE × CUMULATIVE FP BURDEN</span></header>
+    <div className="hash-noise-population-grid">
+      <div className="hash-noise-share">
+        <div className="hash-noise-primary-metrics">
+          <article><span>FP-BEARING HASHES</span><strong>{population.noisy_values.toLocaleString()}</strong><small>{observedPercent(population.noisy_fraction)} of {row.distinct_values.toLocaleString()}</small></article>
+          <article><span>FP OBSERVATIONS</span><strong>{population.false_positive_observations.toLocaleString()}</strong><small>{observedPercent(population.false_positive_fraction)} carried by FP-bearing hashes</small></article>
+          <article><span>TOP 10% NOISY</span><strong>{topTen ? observedPercent(topTen.false_positive_fraction) : '—'}</strong><small>of observed FP burden</small></article>
+          <article><span>TOP 50% NOISY</span><strong>{topHalf ? observedPercent(topHalf.false_positive_fraction) : '—'}</strong><small>of observed FP burden</small></article>
+        </div>
+        <div className="hash-noise-stack" role="img" aria-label={`${observedPercent(population.noisy_fraction)} of ${row.hash_type} hashes produced at least one false positive`}>
+          {segments.map(segment => <i key={segment.id} className={segment.id} style={{ width: `${segment.fraction * 100}%` }} />)}
+        </div>
+        <div className="hash-noise-legend">{segments.map(segment => <span key={segment.id}><i className={segment.id} /><b>{segment.label}</b><em>{segment.values.toLocaleString()} · {observedPercent(segment.fraction)}</em></span>)}</div>
+      </div>
+      <div className="hash-fp-concentration">
+        {points.length > 1 ? <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Cumulative false-positive burden ranked across ${population.noisy_values.toLocaleString()} noisy ${row.hash_type} hashes`}>
+          {[0.25, 0.5, 0.75, 1].map(fraction => <line className="grid" key={`y-${fraction}`} x1={left} x2={width - right} y1={y(fraction)} y2={y(fraction)} />)}
+          <line className="axis" x1={left} x2={width - right} y1={height - bottom} y2={height - bottom} />
+          <line className="axis" x1={left} x2={left} y1={top} y2={height - bottom} />
+          <line className="equal" x1={x(0)} x2={x(1)} y1={y(0)} y2={y(1)} />
+          <polyline className="burden" points={points.map(point => `${x(point.noisy_hash_fraction)},${y(point.false_positive_fraction)}`).join(' ')} />
+          {anchors.map(({ target, point }) => point && <g key={target}><circle cx={x(point.noisy_hash_fraction)} cy={y(point.false_positive_fraction)} r="3"><title>{`Top ${observedPercent(point.noisy_hash_fraction)}: ${observedPercent(point.false_positive_fraction)} of false positives`}</title></circle><text x={x(point.noisy_hash_fraction)} y={Math.max(top + 8, y(point.false_positive_fraction) - 7)} textAnchor={target > 0.4 ? 'end' : 'start'}>{observedPercent(point.false_positive_fraction)}</text></g>)}
+          <text x={left} y={height - 10}>0%</text><text x={x(0.5)} y={height - 10} textAnchor="middle">50% of noisy hashes</text><text x={width - right} y={height - 10} textAnchor="end">100%</text>
+          <text x="8" y={top + 4}>100% FP</text><text x="15" y={y(0.5) + 2}>50%</text>
+        </svg> : <div className="operational-empty"><strong>FP concentration unavailable</strong><small>The selected batch has no retained per-hash FP population.</small></div>}
+      </div>
+    </div>
+  </section>;
+}
+
 function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
   const observatory = factory.validationObservatory;
   const selected = observatory?.selected;
@@ -1147,6 +1200,8 @@ function ValidationObservatoryPanel({ factory }: { factory: FactoryApiState }) {
         <div className="hash-type-comparison">{hashTypes.map(row => <button key={row.hash_type} className={row.hash_type === activeType?.hash_type ? 'active' : ''} onClick={() => setSelectedHashType(row.hash_type)}><span>{row.hash_type.toUpperCase()}</span><strong>{row.multi_owner_values.toLocaleString()}</strong><small>multi-owner / {row.distinct_values.toLocaleString()} values</small><dl><div><dt>AMBIGUOUS</dt><dd>{observedPercent(row.multi_owner_fraction)}</dd></div><div><dt>OWNER LINKS</dt><dd>{row.ambiguous_owner_links.toLocaleString()}</dd></div><div><dt>MAX OWNERS</dt><dd>{row.maximum_distinct_owners}</dd></div><div><dt>RESOLVED BY COMPLETE</dt><dd>{row.complete_disambiguated_owner_signatures.toLocaleString()}</dd></div></dl></button>)}</div>
       </>}
     </section>
+
+    {activeType && <HashNoisePopulationGraph row={activeType} />}
 
     {activeType && <section className="panel hash-population-panel"><header><h3>{activeType.hash_type} hash population</h3><span>PREVALENCE TAIL × CONTRIBUTING LIBRARIES</span></header><div className="hash-population-map"><HashPopulationTail rows={[activeType]} /><HashLibraryPopulation row={activeType} /></div></section>}
 

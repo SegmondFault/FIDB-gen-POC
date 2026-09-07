@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -81,6 +82,42 @@ class ValidationObservatoryTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _population_evidence(self, root: Path):
+        connection = sqlite3.connect(root / "evidence.sqlite3")
+        connection.execute(
+            """
+            CREATE TABLE hash_population(
+                hash_type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                false_positives INTEGER NOT NULL
+            )
+            """
+        )
+        connection.executemany(
+            "INSERT INTO hash_population VALUES (?,?,?)",
+            (("full", "common", 6), ("full", "less-common", 4)),
+        )
+        connection.commit()
+        connection.close()
+
+    def _component_evidence(self, root: Path):
+        connection = sqlite3.connect(root / "evidence.sqlite3")
+        connection.execute(
+            """
+            CREATE TABLE hash_component_noise(
+                hash_type TEXT NOT NULL,
+                component_value TEXT NOT NULL,
+                exact_false_positive_observations INTEGER NOT NULL
+            )
+            """
+        )
+        connection.executemany(
+            "INSERT INTO hash_component_noise VALUES (?,?,?)",
+            (("full", "common", 6), ("full", "less-common", 4)),
+        )
+        connection.commit()
+        connection.close()
+
     def test_indexes_all_runs_and_bounds_unselected_detail(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -125,6 +162,55 @@ class ValidationObservatoryTests(unittest.TestCase):
             self.assertEqual(result["selected_run_key"], "c10:run-1")
             self.assertEqual(
                 result["selected"]["report_sha256"], result["runs"][0]["report_sha256"]
+            )
+
+    def test_adds_population_and_false_positive_concentration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._report(root, "c10", "run-1", "2026-09-01T00:00:00Z", 3)
+            self._population_evidence(root)
+
+            result = compile_validation_observatory(root)
+
+            full = result["selected"]["hash_type_analysis"][0]
+            population = full["noise_population"]
+            self.assertEqual(population["noisy_values"], 2)
+            self.assertEqual(population["other_multi_owner_values"], 1)
+            self.assertEqual(population["single_owner_values"], 7)
+            self.assertEqual(population["noisy_fraction"], 0.2)
+            self.assertEqual(population["false_positive_observations"], 10)
+            self.assertEqual(population["false_positive_fraction"], 1.0)
+            self.assertEqual(
+                full["false_positive_concentration"][0]["rank"], 0
+            )
+            self.assertEqual(
+                full["false_positive_concentration"][1][
+                    "false_positive_fraction"
+                ],
+                0.6,
+            )
+            self.assertEqual(
+                full["false_positive_concentration"][-1][
+                    "false_positive_fraction"
+                ],
+                1.0,
+            )
+
+    def test_reads_incremental_machine_validation_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._report(root, "c10", "run-1", "2026-09-01T00:00:00Z", 3)
+            self._component_evidence(root)
+
+            result = compile_validation_observatory(root)
+
+            full = result["selected"]["hash_type_analysis"][0]
+            self.assertEqual(full["noise_population"]["noisy_values"], 2)
+            self.assertEqual(
+                full["false_positive_concentration"][-1][
+                    "false_positive_observations"
+                ],
+                10,
             )
 
     def test_unknown_run_does_not_fall_back_silently(self):

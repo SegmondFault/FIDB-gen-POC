@@ -1579,6 +1579,24 @@ export type HashComponentLibrary = {
   exact_false_positive_observations: number;
 };
 
+export type HashNoisePopulation = {
+  noisy_values: number;
+  noisy_fraction: number | null;
+  other_multi_owner_values: number;
+  other_multi_owner_fraction: number | null;
+  single_owner_values: number;
+  single_owner_fraction: number | null;
+  false_positive_observations: number;
+  false_positive_fraction: number | null;
+};
+
+export type HashFalsePositiveConcentrationPoint = {
+  rank: number;
+  noisy_hash_fraction: number;
+  false_positive_fraction: number;
+  false_positive_observations: number;
+};
+
 export type HashTypeAnalysis = {
   hash_type: 'full' | 'specific' | 'complete';
   distinct_values: number;
@@ -1590,7 +1608,10 @@ export type HashTypeAnalysis = {
   complete_disambiguated_owner_signatures: number;
   reference_observations: number;
   exact_false_positive_observations: number;
+  false_positive_values?: number | null;
   maximum_distinct_owners: number;
+  noise_population?: HashNoisePopulation;
+  false_positive_concentration?: HashFalsePositiveConcentrationPoint[];
   distribution?: HashComponentDistribution[];
   top_ambiguous?: HashComponentAmbiguity[];
   libraries?: HashComponentLibrary[];
