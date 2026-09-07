@@ -620,6 +620,83 @@ def _portable_candidate_id(record, library) -> str:
     return hashlib.sha256("\0".join(fields).encode("utf-8")).hexdigest()
 
 
+def inspect_fid_candidate_source(fidb: Path) -> dict[str, object]:
+    """Read compact candidate scalars and raw relation-smash keys from a FIDB.
+
+    Relation keys remain in Ghidra's native FNV-smash representation. The
+    portable matcher can therefore test a query parent/child hash without
+    expanding a candidate object for every query function.
+    """
+
+    from ghidra.feature.fid.db import FidFileManager
+    from java.io import File
+
+    manager = FidFileManager.getInstance()
+    manager.load()
+    fid_file = manager.addUserFidFile(File(str(fidb.resolve())))
+    database = fid_file.getFidDB(False)
+    candidates: list[dict[str, object]] = []
+    relations: dict[str, list[str]] = {"superior": [], "inferior": []}
+    try:
+        next_hash = -(1 << 63)
+        while True:
+            boxed_hash = database.findFullHashValueAtOrAfter(next_hash)
+            if boxed_hash is None:
+                break
+            full_hash_signed = int(boxed_hash.longValue())
+            for record in database.findFunctionsByFullHash(full_hash_signed):
+                library = database.getLibraryForFunction(record)
+                candidates.append(
+                    {
+                        "candidate_id": _portable_candidate_id(record, library),
+                        "record_key": _unsigned_hash(record.getID()),
+                        "owner": (
+                            f"{library.getLibraryFamilyName()}@"
+                            f"{library.getLibraryVersion()}"
+                        ),
+                        "name": str(record.getName()),
+                        "full_hash": _unsigned_hash(record.getFullHash()),
+                        "specific_hash": _unsigned_hash(record.getSpecificHash()),
+                        "specific_hash_additional_size": int(
+                            record.getSpecificHashAdditionalSize()
+                        ),
+                        "code_unit_size": int(record.getCodeUnitSize()),
+                        "auto_pass": bool(record.autoPass()),
+                        "auto_fail": bool(record.autoFail()),
+                        "force_specific": bool(record.isForceSpecific()),
+                        "force_relation": bool(record.isForceRelation()),
+                    }
+                )
+            if full_hash_signed == (1 << 63) - 1:
+                break
+            next_hash = full_hash_signed + 1
+
+        handle = database.getDBHandle()
+        for kind, table_name in (
+            ("superior", "Superior Table"),
+            ("inferior", "Inferior Table"),
+        ):
+            table = handle.getTable(table_name)
+            iterator = table.longKeyIterator()
+            while iterator.hasNext():
+                relations[kind].append(_unsigned_hash(iterator.next()))
+    finally:
+        database.close()
+        manager.removeUserFile(fid_file)
+
+    candidates.sort(key=lambda row: str(row["candidate_id"]))
+    for values in relations.values():
+        values.sort()
+    with fidb.open("rb") as stream:
+        fidb_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {
+        "schema_version": "fidb-compact-candidate-source/v1",
+        "fidb_sha256": fidb_sha256,
+        "candidates": candidates,
+        "relations": relations,
+    }
+
+
 def export_fid_oracle_input(
     project_dir: Path,
     project_name: str,

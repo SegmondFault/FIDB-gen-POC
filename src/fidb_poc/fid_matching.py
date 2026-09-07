@@ -258,18 +258,18 @@ def match_cpu(
     semantics = authority["semantics"]
     started_ns = time.monotonic_ns()
     functions = list(document["functions"])
-    scores: list[float | None] = []
-    for function in functions:
-        for candidate in function.get("candidates", []):
-            scores.append(
-                _score_cpu_row(_score_inputs(function, candidate, semantics), semantics)
-            )
+    rows = [
+        _score_inputs(function, candidate, semantics)
+        for function in functions
+        for candidate in function.get("candidates", [])
+    ]
+    scores = score_rows_cpu(rows, semantics)
     decisions = _cull(functions, scores)
     return {
         "backend": "cpu-portable-fid-v1",
         "device": None,
         "functions": decisions,
-        "candidate_count": len(scores),
+        "candidate_count": len(rows),
         "matched_functions": sum(bool(row["matches"]) for row in decisions),
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }
@@ -313,6 +313,57 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {{
 """
 
 
+def score_rows_cpu(
+    rows: Sequence[tuple[int, int, int, int, int]],
+    semantics: Mapping[str, object],
+) -> list[float | None]:
+    """Score an already packed candidate batch with float32-compatible CPU math."""
+
+    return [_score_cpu_row(row, semantics) for row in rows]
+
+
+def score_rows_gpu(
+    rows: Sequence[tuple[int, int, int, int, int]],
+    authority: Mapping[str, object],
+    *,
+    workgroup_size: int = 256,
+) -> tuple[list[float | None], dict[str, object] | None]:
+    """Score one bounded packed batch on WGPU without retaining candidate JSON."""
+
+    if workgroup_size < 1 or workgroup_size > 1024:
+        raise ValueError("portable FID WGPU workgroup size is invalid")
+    if not rows:
+        return [], None
+    import numpy as np
+    import wgpu.utils
+    from wgpu.utils.compute import compute_with_buffers
+
+    semantics = authority["semantics"]
+    inputs = np.asarray(rows, dtype=np.uint32)
+    groups = (len(rows) + workgroup_size - 1) // workgroup_size
+    device = wgpu.utils.get_default_device()
+    device_info = dict(device.adapter.info)
+    gpu_backend = next(row for row in authority["backend"] if row["device"] == "gpu")
+    if device_info.get("adapter_type") not in gpu_backend["allowed_adapter_types"]:
+        raise ValueError(
+            "portable FID WGPU requires a hardware adapter; "
+            f"resolved {device_info.get('adapter_type') or 'unknown'}"
+        )
+    buffers = compute_with_buffers(
+        {0: inputs},
+        {1: (len(rows), "f"), 2: (len(rows), "I")},
+        _gpu_shader(len(rows), workgroup_size, semantics),
+        n=groups,
+    )
+    raw_scores = np.frombuffer(buffers[1], dtype=np.float32)
+    accepted = np.frombuffer(buffers[2], dtype=np.uint32)
+    scores = [
+        float(score) if int(keep) else None
+        for score, keep in zip(raw_scores, accepted)
+    ]
+    return scores, device_info
+
+
 def match_gpu(
     document: Mapping[str, object],
     authority: Mapping[str, object],
@@ -324,10 +375,6 @@ def match_gpu(
     _validate_input(document)
     if workgroup_size < 1 or workgroup_size > 1024:
         raise ValueError("portable FID WGPU workgroup size is invalid")
-    import numpy as np
-    import wgpu.utils
-    from wgpu.utils.compute import compute_with_buffers
-
     semantics = authority["semantics"]
     functions = list(document["functions"])
     rows = [
@@ -336,36 +383,9 @@ def match_gpu(
         for candidate in function.get("candidates", [])
     ]
     started_ns = time.monotonic_ns()
-    if rows:
-        inputs = np.asarray(rows, dtype=np.uint32)
-        groups = (len(rows) + workgroup_size - 1) // workgroup_size
-        device = wgpu.utils.get_default_device()
-        device_info = dict(device.adapter.info)
-        gpu_backend = next(
-            row for row in authority["backend"] if row["device"] == "gpu"
-        )
-        if device_info.get("adapter_type") not in gpu_backend[
-            "allowed_adapter_types"
-        ]:
-            raise ValueError(
-                "portable FID WGPU requires a hardware adapter; "
-                f"resolved {device_info.get('adapter_type') or 'unknown'}"
-            )
-        buffers = compute_with_buffers(
-            {0: inputs},
-            {1: (len(rows), "f"), 2: (len(rows), "I")},
-            _gpu_shader(len(rows), workgroup_size, semantics),
-            n=groups,
-        )
-        raw_scores = np.frombuffer(buffers[1], dtype=np.float32)
-        accepted = np.frombuffer(buffers[2], dtype=np.uint32)
-        scores = [
-            float(score) if int(keep) else None
-            for score, keep in zip(raw_scores, accepted)
-        ]
-    else:
-        scores = []
-        device_info = None
+    scores, device_info = score_rows_gpu(
+        rows, authority, workgroup_size=workgroup_size
+    )
     decisions = _cull(functions, scores)
     return {
         "backend": "gpu-portable-fid-v1",
