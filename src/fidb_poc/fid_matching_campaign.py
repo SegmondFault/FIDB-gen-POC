@@ -342,6 +342,39 @@ def _scheduled_case_chunks(
     }
 
 
+def _terminal_campaign_report(
+    root: Path,
+    campaign: Mapping[str, object],
+    mode: str,
+) -> dict[str, object] | None:
+    path = _campaign_root(root, campaign) / f"{mode}-report.json"
+    if not path.is_file():
+        return None
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    method = load_matching_authority(root, str(campaign["matching_authority"]))
+    expected_state = "qualified" if mode == "canary" else "measured-complete"
+    progress = report.get("progress", {})
+    expected_cases = len(_expected_cases(campaign, mode))
+    if (
+        report.get("schema_version") != REPORT_SCHEMA
+        or report.get("campaign_id") != campaign["id"]
+        or report.get("mode") != mode
+        or report.get("state") != expected_state
+        or report.get("authority_sha256") != campaign["authority_sha256"]
+        or report.get("source_run_id") != campaign["source_run_id"]
+        or report.get("method_authority", {}).get("sha256")
+        != method["authority_sha256"]
+        or int(progress.get("expected_cases", -1)) != expected_cases
+        or int(progress.get("complete_cases", -1)) != expected_cases
+        or int(progress.get("failed_or_pending_cases", -1)) != 0
+    ):
+        return None
+    return report
+
+
 def _aggregate(
     root: Path, campaign: Mapping[str, object], mode: str
 ) -> dict[str, object]:
@@ -992,7 +1025,16 @@ def run_campaign(
     campaign_root.mkdir(parents=True, exist_ok=True)
     lock = campaign_root / ".campaign.lock"
     lock_descriptor = _acquire_campaign_lock(lock)
-    chunks, scheduling = _scheduled_case_chunks(root, campaign, mode)
+    try:
+        chunks, scheduling = _scheduled_case_chunks(root, campaign, mode)
+        if not chunks:
+            terminal = _terminal_campaign_report(root, campaign, mode)
+            if terminal is not None:
+                _release_campaign_lock(lock_descriptor)
+                return terminal
+    except Exception:
+        _release_campaign_lock(lock_descriptor)
+        raise
     started_at = datetime.now(timezone.utc).isoformat()
     _atomic_json(
         campaign_root / "status.json",

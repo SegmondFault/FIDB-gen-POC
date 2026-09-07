@@ -16,9 +16,11 @@ from fidb_poc.fid_matching_campaign import (
     _resource_preflight,
     _release_campaign_lock,
     _source_harness_preflight,
+    _terminal_campaign_report,
     _window_open,
     campaign_status,
     load_campaign,
+    run_campaign,
 )
 from fidb_poc.fid_match_qualification import (
     _linker_truth_intervals,
@@ -106,6 +108,90 @@ class FidMatchingCampaignTests(unittest.TestCase):
             _release_campaign_lock(second)
             owner = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(owner["pid"], os.getpid())
+
+    def test_terminal_campaign_report_is_reused_only_under_exact_authority(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign = {
+                **self.campaign,
+                "output_root": "out",
+                "authority_sha256": "campaign-digest",
+            }
+            destination = root / "out" / campaign["id"]
+            destination.mkdir(parents=True)
+            report_path = destination / "canary-report.json"
+            report = {
+                "schema_version": "fidb-fid-matching-campaign-report/v1",
+                "campaign_id": campaign["id"],
+                "mode": "canary",
+                "state": "qualified",
+                "authority_sha256": "campaign-digest",
+                "source_run_id": campaign["source_run_id"],
+                "method_authority": {"sha256": "method-digest"},
+                "progress": {
+                    "expected_cases": 4,
+                    "complete_cases": 4,
+                    "failed_or_pending_cases": 0,
+                },
+                "wall_time_seconds": 129.0,
+            }
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            with patch(
+                "fidb_poc.fid_matching_campaign.load_matching_authority",
+                return_value={"authority_sha256": "method-digest"},
+            ):
+                self.assertEqual(
+                    _terminal_campaign_report(root, campaign, "canary"), report
+                )
+                report["authority_sha256"] = "stale-campaign"
+                report_path.write_text(json.dumps(report), encoding="utf-8")
+                self.assertIsNone(_terminal_campaign_report(root, campaign, "canary"))
+
+    def test_all_reused_campaign_does_not_republish_terminal_report(self):
+        terminal = {"state": "qualified", "wall_time_seconds": 129.0}
+        scheduling = {
+            "policy": "largest-query-first-greedy-v1",
+            "pending_cases": 0,
+            "reused_cases": 4,
+            "estimated_function_loads": [],
+        }
+        with (
+            patch(
+                "fidb_poc.fid_matching_campaign.load_campaign",
+                return_value=self.campaign,
+            ),
+            patch(
+                "fidb_poc.fid_matching_campaign._source_harness_preflight",
+                return_value={"blockers": []},
+            ),
+            patch(
+                "fidb_poc.fid_matching_campaign._production_active",
+                return_value=False,
+            ),
+            patch(
+                "fidb_poc.fid_matching_campaign._resource_preflight",
+                return_value={"blockers": []},
+            ),
+            patch(
+                "fidb_poc.fid_matching_campaign._acquire_campaign_lock",
+                return_value=42,
+            ),
+            patch(
+                "fidb_poc.fid_matching_campaign._scheduled_case_chunks",
+                return_value=([], scheduling),
+            ),
+            patch(
+                "fidb_poc.fid_matching_campaign._terminal_campaign_report",
+                return_value=terminal,
+            ),
+            patch("fidb_poc.fid_matching_campaign._release_campaign_lock") as release,
+            patch("fidb_poc.fid_matching_campaign._atomic_json") as write,
+        ):
+            result = run_campaign(self.root, "canary")
+
+        self.assertEqual(result, terminal)
+        release.assert_called_once_with(42)
+        write.assert_not_called()
 
         status = campaign_status(self.root)
         self.assertEqual(
