@@ -395,6 +395,26 @@ def analyze_target(
     return project_parent, program_path
 
 
+def _deduplicated_relation_rows(relations, service, hashes_by_address):
+    """Mirror Ghidra HashFamily's full-hash relation deduplication."""
+
+    by_full_hash = {}
+    for relation in relations:
+        address = str(relation.getEntryPoint())
+        related_hashes = hashes_by_address.get(address)
+        if related_hashes is None:
+            related_hashes = service.hashFunction(relation)
+            if related_hashes is None:
+                continue
+            hashes_by_address[address] = related_hashes
+        full_hash = int(related_hashes.getFullHash()) & ((1 << 64) - 1)
+        by_full_hash[full_hash] = {
+            "full_hash": format(full_hash, "016x"),
+            "code_unit_size": int(related_hashes.getCodeUnitSize()),
+        }
+    return [by_full_hash[key] for key in sorted(by_full_hash)]
+
+
 def export_program_signatures(
     project_dir: Path,
     project_name: str,
@@ -409,21 +429,41 @@ def export_program_signatures(
     and keeps that comparison independently inspectable.
     """
 
-    from ghidra.feature.fid.service import FidService
+    from ghidra.feature.fid.service import FidProgramSeeker, FidService
 
     rows: list[dict[str, object]] = []
     with pyghidra.open_project(project_dir, project_name) as project:
         with pyghidra.program_context(project, program_path) as program:
             language = str(program.getLanguageID())
             compiler_spec = str(program.getCompilerSpec().getCompilerSpecID())
-            functions = program.getFunctionManager().getFunctionsNoStubs(True)
+            functions = list(program.getFunctionManager().getFunctionsNoStubs(True))
             service = FidService()
             monitor = pyghidra.task_monitor()
+            hashes_by_address = {}
             for function in functions:
                 monitor.checkCancelled()
                 hashes = service.hashFunction(function)
                 if hashes is None:
                     continue
+                hashes_by_address[str(function.getEntryPoint())] = hashes
+            relation_count = 0
+            for function in functions:
+                monitor.checkCancelled()
+                hashes = hashes_by_address.get(str(function.getEntryPoint()))
+                if hashes is None:
+                    continue
+
+                children = _deduplicated_relation_rows(
+                    FidProgramSeeker.getChildren(function, True),
+                    service,
+                    hashes_by_address,
+                )
+                parents = _deduplicated_relation_rows(
+                    FidProgramSeeker.getParents(function, True),
+                    service,
+                    hashes_by_address,
+                )
+                relation_count += len(children) + len(parents)
                 rows.append(
                     {
                         "address": str(function.getEntryPoint()),
@@ -441,6 +481,8 @@ def export_program_signatures(
                             hashes.getSpecificHashAdditionalSize()
                         ),
                         "code_unit_size": int(hashes.getCodeUnitSize()),
+                        "children": children,
+                        "parents": parents,
                     }
                 )
 
@@ -464,6 +506,7 @@ def export_program_signatures(
         temporary.unlink(missing_ok=True)
     return {
         "functions_hashed": len(rows),
+        "relation_hashes": relation_count,
         "language_id": rows[0]["ghidra_language_id"] if rows else None,
         "compiler_spec_id": rows[0]["ghidra_compiler_spec_id"] if rows else None,
     }

@@ -1,9 +1,10 @@
 import unittest
 from contextlib import nullcontext
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fidb_poc.ghidra_fid import (
     _configure_target_analysis,
+    _deduplicated_relation_rows,
     _set_registered_analysis_boolean_option,
 )
 from fidb_poc.validation_analysis import (
@@ -29,6 +30,37 @@ class _Options:
 
 
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_relation_evidence_is_sorted_and_deduplicated_by_full_hash(self):
+        first = Mock()
+        first.getEntryPoint.return_value = "1000"
+        duplicate = Mock()
+        duplicate.getEntryPoint.return_value = "2000"
+        second = Mock()
+        second.getEntryPoint.return_value = "3000"
+        first_hash = Mock()
+        first_hash.getFullHash.return_value = 0x20
+        first_hash.getCodeUnitSize.return_value = 4
+        duplicate_hash = Mock()
+        duplicate_hash.getFullHash.return_value = 0x20
+        duplicate_hash.getCodeUnitSize.return_value = 4
+        second_hash = Mock()
+        second_hash.getFullHash.return_value = 0x10
+        second_hash.getCodeUnitSize.return_value = 7
+        service = Mock()
+        service.hashFunction.side_effect = [first_hash, duplicate_hash, second_hash]
+
+        rows = _deduplicated_relation_rows(
+            [first, duplicate, second], service, {}
+        )
+
+        self.assertEqual(
+            rows,
+            [
+                {"full_hash": "0000000000000010", "code_unit_size": 7},
+                {"full_hash": "0000000000000020", "code_unit_size": 4},
+            ],
+        )
+
     def test_default_policy_is_a_noop(self):
         _configure_target_analysis(object(), QUERY_ANALYSIS_POLICY)
 
