@@ -29,6 +29,7 @@ from .validation_analysis import (
 
 QUALIFICATION_SCHEMA = "fidb-portable-fid-qualification/v1"
 RELATIONSHIP_RECEIPT_SCHEMA = "fidb-query-relationship-evidence/v1"
+QUERY_EVIDENCE_CONTRACT = "fidb-integrated-query-evidence/v1"
 
 
 def _retained_query_analysis_policy(
@@ -292,11 +293,51 @@ def ensure_query_relationship_evidence(
     work_root: Path,
     *,
     ghidra_user_home: Path | None = None,
+    source_evidence_contract: object = None,
 ) -> tuple[Path, dict[str, object], str]:
-    """Return digest-bound query hashes/relations, backfilling a legacy fold once."""
+    """Return sealed query evidence; backfill only an explicitly legacy result."""
 
     direct = fold_root / "query-signatures.jsonl"
     summary = fold_result.get("signature_summary")
+    if source_evidence_contract == QUERY_EVIDENCE_CONTRACT:
+        receipt = fold_result.get("query_evidence")
+        if not isinstance(receipt, dict):
+            raise ValueError("integrated validation result has no query-evidence seal")
+        value = receipt.get("path")
+        if not isinstance(value, str):
+            raise ValueError("integrated query-evidence path is invalid")
+        sealed = (root / value).resolve()
+        try:
+            sealed.relative_to(root)
+        except ValueError as error:
+            raise ValueError(
+                "integrated query evidence escapes the project root"
+            ) from error
+        expected_roles = {"exact-signatures", "fid-relationship-evidence"}
+        if not (
+            sealed == direct.resolve()
+            and isinstance(summary, dict)
+            and sealed.is_file()
+            and receipt.get("schema_version")
+            == "fidb-program-signature-evidence/v1"
+            and receipt.get("source") == "integrated-composite-analysis"
+            and set(receipt.get("roles", [])) == expected_roles
+            and receipt.get("query_analysis_policy")
+            == _retained_query_analysis_policy(fold_result, route)
+            and receipt.get("sha256") == _sha256(sealed)
+            and receipt.get("bytes") == sealed.stat().st_size
+            and summary.get("evidence_schema") == receipt.get("schema_version")
+            and summary.get("artifact_sha256") == receipt.get("sha256")
+            and summary.get("artifact_bytes") == receipt.get("bytes")
+        ):
+            raise ValueError("integrated query-evidence seal is invalid")
+        return sealed, dict(summary), "integrated-fold-export"
+    if source_evidence_contract is not None:
+        raise ValueError(
+            f"retained validation result uses an unsupported evidence contract: "
+            f"{source_evidence_contract}"
+        )
+
     if (
         isinstance(summary, dict)
         and direct.is_file()
@@ -712,6 +753,7 @@ def run_compact_retained_validation(
         runtime,
         destination / "work",
         ghidra_user_home=worker_ghidra_home,
+        source_evidence_contract=result.get("evidence_contract"),
     )
     functions = load_query_evidence(query_path)
     document = {

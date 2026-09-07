@@ -42,6 +42,7 @@ RUNTIME_SCHEMA = "fidb-machine-validation-runtime/v1"
 RUN_STATUS_SCHEMA = "fidb-machine-validation-run-status/v1"
 UNIT_RESULT_SCHEMA = "fidb-machine-validation-unit/v1"
 FOLD_RESULT_SCHEMA = "fidb-machine-validation-fold-result/v1"
+QUERY_EVIDENCE_CONTRACT = "fidb-integrated-query-evidence/v1"
 WORK_CLAIM_SCHEMA = "fidb-machine-validation-work-claim/v1"
 PREPARED_FOLD_SCHEMA = "fidb-machine-validation-prepared-fold/v1"
 REFERENCE_INDEX_SCHEMA = "fidb-machine-validation-reference-index/v3"
@@ -504,6 +505,7 @@ def _supervisor_failure(
         result_path,
         {
             "schema_version": UNIT_RESULT_SCHEMA,
+            "evidence_contract": QUERY_EVIDENCE_CONTRACT,
             "state": "failed",
             "mode": mode,
             "position": position,
@@ -2031,6 +2033,26 @@ def _worker(
                 signature_summary = ghidra_fid.export_program_signatures(
                     project_dir, "composite", program_path, query_signatures
                 )
+                if not (
+                    signature_summary.get("evidence_schema")
+                    == "fidb-program-signature-evidence/v1"
+                    and signature_summary.get("artifact_sha256")
+                    == _sha256(query_signatures)
+                    and signature_summary.get("artifact_bytes")
+                    == query_signatures.stat().st_size
+                ):
+                    raise ValueError(
+                        "integrated query evidence was not sealed by its export"
+                    )
+                query_evidence = {
+                    "schema_version": signature_summary["evidence_schema"],
+                    "path": str(query_signatures.relative_to(root)),
+                    "sha256": signature_summary["artifact_sha256"],
+                    "bytes": signature_summary["artifact_bytes"],
+                    "source": "integrated-composite-analysis",
+                    "roles": ["exact-signatures", "fid-relationship-evidence"],
+                    "query_analysis_policy": query_analysis_policy,
+                }
                 matches, examples = _query_index(
                     index,
                     query_signatures,
@@ -2082,6 +2104,7 @@ def _worker(
                     "query_sha256": prepared["query_sha256"],
                     "truth_sha256": prepared["truth_sha256"],
                     "signature_summary": signature_summary,
+                    "query_evidence": query_evidence,
                     "owner_match_counts": {
                         owner: len(matches.get(owner, set()))
                         for owner in sorted(cohort)
@@ -2112,6 +2135,7 @@ def _worker(
                     shutil.rmtree(project_parent, ignore_errors=True)
             document = {
                 "schema_version": UNIT_RESULT_SCHEMA,
+                "evidence_contract": QUERY_EVIDENCE_CONTRACT,
                 "state": "complete",
                 "mode": mode,
                 "position": position,
@@ -2130,6 +2154,7 @@ def _worker(
                 result_path,
                 {
                     "schema_version": UNIT_RESULT_SCHEMA,
+                    "evidence_contract": QUERY_EVIDENCE_CONTRACT,
                     "state": "failed",
                     "mode": mode,
                     "position": position,

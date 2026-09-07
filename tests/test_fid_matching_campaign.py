@@ -26,6 +26,8 @@ from fidb_poc.fid_matching_campaign import (
     run_campaign,
 )
 from fidb_poc.fid_match_qualification import (
+    QUERY_EVIDENCE_CONTRACT,
+    ensure_query_relationship_evidence,
     _linker_truth_intervals,
     _load_retained_oracle_replay,
     _portable_executions,
@@ -419,6 +421,79 @@ class FidMatchingCampaignTests(unittest.TestCase):
             _retained_query_analysis_policy(
                 {"query_analysis_policy": "unreviewed"}, superh
             )
+
+    def test_integrated_query_evidence_is_reused_without_backfill(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fold_root = root / "run/units/001-route/fold-A"
+            fold_root.mkdir(parents=True)
+            evidence = fold_root / "query-signatures.jsonl"
+            evidence.write_text('{"full_hash":"1"}\n', encoding="utf-8")
+            digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
+            summary = {
+                "evidence_schema": "fidb-program-signature-evidence/v1",
+                "artifact_sha256": digest,
+                "artifact_bytes": evidence.stat().st_size,
+            }
+            fold_result = {
+                "query_analysis_policy": QUERY_ANALYSIS_POLICY,
+                "signature_summary": summary,
+                "query_evidence": {
+                    "schema_version": "fidb-program-signature-evidence/v1",
+                    "path": str(evidence.relative_to(root)),
+                    "sha256": digest,
+                    "bytes": evidence.stat().st_size,
+                    "source": "integrated-composite-analysis",
+                    "roles": [
+                        "exact-signatures",
+                        "fid-relationship-evidence",
+                    ],
+                    "query_analysis_policy": QUERY_ANALYSIS_POLICY,
+                },
+            }
+            route = Mock(
+                id="linux-x86-64-gcc",
+                ghidra_language="x86:LE:64:default",
+            )
+
+            path, loaded, source = ensure_query_relationship_evidence(
+                root,
+                fold_root,
+                fold_result,
+                fold_root / "query.elf",
+                route,
+                "baseline_o2",
+                {},
+                root / "work",
+                source_evidence_contract=QUERY_EVIDENCE_CONTRACT,
+            )
+
+            self.assertEqual(path, evidence)
+            self.assertEqual(loaded, summary)
+            self.assertEqual(source, "integrated-fold-export")
+
+    def test_integrated_query_evidence_fails_closed_when_unsealed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fold_root = root / "run/units/001-route/fold-A"
+            fold_root.mkdir(parents=True)
+            route = Mock(
+                id="linux-x86-64-gcc",
+                ghidra_language="x86:LE:64:default",
+            )
+
+            with self.assertRaisesRegex(ValueError, "no query-evidence seal"):
+                ensure_query_relationship_evidence(
+                    root,
+                    fold_root,
+                    {"query_analysis_policy": QUERY_ANALYSIS_POLICY},
+                    fold_root / "query.elf",
+                    route,
+                    "baseline_o2",
+                    {},
+                    root / "work",
+                    source_evidence_contract=QUERY_EVIDENCE_CONTRACT,
+                )
 
     def test_schedule_opens_only_in_the_reviewed_window(self):
         timezone = ZoneInfo("Europe/Luxembourg")
