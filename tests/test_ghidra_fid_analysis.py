@@ -6,11 +6,14 @@ from unittest.mock import Mock, patch
 
 from fidb_poc.ghidra_fid import (
     analyze_and_export_program_signatures,
+    _configure_fid_build_analysis,
     _configure_target_analysis,
     _deduplicated_relation_rows,
     _set_registered_analysis_boolean_option,
 )
 from fidb_poc.validation_analysis import (
+    FID_BUILD_ANALYSIS_POLICY,
+    FID_BUILD_RECOVERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_RECOVERY_POLICY,
 )
@@ -33,6 +36,40 @@ class _Options:
 
 
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_fid_build_recovery_layers_on_fid_safe_analysis(self):
+        program = object()
+        with (
+            patch("fidb_poc.ghidra_fid._configure_fid_safe_analysis") as safe,
+            patch(
+                "fidb_poc.ghidra_fid._set_registered_analysis_analyzer_enablement"
+            ) as enablement,
+        ):
+            _configure_fid_build_analysis(
+                program, FID_BUILD_RECOVERY_ANALYSIS_POLICY
+            )
+
+        safe.assert_called_once_with(program)
+        enablement.assert_called_once_with(
+            program,
+            {
+                "Call-Fixup Installer": False,
+                "Non-Returning Functions - Discovered": False,
+            },
+        )
+
+    def test_fid_build_default_is_only_fid_safe_analysis(self):
+        program = object()
+        with (
+            patch("fidb_poc.ghidra_fid._configure_fid_safe_analysis") as safe,
+            patch(
+                "fidb_poc.ghidra_fid._set_registered_analysis_analyzer_enablement"
+            ) as enablement,
+        ):
+            _configure_fid_build_analysis(program, FID_BUILD_ANALYSIS_POLICY)
+
+        safe.assert_called_once_with(program)
+        enablement.assert_not_called()
+
     def test_missing_project_journal_rebuilds_once_then_exports(self):
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary) / "project"

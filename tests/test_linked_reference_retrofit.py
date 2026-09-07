@@ -8,11 +8,33 @@ from fidb_poc.linked_reference_retrofit import (
     _balanced_chunks,
     _failure_fingerprint,
     _parse_task_key,
+    _reference_analysis_policy,
     load_authority,
+)
+from fidb_poc.validation_analysis import (
+    FID_BUILD_ANALYSIS_POLICY,
+    FID_BUILD_RECOVERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
 )
 
 
 class LinkedReferenceRetrofitTests(unittest.TestCase):
+    def test_source_query_recovery_propagates_to_superh_reference_build(self) -> None:
+        self.assertEqual(
+            _reference_analysis_policy(
+                "SuperH4:LE:32:default", QUERY_ANALYSIS_RECOVERY_POLICY
+            ),
+            FID_BUILD_RECOVERY_ANALYSIS_POLICY,
+        )
+        self.assertEqual(
+            _reference_analysis_policy("x86:LE:64:default", None),
+            FID_BUILD_ANALYSIS_POLICY,
+        )
+        with self.assertRaisesRegex(ValueError, "non-SuperH"):
+            _reference_analysis_policy(
+                "x86:LE:64:default", QUERY_ANALYSIS_RECOVERY_POLICY
+            )
+
     def test_checked_in_authority_is_fail_closed(self) -> None:
         root = Path(__file__).resolve().parents[1]
         authority = load_authority(root)

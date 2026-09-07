@@ -20,6 +20,8 @@ from typing import Callable, ContextManager, Mapping
 import pyghidra
 
 from .validation_analysis import (
+    FID_BUILD_ANALYSIS_POLICY,
+    FID_BUILD_RECOVERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_RECOVERY_POLICY,
 )
@@ -151,6 +153,29 @@ def _configure_target_analysis(program, analysis_policy: str) -> None:
     )
 
 
+def _configure_fid_build_analysis(program, analysis_policy: str) -> None:
+    """Apply the FID-safe baseline and an explicitly selected recovery.
+
+    Linked executable-shaped reference images can encounter the same proven
+    SuperH ``ClearFlowAndRepairCmd`` loop as validation queries.  The recovery
+    remains a distinct, recorded FID-build policy so query and reference
+    construction provenance cannot be conflated.
+    """
+
+    _configure_fid_safe_analysis(program)
+    if analysis_policy == FID_BUILD_ANALYSIS_POLICY:
+        return
+    if analysis_policy != FID_BUILD_RECOVERY_ANALYSIS_POLICY:
+        raise ValueError(f"unsupported FID build analysis policy: {analysis_policy}")
+    _set_registered_analysis_analyzer_enablement(
+        program,
+        {
+            "Call-Fixup Installer": False,
+            "Non-Returning Functions - Discovered": False,
+        },
+    )
+
+
 def build_library_fidb(
     *,
     objects: list[Path],
@@ -162,6 +187,7 @@ def build_library_fidb(
     variant: str,
     language: str,
     compiler_spec: str,
+    analysis_policy: str = FID_BUILD_ANALYSIS_POLICY,
     timing: TimingFactory | None = None,
 ) -> dict[str, int]:
     """Import+analyze every object into one fresh Ghidra project, then build
@@ -181,7 +207,7 @@ def build_library_fidb(
     monitor = pyghidra.task_monitor()
 
     def _prepare_and_analyze(program) -> None:
-        _configure_fid_safe_analysis(program)
+        _configure_fid_build_analysis(program, analysis_policy)
         pyghidra.analyze(program, monitor)
 
     with pyghidra.open_project(project_dir, project_name, create=True) as project:
@@ -195,6 +221,7 @@ def build_library_fidb(
                 "object_bytes": sum(path.stat().st_size for path in objects),
                 "language": language,
                 "compiler_spec": compiler_spec,
+                "analysis_policy": analysis_policy,
             },
         ) as import_metrics:
             for obj in objects:

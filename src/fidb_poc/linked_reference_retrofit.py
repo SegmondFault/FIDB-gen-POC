@@ -28,6 +28,12 @@ import tomllib
 from typing import Iterable, Mapping, Sequence
 
 from .machine_validation import LINK_HARNESS_POLICY
+from .validation_analysis import (
+    FID_BUILD_ANALYSIS_POLICY,
+    FID_BUILD_RECOVERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY_V1,
+)
 
 AUTHORITY_SCHEMA = "fidb-linked-reference-retrofit/v1"
 PLAN_SCHEMA = "fidb-linked-reference-plan/v1"
@@ -199,6 +205,32 @@ def _slug(value: str) -> str:
     return result
 
 
+def _reference_analysis_policy(
+    ghidra_language: str, source_query_analysis_policy: str | None
+) -> str:
+    """Map retained query recovery evidence to reference construction.
+
+    A blank source policy denotes the historical/default query policy.  A
+    proven SuperH recovery must also protect executable-shaped FID reference
+    analysis; applying it to another language or accepting an unknown policy
+    would silently change the experiment and therefore fails closed.
+    """
+
+    source_policy = str(source_query_analysis_policy or "")
+    if not source_policy:
+        return FID_BUILD_ANALYSIS_POLICY
+    if source_policy in {
+        QUERY_ANALYSIS_RECOVERY_POLICY_V1,
+        QUERY_ANALYSIS_RECOVERY_POLICY,
+    }:
+        if not ghidra_language.startswith("SuperH4:"):
+            raise ValueError(
+                "SuperH query recovery policy is attached to a non-SuperH route"
+            )
+        return FID_BUILD_RECOVERY_ANALYSIS_POLICY
+    raise ValueError(f"unsupported source query analysis policy: {source_policy}")
+
+
 def _available_memory_bytes() -> int:
     fields = {}
     for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
@@ -305,6 +337,9 @@ def compile_plan(
         route = routes.get(route_id)
         if route is None:
             raise ValueError(f"source validation route is unavailable: {route_id}")
+        reference_analysis_policy = _reference_analysis_policy(
+            route.ghidra_language, result.get("query_analysis_policy")
+        )
         owners_in_unit = set()
         for fold in ("A", "B"):
             truth_path = result_path.parent / f"fold-{fold}" / "truth-map.json"
@@ -382,6 +417,14 @@ def compile_plan(
                     "reference_form": authority["reference"]["form"],
                     "archives": archives,
                 }
+                if reference_analysis_policy != FID_BUILD_ANALYSIS_POLICY:
+                    # Recovery changes the reference population and is therefore
+                    # part of the task identity.  Historical/default tasks retain
+                    # their existing digest so sound completed evidence remains
+                    # resumable across this compatible fix.
+                    identity_document["reference_analysis_policy"] = (
+                        reference_analysis_policy
+                    )
                 tasks.append(
                     {
                         **identity_document,
@@ -391,6 +434,7 @@ def compile_plan(
                         "code_revision": revision,
                         "input_sha256": _json_digest(identity_document),
                         "weight_bytes": sum(int(row["bytes"]) for row in archives),
+                        "reference_analysis_policy": reference_analysis_policy,
                     }
                 )
         if owners_in_unit != set(evidence["cohort"]):
@@ -588,6 +632,7 @@ def _run_task(
         ),
         language=route.ghidra_language,
         compiler_spec=route.ghidra_compiler_spec,
+        analysis_policy=str(task["reference_analysis_policy"]),
     )
     signatures = artifacts / f"{stem}.fid-signatures.jsonl"
     signature_counts = ghidra_fid.export_fid_signatures(
@@ -628,6 +673,7 @@ def _run_task(
         "source_run_id": authority["source_run_id"],
         "code_revision": task["code_revision"],
         "reference_form": authority["reference"]["form"],
+        "reference_analysis_policy": task["reference_analysis_policy"],
         "position": task["position"],
         "route_id": task["route_id"],
         "treatment_id": task["treatment_id"],
