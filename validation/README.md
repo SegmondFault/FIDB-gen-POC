@@ -255,6 +255,14 @@ run. Four long-lived campaign slots use the heap and processor bounds in
 `machine-validation-runtime.toml`. No target executable is run, no compiler is
 started, and the production queue is never mutated.
 
+The execution TOML selects `largest-query-first-greedy-v1`. Before workers are
+started, completed cases are reused only when their source run, matching
+authority, position, fold and link-harness policy still agree. Remaining cases
+are weighted by the sealed query's `functions_hashed`, ordered largest first
+and greedily assigned to the lightest worker. This prevents periodic folds and
+treatments—especially the OpenSSL/O0 combination—from concentrating on a
+single worker while preserving deterministic, inspectable scheduling.
+
 ```sh
 uv run fidb-poc machine-validation qualify-matcher --project-root . \
   --run-id 20260904T152653Z-full --position 1 --fold B

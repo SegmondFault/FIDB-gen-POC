@@ -469,6 +469,17 @@ workers with explicit JVM limits inherited from
 jobs, never executes target binaries, never starts a compiler and never mutates
 the production queue.
 
+Do not partition matcher cases by their materialized order. Position, fold and
+treatment are periodic, so naive round-robin assigned 2.21 million estimated
+query functions to one C10 worker and only 0.29 million to another; O0 and the
+OpenSSL fold became concentrated on the critical path. The TOML-selected
+`largest-query-first-greedy-v1` scheduler reads each sealed fold's
+`functions_hashed`, skips only method- and harness-compatible completed cases,
+and assigns the largest remaining case to the currently lightest worker. The
+2026-09-07 recovery balanced the remaining four loads to 1.135--1.138 million
+functions each. Preserve this deterministic policy for future cohorts unless a
+measured replacement records an equally inspectable cost model.
+
 Admission rechecks `minimum_available_memory_gib`, `minimum_free_disk_gib` and
 the reviewed Ghidra headless executable from the runtime TOML before it creates
 a campaign lock. Do not bypass this because a daytime observation looked safe;
