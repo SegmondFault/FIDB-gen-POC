@@ -106,15 +106,33 @@ def _set_registered_analysis_boolean_option(
         analyzer_options.setBoolean(option_name, value)
 
 
+def _set_registered_analysis_analyzer_enablement(
+    program,
+    enablement: Mapping[str, bool],
+) -> None:
+    """Atomically set registered analyzer enablement, or fail closed."""
+
+    options = pyghidra.analysis_properties(program)
+    missing = [name for name in enablement if not options.contains(name)]
+    if missing:
+        raise RuntimeError(
+            "required Ghidra analyzers are unavailable: " + ", ".join(missing)
+        )
+    with pyghidra.transaction(program, "Configure FIDB target analyzer policy"):
+        for name, enabled in enablement.items():
+            options.setBoolean(name, enabled)
+
+
 def _configure_target_analysis(program, analysis_policy: str) -> None:
     """Apply a named, evidence-recorded target analysis policy.
 
     Ghidra 12.1.2 can enter a non-converging ``ClearFlowAndRepairCmd`` loop on
-    some SuperH images while repairing flow after inferred non-returning
-    functions.  The recovery policy retains non-return discovery but disables
-    only that repair step.  Callers select it only after a retained timeout,
-    so the fallback is deterministic and auditable rather than architecture-
-    wide silent drift.
+    some SuperH images.  A live thread dump proved the immediate caller was
+    ``CallFixupAnalyzer``; ``FindNoReturnFunctionsAnalyzer`` has an independent
+    unconditional call into the same repair command.  The recovery policy
+    therefore disables both repair-producing analyzers.  Callers select it
+    only after a retained timeout, so the fallback is deterministic and
+    auditable rather than architecture-wide silent drift.
     """
 
     if analysis_policy == QUERY_ANALYSIS_POLICY:
@@ -122,11 +140,12 @@ def _configure_target_analysis(program, analysis_policy: str) -> None:
     if analysis_policy != QUERY_ANALYSIS_RECOVERY_POLICY:
         raise ValueError(f"unsupported query analysis policy: {analysis_policy}")
 
-    _set_registered_analysis_boolean_option(
+    _set_registered_analysis_analyzer_enablement(
         program,
-        analyzer_name="Non-Returning Functions - Discovered",
-        option_name="Repair Flow Damage",
-        value=False,
+        {
+            "Call-Fixup Installer": False,
+            "Non-Returning Functions - Discovered": False,
+        },
     )
 
 

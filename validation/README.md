@@ -186,15 +186,16 @@ but do not consume the new generation's automatic timeout allowance. This is
 not an unlimited retry mechanism: each reviewed requeue is named, stopped-run
 only, position-bounded and receipt-backed.
 
-Ghidra 12.1.2 can fail to converge while its discovered-non-return analyzer
-repairs overlapping SuperH function bodies. A first timeout remains the normal,
-unaltered Ghidra analysis attempt. A subsequent attempt for that same SuperH
-unit selects the named
-`superh-no-return-flow-repair-disabled-after-timeout-v1` recovery policy. It
-keeps non-return discovery enabled and disables only its `Repair Flow Damage`
-sub-option. Every recovered fold and the aggregate report record the policy;
-other architectures and SuperH cells without a retained timeout continue to
-use `ghidra-default-auto-analysis-v1`.
+Ghidra 12.1.2 can fail to converge while repairing overlapping SuperH function
+bodies. A live JVM thread dump traced the observed loop through `Call-Fixup
+Installer`; `Non-Returning Functions - Discovered` contains a second
+unconditional route into the same repair command. A first timeout remains the
+normal, unaltered Ghidra analysis attempt. A subsequent attempt for that same
+SuperH unit selects the named
+`superh-clear-flow-repair-analyzers-disabled-after-timeout-v1` recovery policy,
+which disables those two analyzers only. Every recovered fold and the aggregate
+report record the policy; other architectures and SuperH cells without a
+retained timeout continue to use `ghidra-default-auto-analysis-v1`.
 
 The full run is rejected unless the latest successful canary records the exact
 scientific canary-contract digest, query-copy policy and reference-index schema

@@ -662,12 +662,19 @@ and 126 all stopped at the 1,800-second supervisor bound. This was not ordinary
 slow SH32 analysis: each affected Ghidra worker emitted roughly 0.9--1.0 GiB of
 repeating `ClearFlowAndRepairCmd` overlap messages, while the 14 successful
 SH32 units completed in about 156--389 seconds. Do not raise the general cell
-timeout for this signature. The deterministic retry policy instead disables
-only `Non-Returning Functions - Discovered` -> `Repair Flow Damage` after a
-retained SuperH timeout, and records that recovery-policy identity in the fold
-and report. The explicit requeue receipt is the boundary for a fresh bounded
-automatic timeout allowance; older archived failures remain intact but no
-longer spend the new allowance.
+timeout for this signature. The first attempted fallback disabled the
+`Non-Returning Functions - Discovered` -> `Repair Flow Damage` sub-option, but
+a live `kill -3` JVM dump proved that the continuing loop was instead
+`CallFixupAnalyzer -> ClearFlowAndRepairCmd -> MultEntSubModel`. The discovered
+non-return analyzer also has an unconditional repair route outside that
+sub-option. The replacement recovery policy therefore disables both
+`Call-Fixup Installer` and `Non-Returning Functions - Discovered` only after a
+retained SuperH timeout, and records that policy identity in every recovered
+fold and report. A bounded oracle on position 126's retained fold-A image then
+completed in about 107 seconds with zero `ClearFlowAndRepairCmd` messages. The
+explicit requeue receipt is the boundary for a fresh
+bounded automatic timeout allowance; older archived failures remain intact but
+no longer spend the new allowance.
 
 Ghidra analyzer child options do not exist in a freshly loaded program's raw
 analysis-options tree until `AutoAnalysisManager.initializeOptions()` has run,

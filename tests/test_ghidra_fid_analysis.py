@@ -2,7 +2,10 @@ import unittest
 from contextlib import nullcontext
 from unittest.mock import patch
 
-from fidb_poc.ghidra_fid import _configure_target_analysis
+from fidb_poc.ghidra_fid import (
+    _configure_target_analysis,
+    _set_registered_analysis_boolean_option,
+)
 from fidb_poc.validation_analysis import (
     QUERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_RECOVERY_POLICY,
@@ -29,12 +32,12 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
     def test_default_policy_is_a_noop(self):
         _configure_target_analysis(object(), QUERY_ANALYSIS_POLICY)
 
-    def test_superh_recovery_disables_only_nonreturn_flow_repair(self):
-        analyzer = "Non-Returning Functions - Discovered"
-        repair = "Repair Flow Damage"
-        nested = _Options([repair])
-        options = _Options([analyzer])
-        options.children[analyzer] = nested
+    def test_superh_recovery_disables_both_repair_producers(self):
+        analyzers = (
+            "Call-Fixup Installer",
+            "Non-Returning Functions - Discovered",
+        )
+        options = _Options(analyzers)
         program = object()
 
         with (
@@ -51,9 +54,9 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
 
         analysis_properties.assert_called_once_with(program)
         transaction.assert_called_once_with(
-            program, "Configure FIDB target analysis policy"
+            program, "Configure FIDB target analyzer policy"
         )
-        self.assertEqual(nested.values, {repair: False})
+        self.assertEqual(options.values, {name: False for name in analyzers})
 
     def test_unknown_policy_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "unsupported query analysis policy"):
@@ -64,10 +67,10 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
             "fidb_poc.ghidra_fid.pyghidra.analysis_properties",
             return_value=_Options(),
         ):
-            with self.assertRaisesRegex(RuntimeError, "analyzer is unavailable"):
+            with self.assertRaisesRegex(RuntimeError, "analyzers are unavailable"):
                 _configure_target_analysis(object(), QUERY_ANALYSIS_RECOVERY_POLICY)
 
-    def test_recovery_fails_closed_when_child_option_is_not_registered(self):
+    def test_child_option_helper_fails_closed_when_option_is_not_registered(self):
         analyzer = "Non-Returning Functions - Discovered"
         options = _Options([analyzer])
         options.children[analyzer] = _Options()
@@ -76,7 +79,12 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
             return_value=options,
         ):
             with self.assertRaisesRegex(RuntimeError, "analyzer option is unavailable"):
-                _configure_target_analysis(object(), QUERY_ANALYSIS_RECOVERY_POLICY)
+                _set_registered_analysis_boolean_option(
+                    object(),
+                    analyzer_name=analyzer,
+                    option_name="Repair Flow Damage",
+                    value=False,
+                )
 
 
 if __name__ == "__main__":
