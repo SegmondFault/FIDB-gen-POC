@@ -1319,6 +1319,10 @@ def main(argv: list[str] | None = None) -> int:
         return _auto_batches_main(tokens[1:])
     if tokens and tokens[0] == "machine-validation":
         return _machine_validation_main(tokens[1:])
+    if tokens and tokens[0] == "linked-references":
+        from .linked_reference_retrofit import main as linked_reference_main
+
+        return linked_reference_main(tokens[1:])
     if tokens and tokens[0] == "ecological-validation":
         return _ecological_validation_main(tokens[1:])
     if tokens and tokens[0] == "noisy-hashes":

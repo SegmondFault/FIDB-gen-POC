@@ -1,0 +1,48 @@
+schema_version = "fidb-linked-reference-retrofit/v1"
+id = "c10-linked-reference-v1"
+state = "experimental-enabled"
+source_run_id = "c10-shared-image-symbolic-v2-full"
+runtime = "validation/machine-validation-runtime.toml"
+output_root = "artifacts/linked-reference-runs"
+
+[source_archive_recovery]
+allow_digest_refresh_owners = ["openssl@3.5.8"]
+require_path_prefix = "artifacts/validation-runs/c-top10-cohort-001/c10-shared-image-symbolic-v2-full/preparation"
+reason = "OpenSSL preparation reruns replaced 68 archive pairs after their truth maps were sealed; pin the present bytes without changing the archived baseline."
+
+[reference]
+form = "linked-shared-image"
+link_harness = "whole-archive-shared-image-symbolic-v2"
+variant_suffix = "linked-reference-v1"
+retain_fidb = true
+retain_fidbf = true
+retain_signature_ledger = true
+
+[execution]
+workers = 4
+jvm_initial_heap_mib = 256
+jvm_max_heap_mib = 6144
+jvm_active_processors = 4
+identical_failure_limit = 4
+
+[canary]
+tasks = [
+  "1:gmp@6.3.0",
+  "67:gmp@6.3.0",
+  "145:sqlite@3.53.4",
+  "175:sqlite@3.53.4",
+]
+
+[retention]
+remove_success_work = true
+retain_failed_work = true
+
+[safety]
+execute_target_binaries = false
+compile_source = false
+invoke_linker = true
+mutate_archive_baseline = false
+mutate_production_queue = false
+require_production_queue_drained = true
+minimum_free_disk_gib = 100
+minimum_available_memory_gib = 24
