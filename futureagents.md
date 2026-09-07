@@ -587,6 +587,18 @@ original evidence. The runtime status also changes a missing or zombie parent
 to `interrupted`; never trust a stored PID without checking its command and run
 identity.
 
+The 2026-09-07 C10 matcher pass exposed a narrow Ghidra project-reopen race:
+analysis completed, but reopening the temporary project for relationship
+export sometimes raised `FileNotFoundException` for
+`compact-query.rep/idata/~journal.dat`. Use
+`ghidra_fid.analyze_and_export_program_signatures`; it deletes and rebuilds the
+temporary project once only for that exact missing-journal fingerprint. The
+target bytes and analysis policy are unchanged, and the retry count/source are
+retained. Unrecognised errors and a second journal failure still fail closed.
+Rerun the same matcher campaign after the active parent exits: sealed summaries
+are reused, while each prior `failure.json` is archived under `attempts/`
+before its case is retried. Never clear the case directory or campaign ledger.
+
 The first full C10 validation exposed a PowerPC/glibc harness edge in GCC 12 and
 13 stack-protector routes: forced `-nostdlib` composite links cannot leave the
 hidden `__stack_chk_fail_local` unresolved. The linker now retries only that
