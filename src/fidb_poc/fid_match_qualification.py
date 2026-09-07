@@ -21,8 +21,26 @@ from .fid_matching import (
     match_cpu,
     match_gpu,
 )
+from .validation_analysis import (
+    QUERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
+)
 
 QUALIFICATION_SCHEMA = "fidb-portable-fid-qualification/v1"
+
+
+def _retained_query_analysis_policy(
+    fold_result: Mapping[str, object], route: object
+) -> str:
+    """Reuse the exact policy that sealed the retained query evidence."""
+
+    policy = str(fold_result.get("query_analysis_policy") or QUERY_ANALYSIS_POLICY)
+    if policy not in {QUERY_ANALYSIS_POLICY, QUERY_ANALYSIS_RECOVERY_POLICY}:
+        raise ValueError(f"retained query analysis policy is unsupported: {policy}")
+    language = str(getattr(route, "ghidra_language", ""))
+    if policy == QUERY_ANALYSIS_RECOVERY_POLICY and not language.startswith("SuperH4:"):
+        raise ValueError("SuperH query recovery policy cannot be applied to another ISA")
+    return policy
 
 
 def _sha256(path: Path) -> str:
@@ -268,6 +286,7 @@ def qualify_retained_validation(
         raise ValueError("retained validation fold failed its link audit")
     routes = {route.id: route for route in evidence["configuration"].routes}
     route = routes[route_id]
+    query_analysis_policy = _retained_query_analysis_policy(fold_result, route)
     fold_root = matches[0].parent / f"fold-{fold}"
     query_binary = next(
         (
@@ -316,6 +335,7 @@ def qualify_retained_validation(
             "oracle",
             route.ghidra_language,
             route.ghidra_compiler_spec,
+            analysis_policy=query_analysis_policy,
         )
         oracle = ghidra_fid.export_fid_oracle_input(
             project_dir, "oracle", program_path, fidbs, oracle_path
@@ -365,6 +385,7 @@ def qualify_retained_validation(
             "binary_format": route.binary_format,
             "ghidra_language_id": route.ghidra_language,
             "ghidra_compiler_spec_id": route.ghidra_compiler_spec,
+            "query_analysis_policy": query_analysis_policy,
             "query_path": str(query_binary.relative_to(root)),
             "query_sha256": _sha256(query_binary),
             "link_harness_policy": LINK_HARNESS_POLICY,

@@ -26,7 +26,12 @@ from fidb_poc.fid_matching_campaign import (
 from fidb_poc.fid_match_qualification import (
     _linker_truth_intervals,
     _portable_executions,
+    _retained_query_analysis_policy,
     _symbol_address_bias,
+)
+from fidb_poc.validation_analysis import (
+    QUERY_ANALYSIS_POLICY,
+    QUERY_ANALYSIS_RECOVERY_POLICY,
 )
 
 
@@ -251,6 +256,28 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertEqual(executions, [selected])
         cpu.assert_called_once()
         gpu.assert_not_called()
+
+    def test_matcher_reuses_the_retained_query_analysis_policy(self):
+        superh = Mock(ghidra_language="SuperH4:BE:32:default")
+        x86 = Mock(ghidra_language="x86:LE:64:default")
+
+        self.assertEqual(
+            _retained_query_analysis_policy({}, superh), QUERY_ANALYSIS_POLICY
+        )
+        self.assertEqual(
+            _retained_query_analysis_policy(
+                {"query_analysis_policy": QUERY_ANALYSIS_RECOVERY_POLICY}, superh
+            ),
+            QUERY_ANALYSIS_RECOVERY_POLICY,
+        )
+        with self.assertRaisesRegex(ValueError, "cannot be applied"):
+            _retained_query_analysis_policy(
+                {"query_analysis_policy": QUERY_ANALYSIS_RECOVERY_POLICY}, x86
+            )
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            _retained_query_analysis_policy(
+                {"query_analysis_policy": "unreviewed"}, superh
+            )
 
     def test_schedule_opens_only_in_the_reviewed_window(self):
         timezone = ZoneInfo("Europe/Luxembourg")
