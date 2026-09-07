@@ -51,13 +51,32 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
 
         analysis_properties.assert_called_once_with(program)
         transaction.assert_called_once_with(
-            program, "Configure FIDB target analysis recovery"
+            program, "Configure FIDB target analysis policy"
         )
         self.assertEqual(nested.values, {repair: False})
 
     def test_unknown_policy_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "unsupported query analysis policy"):
             _configure_target_analysis(object(), "unknown")
+
+    def test_recovery_fails_closed_when_analyzer_is_not_registered(self):
+        with patch(
+            "fidb_poc.ghidra_fid.pyghidra.analysis_properties",
+            return_value=_Options(),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "analyzer is unavailable"):
+                _configure_target_analysis(object(), QUERY_ANALYSIS_RECOVERY_POLICY)
+
+    def test_recovery_fails_closed_when_child_option_is_not_registered(self):
+        analyzer = "Non-Returning Functions - Discovered"
+        options = _Options([analyzer])
+        options.children[analyzer] = _Options()
+        with patch(
+            "fidb_poc.ghidra_fid.pyghidra.analysis_properties",
+            return_value=options,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "analyzer option is unavailable"):
+                _configure_target_analysis(object(), QUERY_ANALYSIS_RECOVERY_POLICY)
 
 
 if __name__ == "__main__":

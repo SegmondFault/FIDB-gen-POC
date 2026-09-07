@@ -669,6 +669,18 @@ and report. The explicit requeue receipt is the boundary for a fresh bounded
 automatic timeout allowance; older archived failures remain intact but no
 longer spend the new allowance.
 
+Ghidra analyzer child options do not exist in a freshly loaded program's raw
+analysis-options tree until `AutoAnalysisManager.initializeOptions()` has run,
+and option mutation outside a program transaction raises
+`NoTransactionException`. The first recovery retry therefore failed closed in
+about three seconds per cell rather than applying an unverified policy. Use
+`_set_registered_analysis_boolean_option` for future analyzer-specific boolean
+policies: it initializes registration through `pyghidra.analysis_properties`,
+checks both the analyzer and child option, and owns the required transaction.
+Do not replace it with direct `program.getOptions(...)` mutation. Preserve the
+failed results and explicit requeue receipt; they distinguish recovery-code
+failure from the original analysis-loop timeout.
+
 The next staged preparation pass exposed 24 deterministic failures before any
 new JVM started: fold B contains GMP, whose Android ARM32 and i686 archives use
 non-PIC assembly. All six treatments failed on both 32-bit Android routes for

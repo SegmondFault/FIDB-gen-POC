@@ -77,6 +77,35 @@ def _configure_fid_safe_analysis(program) -> None:
         options.setBoolean("Scalar Operand References", True)
 
 
+def _set_registered_analysis_boolean_option(
+    program,
+    *,
+    analyzer_name: str,
+    option_name: str,
+    value: bool,
+) -> None:
+    """Set one analyzer child option after registration, or fail closed.
+
+    Ghidra does not register analyzer-specific child options merely because a
+    program has been loaded.  It also requires program options to be mutated
+    inside a transaction.  Keeping both requirements here prevents later
+    target-analysis policies from depending on call-site ordering or silently
+    doing nothing.
+    """
+
+    options = pyghidra.analysis_properties(program)
+    if not options.contains(analyzer_name):
+        raise RuntimeError(f"required Ghidra analyzer is unavailable: {analyzer_name}")
+    analyzer_options = options.getOptions(analyzer_name)
+    if not analyzer_options.contains(option_name):
+        raise RuntimeError(
+            f"required Ghidra analyzer option is unavailable: "
+            f"{analyzer_name}.{option_name}"
+        )
+    with pyghidra.transaction(program, "Configure FIDB target analysis policy"):
+        analyzer_options.setBoolean(option_name, value)
+
+
 def _configure_target_analysis(program, analysis_policy: str) -> None:
     """Apply a named, evidence-recorded target analysis policy.
 
@@ -93,22 +122,12 @@ def _configure_target_analysis(program, analysis_policy: str) -> None:
     if analysis_policy != QUERY_ANALYSIS_RECOVERY_POLICY:
         raise ValueError(f"unsupported query analysis policy: {analysis_policy}")
 
-    # Analyzer enablement and analyzer-specific child options are registered by
-    # AutoAnalysisManager.initializeOptions().  ``pyghidra.analyze`` normally
-    # performs that initialization, but the recovery setting must be applied
-    # before analysis begins.
-    options = pyghidra.analysis_properties(program)
-    analyzer_name = "Non-Returning Functions - Discovered"
-    option_name = "Repair Flow Damage"
-    if not options.contains(analyzer_name):
-        raise RuntimeError(f"required Ghidra analyzer is unavailable: {analyzer_name}")
-    analyzer_options = options.getOptions(analyzer_name)
-    if not analyzer_options.contains(option_name):
-        raise RuntimeError(
-            f"required Ghidra analyzer option is unavailable: {analyzer_name}.{option_name}"
-        )
-    with pyghidra.transaction(program, "Configure FIDB target analysis recovery"):
-        analyzer_options.setBoolean(option_name, False)
+    _set_registered_analysis_boolean_option(
+        program,
+        analyzer_name="Non-Returning Functions - Discovered",
+        option_name="Repair Flow Damage",
+        value=False,
+    )
 
 
 def build_library_fidb(
