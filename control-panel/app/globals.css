@@ -308,7 +308,7 @@ button { font: inherit; }
 .c80-workload-strip span { padding: 7px 10px; color: #657387; border-right: 1px solid var(--line-soft); font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; text-align: center; }
 .c80-workload-strip span:last-child { border-right: 0; }
 .c80-workload-strip b { color: var(--cyan); font-size: 8px; }
-.c80-cohort-ledger > header, .c80-cohort-ledger > details > summary { min-height: 43px; padding: 6px 12px; display: grid; grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(62px, .4fr)) minmax(110px, .65fr) 42px; gap: 8px; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.c80-cohort-ledger > header, .c80-cohort-ledger > details > summary { min-height: 43px; padding: 6px 12px; display: grid; grid-template-columns: minmax(220px, 1.4fr) repeat(7, minmax(62px, .4fr)) minmax(110px, .65fr) 42px; gap: 8px; align-items: center; border-bottom: 1px solid var(--line-soft); }
 .c80-cohort-ledger > header { min-height: 27px; color: #637187; background: #0c131b; font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 .c80-cohort-ledger > details > summary { cursor: pointer; list-style: none; }
 .c80-cohort-ledger > details > summary::-webkit-details-marker { display: none; }
@@ -317,11 +317,16 @@ button { font: inherit; }
 .c80-cohort-ledger > details > summary strong { color: #bfc9d4; font-size: 8px; }
 .c80-cohort-ledger > details > summary small { overflow: hidden; color: var(--muted-2); font-size: 6px; text-overflow: ellipsis; white-space: nowrap; }
 .c80-cohort-ledger > details > summary > b { color: #aab5c2; font: 700 8px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+.c80-cohort-ledger > details > summary > b.lifecycle-state { color: #d7a955; font-size: 6px; text-transform: uppercase; }
 .c80-cohort-ledger > details > summary > em { color: var(--cyan); font: normal 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
 .c80-cohort-ledger > details[open] > summary { background: #111a24; }
 .c80-cohort-ledger > details[open] > summary > em { font-size: 0; }
 .c80-cohort-ledger > details[open] > summary > em::after { content: 'COLLAPSE'; font-size: 6px; }
 .c80-cohort-ledger > details > section { padding: 0 12px 8px; background: #0b1118; }
+.c80-validation-chain { display: grid; grid-template-columns: repeat(7, minmax(105px, 1fr)); gap: 1px; padding: 8px 0; border-bottom: 1px solid #1b2531; }
+.c80-validation-chain > span { min-width: 0; padding: 7px 8px; display: flex; flex-direction: column; gap: 3px; background: #101821; }
+.c80-validation-chain strong { color: #92a1b3; font-size: 6px; }
+.c80-validation-chain small { overflow: hidden; color: #59677a; font: 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .c80-cohort-ledger > details > section > header, .c80-cohort-ledger > details > section > article { min-height: 37px; display: grid; grid-template-columns: minmax(170px, 1.3fr) minmax(75px, .55fr) repeat(4, minmax(68px, .52fr)) minmax(105px, .7fr); gap: 8px; align-items: center; border-bottom: 1px solid #1b2531; }
 .c80-cohort-ledger > details > section > header { min-height: 24px; color: #526176; font: 700 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 .c80-cohort-ledger > details > section > article > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -332,6 +337,29 @@ button { font: inherit; }
 .c80-cohort-ledger > details > section > article > span.pending { color: var(--amber); }
 .c80-programme-panel > footer { padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #657387; background: #0d141c; font-size: 6px; }
 .c80-programme-panel > footer code { color: var(--cyan); font-size: 6px; }
+.cohort-lifecycle-panel { overflow: hidden; }
+.cohort-lifecycle-panel > header { min-height: 48px; padding: 8px 13px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line-soft); background: linear-gradient(90deg, #111d25, #10151e); }
+.cohort-lifecycle-panel > header > div { display: flex; flex-direction: column; gap: 3px; }
+.cohort-lifecycle-panel > header span:first-child { color: var(--cyan); font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .11em; }
+.cohort-lifecycle-panel > header h3 { margin: 0; color: #d0d8e1; font-size: 11px; }
+.cohort-lifecycle-facts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-bottom: 1px solid var(--line-soft); }
+.cohort-lifecycle-facts article { min-width: 0; padding: 9px 11px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--line-soft); }
+.cohort-lifecycle-facts article:last-child { border-right: 0; }
+.cohort-lifecycle-facts span { color: #657387; font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cohort-lifecycle-facts strong { color: #cbd5df; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cohort-lifecycle-facts small { overflow: hidden; color: var(--muted-2); font-size: 6px; text-overflow: ellipsis; white-space: nowrap; }
+.cohort-lifecycle-chain { padding: 10px 12px; display: grid; grid-template-columns: repeat(17, auto); justify-content: center; gap: 7px; align-items: center; border-bottom: 1px solid var(--line-soft); background: #0c131b; }
+.cohort-lifecycle-chain > span { display: flex; align-items: center; gap: 5px; }
+.cohort-lifecycle-chain b { display: grid; place-items: center; width: 19px; height: 19px; color: var(--cyan); border: 1px solid #28575c; border-radius: 50%; font: 700 5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cohort-lifecycle-chain strong { color: #91a0b2; font-size: 6px; white-space: nowrap; }
+.cohort-lifecycle-chain i { color: #34475b; font: normal 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cohort-lifecycle-active { min-height: 34px; padding: 6px 12px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line-soft); }
+.cohort-lifecycle-active > span { color: var(--amber); font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cohort-lifecycle-active > strong { color: #c5cfda; font-size: 8px; }
+.cohort-lifecycle-active > small { margin-right: auto; color: #657387; font-size: 6px; }
+.cohort-lifecycle-active > em { color: #8b9aae; font: normal 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.cohort-lifecycle-panel > footer { padding: 7px 12px; display: flex; justify-content: space-between; gap: 16px; color: #657387; background: #0d141c; font-size: 6px; }
+.cohort-lifecycle-panel > footer code { color: var(--cyan); font-size: 6px; }
 .qualification-pipeline-panel { overflow: hidden; }
 .qualification-chain { padding: 13px 18px; display: grid; grid-template-columns: repeat(11, auto); justify-content: center; gap: 12px; align-items: center; border-bottom: 1px solid var(--line-soft); background: linear-gradient(90deg, rgba(71,215,208,.035), rgba(240,182,87,.035)); }
 .qualification-chain > span { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: center; }

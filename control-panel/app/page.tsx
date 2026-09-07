@@ -21,6 +21,8 @@ import {
   type WidthCompilation,
   type WidthStudy,
   type CampaignProgramme,
+  type CohortValidationLifecycle,
+  type CohortValidationProgramme,
   type HashTypeAnalysis,
   type HashDiscriminationStatus,
   type NoisyHashRow,
@@ -1863,8 +1865,16 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
 
       <LanguageScopeSelector languages={coverageUniverse?.languages ?? []} selectedId={selectedLanguageId} onSelect={setSelectedLanguageId} />
 
+      {selectedLanguageId === 'c' && authority?.cohort_validation && (
+        <CohortValidationLifecyclePanel lifecycle={authority.cohort_validation} />
+      )}
+
       {selectedLanguageId === 'c' && authority?.campaign_programmes.map(programme => (
-        <CampaignProgrammePanel key={programme.id} programme={programme} />
+        <CampaignProgrammePanel
+          key={programme.id}
+          programme={programme}
+          lifecycle={authority.cohort_validation?.programmes.find(row => row.id === programme.id)}
+        />
       ))}
 
       <section className="panel operational-matrix-index" aria-label="Operational matrix build order">
@@ -2450,7 +2460,28 @@ function AttemptTimingRow({ attempt, now }: { attempt: CoordinatorAttempt; now: 
   return <div><span className={`timing-result ${attempt.state}`}>{attempt.attempt_number > 1 ? `retry ${attempt.attempt_number}` : attempt.state}</span><p><strong>{attempt.job_id.slice(0, 12)}</strong><small>{attempt.worker_id} · {formatStartedAt(attempt.started_at)}{attempt.queue_wait_duration_ns !== undefined && attempt.queue_wait_duration_ns !== null ? ` · waited ${formatDurationNs(attempt.queue_wait_duration_ns)}` : ''}</small></p><b>{formatDurationNs(elapsedNs(attempt.started_at, now, attempt.ended_at))}</b></div>;
 }
 
-function CampaignProgrammePanel({ programme }: { programme: CampaignProgramme }) {
+function CohortValidationLifecyclePanel({ lifecycle }: { lifecycle: CohortValidationLifecycle }) {
+  const active = lifecycle.active_cohort;
+  const performance = lifecycle.performance;
+  return <section className="panel cohort-lifecycle-panel">
+    <header><div><span>INTEGRATED VALIDATION</span><h3>{lifecycle.label}</h3></div><span className="operational-state blocked">PLANNED · DISARMED</span></header>
+    <div className="cohort-lifecycle-facts">
+      <article><span>SCIENTIFIC BLOCK</span><strong>10 libraries</strong><small>short scheduler blocks may resume</small></article>
+      <article><span>GHIDRA / COHORT</span><strong>{lifecycle.summary.legacy_analyses_per_full_cohort} → {lifecycle.summary.fused_analyses_per_full_cohort}</strong><small>{lifecycle.summary.fused_analyses_per_full_cohort} duplicate analyses avoided</small></article>
+      <article><span>PROJECTED CYCLE</span><strong>{performance.projected_fused_cycle_wall_hours_lower.toFixed(1)}–{performance.projected_fused_cycle_wall_hours_upper.toFixed(1)} h</strong><small>{performance.estimate_class.replaceAll('-', ' ')}</small></article>
+      <article><span>CANDIDATE SCOPE</span><strong>Incremental</strong><small>new cohort × admitted corpus</small></article>
+      <article><span>ADMISSION</span><strong>Manual review</strong><small>validation + discrimination + retention</small></article>
+      <article><span>C80 PROGRAMME</span><strong>{lifecycle.summary.programme_cohorts} cohorts</strong><small>{lifecycle.summary.planned_validation_composites.toLocaleString()} validation composites</small></article>
+    </div>
+    <div className="cohort-lifecycle-chain">
+      {lifecycle.stages.map((stage, index) => <Fragment key={stage.id}><span><b>{String(index + 1).padStart(2, '0')}</b><strong>{stage.label}</strong></span>{index < lifecycle.stages.length - 1 && <i>→</i>}</Fragment>)}
+    </div>
+    {active && <div className="cohort-lifecycle-active"><span>CURRENT RETROFIT</span><strong>{active.id}</strong><small>{active.libraries} libraries</small><em>WIDTH {active.width_state.replaceAll('-', ' ')}</em><em>VALIDATION {active.validation_state.replaceAll('-', ' ')}</em><em>ADMISSION {active.admission_state.replaceAll('-', ' ')}</em></div>}
+    <footer><code>{lifecycle.authority_path}</code><span>{lifecycle.query_evidence_contract} · routine Ghidra backfill {lifecycle.fusion.routine_backfill}</span></footer>
+  </section>;
+}
+
+function CampaignProgrammePanel({ programme, lifecycle }: { programme: CampaignProgramme; lifecycle?: CohortValidationProgramme }) {
   const summary = programme.summary;
   const stageLabel = (stage: string) => stage.replaceAll('-', ' ').toUpperCase();
   const stageTone = (stage: string) => stage === 'queue-candidate'
@@ -2474,11 +2505,16 @@ function CampaignProgrammePanel({ programme }: { programme: CampaignProgramme })
     </div>
     <div className="c80-workload-strip"><span><b>{programme.route_profiles_per_library}</b> routes</span><span><b>{programme.treatments_per_route}</b> treatments</span><span><b>{programme.campaign_executions_per_library}</b> cells / accepted library</span><span><b>{programme.qualification_routes_per_library}</b> qualification edges / library</span><span><b>{summary.planned_qualification_cells.toLocaleString()}</b> maximum qualification cells</span></div>
     <div className="c80-cohort-ledger">
-      <header><span>Cohort / research ranks</span><span>Research archive</span><span>Screened</span><span>Build source</span><span>Recipes</span><span>Qualification</span><span>Current gate</span><span></span></header>
-      {programme.cohorts.map(cohort => <details key={cohort.id}>
-        <summary><div><strong>{String(cohort.order).padStart(2, '0')} · {cohort.id}</strong><small>ranks {cohort.candidate_rank_start}–{cohort.candidate_rank_end} · {cohort.candidates.slice(0, 3).map(row => row.display_name).join(', ')}{cohort.capacity > 3 ? '…' : ''}</small></div><b>{cohort.counts.research_source_pinned}/{cohort.counts.research_source_cached}</b><b>{cohort.counts.screened}/{cohort.capacity}</b><b>{cohort.counts.source_pinned}/{cohort.counts.source_cached}</b><b>{cohort.counts.recipe_ready}/{cohort.capacity}</b><b>{cohort.counts.qualification_satisfied}/{cohort.capacity}</b><span className={`evidence-badge ${stageTone(cohort.stage)}`}>{stageLabel(cohort.stage)}</span><em>EXPAND</em></summary>
-        <section><header><span>Rank / candidate</span><span>Research archive</span><span>C screen</span><span>Build source</span><span>Recipe</span><span>Qualification</span><span>Next gate</span></header>{cohort.candidates.map(candidate => <article key={candidate.rank}><div><b>#{candidate.rank} {candidate.display_name}</b><small>{candidate.subject_id !== candidate.canonical_key ? `${candidate.canonical_key} → ${candidate.subject_id}` : candidate.canonical_key}</small></div><span className={candidate.research_source_cached ? 'pass' : 'pending'}>{candidate.research_source_cached ? 'CACHED' : candidate.research_source_pinned ? 'PINNED' : 'UNRESOLVED'}<br /><small>{candidate.research_source_resolver ?? candidate.research_source_reason}</small></span><span className={candidate.screened ? 'pass' : 'pending'}>{candidate.screened ? 'SCREENED' : 'REQUIRED'}</span><span className={candidate.source_cached ? 'pass' : 'pending'}>{candidate.source_cached ? 'VERIFIED' : candidate.source_pinned ? 'PINNED' : 'NOT PROMOTED'}</span><span className={candidate.recipe_ready ? 'pass' : 'pending'}>{candidate.recipe_ready ? 'REVIEWED' : 'REQUIRED'}</span><span className={candidate.qualification_satisfied ? 'pass' : 'pending'}>{candidate.qualification_satisfied ? candidate.qualification_state.toUpperCase() : candidate.width_batch_bound ? candidate.qualification_state.toUpperCase() : 'NOT DEFINED'}</span><strong>{stageLabel(candidate.stage)}</strong></article>)}</section>
-      </details>)}
+      <header><span>Cohort / research ranks</span><span>Research archive</span><span>Screened</span><span>Build source</span><span>Recipes</span><span>Qualification</span><span>Validation</span><span>Admission</span><span>Current gate</span><span></span></header>
+      {programme.cohorts.map(cohort => {
+        const lifecycleCohort = lifecycle?.cohorts.find(row => row.id === cohort.id);
+        const validationStage = lifecycleCohort?.stages.find(stage => stage.id === 'validation-composites');
+        const admissionStage = lifecycleCohort?.stages.find(stage => stage.id === 'corpus-admission');
+        return <details key={cohort.id}>
+          <summary><div><strong>{String(cohort.order).padStart(2, '0')} · {cohort.id}</strong><small>ranks {cohort.candidate_rank_start}–{cohort.candidate_rank_end} · {cohort.candidates.slice(0, 3).map(row => row.display_name).join(', ')}{cohort.capacity > 3 ? '…' : ''}</small></div><b>{cohort.counts.research_source_pinned}/{cohort.counts.research_source_cached}</b><b>{cohort.counts.screened}/{cohort.capacity}</b><b>{cohort.counts.source_pinned}/{cohort.counts.source_cached}</b><b>{cohort.counts.recipe_ready}/{cohort.capacity}</b><b>{cohort.counts.qualification_satisfied}/{cohort.capacity}</b><b className="lifecycle-state">{validationStage?.state.replaceAll('-', ' ') ?? 'unbound'}</b><b className="lifecycle-state">{admissionStage?.state.replaceAll('-', ' ') ?? 'unbound'}</b><span className={`evidence-badge ${stageTone(cohort.stage)}`}>{stageLabel(cohort.stage)}</span><em>EXPAND</em></summary>
+          <section>{lifecycleCohort && <div className="c80-validation-chain">{lifecycleCohort.stages.slice(2).map(stage => <span key={stage.id}><strong>{stage.label}</strong><small>{stage.state.replaceAll('-', ' ')} · {stage.detail}</small></span>)}</div>}<header><span>Rank / candidate</span><span>Research archive</span><span>C screen</span><span>Build source</span><span>Recipe</span><span>Qualification</span><span>Next gate</span></header>{cohort.candidates.map(candidate => <article key={candidate.rank}><div><b>#{candidate.rank} {candidate.display_name}</b><small>{candidate.subject_id !== candidate.canonical_key ? `${candidate.canonical_key} → ${candidate.subject_id}` : candidate.canonical_key}</small></div><span className={candidate.research_source_cached ? 'pass' : 'pending'}>{candidate.research_source_cached ? 'CACHED' : candidate.research_source_pinned ? 'PINNED' : 'UNRESOLVED'}<br /><small>{candidate.research_source_resolver ?? candidate.research_source_reason}</small></span><span className={candidate.screened ? 'pass' : 'pending'}>{candidate.screened ? 'SCREENED' : 'REQUIRED'}</span><span className={candidate.source_cached ? 'pass' : 'pending'}>{candidate.source_cached ? 'VERIFIED' : candidate.source_pinned ? 'PINNED' : 'NOT PROMOTED'}</span><span className={candidate.recipe_ready ? 'pass' : 'pending'}>{candidate.recipe_ready ? 'REVIEWED' : 'REQUIRED'}</span><span className={candidate.qualification_satisfied ? 'pass' : 'pending'}>{candidate.qualification_satisfied ? candidate.qualification_state.toUpperCase() : candidate.width_batch_bound ? candidate.qualification_state.toUpperCase() : 'NOT DEFINED'}</span><strong>{stageLabel(candidate.stage)}</strong></article>)}</section>
+        </details>;
+      })}
     </div>
     <footer><code>{programme.authorities.source_lock}</code><span>Research archive cache ≠ accepted C-library cohort. Screening, recipe review and qualification remain independent gates.</span></footer>
   </section>;

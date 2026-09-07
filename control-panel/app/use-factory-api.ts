@@ -1335,8 +1335,109 @@ export type CampaignProgramme = {
   cohorts: CampaignProgrammeCohort[];
 };
 
+export type CohortValidationStage = {
+  id: string;
+  label: string;
+  state: string;
+  detail: string;
+};
+
+export type CohortValidationProgramme = {
+  id: string;
+  label: string;
+  cohorts: Array<{
+    id: string;
+    order: number;
+    capacity: number;
+    candidate_rank_start: number;
+    candidate_rank_end: number;
+    state: string;
+    work: {
+      width_build_cells: number;
+      exact_identities: number;
+      validation_composites: number;
+      query_projections: number;
+      fused_ghidra_analyses: number;
+      legacy_duplicate_analyses_avoided: number;
+    };
+    stages: CohortValidationStage[];
+  }>;
+};
+
+export type CohortValidationLifecycle = {
+  schema_version: 'fidb-cohort-validation-lifecycle-status/v1';
+  id: string;
+  label: string;
+  state: 'planned-disarmed';
+  language_id: string;
+  authority_path: string;
+  authority_sha256: string;
+  query_evidence_contract: string;
+  execution: {
+    scientific_boundary: string;
+    scheduler_boundary: string;
+    folds_per_identity: number;
+    query_projections_per_composite: number;
+  };
+  fusion: {
+    enabled_for_new_runs: boolean;
+    single_ghidra_analysis_per_composite: boolean;
+    canonical_export: string;
+    export_roles: string[];
+    routine_backfill: string;
+    legacy_backfill: string;
+  };
+  incremental: {
+    candidate_scope: string;
+    historical_replay: string;
+    historical_sentinel_enabled: boolean;
+    full_revalidation_milestones: number[];
+  };
+  scheduling: {
+    maximum_unvalidated_width_cohorts: number;
+    validation_failure_action: string;
+    retention_required_before_admission: boolean;
+  };
+  admission: {
+    automatic_corpus_admission: boolean;
+    scientific_threshold_authority: string;
+    unconfigured_threshold_action: string;
+  };
+  performance: {
+    estimate_class: string;
+    legacy_composite_ghidra_analyses_per_cohort: number;
+    legacy_backfill_ghidra_analyses_per_cohort: number;
+    fused_ghidra_analyses_per_cohort: number;
+    observed_composite_build_wall_hours: number;
+    observed_backfill_wall_hours: number;
+    observed_gpu_match_wall_hours: number;
+    projected_fused_cycle_wall_hours_lower: number;
+    projected_fused_cycle_wall_hours_upper: number;
+  };
+  stages: CohortValidationStage[];
+  active_cohort: null | {
+    id: string;
+    label: string;
+    integration: string;
+    libraries: number;
+    width_state: string;
+    validation_state: string;
+    admission_state: string;
+    result_state: string;
+  };
+  programmes: CohortValidationProgramme[];
+  summary: {
+    programme_cohorts: number;
+    planned_validation_composites: number;
+    legacy_duplicate_analyses_avoided: number;
+    fused_analyses_per_full_cohort: number;
+    legacy_analyses_per_full_cohort: number;
+  };
+  status_digest: string;
+};
+
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v18';
+  schema_version: 'fidb-authority-catalog/v19';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
@@ -1347,6 +1448,7 @@ export type FactoryAuthority = {
   materialized_campaigns: MaterializedCampaign[];
   auto_batch_campaigns: AutoBatchCampaign[];
   machine_validations: MachineValidation[];
+  cohort_validation: CohortValidationLifecycle;
   ecological_validation: EcologicalValidation;
   noisy_hashes: NoisyHashStatus;
   hash_discrimination: HashDiscriminationStatus;
