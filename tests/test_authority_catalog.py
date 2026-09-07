@@ -58,6 +58,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             lifecycle["active_cohort"]["integration"], "legacy-run-retrofit"
         )
+        self.assertEqual(lifecycle["summary"]["bound_future_cohorts"], 2)
         self.assertEqual(
             len(document["source_digests"]["cohort_validation_sha256"]), 64
         )

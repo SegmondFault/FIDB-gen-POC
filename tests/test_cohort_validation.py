@@ -24,6 +24,14 @@ class CohortValidationLifecycleTests(unittest.TestCase):
         )
         self.assertTrue(authority["fusion"]["enabled_for_new_runs"])
         self.assertEqual(authority["fusion"]["routine_backfill"], "forbidden")
+        self.assertEqual(
+            authority["incremental"]["primary_confusion_scope"],
+            "present-fold-vs-withheld-fold",
+        )
+        self.assertEqual(
+            authority["incremental"]["corpus_noise_scope"],
+            "new-cohort-hashes-against-cumulative-admitted-corpus",
+        )
         self.assertFalse(authority["admission"]["automatic_corpus_admission"])
 
     def test_projection_adds_validation_and_admission_to_every_cohort(self):
@@ -48,6 +56,12 @@ class CohortValidationLifecycleTests(unittest.TestCase):
                 "corpus-admission",
             ],
         )
+        bound = status["bound_cohorts"]
+        self.assertEqual([row["order"] for row in bound], [2, 3])
+        self.assertEqual(len(bound[0]["fold_a"]), 5)
+        self.assertEqual(len(bound[0]["fold_b"]), 5)
+        self.assertTrue(bound[0]["automatic_materialization"])
+        self.assertEqual(status["summary"]["bound_future_cohorts"], 2)
 
 
 if __name__ == "__main__":

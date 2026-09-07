@@ -358,6 +358,13 @@ button { font: inherit; }
 .cohort-lifecycle-active > strong { color: #c5cfda; font-size: 8px; }
 .cohort-lifecycle-active > small { margin-right: auto; color: #657387; font-size: 6px; }
 .cohort-lifecycle-active > em { color: #8b9aae; font: normal 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.cohort-lifecycle-bound article { min-height: 38px; padding: 6px 12px; display: grid; grid-template-columns: 24px minmax(180px, 1fr) minmax(110px, .45fr) minmax(110px, .45fr) auto; gap: 10px; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.cohort-lifecycle-bound article > b { color: var(--cyan); font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cohort-lifecycle-bound article > p { min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.cohort-lifecycle-bound article strong { color: #b8c3cf; font-size: 7px; }
+.cohort-lifecycle-bound article small { overflow: hidden; color: #59677a; font: 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.cohort-lifecycle-bound article > span { color: #8795a7; font: 650 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.cohort-lifecycle-bound article > em { color: var(--amber); font: normal 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cohort-lifecycle-panel > footer { padding: 7px 12px; display: flex; justify-content: space-between; gap: 16px; color: #657387; background: #0d141c; font-size: 6px; }
 .cohort-lifecycle-panel > footer code { color: var(--cyan); font-size: 6px; }
 .qualification-pipeline-panel { overflow: hidden; }

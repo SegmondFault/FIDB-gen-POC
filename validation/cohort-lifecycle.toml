@@ -7,6 +7,8 @@ scientific_cohort_size = 10
 minimum_final_partial_size = 2
 validation_method_authority = "validation/fid-matching.toml"
 validation_method_authority_sha256 = "1d9fc8fb9255b6c3723f2dbc0810224f0973b0005485ec6d82e2679fb4a778fe"
+cohort_registry = "validation/cohorts.toml"
+cohort_registry_sha256 = "defa9165d22eccf5eb67de634af5b343f7d922b2181da0187ed0357647b2ba35"
 query_evidence_contract = "fidb-integrated-query-evidence/v1"
 
 stages = [
@@ -39,7 +41,8 @@ routine_backfill = "forbidden"
 legacy_backfill = "explicit-digest-bound-once"
 
 [incremental]
-candidate_scope = "new-cohort-against-cumulative-admitted-corpus"
+primary_confusion_scope = "present-fold-vs-withheld-fold"
+corpus_noise_scope = "new-cohort-hashes-against-cumulative-admitted-corpus"
 new_cohort_scope = "complete"
 historical_replay = "frozen-sentinel-set"
 historical_sentinel_authority = ""

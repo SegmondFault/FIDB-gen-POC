@@ -2469,7 +2469,7 @@ function CohortValidationLifecyclePanel({ lifecycle }: { lifecycle: CohortValida
       <article><span>SCIENTIFIC BLOCK</span><strong>10 libraries</strong><small>short scheduler blocks may resume</small></article>
       <article><span>GHIDRA / COHORT</span><strong>{lifecycle.summary.legacy_analyses_per_full_cohort} → {lifecycle.summary.fused_analyses_per_full_cohort}</strong><small>{lifecycle.summary.fused_analyses_per_full_cohort} duplicate analyses avoided</small></article>
       <article><span>PROJECTED CYCLE</span><strong>{performance.projected_fused_cycle_wall_hours_lower.toFixed(1)}–{performance.projected_fused_cycle_wall_hours_upper.toFixed(1)} h</strong><small>{performance.estimate_class.replaceAll('-', ' ')}</small></article>
-      <article><span>CANDIDATE SCOPE</span><strong>Incremental</strong><small>new cohort × admitted corpus</small></article>
+      <article><span>COMPARISONS</span><strong>50/50 + corpus</strong><small>fold matrix · incremental noise view</small></article>
       <article><span>ADMISSION</span><strong>Manual review</strong><small>validation + discrimination + retention</small></article>
       <article><span>C80 PROGRAMME</span><strong>{lifecycle.summary.programme_cohorts} cohorts</strong><small>{lifecycle.summary.planned_validation_composites.toLocaleString()} validation composites</small></article>
     </div>
@@ -2477,6 +2477,9 @@ function CohortValidationLifecyclePanel({ lifecycle }: { lifecycle: CohortValida
       {lifecycle.stages.map((stage, index) => <Fragment key={stage.id}><span><b>{String(index + 1).padStart(2, '0')}</b><strong>{stage.label}</strong></span>{index < lifecycle.stages.length - 1 && <i>→</i>}</Fragment>)}
     </div>
     {active && <div className="cohort-lifecycle-active"><span>CURRENT RETROFIT</span><strong>{active.id}</strong><small>{active.libraries} libraries</small><em>WIDTH {active.width_state.replaceAll('-', ' ')}</em><em>VALIDATION {active.validation_state.replaceAll('-', ' ')}</em><em>ADMISSION {active.admission_state.replaceAll('-', ' ')}</em></div>}
+    <div className="cohort-lifecycle-bound">
+      {lifecycle.bound_cohorts.map(cohort => <article key={cohort.id}><b>{String(cohort.order).padStart(2, '0')}</b><p><strong>{cohort.id}</strong><small>{cohort.source_ids.join(' · ')}</small></p><span>{cohort.width_batch_state.replaceAll('-', ' ')}</span><span>{cohort.validation_state.replaceAll('-', ' ')}</span><em>AUTO MATERIALIZE + SCHEDULE</em></article>)}
+    </div>
     <footer><code>{lifecycle.authority_path}</code><span>{lifecycle.query_evidence_contract} · routine Ghidra backfill {lifecycle.fusion.routine_backfill}</span></footer>
   </section>;
 }

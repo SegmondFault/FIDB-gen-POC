@@ -749,6 +749,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         root,
         campaign_programmes=campaign_programmes,
         machine_validations=machine_validations,
+        width_batches=width_batches,
     )
     ecological_validation = compile_ecological_validation(root)
     # The authority catalog carries the complete noisy-hash summary and digest,
@@ -812,7 +813,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
             "auto_batch_campaigns": "plans/auto-materialized/*/manifest.toml",
             "machine_validations": "validation/*.toml + plans/validation-schedule.toml",
-            "cohort_validation": "validation/cohort-lifecycle.toml",
+            "cohort_validation": "validation/cohort-lifecycle.toml + validation/cohorts.toml",
             "ecological_validation": "validation/ecological-validation.toml + var/fidb-ecological-validation/cases/",
             "noisy_hashes": "validation/noisy-hashes.toml + validation/noisy-hash-decisions/*.toml",
             "hash_discrimination": "validation/hash-discrimination.toml + artifacts/hash-discrimination/",
@@ -873,6 +874,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             ).hexdigest(),
             "cohort_validation_sha256": hashlib.sha256(
                 (root / "validation/cohort-lifecycle.toml").read_bytes()
+                + (root / "validation/cohorts.toml").read_bytes()
             ).hexdigest(),
             "ecological_validation_sha256": hashlib.sha256(
                 (root / "validation/ecological-validation.toml").read_bytes()

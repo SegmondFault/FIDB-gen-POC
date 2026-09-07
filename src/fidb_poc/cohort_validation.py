@@ -25,6 +25,8 @@ _TOP_LEVEL_FIELDS = {
     "minimum_final_partial_size",
     "validation_method_authority",
     "validation_method_authority_sha256",
+    "cohort_registry",
+    "cohort_registry_sha256",
     "query_evidence_contract",
     "stages",
     "execution",
@@ -53,7 +55,8 @@ _SECTION_FIELDS = {
         "legacy_backfill",
     },
     "incremental": {
-        "candidate_scope",
+        "primary_confusion_scope",
+        "corpus_noise_scope",
         "new_cohort_scope",
         "historical_replay",
         "historical_sentinel_authority",
@@ -175,11 +178,120 @@ def load_cohort_validation_lifecycle(
     expected = str(document["validation_method_authority_sha256"])
     if not method.is_file() or _DIGEST.fullmatch(expected) is None or _sha256(method) != expected:
         raise ValueError("cohort validation method authority is unavailable or stale")
+    registry = _inside(root, document["cohort_registry"], "validation cohort registry")
+    registry_digest = str(document["cohort_registry_sha256"])
+    if (
+        not registry.is_file()
+        or _DIGEST.fullmatch(registry_digest) is None
+        or _sha256(registry) != registry_digest
+    ):
+        raise ValueError("validation cohort registry is unavailable or stale")
     return {
         **document,
         "authority_path": str(path.relative_to(root)),
         "authority_sha256": _sha256(path),
     }
+
+
+def _load_bound_cohorts(
+    root: Path,
+    lifecycle: Mapping[str, object],
+    width_batches: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    path = _inside(root, lifecycle["cohort_registry"], "validation cohort registry")
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    if set(document) != {"schema_version", "state", "language_id", "cohort"} or (
+        document["schema_version"] != "fidb-validation-cohort-registry/v1"
+        or document["state"] != "planned-disarmed"
+        or document["language_id"] != lifecycle["language_id"]
+    ):
+        raise ValueError("validation cohort registry has unsupported fields or schema")
+    batches = {
+        str(batch["authority_path"]): batch for batch in width_batches
+    }
+    rows = []
+    ids: set[str] = set()
+    orders: set[int] = set()
+    for raw in document["cohort"]:
+        expected_fields = {
+            "id",
+            "order",
+            "label",
+            "state",
+            "source_pack",
+            "width_batch",
+            "seed",
+            "source_ids",
+        }
+        if not isinstance(raw, dict) or set(raw) != expected_fields:
+            raise ValueError("validation cohort registry row fields are invalid")
+        identifier = str(raw["id"])
+        order = int(raw["order"])
+        source_ids = list(raw["source_ids"])
+        if (
+            not identifier
+            or identifier in ids
+            or order in orders
+            or raw["state"] != "planned-disarmed"
+            or len(source_ids) != int(lifecycle["scientific_cohort_size"])
+            or len(set(source_ids)) != len(source_ids)
+        ):
+            raise ValueError("validation cohort registry identity is invalid")
+        ids.add(identifier)
+        orders.add(order)
+        source_path = _inside(root, raw["source_pack"], "cohort source pack")
+        source = tomllib.loads(source_path.read_text(encoding="utf-8"))
+        available = {
+            f'{item["id"]}@{item["version"]}' for item in source.get("source", [])
+        }
+        if not set(source_ids).issubset(available):
+            raise ValueError(f"validation cohort {identifier} is absent from its source pack")
+        batch_path = str(raw["width_batch"])
+        batch = batches.get(batch_path)
+        if batch is None:
+            raise ValueError(f"validation cohort {identifier} width batch is unavailable")
+        requested_names = {identity.rsplit("@", 1)[0] for identity in source_ids}
+        batch_names = {str(item["id"]) for item in batch["libraries"]}
+        if requested_names != batch_names:
+            raise ValueError(f"validation cohort {identifier} does not match its width batch")
+        ranked = _sha256_ranked(str(raw["seed"]), source_ids)
+        split = len(ranked) // 2
+        readiness = batch["readiness"]
+        rows.append(
+            {
+                **raw,
+                "source_ids": source_ids,
+                "fold_a": ranked[:split],
+                "fold_b": ranked[split:],
+                "width_batch_state": readiness["queue_state"],
+                "width_queue_eligible_executions": readiness[
+                    "queue_eligible_executions"
+                ],
+                "validation_state": "awaiting-sealed-width",
+                "automatic_materialization": lifecycle["execution"][
+                    "automatic_materialization"
+                ],
+                "automatic_scheduling": lifecycle["execution"][
+                    "automatic_scheduling"
+                ],
+            }
+        )
+    return sorted(rows, key=lambda row: int(row["order"]))
+
+
+def _sha256_ranked(seed: str, identities: Sequence[str]) -> list[str]:
+    try:
+        seed_bytes = bytes.fromhex(seed)
+    except ValueError as error:
+        raise ValueError("validation cohort seed is not hexadecimal") from error
+    if len(seed_bytes) != 32:
+        raise ValueError("validation cohort seed must contain 32 bytes")
+    return sorted(
+        identities,
+        key=lambda identity: hashlib.sha256(
+            seed_bytes + b"\0" + identity.encode("utf-8")
+        ).digest(),
+    )
 
 
 def _stage(
@@ -253,10 +365,12 @@ def compile_cohort_validation_lifecycle(
     *,
     campaign_programmes: Sequence[Mapping[str, object]],
     machine_validations: Sequence[Mapping[str, object]],
+    width_batches: Sequence[Mapping[str, object]],
     authority_path: str | Path = DEFAULT_AUTHORITY,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     lifecycle = load_cohort_validation_lifecycle(root, authority_path)
+    bound_cohorts = _load_bound_cohorts(root, lifecycle, width_batches)
     programmes = []
     total_cohorts = 0
     total_composites = 0
@@ -324,10 +438,12 @@ def compile_cohort_validation_lifecycle(
         ],
         "active_cohort": active,
         "programmes": programmes,
+        "bound_cohorts": bound_cohorts,
         "summary": {
             "programme_cohorts": total_cohorts,
             "planned_validation_composites": total_composites,
             "legacy_duplicate_analyses_avoided": total_avoided,
+            "bound_future_cohorts": len(bound_cohorts),
             "fused_analyses_per_full_cohort": lifecycle["performance"][
                 "fused_ghidra_analyses_per_cohort"
             ],

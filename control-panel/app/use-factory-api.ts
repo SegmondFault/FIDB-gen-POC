@@ -1388,7 +1388,8 @@ export type CohortValidationLifecycle = {
     legacy_backfill: string;
   };
   incremental: {
-    candidate_scope: string;
+    primary_confusion_scope: string;
+    corpus_noise_scope: string;
     historical_replay: string;
     historical_sentinel_enabled: boolean;
     full_revalidation_milestones: number[];
@@ -1425,11 +1426,29 @@ export type CohortValidationLifecycle = {
     admission_state: string;
     result_state: string;
   };
+  bound_cohorts: Array<{
+    id: string;
+    order: number;
+    label: string;
+    state: string;
+    source_pack: string;
+    width_batch: string;
+    seed: string;
+    source_ids: string[];
+    fold_a: string[];
+    fold_b: string[];
+    width_batch_state: string;
+    width_queue_eligible_executions: number;
+    validation_state: string;
+    automatic_materialization: boolean;
+    automatic_scheduling: boolean;
+  }>;
   programmes: CohortValidationProgramme[];
   summary: {
     programme_cohorts: number;
     planned_validation_composites: number;
     legacy_duplicate_analyses_avoided: number;
+    bound_future_cohorts: number;
     fused_analyses_per_full_cohort: number;
     legacy_analyses_per_full_cohort: number;
   };
