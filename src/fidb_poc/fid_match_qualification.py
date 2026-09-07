@@ -290,6 +290,8 @@ def ensure_query_relationship_evidence(
     treatment_id: str,
     runtime: Mapping[str, object],
     work_root: Path,
+    *,
+    ghidra_user_home: Path | None = None,
 ) -> tuple[Path, dict[str, object], str]:
     """Return digest-bound query hashes/relations, backfilling a legacy fold once."""
 
@@ -333,7 +335,8 @@ def ensure_query_relationship_evidence(
     os.environ["GHIDRA_HEADLESS"] = str(runtime["ghidra_headless"])
     _headless, ghidra_home = find_ghidra()
     ghidra_fid.ensure_started(
-        ghidra_home, ghidra_environment(work_root / "ghidra-user")
+        ghidra_home,
+        ghidra_environment(ghidra_user_home or work_root / "ghidra-user"),
     )
     project_parent = work_root / "query-project"
     if project_parent.exists():
@@ -634,6 +637,7 @@ def run_compact_retained_validation(
     performance_path: str | Path = "performance/fid-matching.toml",
     output_root: str | Path = "qualification/evidence",
     oracle_replay_source: str | Path | None = None,
+    ghidra_user_home: str | Path | None = None,
 ) -> dict[str, object]:
     """Run the selected compact backend without constructing a native oracle."""
 
@@ -691,6 +695,13 @@ def run_compact_retained_validation(
     if root not in destination.parents:
         raise ValueError("compact FID matcher output escapes project root")
     destination.mkdir(parents=True, exist_ok=True)
+    worker_ghidra_home = (
+        Path(ghidra_user_home).resolve()
+        if ghidra_user_home is not None
+        else destination / "work" / "ghidra-user"
+    )
+    if root not in worker_ghidra_home.parents:
+        raise ValueError("compact FID Ghidra user home escapes project root")
     query_path, query_summary, query_source = ensure_query_relationship_evidence(
         root,
         fold_root,
@@ -700,6 +711,7 @@ def run_compact_retained_validation(
         treatment_id,
         runtime,
         destination / "work",
+        ghidra_user_home=worker_ghidra_home,
     )
     functions = load_query_evidence(query_path)
     document = {
@@ -779,7 +791,11 @@ def run_compact_retained_validation(
     equivalent = all(row["state"] == "equivalent" for row in comparisons)
     execution_path = destination / "selected-output.json"
     classification_path = destination / "classification.json"
-    _atomic_json(execution_path, execution)
+    retain_backend_output = oracle_replay_source is not None
+    if retain_backend_output:
+        _atomic_json(execution_path, execution)
+    else:
+        execution_path.unlink(missing_ok=True)
     _atomic_json(classification_path, classification)
     summary = {
         "schema_version": QUALIFICATION_SCHEMA,
@@ -827,8 +843,14 @@ def run_compact_retained_validation(
                 "matched_functions": execution["matched_functions"],
                 "wall_time_ns": execution["wall_time_ns"],
                 "device": execution["device"],
-                "output_path": str(execution_path.relative_to(root)),
-                "output_sha256": _sha256(execution_path),
+                "output_path": (
+                    str(execution_path.relative_to(root))
+                    if retain_backend_output
+                    else None
+                ),
+                "output_sha256": (
+                    _sha256(execution_path) if retain_backend_output else None
+                ),
             }
         ],
         "comparisons": comparisons,

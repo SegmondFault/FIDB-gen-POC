@@ -12,6 +12,7 @@ from fidb_poc.fid_matching_campaign import (
     _acquire_campaign_lock,
     _archive_prior_case_failure,
     _balanced_case_chunks,
+    _cleanup_campaign_scratch,
     _expected_cases,
     _publish_hash_evidence,
     _reusable_case,
@@ -49,6 +50,9 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertFalse(self.campaign["execution"]["compare_cpu_and_gpu"])
         self.assertEqual(self.campaign["canary"]["workers"], 1)
         self.assertEqual(
+            self.campaign["methodology"]["retain_backend_outputs"], "canary-only"
+        )
+        self.assertEqual(
             self.campaign["execution"]["scheduling"],
             "largest-query-first-greedy-v1",
         )
@@ -68,6 +72,28 @@ class FidMatchingCampaignTests(unittest.TestCase):
         for chunk in chunks:
             weights = [dict(weighted)[case] for case in chunk]
             self.assertEqual(weights, sorted(weights, reverse=True))
+
+    def test_campaign_cleanup_removes_only_known_scratch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign = {**self.campaign, "output_root": "runs"}
+            campaign_root = root / "runs" / str(campaign["id"])
+            scratch = [
+                campaign_root / "compact-index-ghidra-user" / "cache.bin",
+                campaign_root / "worker-scratch" / "worker-1" / "cache.bin",
+                campaign_root / "cases" / "case-1" / "work" / "project.bin",
+            ]
+            for path in scratch:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"scratch")
+            evidence = campaign_root / "cases" / "case-1" / "summary.json"
+            evidence.write_text("{}", encoding="utf-8")
+
+            report = _cleanup_campaign_scratch(root, campaign)
+
+            self.assertEqual(report["recoverable_bytes"], 21)
+            self.assertTrue(evidence.is_file())
+            self.assertTrue(all(not path.exists() for path in scratch))
 
     def test_completed_case_reuse_is_bound_to_matching_authority(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -134,7 +134,7 @@ def load_campaign(
         "unresolved_truth": "retain-exclude-from-confusion-matrix",
         "retain_hash_types": ["full", "specific", "complete"],
         "retain_oracle_inputs": "canary-only",
-        "retain_backend_outputs": True,
+        "retain_backend_outputs": "canary-only",
         "retain_hash_observations": True,
         "required_link_harness": LINK_HARNESS_POLICY,
     }:
@@ -269,6 +269,45 @@ def _campaign_root(root: Path, campaign: Mapping[str, object]) -> Path:
     )
 
 
+def _tree_bytes(path: Path) -> int:
+    return sum(
+        item.stat().st_size
+        for item in path.rglob("*")
+        if item.is_file() and not item.is_symlink()
+    )
+
+
+def _cleanup_campaign_scratch(
+    root: Path, campaign: Mapping[str, object]
+) -> dict[str, object]:
+    """Remove only known disposable matcher scratch after workers have exited."""
+
+    campaign_root = _campaign_root(root, campaign)
+    candidates = [
+        campaign_root / "compact-index-ghidra-user",
+        campaign_root / "worker-scratch",
+    ]
+    cases = campaign_root / "cases"
+    if cases.is_dir():
+        candidates.extend(cases.glob("*/work"))
+    removed = []
+    recoverable_bytes = 0
+    for path in candidates:
+        if not path.exists():
+            continue
+        resolved = path.resolve()
+        if path.is_symlink() or campaign_root not in resolved.parents:
+            raise ValueError(f"matcher scratch cleanup target is unsafe: {path}")
+        recoverable_bytes += _tree_bytes(path)
+        shutil.rmtree(path)
+        removed.append(str(path.relative_to(root)))
+    return {
+        "state": "complete",
+        "removed_paths": removed,
+        "recoverable_bytes": recoverable_bytes,
+    }
+
+
 def _compact_index_entries(
     root: Path, evidence: Mapping[str, object]
 ) -> list[dict[str, object]]:
@@ -294,6 +333,7 @@ def _ensure_compact_candidate_index(
     campaign: Mapping[str, object],
     evidence: Mapping[str, object],
     runtime: Mapping[str, object],
+    ghidra_user_home: Path,
 ) -> dict[str, object]:
     """Build the campaign-wide FID index once while peer workers wait."""
 
@@ -317,7 +357,7 @@ def _ensure_compact_candidate_index(
                 _headless, ghidra_home = find_ghidra()
                 ghidra_fid.ensure_started(
                     ghidra_home,
-                    ghidra_environment(campaign_root / "compact-index-ghidra-user"),
+                    ghidra_environment(ghidra_user_home),
                 )
                 ghidra_started = True
             return ghidra_fid.inspect_fid_candidate_source(path)
@@ -1091,8 +1131,11 @@ def worker_cases(
         f'-XX:ActiveProcessorCount={execution["jvm_active_processors"]}'
     )
     relative_output = Path(str(campaign["output_root"])) / str(campaign["id"]) / "cases"
+    worker_scratch = (
+        _campaign_root(root, campaign) / "worker-scratch" / f"worker-{os.getpid()}"
+    )
     compact_index = _ensure_compact_candidate_index(
-        root, campaign, evidence, runtime
+        root, campaign, evidence, runtime, worker_scratch / "ghidra-user"
     )["path"]
     failed = 0
     for value in cases:
@@ -1129,6 +1172,7 @@ def worker_cases(
                 performance_path=str(campaign["execution"]["performance"]),
                 output_root=relative_output,
                 oracle_replay_source=replay_root,
+                ghidra_user_home=worker_scratch / "ghidra-user",
             )
         except Exception as error:
             failed += 1
@@ -1163,6 +1207,7 @@ def run_campaign(
     lock = campaign_root / ".campaign.lock"
     lock_descriptor = _acquire_campaign_lock(lock)
     try:
+        stale_scratch = _cleanup_campaign_scratch(root, campaign)
         chunks, scheduling = _scheduled_case_chunks(root, campaign, mode)
         if not chunks:
             terminal = _terminal_campaign_report(root, campaign, mode)
@@ -1227,10 +1272,16 @@ def run_campaign(
             },
         )
         return_codes = [process.wait() for process in processes]
+        retention = _cleanup_campaign_scratch(root, campaign)
+        retention["recoverable_bytes"] += stale_scratch["recoverable_bytes"]
+        retention["removed_paths"] = sorted(
+            set(stale_scratch["removed_paths"] + retention["removed_paths"])
+        )
         report = _aggregate(root, campaign, mode)
         _publish_hash_evidence(root, campaign, mode, report)
         report["worker_return_codes"] = return_codes
         report["scheduling"] = scheduling
+        report["retention"] = retention
         report["finished_at"] = datetime.now(timezone.utc).isoformat()
         report["wall_time_seconds"] = (
             time.time() - datetime.fromisoformat(started_at).timestamp()

@@ -15,7 +15,7 @@ truth_precedence = ["linker-map", "unique-reference-name"]
 unresolved_truth = "retain-exclude-from-confusion-matrix"
 retain_hash_types = ["full", "specific", "complete"]
 retain_oracle_inputs = "canary-only"
-retain_backend_outputs = true
+retain_backend_outputs = "canary-only"
 retain_hash_observations = true
 required_link_harness = "whole-archive-shared-image-symbolic-v2"
 
