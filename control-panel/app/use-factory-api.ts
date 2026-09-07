@@ -2,7 +2,31 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { settlePanelRead } from './panel-health.mjs';
+
 export type ConnectionState = 'connecting' | 'live' | 'stale' | 'offline';
+
+export type PanelReadKey =
+  | 'authority'
+  | 'capabilities'
+  | 'ecological-validation'
+  | 'events'
+  | 'fid-matching-backend'
+  | 'hash-analysis-backend'
+  | 'lane-inventory'
+  | 'machine-validation/run'
+  | 'noisy-hashes'
+  | 'preflight'
+  | 'retention'
+  | 'snapshot'
+  | 'timings'
+  | 'validation-observatory';
+
+type PanelReadResult<T> = {
+  key: PanelReadKey;
+  value: T | null;
+  error: string | null;
+};
 
 export type CoordinatorCounts = Record<
   'blocked' | 'complete' | 'failed' | 'leased' | 'queued' | 'running',
@@ -2559,6 +2583,10 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   return document;
 }
 
+async function panelJson<T>(key: PanelReadKey, path: string): Promise<PanelReadResult<T>> {
+  return settlePanelRead(key, () => json<T>(path)) as Promise<PanelReadResult<T>>;
+}
+
 export function useFactoryApi(pollMilliseconds = 5000) {
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [snapshot, setSnapshot] = useState<CoordinatorSnapshot | null>(null);
@@ -2576,6 +2604,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
   const [preflight, setPreflight] = useState<OperationsPreflight | null>(null);
   const [timingsError, setTimingsError] = useState<string | null>(null);
+  const [panelErrors, setPanelErrors] = useState<Partial<Record<PanelReadKey, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -2587,6 +2616,16 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const capabilityCache = useRef<FactoryCapabilities | null>(null);
   const authorityCache = useRef<FactoryAuthority | null>(null);
   const lastCapabilityRead = useRef(0);
+  const recordPanelReads = useCallback((reads: Array<PanelReadResult<unknown>>) => {
+    setPanelErrors(current => {
+      const next = { ...current };
+      for (const read of reads) {
+        if (read.error) next[read.key] = read.error;
+        else delete next[read.key];
+      }
+      return next;
+    });
+  }, []);
   const workloadActive = Boolean(
     machineValidation
     && ['queued', 'preparing-index', 'running', 'pausing', 'postprocessing', 'retaining'].includes(machineValidation.run.state),
@@ -2656,68 +2695,85 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult, hashBackendResult, fidBackendResult, noisyResult] = await Promise.all([
-          json<FactoryCapabilities>('capabilities'),
-          json<FactoryAuthority>('authority'),
-          json<LaneInventory>('lane-inventory'),
-          json<RetentionStatus>('retention'),
-          json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
-          json<HashAnalysisBackendStatus>('hash-analysis-backend'),
-          json<FidMatchingBackendStatus>('fid-matching-backend'),
-          json<NoisyHashStatus>('noisy-hashes'),
+        const reads = await Promise.all([
+          panelJson<FactoryCapabilities>('capabilities', 'capabilities'),
+          panelJson<FactoryAuthority>('authority', 'authority'),
+          panelJson<LaneInventory>('lane-inventory', 'lane-inventory'),
+          panelJson<EcologicalValidation>('ecological-validation', 'ecological-validation'),
+          panelJson<RetentionStatus>('retention', 'retention'),
+          panelJson<ValidationObservatory>('validation-observatory', `validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
+          panelJson<HashAnalysisBackendStatus>('hash-analysis-backend', 'hash-analysis-backend'),
+          panelJson<FidMatchingBackendStatus>('fid-matching-backend', 'fid-matching-backend'),
+          panelJson<NoisyHashStatus>('noisy-hashes', 'noisy-hashes'),
         ]);
-        capabilityCache.current = capabilityResult;
-        authorityCache.current = authorityResult;
-        lastCapabilityRead.current = Date.now();
-        setCapabilities(capabilityResult);
-        setAuthority(authorityResult);
-        setMachineValidation(authorityResult.machine_validations[0] ?? null);
-        setLaneInventory(laneInventoryResult);
-        setEcologicalValidation(authorityResult.ecological_validation);
-        setNoisyHashes(noisyResult);
-        setRetention(retentionResult);
-        setValidationObservatory(observatoryResult);
-        setHashAnalysisBackend(hashBackendResult);
-        setFidMatchingBackend(fidBackendResult);
+        recordPanelReads(reads as Array<PanelReadResult<unknown>>);
+        const [capabilityRead, authorityRead, laneInventoryRead, ecologicalRead, retentionRead, observatoryRead, hashBackendRead, fidBackendRead, noisyRead] = reads;
+        if (capabilityRead.value) {
+          capabilityCache.current = capabilityRead.value;
+          setCapabilities(capabilityRead.value);
+        }
+        if (authorityRead.value) {
+          authorityCache.current = authorityRead.value;
+          setAuthority(authorityRead.value);
+          setMachineValidation(authorityRead.value.machine_validations[0] ?? null);
+        }
+        if (capabilityRead.value && authorityRead.value) lastCapabilityRead.current = Date.now();
+        if (laneInventoryRead.value) setLaneInventory(laneInventoryRead.value);
+        if (ecologicalRead.value) setEcologicalValidation(ecologicalRead.value);
+        if (noisyRead.value) setNoisyHashes(noisyRead.value);
+        if (retentionRead.value) setRetention(retentionRead.value);
+        if (observatoryRead.value) setValidationObservatory(observatoryRead.value);
+        if (hashBackendRead.value) setHashAnalysisBackend(hashBackendRead.value);
+        if (fidBackendRead.value) setFidMatchingBackend(fidBackendRead.value);
       } else {
-        const [machineResult, ecologicalResult, noisyResult, retentionResult, observatoryResult, hashBackendResult, fidBackendResult] = await Promise.all([
-          json<MachineValidationLive>('machine-validation/run'),
-          json<EcologicalValidation>('ecological-validation'),
-          json<NoisyHashStatus>('noisy-hashes'),
-          json<RetentionStatus>('retention'),
-          json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
-          json<HashAnalysisBackendStatus>('hash-analysis-backend'),
-          json<FidMatchingBackendStatus>('fid-matching-backend'),
+        const reads = await Promise.all([
+          panelJson<MachineValidationLive>('machine-validation/run', 'machine-validation/run'),
+          panelJson<EcologicalValidation>('ecological-validation', 'ecological-validation'),
+          panelJson<NoisyHashStatus>('noisy-hashes', 'noisy-hashes'),
+          panelJson<RetentionStatus>('retention', 'retention'),
+          panelJson<ValidationObservatory>('validation-observatory', `validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
+          panelJson<HashAnalysisBackendStatus>('hash-analysis-backend', 'hash-analysis-backend'),
+          panelJson<FidMatchingBackendStatus>('fid-matching-backend', 'fid-matching-backend'),
         ]);
-        setMachineValidation(current => current ? {
-          ...current,
-          run: machineResult.run,
-          canary_gate: machineResult.canary_gate,
-          fid_matching: machineResult.fid_matching,
-        } : current);
-        setEcologicalValidation(ecologicalResult);
-        setNoisyHashes(noisyResult);
-        setRetention(retentionResult);
-        setValidationObservatory(observatoryResult);
-        setHashAnalysisBackend(hashBackendResult);
-        setFidMatchingBackend(fidBackendResult);
+        recordPanelReads(reads as Array<PanelReadResult<unknown>>);
+        const [machineRead, ecologicalRead, noisyRead, retentionRead, observatoryRead, hashBackendRead, fidBackendRead] = reads;
+        if (machineRead.value) {
+          setMachineValidation(current => current ? {
+            ...current,
+            run: machineRead.value?.run ?? current.run,
+            canary_gate: machineRead.value?.canary_gate ?? current.canary_gate,
+            fid_matching: machineRead.value?.fid_matching ?? current.fid_matching,
+          } : current);
+        }
+        if (ecologicalRead.value) setEcologicalValidation(ecologicalRead.value);
+        if (noisyRead.value) setNoisyHashes(noisyRead.value);
+        if (retentionRead.value) setRetention(retentionRead.value);
+        if (observatoryRead.value) setValidationObservatory(observatoryRead.value);
+        if (hashBackendRead.value) setHashAnalysisBackend(hashBackendRead.value);
+        if (fidBackendRead.value) setFidMatchingBackend(fidBackendRead.value);
       }
       if (health.coordinator.state === 'ready') {
-        const [snapshotResult, timingResult, preflightResult] = await Promise.all([
-          json<CoordinatorSnapshot>('snapshot?detail=control-panel'),
-          json<TimingSnapshot>('timings?limit=200')
-            .then(value => ({ value, error: null }))
-            .catch(caught => ({
-              value: null,
-              error: caught instanceof Error ? caught.message : 'Timing API unavailable',
-            })),
-          json<OperationsPreflight>('preflight'),
+        const reads = await Promise.all([
+          panelJson<CoordinatorSnapshot>('snapshot', 'snapshot?detail=control-panel'),
+          panelJson<TimingSnapshot>('timings', 'timings?limit=200'),
+          panelJson<OperationsPreflight>('preflight', 'preflight'),
         ]);
-        setSnapshot(snapshotResult);
-        setPreflight(preflightResult);
-        setTimings(timingResult.value);
-        setTimingsError(timingResult.error);
-        await refreshEvents(snapshotResult);
+        recordPanelReads(reads as Array<PanelReadResult<unknown>>);
+        const [snapshotRead, timingRead, preflightRead] = reads;
+        if (snapshotRead.value) setSnapshot(snapshotRead.value);
+        if (preflightRead.value) setPreflight(preflightRead.value);
+        if (timingRead.value) setTimings(timingRead.value);
+        setTimingsError(timingRead.error);
+        if (snapshotRead.value) {
+          const eventRead = await settlePanelRead(
+            'events',
+            async () => {
+              await refreshEvents(snapshotRead.value as CoordinatorSnapshot);
+              return true;
+            },
+          ) as PanelReadResult<boolean>;
+          recordPanelReads([eventRead]);
+        }
       } else {
         setSnapshot(null);
         setTimings(null);
@@ -2735,7 +2791,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     } finally {
       refreshInFlight.current = false;
     }
-  }, [refreshEvents, resetEvents]);
+  }, [recordPanelReads, refreshEvents, resetEvents]);
 
   useEffect(() => {
     const kickoff = window.setTimeout(() => void refresh(false), 0);
@@ -3021,6 +3077,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     timings,
     preflight,
     timingsError,
+    panelErrors,
     eventHistoryLimited: Boolean(snapshot && snapshot.last_event_id > events.length),
     error,
     busyAction,
