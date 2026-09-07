@@ -32,17 +32,22 @@ Machine-validation runs use the same collector with a separate
 terminal report agree that every expected work unit completed with no execution
 failure. A full run must also bind the digest of its complete single-hash
 evidence database. The collector hashes that database, every unit result, truth
-map, exported query signature file and retained composite binary. Those files,
-the report and the run logs remain in place. Only TOML-selected direct-child `worker-*` directories
-are disposable; they contain reconstructed build trees and per-process Ghidra
-state. Failed, interrupted, incomplete or structurally inconsistent validation
-runs are quarantined whole.
+map and exported query signature file. The report, compact evidence and run logs
+remain in place. Query and truth composites are reconstruction scratch: TOML
+permits their deletion only when every fold result binds its signature export by
+SHA-256 and declares the required relationship-complete evidence schema.
+Direct-child `worker-*` directories are independently disposable because they
+contain reconstructed build trees and per-process Ghidra state. A legacy run
+without relationship evidence may still lose ordinary worker scratch, but its
+composites remain explicitly protected until a backfill seals. Failed,
+interrupted, incomplete or structurally inconsistent validation runs are
+quarantined whole.
 
 This boundary preserves both the inputs and results of the threshold-free
 per-hash analysis. Do not add
-`units/`, `reference-index.sqlite3`, reports, truth maps, query signatures or
-composite binaries to validation scratch without a newer, verified downstream
-receipt.
+`units/`, `reference-index.sqlite3`, reports, truth maps or query signatures to
+validation scratch. Composite deletion must remain a distinct, evidence-gated
+action so a generic scratch selector cannot bypass the relationship check.
 
 ## Commands
 
@@ -128,6 +133,7 @@ Revert the retention commits to remove the feature without changing the queue
 ledger. Plans and bundles are additive ignored runtime evidence and can remain.
 
 An applied deletion cannot reconstruct disposable scratch. This is why success
-scratch is gated by a relationship-complete lane receipt and failure deletion
-is gated by a verified concise bundle. Preserve filesystem backups when whole
-failed build trees may later be required for research.
+scratch is gated by a relationship-complete lane receipt, validation composites
+by relationship-complete signature evidence, and failure deletion by a verified
+concise bundle. Preserve filesystem backups when whole failed build trees may
+later be required for research.

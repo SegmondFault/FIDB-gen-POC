@@ -11,6 +11,7 @@ that launcher, so the same failure mode cannot occur.
 from __future__ import annotations
 
 from contextlib import nullcontext
+import hashlib
 import json
 from pathlib import Path
 from typing import Callable, ContextManager, Mapping
@@ -504,11 +505,16 @@ def export_program_signatures(
         temporary.replace(output)
     finally:
         temporary.unlink(missing_ok=True)
+    with output.open("rb") as stream:
+        output_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
     return {
+        "evidence_schema": "fidb-program-signature-evidence/v1",
         "functions_hashed": len(rows),
         "relation_hashes": relation_count,
         "language_id": rows[0]["ghidra_language_id"] if rows else None,
         "compiler_spec_id": rows[0]["ghidra_compiler_spec_id"] if rows else None,
+        "artifact_sha256": output_sha256,
+        "artifact_bytes": output.stat().st_size,
     }
 
 

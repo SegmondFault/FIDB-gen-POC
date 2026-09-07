@@ -2175,6 +2175,8 @@ export type RetentionPlanSummary = {
   success_scratch_prunes: number;
   verified_validation_runs: number;
   validation_scratch_prunes: number;
+  validation_composite_prunes: number;
+  validation_composite_files: number;
   validation_source_directories: number;
   validation_recoverable_apparent_bytes: number;
   source_directories: number;
@@ -2208,7 +2210,8 @@ export type RetentionStatus = {
       automatic_after_terminal_run: boolean;
       scratch_globs: string[];
       required_fold_artifacts: string[];
-      preserve_composite_binaries: boolean;
+      prune_composite_binaries: boolean;
+      required_signature_evidence_schema: string;
     };
     automation: {
       enabled: boolean;

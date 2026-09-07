@@ -171,7 +171,12 @@ class RetentionTests(unittest.TestCase):
             "bytes": path.stat().st_size,
         }
 
-    def add_complete_validation_run(self, run_id: str = "validation-full") -> Path:
+    def add_complete_validation_run(
+        self,
+        run_id: str = "validation-full",
+        *,
+        relationship_evidence: bool = True,
+    ) -> Path:
         run = self.root / "artifacts/validation-runs/cohort-001" / run_id
         unit = run / "units/001-route-baseline"
         folds = []
@@ -182,13 +187,33 @@ class RetentionTests(unittest.TestCase):
                 json.dumps({"fold": name, "owners": [f"library-{name}"]}),
                 encoding="utf-8",
             )
-            (fold / "query-signatures.jsonl").write_text(
-                json.dumps({"full_hash": name, "specific_hash": name}) + "\n",
+            signatures = fold / "query-signatures.jsonl"
+            signatures.write_text(
+                json.dumps(
+                    {
+                        "full_hash": name,
+                        "specific_hash": name,
+                        "children": [],
+                        "parents": [],
+                    }
+                )
+                + "\n",
                 encoding="utf-8",
             )
             (fold / "truth.elf").write_bytes(b"truth" + name.encode())
             (fold / "query.elf").write_bytes(b"query" + name.encode())
-            folds.append({"fold": name})
+            fold_result = {"fold": name}
+            if relationship_evidence:
+                fold_result["signature_summary"] = {
+                    "evidence_schema": "fidb-program-signature-evidence/v1",
+                    "functions_hashed": 1,
+                    "relation_hashes": 0,
+                    "artifact_sha256": hashlib.sha256(
+                        signatures.read_bytes()
+                    ).hexdigest(),
+                    "artifact_bytes": signatures.stat().st_size,
+                }
+            folds.append(fold_result)
         (unit / "result.json").write_text(
             json.dumps(
                 {
@@ -410,7 +435,7 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(report["state"], "warning")
         self.assertEqual(len(report["reasons"]), 2)
 
-    def test_validation_plan_preserves_hash_evidence_and_selects_only_worker_scratch(
+    def test_validation_plan_preserves_hash_evidence_and_prunes_transient_binaries(
         self,
     ) -> None:
         run = self.add_complete_validation_run()
@@ -425,14 +450,26 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(plan["scope"], "machine-validation")
         self.assertEqual(plan["summary"]["verified_validation_runs"], 1)
         self.assertEqual(plan["summary"]["validation_scratch_prunes"], 1)
+        self.assertEqual(plan["summary"]["validation_composite_prunes"], 1)
+        self.assertEqual(plan["summary"]["validation_composite_files"], 4)
         self.assertEqual(plan["summary"]["validation_source_directories"], 1)
-        action = plan["actions"][0]
-        self.assertEqual(action["kind"], "prune-validation-scratch")
-        self.assertEqual(action["run_id"], "validation-full")
-        self.assertEqual(
-            action["paths"], [str((run / "worker-1234").relative_to(self.root))]
+        self.assertEqual(len(plan["actions"]), 2)
+        scratch = next(
+            action
+            for action in plan["actions"]
+            if action["kind"] == "prune-validation-scratch"
         )
-        self.assertGreater(action["retained_evidence_files"], 0)
+        composites = next(
+            action
+            for action in plan["actions"]
+            if action["kind"] == "prune-validation-composites"
+        )
+        self.assertEqual(scratch["run_id"], "validation-full")
+        self.assertEqual(
+            scratch["paths"], [str((run / "worker-1234").relative_to(self.root))]
+        )
+        self.assertEqual(len(composites["paths"]), 4)
+        self.assertGreater(scratch["retained_evidence_files"], 0)
 
         write_retention_plan(plan, self.root)
         apply_retention_plan(self.root, plan["plan_digest"])
@@ -444,7 +481,31 @@ class RetentionTests(unittest.TestCase):
         self.assertTrue(
             (run / "units/001-route-baseline/fold-A/query-signatures.jsonl").is_file()
         )
-        self.assertTrue((run / "units/001-route-baseline/fold-A/query.elf").is_file())
+        self.assertFalse((run / "units/001-route-baseline/fold-A/query.elf").exists())
+        self.assertFalse((run / "units/001-route-baseline/fold-B/truth.elf").exists())
+
+    def test_legacy_validation_composites_wait_for_relationship_backfill(self) -> None:
+        run = self.add_complete_validation_run(
+            "validation-legacy", relationship_evidence=False
+        )
+
+        plan = compile_retention_plan(self.root, scope="machine-validation")
+
+        self.assertEqual(plan["summary"]["verified_validation_runs"], 1)
+        self.assertEqual(plan["summary"]["validation_composite_prunes"], 0)
+        self.assertIn(
+            "backfill",
+            next(
+                row["reason"]
+                for row in plan["preserved"]
+                if row["kind"] == "validation-evidence"
+            ),
+        )
+        write_retention_plan(plan, self.root)
+        apply_retention_plan(self.root, plan["plan_digest"])
+        self.assertTrue(
+            (run / "units/001-route-baseline/fold-A/query.elf").is_file()
+        )
 
     def test_incomplete_validation_run_is_quarantined_without_action(self) -> None:
         run = self.add_complete_validation_run("validation-failed")

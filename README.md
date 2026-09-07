@@ -795,9 +795,12 @@ TOML-controlled ledger check.
 Measured-complete machine-validation runs enter the same dry-run-first system
 under a separate scope. The collector verifies and hashes the retained
 single-hash report and evidence database, unit results, truth maps, query
-signatures and composite binaries, then selects only per-worker build/Ghidra
-scratch. Failed or incomplete validation runs stay
-quarantined. Automatic validation retention is controlled by the
+signatures and their function relationships. It selects per-worker build/Ghidra
+scratch and validation composites as separate actions. Composite binaries are
+transient and become eligible only after every fold has a digest-bound,
+relationship-complete signature export; older runs remain protected pending
+backfill. Failed or incomplete validation runs stay quarantined. Automatic
+validation retention is controlled by the
 `machine-validation-complete` trigger in `retention/policy.toml`; its outcome is
 recorded beside the run in `retention.json`.
 

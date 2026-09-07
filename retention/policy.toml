@@ -38,7 +38,11 @@ enabled = true
 automatic_after_terminal_run = true
 scratch_globs = ["worker-*"]
 required_fold_artifacts = ["truth-map.json", "query-signatures.jsonl"]
-preserve_composite_binaries = true
+# Validation composites are reconstruction scratch, not corpus evidence. They
+# are eligible only after each fold seals digest-bound, relationship-complete
+# function signatures. Legacy runs without this evidence remain protected.
+prune_composite_binaries = true
+required_signature_evidence_schema = "fidb-program-signature-evidence/v1"
 
 [automation]
 enabled = true

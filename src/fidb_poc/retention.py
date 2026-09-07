@@ -147,7 +147,8 @@ class RetentionPolicy:
     validation_automatic_after_terminal_run: bool
     validation_scratch_globs: tuple[str, ...]
     validation_required_fold_artifacts: tuple[str, ...]
-    validation_preserve_composite_binaries: bool
+    validation_prune_composite_binaries: bool
+    validation_required_signature_evidence_schema: str
     automation_enabled: bool
     automation_triggers: tuple[str, ...]
     automation_mode: str
@@ -199,7 +200,10 @@ class RetentionPolicy:
                 "required_fold_artifacts": list(
                     self.validation_required_fold_artifacts
                 ),
-                "preserve_composite_binaries": self.validation_preserve_composite_binaries,
+                "prune_composite_binaries": self.validation_prune_composite_binaries,
+                "required_signature_evidence_schema": (
+                    self.validation_required_signature_evidence_schema
+                ),
             },
             "automation": {
                 "enabled": self.automation_enabled,
@@ -294,7 +298,8 @@ def load_retention_policy(
             "automatic_after_terminal_run",
             "scratch_globs",
             "required_fold_artifacts",
-            "preserve_composite_binaries",
+            "prune_composite_binaries",
+            "required_signature_evidence_schema",
         },
         "retention validation",
     )
@@ -422,9 +427,13 @@ def load_retention_policy(
         ),
         validation_scratch_globs=validation_scratch_globs,
         validation_required_fold_artifacts=validation_required_fold_artifacts,
-        validation_preserve_composite_binaries=_boolean(
-            validation.get("preserve_composite_binaries"),
-            "validation preserve_composite_binaries",
+        validation_prune_composite_binaries=_boolean(
+            validation.get("prune_composite_binaries"),
+            "validation prune_composite_binaries",
+        ),
+        validation_required_signature_evidence_schema=_text(
+            validation.get("required_signature_evidence_schema"),
+            "validation required_signature_evidence_schema",
         ),
         automation_enabled=_boolean(automation.get("enabled"), "automation enabled"),
         automation_triggers=triggers,
@@ -692,6 +701,22 @@ def _attempt_stats(path: Path, maximum_files: int) -> dict[str, int]:
     }
 
 
+def _retention_target_stats(path: Path, maximum_files: int) -> dict[str, int]:
+    if path.is_symlink():
+        raise RetentionError(f"refusing symlinked retention target: {path}")
+    if path.is_file():
+        stat_result = path.stat()
+        return {
+            "files": 1,
+            "directories": 0,
+            "apparent_bytes": stat_result.st_size,
+            "allocated_bytes": stat_result.st_blocks * 512,
+        }
+    if path.is_dir():
+        return _attempt_stats(path, maximum_files)
+    raise RetentionError(f"refusing non-regular retention target: {path}")
+
+
 def _normalise_failure(value: str, attempt_root: Path) -> str:
     result = value.replace(str(attempt_root), "<attempt-root>")
     result = re.sub(
@@ -935,6 +960,8 @@ def _validation_evidence_record(
         )
     positions: set[int] = set()
     fold_count = 0
+    composite_paths: list[str] = []
+    composite_prune_blockers: set[str] = set()
     for result_path in result_paths:
         result = _load_json(
             _safe_regular(policy.root, result_path, "validation unit result"),
@@ -964,20 +991,47 @@ def _validation_evidence_record(
                 raise RetentionError(
                     f"validation fold directory is unavailable: {fold_root}"
                 )
+            required_artifacts: dict[str, Path] = {}
             for name in policy.validation_required_fold_artifacts:
-                retain(fold_root / name, f"validation fold artifact {name}")
-            if policy.validation_preserve_composite_binaries:
-                for stem in ("truth", "query"):
-                    matches = [
-                        path
-                        for suffix in ("elf", "dll")
-                        if (path := fold_root / f"{stem}.{suffix}").is_file()
-                    ]
-                    if len(matches) != 1:
-                        raise RetentionError(
-                            f"validation fold has no unique {stem} composite: {fold_root}"
-                        )
-                    retain(matches[0], f"validation {stem} composite")
+                artifact = fold_root / name
+                retain(artifact, f"validation fold artifact {name}")
+                required_artifacts[name] = artifact
+
+            signature_summary = fold.get("signature_summary")
+            signatures = required_artifacts.get("query-signatures.jsonl")
+            relation_evidence_complete = (
+                isinstance(signature_summary, dict)
+                and signatures is not None
+                and signature_summary.get("evidence_schema")
+                == policy.validation_required_signature_evidence_schema
+                and signature_summary.get("artifact_sha256") == _sha256(signatures)
+                and signature_summary.get("artifact_bytes") == signatures.stat().st_size
+            )
+            if not relation_evidence_complete:
+                composite_prune_blockers.add(
+                    "relationship-complete signature evidence is absent or unbound"
+                )
+
+            for stem in ("truth", "query"):
+                matches = [
+                    path
+                    for suffix in ("elf", "dll")
+                    if (path := fold_root / f"{stem}.{suffix}").is_file()
+                ]
+                if len(matches) > 1:
+                    raise RetentionError(
+                        f"validation fold has ambiguous {stem} composites: {fold_root}"
+                    )
+                if not matches:
+                    continue
+                composite = matches[0]
+                if (
+                    policy.validation_prune_composite_binaries
+                    and relation_evidence_complete
+                ):
+                    composite_paths.append(_relative(policy.root, composite))
+                else:
+                    retain(composite, f"validation {stem} composite")
             fold_count += 1
     if len(positions) != expected_units:
         raise RetentionError("validation result positions are not unique and complete")
@@ -992,6 +1046,8 @@ def _validation_evidence_record(
         "retained_evidence_files": evidence_files,
         "retained_evidence_bytes": evidence_bytes,
         "retained_evidence_sha256": evidence.hexdigest(),
+        "composite_paths": composite_paths,
+        "composite_prune_blockers": sorted(composite_prune_blockers),
     }
 
 
@@ -1036,7 +1092,11 @@ def _validation_retention_records(
                     "kind": "validation-evidence",
                     "path": _relative(policy.root, run_root / "units"),
                     "run_id": record["run_id"],
-                    "reason": "terminal report, composites and signature evidence retained",
+                    "reason": (
+                        "terminal report and compact hash/relationship evidence retained"
+                        if not record["composite_prune_blockers"]
+                        else "legacy composites protected pending relationship-evidence backfill"
+                    ),
                     "evidence_sha256": record["retained_evidence_sha256"],
                 }
             )
@@ -1068,39 +1128,61 @@ def _validation_retention_records(
                     }
                 )
                 continue
-            if not scratch:
-                continue
-            stats = {
-                field: 0
-                for field in (
-                    "files",
-                    "directories",
-                    "apparent_bytes",
-                    "allocated_bytes",
+            candidate_actions = []
+            if scratch:
+                candidate_actions.append(
+                    (
+                        "prune-validation-scratch",
+                        scratch,
+                        "validation-scratch",
+                    )
                 )
-            }
-            try:
-                for path in scratch:
-                    current = _attempt_stats(path, policy.maximum_scan_files)
-                    for field in stats:
-                        stats[field] += current[field]
-            except RetentionError as error:
-                quarantined.append(
+            composites = [
+                _inside(policy.root, path, "validation composite target")
+                for path in record["composite_paths"]
+            ]
+            if composites:
+                candidate_actions.append(
+                    (
+                        "prune-validation-composites",
+                        composites,
+                        "validation-composites",
+                    )
+                )
+            for kind, paths, quarantine_kind in candidate_actions:
+                stats = {
+                    field: 0
+                    for field in (
+                        "files",
+                        "directories",
+                        "apparent_bytes",
+                        "allocated_bytes",
+                    )
+                }
+                try:
+                    for path in paths:
+                        current = _retention_target_stats(
+                            path, policy.maximum_scan_files
+                        )
+                        for field in stats:
+                            stats[field] += current[field]
+                except RetentionError as error:
+                    quarantined.append(
+                        {
+                            "kind": quarantine_kind,
+                            "path": _relative(policy.root, run_root),
+                            "reason": str(error),
+                        }
+                    )
+                    continue
+                actions.append(
                     {
-                        "kind": "validation-scratch",
-                        "path": _relative(policy.root, run_root),
-                        "reason": str(error),
+                        "kind": kind,
+                        **record,
+                        "paths": [_relative(policy.root, path) for path in paths],
+                        **stats,
                     }
                 )
-                continue
-            actions.append(
-                {
-                    "kind": "prune-validation-scratch",
-                    **record,
-                    "paths": [_relative(policy.root, path) for path in scratch],
-                    **stats,
-                }
-            )
     return actions, preserved, quarantined, verified
 
 
@@ -1466,6 +1548,14 @@ def compile_retention_plan(
         "validation_scratch_prunes": sum(
             row["kind"] == "prune-validation-scratch" for row in actions
         ),
+        "validation_composite_prunes": sum(
+            row["kind"] == "prune-validation-composites" for row in actions
+        ),
+        "validation_composite_files": sum(
+            int(row["files"])
+            for row in actions
+            if row["kind"] == "prune-validation-composites"
+        ),
         "validation_source_directories": sum(
             len(row["paths"])
             for row in actions
@@ -1474,7 +1564,8 @@ def compile_retention_plan(
         "validation_recoverable_apparent_bytes": sum(
             int(row["apparent_bytes"])
             for row in actions
-            if row["kind"] == "prune-validation-scratch"
+            if row["kind"]
+            in {"prune-validation-scratch", "prune-validation-composites"}
         ),
         "source_directories": sum(
             len(row["paths"] if "paths" in row else row["source_paths"])
@@ -1802,12 +1893,15 @@ def _copy_bundle(
     return sum(path.stat().st_size for path in destination.rglob("*") if path.is_file())
 
 
-def _remove_tree(policy: RetentionPolicy, value: str) -> dict[str, int]:
+def _remove_retention_target(policy: RetentionPolicy, value: str) -> dict[str, int]:
     path = _inside(policy.root, value, "retention deletion target")
     if not path.exists():
         return {"files": 0, "directories": 0, "apparent_bytes": 0, "allocated_bytes": 0}
-    stats = _attempt_stats(path, policy.maximum_scan_files)
-    shutil.rmtree(path)
+    stats = _retention_target_stats(path, policy.maximum_scan_files)
+    if path.is_file():
+        path.unlink()
+    else:
+        shutil.rmtree(path)
     return stats
 
 
@@ -1841,7 +1935,8 @@ def apply_retention_plan(
             connection.close()
         if any(
             isinstance(action, dict)
-            and action.get("kind") == "prune-validation-scratch"
+            and action.get("kind")
+            in {"prune-validation-scratch", "prune-validation-composites"}
             for action in saved.get("actions", [])
         ):
             _assert_validation_idle(policy)
@@ -1881,7 +1976,10 @@ def apply_retention_plan(
                         "success scratch action lacks a verified lane receipt"
                     )
                 paths = action["paths"]
-            elif kind == "prune-validation-scratch":
+            elif kind in {
+                "prune-validation-scratch",
+                "prune-validation-composites",
+            }:
                 if (
                     action.get("report_sha256") is None
                     or action.get("retained_evidence_sha256") is None
@@ -1893,7 +1991,7 @@ def apply_retention_plan(
             else:
                 raise RetentionError(f"unsupported retention action: {kind}")
             for path in paths:
-                stats = _remove_tree(policy, str(path))
+                stats = _remove_retention_target(policy, str(path))
                 for field in removed:
                     removed[field] += stats[field]
             completed_actions.append(

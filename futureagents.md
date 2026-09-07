@@ -794,6 +794,16 @@ Keep observation writes bounded, retain the engine name and stage timings in
 `hash-report.json`, and use a fresh canary only when changing the expensive
 composite/Ghidra contract itself.
 
+Validation composites are not durable scientific evidence. Future builds must
+seal `fidb-program-signature-evidence/v1` exports containing full/specific hash
+tuples and deduplicated parent/child full-hash relationships. Each fold result
+binds that JSONL by SHA-256 and byte count. Only then may the retention collector
+delete `query.*` and `truth.*`; it retains truth maps, signature exports,
+provenance, reports and hash-evidence databases. The first C10 run predates this
+relationship contract, so its composites must remain until a backfill is
+sealed. Never bypass that guard by adding composite names to a generic scratch
+glob.
+
 The classifier is cohort-generic. Do not restore the original `len(cohort) ==
 10` acquisition gate: any frozen run must instead contain two non-empty,
 duplicate-free, disjoint folds. The canonical method authority is
