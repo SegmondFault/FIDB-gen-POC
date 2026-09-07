@@ -294,6 +294,23 @@ def _reusable_case(
     )
 
 
+def _archive_prior_case_failure(summary_path: Path) -> str | None:
+    failure = summary_path.with_name("failure.json")
+    if not failure.is_file():
+        return None
+    attempts = summary_path.parent / "attempts"
+    attempts.mkdir(parents=True, exist_ok=True)
+    ordinals = []
+    for path in attempts.glob("attempt-*-failure.json"):
+        try:
+            ordinals.append(int(path.name.split("-", 2)[1]))
+        except (IndexError, ValueError):
+            continue
+    destination = attempts / f"attempt-{max(ordinals, default=0) + 1:03d}-failure.json"
+    failure.replace(destination)
+    return str(destination)
+
+
 def _scheduled_case_chunks(
     root: Path,
     campaign: Mapping[str, object],
@@ -982,6 +999,7 @@ def worker_cases(
             root, campaign, position, fold, str(method["authority_sha256"])
         ):
             continue
+        _archive_prior_case_failure(summary_path)
         try:
             qualify_retained_validation(
                 root,

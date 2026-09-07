@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from fidb_poc.fid_matching_campaign import (
     _acquire_campaign_lock,
+    _archive_prior_case_failure,
     _balanced_case_chunks,
     _expected_cases,
     _publish_hash_evidence,
@@ -192,6 +193,27 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertEqual(result, terminal)
         release.assert_called_once_with(42)
         write.assert_not_called()
+
+    def test_retry_archives_prior_case_failure_as_ordered_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = Path(temporary) / "case" / "summary.json"
+            summary.parent.mkdir()
+            failure = summary.with_name("failure.json")
+            failure.write_text(json.dumps({"error": "first"}), encoding="utf-8")
+
+            first = _archive_prior_case_failure(summary)
+            self.assertFalse(failure.exists())
+            self.assertEqual(
+                json.loads(Path(first).read_text(encoding="utf-8"))["error"], "first"
+            )
+            failure.write_text(json.dumps({"error": "second"}), encoding="utf-8")
+            second = _archive_prior_case_failure(summary)
+
+            self.assertTrue(first.endswith("attempt-001-failure.json"))
+            self.assertTrue(second.endswith("attempt-002-failure.json"))
+            self.assertEqual(
+                json.loads(Path(second).read_text(encoding="utf-8"))["error"], "second"
+            )
 
         status = campaign_status(self.root)
         self.assertEqual(
