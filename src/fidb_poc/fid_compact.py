@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from itertools import groupby
 import json
 import os
 from pathlib import Path
@@ -130,7 +131,6 @@ def build_compact_candidate_index(
     temporary = Path(temporary_name)
     temporary.unlink()
     connection = sqlite3.connect(temporary)
-    inspected: dict[str, Mapping[str, object]] = {}
     try:
         connection.executescript("""
             PRAGMA journal_mode=OFF;
@@ -170,74 +170,82 @@ def build_compact_candidate_index(
                 PRIMARY KEY(source_id, kind, smash)
             ) WITHOUT ROWID;
         """)
-        for entry in sorted(
+        ordered_entries = sorted(
             entries,
             key=lambda row: (
+                str(row["fidb_sha256"]),
                 str(row["route_id"]),
                 str(row["treatment_id"]),
                 str(row["owner"]),
             ),
+        )
+        for expected_sha256, grouped_entries in groupby(
+            ordered_entries, key=lambda row: str(row["fidb_sha256"])
         ):
-            fidb = Path(str(entry["fidb_path"])).resolve()
-            expected_sha256 = str(entry["fidb_sha256"])
+            source_entries = list(grouped_entries)
+            source_paths = {
+                str(Path(str(entry["fidb_path"])).resolve())
+                for entry in source_entries
+            }
+            if len(source_paths) != 1:
+                raise ValueError("one compact FID source digest maps to multiple paths")
+            fidb = Path(source_paths.pop())
             if not fidb.is_file() or _sha256(fidb) != expected_sha256:
                 raise ValueError(f"compact FID source digest mismatch: {fidb}")
             source_id = expected_sha256
-            source = inspected.get(source_id)
-            if source is None:
-                source = inspector(fidb)
-                if (
-                    source.get("schema_version")
-                    != "fidb-compact-candidate-source/v1"
-                    or source.get("fidb_sha256") != expected_sha256
-                    or not isinstance(source.get("candidates"), list)
-                    or not isinstance(source.get("relations"), dict)
-                ):
-                    raise ValueError("compact FID source inspection is invalid")
-                inspected[source_id] = source
-                connection.execute(
-                    "INSERT INTO source VALUES (?,?,?)",
-                    (source_id, expected_sha256, str(fidb)),
-                )
-                relation_rows = [
-                    (source_id, kind, str(smash))
-                    for kind in ("superior", "inferior")
-                    for smash in source["relations"].get(kind, [])
-                ]
-                connection.executemany(
-                    "INSERT OR IGNORE INTO relation VALUES (?,?,?)", relation_rows
-                )
-
-            expected_owner = str(entry["owner"])
-            candidate_rows = []
-            for candidate in source["candidates"]:
-                if str(candidate["owner"]) != expected_owner:
-                    raise ValueError(
-                        "compact FID source owner does not match frozen evidence"
-                    )
-                candidate_rows.append(
-                    (
-                        str(entry["route_id"]),
-                        str(entry["treatment_id"]),
-                        str(candidate["full_hash"]),
-                        str(candidate["candidate_id"]),
-                        source_id,
-                        str(candidate["record_key"]),
-                        expected_owner,
-                        str(candidate["name"]),
-                        str(candidate["specific_hash"]),
-                        int(candidate["specific_hash_additional_size"]),
-                        int(candidate["code_unit_size"]),
-                        int(candidate.get("auto_pass") is True),
-                        int(candidate.get("auto_fail") is True),
-                        int(candidate.get("force_specific") is True),
-                        int(candidate.get("force_relation") is True),
-                    )
-                )
-            connection.executemany(
-                "INSERT OR IGNORE INTO candidate VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                candidate_rows,
+            source = inspector(fidb)
+            if (
+                source.get("schema_version")
+                != "fidb-compact-candidate-source/v1"
+                or source.get("fidb_sha256") != expected_sha256
+                or not isinstance(source.get("candidates"), list)
+                or not isinstance(source.get("relations"), dict)
+            ):
+                raise ValueError("compact FID source inspection is invalid")
+            connection.execute(
+                "INSERT INTO source VALUES (?,?,?)",
+                (source_id, expected_sha256, str(fidb)),
             )
+            relation_rows = [
+                (source_id, kind, str(smash))
+                for kind in ("superior", "inferior")
+                for smash in source["relations"].get(kind, [])
+            ]
+            connection.executemany(
+                "INSERT OR IGNORE INTO relation VALUES (?,?,?)", relation_rows
+            )
+
+            for entry in source_entries:
+                expected_owner = str(entry["owner"])
+                candidate_rows = []
+                for candidate in source["candidates"]:
+                    if str(candidate["owner"]) != expected_owner:
+                        raise ValueError(
+                            "compact FID source owner does not match frozen evidence"
+                        )
+                    candidate_rows.append(
+                        (
+                            str(entry["route_id"]),
+                            str(entry["treatment_id"]),
+                            str(candidate["full_hash"]),
+                            str(candidate["candidate_id"]),
+                            source_id,
+                            str(candidate["record_key"]),
+                            expected_owner,
+                            str(candidate["name"]),
+                            str(candidate["specific_hash"]),
+                            int(candidate["specific_hash_additional_size"]),
+                            int(candidate["code_unit_size"]),
+                            int(candidate.get("auto_pass") is True),
+                            int(candidate.get("auto_fail") is True),
+                            int(candidate.get("force_specific") is True),
+                            int(candidate.get("force_relation") is True),
+                        )
+                    )
+                connection.executemany(
+                    "INSERT OR IGNORE INTO candidate VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    candidate_rows,
+                )
             connection.commit()
 
         counts = {

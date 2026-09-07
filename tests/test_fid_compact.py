@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fidb_poc.fid_compact import (
     INDEX_SCHEMA,
@@ -108,6 +108,22 @@ class CompactFidTests(unittest.TestCase):
             self.assertEqual(report["candidates"], 2)
             self.assertEqual(report["relations"], 1)
             self.assertEqual(reused, compact_index_status(destination))
+
+    def test_shared_source_is_inspected_once_without_a_global_row_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entries, inspect = self.fixture(root)
+            entries.append({**entries[0], "route_id": "linux-x86-v2"})
+            inspector = Mock(side_effect=inspect)
+
+            report = build_compact_candidate_index(
+                entries, root / "compact.sqlite3", inspector
+            )
+
+            inspector.assert_called_once()
+            self.assertEqual(report["sources"], 1)
+            self.assertEqual(report["candidates"], 4)
+            self.assertEqual(report["relations"], 1)
 
     def test_performance_toml_selects_gpu_with_cpu_fallback(self) -> None:
         performance = load_fid_matching_performance(self.root)
