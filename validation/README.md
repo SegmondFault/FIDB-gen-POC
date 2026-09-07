@@ -290,6 +290,12 @@ deleting a stale sentinel. Replaying the surrounding systemd chain is also
 safe: a complete source-validation stage is an evidence-checked idempotent
 success, while missing terminal hash or retention evidence still blocks.
 
+An unsealed matcher case may retain `failure.json`. Before that exact case is
+retried, the worker moves the prior record to
+`attempts/attempt-NNN-failure.json`; it never overwrites or discards the earlier
+failure. A later sealed `summary.json` is authoritative for aggregation, while
+the ordered attempt records preserve why previous executions stopped.
+
 The user timer starts admission at 00:00 Europe/Luxembourg. `Persistent=false`
 is intentional: installing or enabling it after midnight must not immediately
 launch a missed heavy run. Work admitted inside the 00:00–05:30 window is

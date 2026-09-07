@@ -760,6 +760,13 @@ automatically even though the inspectable pathname remains. Never delete that
 file merely because it exists, and never restore `O_EXCL` locking: test lock
 ownership by acquiring the advisory lock.
 
+Matcher retries are also evidence-preserving. If an unsealed case has a
+`failure.json`, the next worker archives it as the next ordered
+`attempts/attempt-NNN-failure.json` before beginning work. Do not clear case
+directories to resume a campaign. Aggregation uses a compatible sealed summary
+when one exists, but the attempt trail remains available for interruption and
+failure diagnosis.
+
 The first corpus-admission attempt on 2026-09-05 exposed a scale-only SQLite
 failure: `delta_rollup` joined every signature to an unindexed six-text-field
 `delta_owner` table. SQLite chose `SCAN delta_owner LEFT-JOIN`; the attempt was
