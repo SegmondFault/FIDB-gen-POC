@@ -556,15 +556,18 @@ compilers or Ghidra. The checked-in user service and timers are named
 `fidb-machine-validation-hash-analysis-nightly.timer`.
 
 C10 must also become generation one of the incremental corpus hash index before
-its corrected report is published. The authority is
-`validation/corpus-hash-index.toml`; the derived sidecar is
-`artifacts/hash-discrimination/corpus-index-v2.sqlite3`. The v1 sidecar remains
-the historical generation for the earlier C10 method authority. Do not add
-evolving noise values to an immutable lane database and do not migrate a
-published lane or validation database in place. A schema or method-authority
-change gets a new sidecar path and a deterministic rebuild from retained
-evidence. Batch ingestion is digest-idempotent and owners must be disjoint
-between cohort generations.
+its corrected report is published. `validation/corpus-hash-index.toml` and
+`corpus-index-v1.sqlite3` remain the byte-identical historical authority and
+sidecar cited by the materialized run. Current-method evidence uses
+`validation/corpus-hash-index-v2.toml` and `corpus-index-v2.sqlite3`. The exact
+C10 handoff is recorded in `validation/postprocess-authority-transitions.toml`;
+the resolver verifies the validation, run, job, source path/digest and target
+path/digest before using it, and the report retains the receipt. Future batches
+materialize directly against v2. Do not add evolving noise values to an
+immutable lane database and do not migrate a published lane or validation
+database in place. A schema or method-authority change gets a new authority,
+sidecar path and deterministic rebuild from retained evidence. Batch ingestion
+is digest-idempotent and owners must be disjoint between cohort generations.
 
 The C10 qualification established `gpu-wgpu-packed-probe-v1` for packed exact
 lookup: zero mismatches over 3,025,703 queries and 3.31× the CPU packed-probe
@@ -694,11 +697,15 @@ After the repaired source reached 222/222, the post-processor sealed its new
 hash evidence but correctly rejected admission into `corpus-index-v1.sqlite3`:
 that sidecar already contained the same ten owners under method digest
 `ec9fcc...`, while the current run records `72047a...`. Do not force repeated
-owners into an existing generation and do not replace v1 in place. The current
-`corpus-hash-index.toml` publishes v2 at a new path, preserving v1. Corpus
-admission now checks the first batch's method ID and digest before hashing the
-new evidence database or constructing deltas; any future method drift requires
-another explicitly versioned sidecar.
+owners into an existing generation and do not replace v1 in place.
+`corpus-hash-index.toml` is therefore frozen at v1 and
+`corpus-hash-index-v2.toml` publishes the current sidecar. Corpus admission now
+checks the first batch's method ID and digest before hashing the new evidence
+database or constructing deltas; any future method drift requires another
+explicitly versioned sidecar. If an already-materialized postprocess must use
+that new sidecar, add one exact digest-bound entry to
+`postprocess-authority-transitions.toml`; never edit its source manifest or the
+authority that manifest cites.
 
 Older runner code converted any post-processing exception into
 `failed_work_units = 1`, even when all 222 source-cell results were complete.

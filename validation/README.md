@@ -389,17 +389,21 @@ required nor desirable merely to replace the superseded five-match report.
 
 Before publishing the C10 report, the pass transactionally admits its sealed
 hash evidence as generation one of the cumulative index governed by
-`corpus-hash-index.toml`. Later disjoint cohorts update only signature keys
+`corpus-hash-index-v2.toml`. Later disjoint cohorts update only signature keys
 present in their delta. Historical query counts and existing owner postings
 account for newly possible cross-cohort matches; TN remains arithmetic. The
-index is a rebuildable sidecar and neither lane databases nor immutable
-per-run evidence are migrated.
+index is a rebuildable sidecar and neither lane databases nor immutable per-run
+evidence are migrated.
 
-The current authority publishes `corpus-index-v2.sqlite3`. The v1 sidecar is
-retained as historical evidence for the earlier C10 method authority; it is not
-mutated or mixed with current-method observations. An evidence batch whose
-method ID or digest differs from the first admitted batch fails before source
-hashing and delta staging and requires a new sidecar authority/path.
+`corpus-hash-index.toml` and `corpus-index-v1.sqlite3` remain the immutable
+historical authority and sidecar cited by the original materialized job. The
+current v2 authority publishes `corpus-index-v2.sqlite3`; v1 is not mutated or
+mixed with current-method observations. The current C10 run is allowed across
+that boundary only by the exact paths and SHA-256 digests in
+`postprocess-authority-transitions.toml`, and its report preserves that receipt.
+Future batches cite v2 directly. An evidence batch whose method ID or digest
+differs from the first admitted batch fails before source hashing and delta
+staging and requires a new sidecar authority/path.
 
 A downstream hash-analysis or corpus-admission failure does not manufacture a
 failed source cell. `postprocess-failed` is resumable only when the filesystem
