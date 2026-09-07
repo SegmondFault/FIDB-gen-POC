@@ -19,10 +19,12 @@ import tomllib
 from typing import Mapping
 
 AUTHORITY_SCHEMA = "fidb-corpus-hash-index-authority/v1"
+TRANSITION_SCHEMA = "fidb-postprocess-authority-transitions/v1"
 DATABASE_SCHEMA = "fidb-corpus-hash-index/v1"
 APPLICATION_ID = 0x46494849  # FIHI
 USER_VERSION = 1
-DEFAULT_AUTHORITY = Path("validation/corpus-hash-index.toml")
+DEFAULT_AUTHORITY = Path("validation/corpus-hash-index-v2.toml")
+DEFAULT_TRANSITIONS = Path("validation/postprocess-authority-transitions.toml")
 
 DELTA_ROLLUP_SELECT_SQL = """
 SELECT batch.signature_id,
@@ -249,6 +251,129 @@ def load_corpus_hash_authority(
         "authority_path": str(path.relative_to(root)),
         "authority_sha256": _sha256(path),
         "database_path": database,
+    }
+
+
+def load_postprocess_authority_transitions(
+    project_root: str | Path,
+    authority: str | Path = DEFAULT_TRANSITIONS,
+) -> dict[str, object]:
+    """Load explicit authority changes for already-materialized postprocessing."""
+
+    root = Path(project_root).expanduser().resolve()
+    path = _inside(root, authority, "postprocess authority transitions")
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    if (
+        set(document) != {"schema_version", "transition"}
+        or document.get("schema_version") != TRANSITION_SCHEMA
+    ):
+        raise ValueError(
+            "postprocess authority transitions have unsupported fields or schema"
+        )
+    transitions = document.get("transition")
+    if not isinstance(transitions, list):
+        raise ValueError("postprocess authority transitions must be a TOML array")
+    required = {
+        "id",
+        "validation_id",
+        "run_id",
+        "job_id",
+        "authority_field",
+        "from_path",
+        "from_sha256",
+        "to_path",
+        "to_sha256",
+        "reason",
+    }
+    identities: set[tuple[str, str, str, str]] = set()
+    for transition in transitions:
+        if not isinstance(transition, dict) or set(transition) != required:
+            raise ValueError("postprocess authority transition has unsupported fields")
+        if any(
+            not isinstance(transition[field], str) or not transition[field]
+            for field in required
+        ):
+            raise ValueError(
+                "postprocess authority transition values must be non-empty strings"
+            )
+        if transition["authority_field"] != "corpus_authority":
+            raise ValueError("postprocess authority transition field is unsupported")
+        for field in ("from_sha256", "to_sha256"):
+            value = transition[field]
+            if len(value) != 64 or any(
+                character not in "0123456789abcdef" for character in value
+            ):
+                raise ValueError("postprocess authority transition digest is invalid")
+        identity = (
+            transition["validation_id"],
+            transition["run_id"],
+            transition["job_id"],
+            transition["authority_field"],
+        )
+        if identity in identities:
+            raise ValueError("postprocess authority transition identity is duplicated")
+        identities.add(identity)
+    return {
+        **document,
+        "authority_path": str(path.relative_to(root)),
+        "authority_sha256": _sha256(path),
+    }
+
+
+def resolve_corpus_hash_authority(
+    project_root: str | Path,
+    *,
+    validation_id: str,
+    run_id: str,
+    job_contract: Mapping[str, object],
+    transitions_path: str | Path = DEFAULT_TRANSITIONS,
+) -> dict[str, object]:
+    """Resolve the exact corpus generation allowed for one materialized job.
+
+    The materialized source authority must remain present and byte-identical.
+    A different sidecar is usable only through one exact, digest-bound TOML
+    transition. This keeps source evidence immutable while allowing derived
+    corpus generations to evolve explicitly.
+    """
+
+    root = Path(project_root).expanduser().resolve()
+    job_id = str(job_contract.get("id", ""))
+    source_path = str(job_contract.get("corpus_authority", ""))
+    source_sha256 = str(job_contract.get("corpus_authority_sha256", ""))
+    source = load_corpus_hash_authority(root, source_path)
+    if source["authority_sha256"] != source_sha256:
+        raise ValueError("materialized corpus authority is unavailable or stale")
+    registry = load_postprocess_authority_transitions(root, transitions_path)
+    matches = [
+        transition
+        for transition in registry["transition"]
+        if transition["validation_id"] == validation_id
+        and transition["run_id"] == run_id
+        and transition["job_id"] == job_id
+        and transition["authority_field"] == "corpus_authority"
+    ]
+    if not matches:
+        return {**source, "transition": None}
+    transition = matches[0]
+    if (
+        transition["from_path"] != source_path
+        or transition["from_sha256"] != source_sha256
+    ):
+        raise ValueError(
+            "postprocess authority transition source does not match the materialized job"
+        )
+    target = load_corpus_hash_authority(root, transition["to_path"])
+    if target["authority_sha256"] != transition["to_sha256"]:
+        raise ValueError(
+            "postprocess authority transition target is unavailable or stale"
+        )
+    return {
+        **target,
+        "transition": {
+            **transition,
+            "registry_path": registry["authority_path"],
+            "registry_sha256": registry["authority_sha256"],
+        },
     }
 
 

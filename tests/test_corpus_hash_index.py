@@ -6,10 +6,12 @@ import unittest
 from pathlib import Path
 
 from fidb_poc.corpus_hash_index import (
+    DEFAULT_AUTHORITY,
     DELTA_ROLLUP_SELECT_SQL,
     SCHEMA_SQL,
     inspect_corpus_hash_index,
     load_corpus_hash_authority,
+    resolve_corpus_hash_authority,
     update_corpus_hash_index,
 )
 from fidb_poc.machine_validation_hashes import _create_evidence
@@ -24,10 +26,15 @@ class CorpusHashIndexTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         (self.root / "validation").mkdir()
-        shutil.copy2(
-            self.source / "validation/corpus-hash-index.toml",
-            self.root / "validation/corpus-hash-index.toml",
-        )
+        for name in (
+            "corpus-hash-index.toml",
+            "corpus-hash-index-v2.toml",
+            "postprocess-authority-transitions.toml",
+        ):
+            shutil.copy2(
+                self.source / "validation" / name,
+                self.root / "validation" / name,
+            )
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -125,6 +132,67 @@ class CorpusHashIndexTests(unittest.TestCase):
         self.assertEqual(authority["acceleration"]["mode"], "compare")
         self.assertEqual(authority["acceleration"]["publish_from"], "canonical-only")
 
+    def test_exact_transition_selects_new_corpus_generation(self):
+        original = load_corpus_hash_authority(
+            self.root, "validation/corpus-hash-index.toml"
+        )
+        resolved = resolve_corpus_hash_authority(
+            self.root,
+            validation_id="c-top10-cohort-001",
+            run_id="c10-shared-image-symbolic-v2-full",
+            job_contract={
+                "id": "hash-discrimination",
+                "corpus_authority": original["authority_path"],
+                "corpus_authority_sha256": original["authority_sha256"],
+            },
+        )
+
+        self.assertEqual(resolved["id"], "c-corpus-hash-index-v2")
+        self.assertEqual(
+            resolved["authority_path"], "validation/corpus-hash-index-v2.toml"
+        )
+        self.assertEqual(
+            resolved["transition"]["id"],
+            "c10-shared-image-symbolic-v2-corpus-v2",
+        )
+
+    def test_unlisted_run_keeps_materialized_corpus_generation(self):
+        original = load_corpus_hash_authority(
+            self.root, "validation/corpus-hash-index.toml"
+        )
+        resolved = resolve_corpus_hash_authority(
+            self.root,
+            validation_id="c-top10-cohort-001",
+            run_id="another-run",
+            job_contract={
+                "id": "hash-discrimination",
+                "corpus_authority": original["authority_path"],
+                "corpus_authority_sha256": original["authority_sha256"],
+            },
+        )
+
+        self.assertEqual(resolved["id"], "c-corpus-hash-index-v1")
+        self.assertIsNone(resolved["transition"])
+
+    def test_transition_target_digest_drift_fails_closed(self):
+        original = load_corpus_hash_authority(
+            self.root, "validation/corpus-hash-index.toml"
+        )
+        target = self.root / DEFAULT_AUTHORITY
+        target.write_text(target.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "transition target"):
+            resolve_corpus_hash_authority(
+                self.root,
+                validation_id="c-top10-cohort-001",
+                run_id="c10-shared-image-symbolic-v2-full",
+                job_contract={
+                    "id": "hash-discrimination",
+                    "corpus_authority": original["authority_path"],
+                    "corpus_authority_sha256": original["authority_sha256"],
+                },
+            )
+
     def test_delta_rollup_uses_signature_id_primary_key_lookup(self):
         connection = sqlite3.connect(":memory:")
         try:
@@ -150,7 +218,9 @@ class CorpusHashIndexTests(unittest.TestCase):
             connection.close()
 
         self.assertTrue(
-            any("SEARCH owner USING PRIMARY KEY (signature_id=?)" in row for row in plan)
+            any(
+                "SEARCH owner USING PRIMARY KEY (signature_id=?)" in row for row in plan
+            )
         )
         self.assertFalse(any("SCAN owner" in row for row in plan))
 
@@ -323,7 +393,9 @@ class CorpusHashIndexTests(unittest.TestCase):
             )
 
         index_root = self.root / "artifacts/hash-discrimination"
-        self.assertFalse(load_corpus_hash_authority(self.root)["database_path"].exists())
+        self.assertFalse(
+            load_corpus_hash_authority(self.root)["database_path"].exists()
+        )
         self.assertEqual(list(index_root.glob("*.partial")), [])
 
 

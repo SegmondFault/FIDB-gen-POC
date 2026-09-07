@@ -1100,7 +1100,7 @@ def analyze_hashes(
         resolve_hash_analysis_evidence,
     )
     from .corpus_hash_index import (
-        load_corpus_hash_authority,
+        resolve_corpus_hash_authority,
         update_corpus_hash_index,
     )
     from .hash_gpu_trial import (
@@ -1113,16 +1113,19 @@ def analyze_hashes(
     root = Path(project_root).expanduser().resolve()
     runtime = load_runtime(root, runtime_path)
     method = load_hash_method(root, method_path)
-    corpus_authority = load_corpus_hash_authority(root)
     resolution_started_ns = time.monotonic_ns()
     evidence = resolve_hash_analysis_evidence(root, runtime_path)
     job_contract = evidence["manifest"].get("hash_discrimination_job", {})
-    if method["authority_path"] != job_contract.get(
-        "method_authority"
-    ) or corpus_authority["authority_path"] != job_contract.get("corpus_authority"):
+    if method["authority_path"] != job_contract.get("method_authority"):
         raise ValueError(
-            "hash-analysis authorities do not match the materialized batch job"
+            "hash-analysis method authority does not match the materialized batch job"
         )
+    corpus_authority = resolve_corpus_hash_authority(
+        root,
+        validation_id=str(runtime["validation_id"]),
+        run_id=run_id,
+        job_contract=job_contract,
+    )
     backend_path = str(
         job_contract.get("backend_authority", "validation/hash-analysis-backends.toml")
     )
@@ -1355,6 +1358,7 @@ def analyze_hashes(
         database_path,
         validation_id=str(runtime["validation_id"]),
         run_id=run_id,
+        authority_path=str(corpus_authority["authority_path"]),
     )
     gpu_report_path = run_root / "gpu-comparison.json"
     gpu_comparison = None
@@ -1468,6 +1472,7 @@ def analyze_hashes(
         "corpus_index": {
             **corpus_result,
             "authority_sha256": corpus_authority["authority_sha256"],
+            "authority_transition": corpus_authority["transition"],
         },
         "gpu_comparison": (
             {

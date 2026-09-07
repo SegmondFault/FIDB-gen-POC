@@ -1,0 +1,13 @@
+schema_version = "fidb-postprocess-authority-transitions/v1"
+
+[[transition]]
+id = "c10-shared-image-symbolic-v2-corpus-v2"
+validation_id = "c-top10-cohort-001"
+run_id = "c10-shared-image-symbolic-v2-full"
+job_id = "hash-discrimination"
+authority_field = "corpus_authority"
+from_path = "validation/corpus-hash-index.toml"
+from_sha256 = "fa7cc7fd470c68997fd3903f6a61dab1db25eefeb17901ff80aecd476dab81a2"
+to_path = "validation/corpus-hash-index-v2.toml"
+to_sha256 = "d52fbc40b60f1e84698e529d21d7a11d9ed35fa930dce0e795fae77514638cab"
+reason = "Revalidated C10 owners use a new hash-method digest; preserve the historical v1 corpus and publish a fresh v2 generation."

@@ -1,7 +1,7 @@
 schema_version = "fidb-corpus-hash-index-authority/v1"
-id = "c-corpus-hash-index-v1"
-label = "Incremental C corpus hash evidence"
-database = "artifacts/hash-discrimination/corpus-index-v1.sqlite3"
+id = "c-corpus-hash-index-v2"
+label = "Incremental C corpus hash evidence from the current validation method"
+database = "artifacts/hash-discrimination/corpus-index-v2.sqlite3"
 
 [identity]
 owner_unit = "library-release"

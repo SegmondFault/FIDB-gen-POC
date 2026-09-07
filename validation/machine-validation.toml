@@ -98,7 +98,7 @@ kind = "validation-postprocess"
 automatic = true
 required_for_run_completion = true
 method_authority = "validation/machine-validation-hash-method.toml"
-corpus_authority = "validation/corpus-hash-index.toml"
+corpus_authority = "validation/corpus-hash-index-v2.toml"
 backend_authority = "validation/hash-analysis-backends.toml"
 stages = [
   "classify-signatures",
