@@ -546,6 +546,21 @@ authority endpoint. Keep that lightweight runtime path: compiling the complete
 2,220-input view measured roughly 2.2 seconds and is suitable for explicit or
 periodic authority refresh, not a five-second progress poll.
 
+The browser-facing `/api/fidb/*` proxy has a separate fail-closed route and
+query contract in `control-panel/app/api/fidb/proxy-contract.mjs`. Adding a
+coordinator endpoint to `src/fidb_poc/local_api.py` does not automatically
+expose it to the remote browser. Update the proxy read/write set, its permitted
+query keys and `control-panel/tests/proxy-contract.test.mjs` in the same commit.
+The 2026-09-07 omission of `validation-observatory`, both backend status routes
+and both backend mode routes caused healthy coordinator requests to appear as
+proxy 404s.
+
+Global connection state is determined by `/health` alone. Optional reads settle
+independently through `control-panel/app/panel-health.mjs`; their failures keep
+the last good panel data and render a panel-local stale warning. Do not restore
+a single `Promise.all` failure path that labels the whole coordinator offline
+when an observatory, timing, retention or backend projection fails.
+
 The 2026-09-06 coordinator fan/timeout incident was two bugs amplifying one
 another. The authority response embedded all 2,271 noisy-hash rows and grew to
 14.4 MiB, beyond the API's 8 MiB and browser proxy's 2 MiB bounds. The rejected
