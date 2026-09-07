@@ -1,0 +1,79 @@
+schema_version = "fidb-cohort-validation-lifecycle/v1"
+id = "integrated-cohort-validation-v1"
+label = "Integrated cohort build, validation and admission"
+state = "planned-disarmed"
+language_id = "c"
+scientific_cohort_size = 10
+minimum_final_partial_size = 2
+validation_method_authority = "validation/fid-matching.toml"
+validation_method_authority_sha256 = "1d9fc8fb9255b6c3723f2dbc0810224f0973b0005485ec6d82e2679fb4a778fe"
+query_evidence_contract = "fidb-integrated-query-evidence/v1"
+
+stages = [
+  "source-recipe-preparation",
+  "recipe-qualification",
+  "width-build",
+  "validation-composites",
+  "query-evidence-export",
+  "incremental-corpus-query",
+  "hash-discrimination",
+  "retention",
+  "corpus-admission",
+]
+
+[execution]
+scientific_boundary = "completed-library-cohort"
+scheduler_boundary = "time-bounded-resumable-block"
+folds_per_identity = 2
+query_projections_per_composite = 3
+automatic_materialization = true
+automatic_scheduling = true
+execute_target_binaries = false
+
+[fusion]
+enabled_for_new_runs = true
+single_ghidra_analysis_per_composite = true
+canonical_export = "query-signatures.jsonl"
+export_roles = ["exact-signatures", "fid-relationship-evidence"]
+routine_backfill = "forbidden"
+legacy_backfill = "explicit-digest-bound-once"
+
+[incremental]
+candidate_scope = "new-cohort-against-cumulative-admitted-corpus"
+new_cohort_scope = "complete"
+historical_replay = "frozen-sentinel-set"
+historical_sentinel_authority = ""
+historical_sentinel_enabled = false
+full_revalidation_milestones = [50, 80, 276]
+ecological_validation = "separate-final-dataset-gate"
+
+[scheduling]
+trigger = "after-complete-cohort-width-seal"
+allow_source_recipe_preparation_ahead = true
+allow_recipe_qualification_ahead = true
+maximum_unvalidated_width_cohorts = 1
+validation_failure_action = "pause-next-width-build-admission"
+retention_required_before_admission = true
+final_partial_requires_explicit_override = true
+
+[admission]
+automatic_corpus_admission = false
+required_evidence = [
+  "sealed-validation-report",
+  "hash-discrimination-report",
+  "retention-report",
+]
+scientific_threshold_authority = ""
+unconfigured_threshold_action = "quarantine-built-evidence"
+infrastructure_failure_action = "pause-and-preserve"
+
+[performance]
+estimate_class = "c10-partial-observation-provisional-2026-09-07"
+legacy_composite_ghidra_analyses_per_cohort = 444
+legacy_backfill_ghidra_analyses_per_cohort = 444
+fused_ghidra_analyses_per_cohort = 444
+observed_composite_build_wall_hours = 2.972
+observed_backfill_wall_hours = 3.523
+observed_gpu_match_wall_hours = 0.289
+projected_fused_cycle_wall_hours_lower = 3.3
+projected_fused_cycle_wall_hours_upper = 4.0

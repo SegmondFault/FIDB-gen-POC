@@ -478,7 +478,7 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v18")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v19")
         self.assertEqual(
             document["campaign_programmes"][0]["summary"]["candidate_population"], 276
         )

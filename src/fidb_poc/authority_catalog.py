@@ -10,6 +10,7 @@ import tomllib
 from .batch_time_model import compile_time_block_plan
 from .batch_materializer import load_materialization_manifest
 from .campaign_programme import compile_campaign_programme
+from .cohort_validation import compile_cohort_validation_lifecycle
 from .config import load_configuration
 from .c_width import compile_c_width
 from .coverage_universe import load_coverage_universe
@@ -39,7 +40,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v18"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v19"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -744,6 +745,11 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 "fid_matching": fid_matching_campaign_status(root),
             }
         )
+    cohort_validation = compile_cohort_validation_lifecycle(
+        root,
+        campaign_programmes=campaign_programmes,
+        machine_validations=machine_validations,
+    )
     ecological_validation = compile_ecological_validation(root)
     # The authority catalog carries the complete noisy-hash summary and digest,
     # while the dedicated endpoint serves the TOML-bounded ranked working set.
@@ -772,6 +778,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "materialized_campaigns": materialized_campaigns,
         "auto_batch_campaigns": auto_batch_campaigns,
         "machine_validations": machine_validations,
+        "cohort_validation": cohort_validation,
         "ecological_validation": ecological_validation,
         "noisy_hashes": noisy_hashes,
         "hash_discrimination": hash_discrimination,
@@ -805,6 +812,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
             "auto_batch_campaigns": "plans/auto-materialized/*/manifest.toml",
             "machine_validations": "validation/*.toml + plans/validation-schedule.toml",
+            "cohort_validation": "validation/cohort-lifecycle.toml",
             "ecological_validation": "validation/ecological-validation.toml + var/fidb-ecological-validation/cases/",
             "noisy_hashes": "validation/noisy-hashes.toml + validation/noisy-hash-decisions/*.toml",
             "hash_discrimination": "validation/hash-discrimination.toml + artifacts/hash-discrimination/",
@@ -862,6 +870,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                     for row in machine_validations
                 )
                 + (root / "plans/validation-schedule.toml").read_bytes()
+            ).hexdigest(),
+            "cohort_validation_sha256": hashlib.sha256(
+                (root / "validation/cohort-lifecycle.toml").read_bytes()
             ).hexdigest(),
             "ecological_validation_sha256": hashlib.sha256(
                 (root / "validation/ecological-validation.toml").read_bytes()

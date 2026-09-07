@@ -12,7 +12,7 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v18")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v19")
         self.assertEqual(len(document["campaign_programmes"]), 1)
         programme = document["campaign_programmes"][0]
         self.assertEqual(programme["summary"]["candidate_population"], 276)
@@ -42,6 +42,24 @@ class AuthorityCatalogTests(unittest.TestCase):
         )
         self.assertEqual(
             len(document["source_digests"]["machine_validations_sha256"]), 64
+        )
+        lifecycle = document["cohort_validation"]
+        self.assertEqual(
+            lifecycle["schema_version"],
+            "fidb-cohort-validation-lifecycle-status/v1",
+        )
+        self.assertEqual(lifecycle["summary"]["programme_cohorts"], 28)
+        self.assertEqual(
+            lifecycle["summary"]["planned_validation_composites"], 12_432
+        )
+        self.assertEqual(
+            lifecycle["summary"]["legacy_duplicate_analyses_avoided"], 12_432
+        )
+        self.assertEqual(
+            lifecycle["active_cohort"]["integration"], "legacy-run-retrofit"
+        )
+        self.assertEqual(
+            len(document["source_digests"]["cohort_validation_sha256"]), 64
         )
         self.assertEqual(
             document["ecological_validation"]["schema_version"],
