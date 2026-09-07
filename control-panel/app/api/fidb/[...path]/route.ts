@@ -1,39 +1,8 @@
 import type { NextRequest } from 'next/server';
 
-export const dynamic = 'force-dynamic';
+import { readRoutes, validatedQuery, writeRoutes } from '../proxy-contract.mjs';
 
-const readRoutes = new Set([
-  'health',
-  'status',
-  'snapshot',
-  'events',
-  'timings',
-  'capabilities',
-  'authority',
-  'lane-inventory',
-  'ecological-validation',
-  'machine-validation',
-  'machine-validation/run',
-  'hash-discrimination',
-  'noisy-hashes',
-  'retention',
-  'preflight',
-]);
-const writeRoutes = new Set([
-  'sync',
-  'pause',
-  'resume',
-  'plan-drafts/resolve',
-  'plan-drafts/save',
-  'ecological-validation/import',
-  'ecological-validation/run',
-  'machine-validation/start',
-  'machine-validation/pause',
-  'machine-validation/resume',
-  'noisy-hashes/decision',
-  'retention/plan',
-  'retention/apply',
-]);
+export const dynamic = 'force-dynamic';
 const maxRequestBytes = 64 * 1024;
 const maxImportBytes = 512 * 1024 * 1024;
 const maxResponseBytes = 2 * 1024 * 1024;
@@ -70,20 +39,6 @@ function apiOrigin(): URL {
 function mutationIsSameOrigin(request: NextRequest) {
   const origin = request.headers.get('origin');
   return origin !== null && origin === new URL(request.url).origin;
-}
-
-function validatedQuery(endpoint: string, requestUrl: URL) {
-  const allowed = endpoint === 'events'
-    ? new Set(['after', 'limit'])
-    : endpoint === 'timings'
-      ? new Set(['limit'])
-      : endpoint === 'snapshot'
-        ? new Set(['detail', 'include_inactive'])
-      : new Set<string>();
-  for (const key of requestUrl.searchParams.keys()) {
-    if (!allowed.has(key)) return null;
-  }
-  return requestUrl.search;
 }
 
 async function proxy(
