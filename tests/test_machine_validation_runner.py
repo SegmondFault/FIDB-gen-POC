@@ -16,6 +16,7 @@ from fidb_poc.machine_validation_runner import (
     _claim_position,
     _cost_aware_positions,
     _fold_checkpoint_path,
+    _failed_work_unit_count,
     _link_composite,
     _load_fold_checkpoint,
     _load_prepared_fold,
@@ -667,6 +668,104 @@ class MachineValidationRunnerTests(unittest.TestCase):
             queued = json.loads(status_path.read_text(encoding="utf-8"))
             self.assertEqual(queued["state"], "queued")
             self.assertEqual(queued["resume_count"], 3)
+
+    def test_postprocess_failure_resumes_from_sealed_cell_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "runs/fixed-full"
+            units = run_root / "units"
+            units.mkdir(parents=True)
+            status_path = run_root / "status.json"
+            (root / "runs/current.json").write_text(
+                json.dumps(
+                    {"run_id": "fixed-full", "path": "runs/fixed-full/status.json"}
+                ),
+                encoding="utf-8",
+            )
+            for position in (1, 2):
+                unit = units / f"{position:03d}-route-treatment"
+                unit.mkdir()
+                (unit / "result.json").write_text(
+                    json.dumps({"mode": "full", "state": "complete"}),
+                    encoding="utf-8",
+                )
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "run_id": "fixed-full",
+                        "mode": "full",
+                        "state": "postprocess-failed",
+                        "pid": 42,
+                        "expected_work_units": 2,
+                        "complete_work_units": 2,
+                        # Historical runner versions conflated the downstream
+                        # failure with one failed source cell.
+                        "failed_work_units": 1,
+                        "resume_count": 3,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            terminal = {"state": "measured-complete", "run_id": "fixed-full"}
+            runtime = {"output_root": "runs"}
+            with (
+                patch(
+                    "fidb_poc.machine_validation_runner.load_runtime",
+                    return_value=runtime,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._validation_process_active",
+                    return_value=False,
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.preflight",
+                    return_value={"state": "ready", "blockers": []},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.canary_gate_status",
+                    return_value={"ready": True},
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner._resolve_link_qualification",
+                    return_value=({"ready": True}, None, None),
+                ),
+                patch(
+                    "fidb_poc.machine_validation_runner.run_validation",
+                    return_value=terminal,
+                ) as run,
+            ):
+                resumed = resume_validation(root, foreground=True)
+
+            self.assertEqual(resumed, terminal)
+            run.assert_called_once_with(root, "full", DEFAULT_RUNTIME, "fixed-full")
+            queued = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(queued["state"], "queued")
+            self.assertEqual(queued["complete_work_units"], 2)
+            self.assertEqual(queued["failed_work_units"], 0)
+            self.assertEqual(queued["resume_count"], 4)
+
+    def test_postprocess_failure_does_not_invent_a_failed_source_cell(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            unit = run_root / "units/001-route-treatment"
+            unit.mkdir(parents=True)
+            (unit / "result.json").write_text(
+                json.dumps({"mode": "full", "state": "complete"}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                _failed_work_unit_count(
+                    run_root, "full", postprocess_started=True
+                ),
+                0,
+            )
+            self.assertEqual(
+                _failed_work_unit_count(
+                    run_root, "full", postprocess_started=False
+                ),
+                1,
+            )
 
     def test_runtime_status_marks_a_missing_process_interrupted(self):
         with tempfile.TemporaryDirectory() as temporary:

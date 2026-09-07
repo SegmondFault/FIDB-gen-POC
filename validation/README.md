@@ -401,6 +401,13 @@ mutated or mixed with current-method observations. An evidence batch whose
 method ID or digest differs from the first admitted batch fails before source
 hashing and delta staging and requires a new sidecar authority/path.
 
+A downstream hash-analysis or corpus-admission failure does not manufacture a
+failed source cell. `postprocess-failed` is resumable only when the filesystem
+still proves that every expected full-run cell is complete and none is failed;
+resume then reruns aggregation/post-processing from those sealed results. This
+also repairs status written by older runners that reported the downstream
+failure as one failed work unit.
+
 `hash-analysis-backends.toml` records qualified exact-lookup backends and
 `../performance/hash-analysis.toml` selects `auto`, `gpu` or `cpu`. C10
 qualification returned zero mismatches over 3,025,703 queries and measured a

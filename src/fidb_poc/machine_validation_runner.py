@@ -187,6 +187,18 @@ def _result_counts(run_root: Path, mode: str) -> tuple[int, int]:
     )
 
 
+def _failed_work_unit_count(
+    run_root: Path,
+    mode: str,
+    *,
+    postprocess_started: bool,
+) -> int:
+    """Keep downstream failures separate from source-cell failures."""
+
+    failed = _result_counts(run_root, mode)[1]
+    return failed if postprocess_started else max(1, failed)
+
+
 def _fold_checkpoint_path(unit_root: Path, fold: str) -> Path:
     return unit_root / f"fold-{fold}" / "fold-result.json"
 
@@ -2925,7 +2937,11 @@ def run_validation(
                 "attempt_started_at": attempt_started,
                 "resume_count": resume_count,
                 "complete_work_units": _result_counts(run_root, mode)[0],
-                "failed_work_units": max(1, _result_counts(run_root, mode)[1]),
+                "failed_work_units": _failed_work_unit_count(
+                    run_root,
+                    mode,
+                    postprocess_started=postprocess_started,
+                ),
                 "error": f"{type(error).__name__}: {error}",
                 "postprocess_job": (
                     {
@@ -3201,15 +3217,29 @@ def resume_validation(
     runtime = load_runtime(root, runtime_path)
     status_path = _current_status_path(root, runtime)
     status = runtime_status(root, runtime_path)
-    if status.get("state") not in {"paused", "interrupted", "failed"}:
+    postprocess_retry = status.get("state") == "postprocess-failed"
+    if status.get("state") not in {
+        "paused",
+        "interrupted",
+        "failed",
+        "postprocess-failed",
+    }:
         raise ValueError("machine validation is not resumable")
     run_id = str(status.get("run_id") or "")
     mode = str(status.get("mode") or "")
     if mode not in {"canary", "full"} or not run_id:
         raise ValueError("machine validation resume identity is invalid")
-    if int(status.get("complete_work_units", 0)) >= int(
-        status.get("expected_work_units", 0)
-    ):
+    expected = int(status.get("expected_work_units", 0))
+    if postprocess_retry:
+        actual_complete, actual_failed = _result_counts(status_path.parent, mode)
+        if mode != "full" or actual_complete != expected or actual_failed != 0:
+            raise ValueError(
+                "postprocess retry requires a sealed full run with no failed cells"
+            )
+    else:
+        actual_complete = int(status.get("complete_work_units", 0))
+        actual_failed = int(status.get("failed_work_units", 0))
+    if not postprocess_retry and actual_complete >= expected:
         raise ValueError("machine validation has no incomplete work to resume")
     if _validation_process_active(status.get("pid"), run_id):
         raise ValueError("machine-validation run process is still active")
@@ -3239,6 +3269,8 @@ def resume_validation(
         "finished_at": None,
         "resumed_at": _now(),
         "resume_count": resume_count,
+        "complete_work_units": actual_complete,
+        "failed_work_units": actual_failed,
     }
     queued.pop("error", None)
     queued.pop("report_path", None)
@@ -3255,8 +3287,8 @@ def resume_validation(
         "mode": mode,
         "pid": process.pid,
         "resume_count": resume_count,
-        "complete_work_units": int(status.get("complete_work_units", 0)),
-        "failed_work_units": int(status.get("failed_work_units", 0)),
+        "complete_work_units": actual_complete,
+        "failed_work_units": actual_failed,
         "log_path": str(log_path.relative_to(root)),
     }
 

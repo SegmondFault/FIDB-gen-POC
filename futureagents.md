@@ -700,6 +700,15 @@ admission now checks the first batch's method ID and digest before hashing the
 new evidence database or constructing deltas; any future method drift requires
 another explicitly versioned sidecar.
 
+Older runner code converted any post-processing exception into
+`failed_work_units = 1`, even when all 222 source-cell results were complete.
+That made the documented recovery command reject its own `postprocess-failed`
+state. Source-cell counts and downstream job state are now separate. A resume
+of `postprocess-failed` recounts immutable unit results, requires a sealed full
+run with zero failed cells, and then reruns aggregation, hash analysis, corpus
+admission and retention without rebuilding any cell. Do not edit status JSON by
+hand to recover this condition.
+
 The next staged preparation pass exposed 24 deterministic failures before any
 new JVM started: fold B contains GMP, whose Android ARM32 and i686 archives use
 non-PIC assembly. All six treatments failed on both 32-bit Android routes for
