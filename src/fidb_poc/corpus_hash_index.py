@@ -384,6 +384,17 @@ def update_corpus_hash_index(
                 "source_database_sha256": str(existing[2]),
                 "authority_path": authority["authority_path"],
             }
+        indexed_method = connection.execute(
+            "SELECT method_id, method_sha256 FROM corpus_batch "
+            "ORDER BY ordinal LIMIT 1"
+        ).fetchone()
+        if indexed_method is not None and (
+            str(indexed_method[0]) != source_metadata["method_id"]
+            or str(indexed_method[1]) != source_metadata["method_sha256"]
+        ):
+            raise ValueError(
+                "corpus method authority changed; publish a new index sidecar"
+            )
         source_database_sha256 = _sha256(source)
         owners = [
             str(row[0])

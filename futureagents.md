@@ -558,11 +558,13 @@ compilers or Ghidra. The checked-in user service and timers are named
 C10 must also become generation one of the incremental corpus hash index before
 its corrected report is published. The authority is
 `validation/corpus-hash-index.toml`; the derived sidecar is
-`artifacts/hash-discrimination/corpus-index-v1.sqlite3`. Do not add evolving
-noise values to an immutable lane database and do not migrate a published lane
-or validation database in place. A schema/authority change gets a new sidecar
-path and a deterministic rebuild from retained evidence. Batch ingestion is
-digest-idempotent and owners must be disjoint between cohort generations.
+`artifacts/hash-discrimination/corpus-index-v2.sqlite3`. The v1 sidecar remains
+the historical generation for the earlier C10 method authority. Do not add
+evolving noise values to an immutable lane database and do not migrate a
+published lane or validation database in place. A schema or method-authority
+change gets a new sidecar path and a deterministic rebuild from retained
+evidence. Batch ingestion is digest-idempotent and owners must be disjoint
+between cohort generations.
 
 The C10 qualification established `gpu-wgpu-packed-probe-v1` for packed exact
 lookup: zero mismatches over 3,025,703 queries and 3.31× the CPU packed-probe
@@ -687,6 +689,16 @@ checks both the analyzer and child option, and owns the required transaction.
 Do not replace it with direct `program.getOptions(...)` mutation. Preserve the
 failed results and explicit requeue receipt; they distinguish recovery-code
 failure from the original analysis-loop timeout.
+
+After the repaired source reached 222/222, the post-processor sealed its new
+hash evidence but correctly rejected admission into `corpus-index-v1.sqlite3`:
+that sidecar already contained the same ten owners under method digest
+`ec9fcc...`, while the current run records `72047a...`. Do not force repeated
+owners into an existing generation and do not replace v1 in place. The current
+`corpus-hash-index.toml` publishes v2 at a new path, preserving v1. Corpus
+admission now checks the first batch's method ID and digest before hashing the
+new evidence database or constructing deltas; any future method drift requires
+another explicitly versioned sidecar.
 
 The next staged preparation pass exposed 24 deterministic failures before any
 new JVM started: fold B contains GMP, whose Android ARM32 and i686 archives use

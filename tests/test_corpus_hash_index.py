@@ -200,7 +200,7 @@ class CorpusHashIndexTests(unittest.TestCase):
         )
 
         connection = sqlite3.connect(
-            self.root / "artifacts/hash-discrimination/corpus-index-v1.sqlite3"
+            load_corpus_hash_authority(self.root)["database_path"]
         )
         try:
             rows = connection.execute("""
@@ -253,6 +253,48 @@ class CorpusHashIndexTests(unittest.TestCase):
             generation["generation_digest"],
         )
 
+    def test_method_authority_drift_requires_a_new_sidecar(self):
+        first = self.evidence(
+            "first",
+            owner="one@1",
+            source_digest="a" * 64,
+            shared=True,
+            internal_fp=0,
+            internal_tn=1,
+        )
+        second = self.evidence(
+            "second",
+            owner="two@1",
+            source_digest="b" * 64,
+            shared=False,
+            internal_fp=0,
+            internal_tn=1,
+        )
+        connection = sqlite3.connect(second)
+        try:
+            connection.execute(
+                "UPDATE metadata SET value=? WHERE key='method_sha256'",
+                ("f" * 64,),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        generation = update_corpus_hash_index(
+            self.root, first, validation_id="c10", run_id="first"
+        )
+
+        with self.assertRaisesRegex(ValueError, "publish a new index sidecar"):
+            update_corpus_hash_index(
+                self.root, second, validation_id="c20", run_id="second"
+            )
+
+        status = inspect_corpus_hash_index(self.root)
+        self.assertEqual(status["generation"]["ordinal"], 1)
+        self.assertEqual(
+            status["generation"]["generation_digest"],
+            generation["generation_digest"],
+        )
+
     def test_ingestion_never_mutates_source_evidence(self):
         source = self.evidence(
             "source",
@@ -281,7 +323,7 @@ class CorpusHashIndexTests(unittest.TestCase):
             )
 
         index_root = self.root / "artifacts/hash-discrimination"
-        self.assertFalse((index_root / "corpus-index-v1.sqlite3").exists())
+        self.assertFalse(load_corpus_hash_authority(self.root)["database_path"].exists())
         self.assertEqual(list(index_root.glob("*.partial")), [])
 
 

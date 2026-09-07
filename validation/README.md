@@ -395,6 +395,12 @@ account for newly possible cross-cohort matches; TN remains arithmetic. The
 index is a rebuildable sidecar and neither lane databases nor immutable
 per-run evidence are migrated.
 
+The current authority publishes `corpus-index-v2.sqlite3`. The v1 sidecar is
+retained as historical evidence for the earlier C10 method authority; it is not
+mutated or mixed with current-method observations. An evidence batch whose
+method ID or digest differs from the first admitted batch fails before source
+hashing and delta staging and requires a new sidecar authority/path.
+
 `hash-analysis-backends.toml` records qualified exact-lookup backends and
 `../performance/hash-analysis.toml` selects `auto`, `gpu` or `cpu`. C10
 qualification returned zero mismatches over 3,025,703 queries and measured a
