@@ -657,6 +657,18 @@ immutable receipt below `requeues/`. The 2026-09-06 repair requeued positions
 19, 22, 23, 26, 27, 30, 31, 34, 35, 63, 70, 120 and 121. The first nine were
 the ARM `bic` audit error; the last four were interrupted by the operator pause.
 
+The 2026-09-07 overnight resume reached 218/222 units. Positions 114, 120, 121
+and 126 all stopped at the 1,800-second supervisor bound. This was not ordinary
+slow SH32 analysis: each affected Ghidra worker emitted roughly 0.9--1.0 GiB of
+repeating `ClearFlowAndRepairCmd` overlap messages, while the 14 successful
+SH32 units completed in about 156--389 seconds. Do not raise the general cell
+timeout for this signature. The deterministic retry policy instead disables
+only `Non-Returning Functions - Discovered` -> `Repair Flow Damage` after a
+retained SuperH timeout, and records that recovery-policy identity in the fold
+and report. The explicit requeue receipt is the boundary for a fresh bounded
+automatic timeout allowance; older archived failures remain intact but no
+longer spend the new allowance.
+
 The next staged preparation pass exposed 24 deterministic failures before any
 new JVM started: fold B contains GMP, whose Android ARM32 and i686 archives use
 non-PIC assembly. All six treatments failed on both 32-bit Android routes for

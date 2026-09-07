@@ -180,6 +180,22 @@ worker exits also release their claims and are bounded by
 abandon unrelated work. These settings are operational safety bounds, not
 permission to weaken a failed link audit or discard its evidence.
 
+An explicit operator requeue is also an explicit retry-generation boundary.
+Attempts archived before the latest immutable requeue receipt remain evidence,
+but do not consume the new generation's automatic timeout allowance. This is
+not an unlimited retry mechanism: each reviewed requeue is named, stopped-run
+only, position-bounded and receipt-backed.
+
+Ghidra 12.1.2 can fail to converge while its discovered-non-return analyzer
+repairs overlapping SuperH function bodies. A first timeout remains the normal,
+unaltered Ghidra analysis attempt. A subsequent attempt for that same SuperH
+unit selects the named
+`superh-no-return-flow-repair-disabled-after-timeout-v1` recovery policy. It
+keeps non-return discovery enabled and disables only its `Repair Flow Damage`
+sub-option. Every recovered fold and the aggregate report record the policy;
+other architectures and SuperH cells without a retained timeout continue to
+use `ghidra-default-auto-analysis-v1`.
+
 The full run is rejected unless the latest successful canary records the exact
 scientific canary-contract digest, query-copy policy and reference-index schema
 in use. Worker counts, polling, retries and timeout bounds remain visible in the
