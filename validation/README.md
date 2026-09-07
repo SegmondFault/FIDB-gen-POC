@@ -42,6 +42,12 @@ The Matrix projects these authorities as separate Width, Validation and
 Admission states. C10 appears as `legacy-run-retrofit`: its current old-path
 execution is preserved and is not reinterpreted as a native integrated run.
 
+The **Batch validation** view is the cohort ledger: select one scientific batch
+to inspect its primary confusion matrix, failures, timing and immutable
+evidence. Method, construction stages and frozen folds are collapsed beneath
+that result. Cross-batch hash prevalence and cumulative noise trends belong on
+**Hash discrimination**, rather than competing with the batch result.
+
 `machine-validation.toml` is the reviewed authority for continuous synthetic
 validation of each completed ten-library cohort. It freezes a reproducible
 random five/five split and defines a separate `validation-run` batch. This is
