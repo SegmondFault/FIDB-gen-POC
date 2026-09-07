@@ -22,7 +22,11 @@ from .fid_match_qualification import (
     _fidb_from_signatures,
     run_compact_retained_validation,
 )
-from .fid_compact import build_compact_candidate_index
+from .fid_compact import (
+    build_compact_candidate_index,
+    load_fid_matching_performance,
+    selected_backend_id,
+)
 from .fid_matching import load_matching_authority
 from .machine_validation import LINK_HARNESS_POLICY
 
@@ -136,6 +140,7 @@ def load_campaign(
         "retain_oracle_inputs": "canary-only",
         "retain_backend_outputs": "canary-only",
         "retain_hash_observations": True,
+        "backend_contract": "selected-backend-no-fallback-canary",
         "required_link_harness": LINK_HARNESS_POLICY,
     }:
         raise ValueError("FID matching campaign methodology is unsupported")
@@ -529,6 +534,9 @@ def _aggregate(
     truth_labelled = 0
     truth_unlabelled = 0
     mismatch_count = 0
+    selected_backends = set()
+    requested_backends = set()
+    fallback_cases = []
     for position, fold in expected:
         path = _case_summary_path(root, campaign, position, fold)
         if not path.is_file():
@@ -550,6 +558,10 @@ def _aggregate(
             failures.append({"case": f"{position}:{fold}", "error": summary["state"]})
             continue
         summaries.append(summary)
+        selected_backends.add(str(summary["selected_backend"]))
+        requested_backends.add(str(summary["requested_backend"]))
+        if summary.get("performance", {}).get("fallback_reason"):
+            fallback_cases.append(f"{position}:{fold}")
         classification = summary["classification"]
         for key in matrix:
             matrix[key] += int(classification["confusion_matrix"][key])
@@ -561,9 +573,21 @@ def _aggregate(
     total_truth = truth_labelled + truth_unlabelled
     truth_coverage = truth_labelled / total_truth if total_truth else 0.0
     complete = len(summaries) == len(expected) and not failures
+    performance = load_fid_matching_performance(
+        root, str(campaign["execution"]["performance"])
+    )
+    requested_backend = selected_backend_id(
+        performance, load_matching_authority(root, str(campaign["matching_authority"]))
+    )
+    backend_contract_met = (
+        selected_backends in (set(), {requested_backend})
+        and requested_backends in (set(), {requested_backend})
+        and not fallback_cases
+    )
     canary_passed = (
         complete
         and mismatch_count == 0
+        and backend_contract_met
         and truth_coverage >= float(campaign["canary"]["minimum_truth_coverage"])
     )
     if mode == "canary" and canary_passed:
@@ -612,6 +636,14 @@ def _aggregate(
             if mode == "canary"
             else campaign["execution"]["workers"]
         ),
+        "backend": {
+            "requested": requested_backend,
+            "effective": sorted(selected_backends),
+            "fallback_cases": fallback_cases,
+            "contract_met": backend_contract_met,
+            "performance_authority_path": performance["authority_path"],
+            "performance_authority_sha256": performance["authority_sha256"],
+        },
         "method_authority": {
             "id": "compact-portable-fid-owner-validation-v1",
             "path": matching["authority_path"],

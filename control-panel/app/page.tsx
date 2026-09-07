@@ -2057,6 +2057,7 @@ function PerformanceView({ factory }: { factory: FactoryApiState }) {
       ? <PerformanceProfilesPanel catalog={factory.authority.performance_profiles} capabilities={factory.capabilities} snapshot={factory.snapshot} />
       : <section className="panel"><div className="empty-state"><span>◇</span><strong>Performance authority unavailable</strong><p>Reconnect the local API to load the reviewed TOML profiles.</p></div></section>}
     <HashAnalysisBackendPanel factory={factory} />
+    <FidMatchingBackendPanel factory={factory} />
   </div>;
 }
 
@@ -2398,6 +2399,34 @@ function HashAnalysisBackendPanel({ factory }: { factory: FactoryApiState }) {
     </div>
     <div className="hash-backend-controls"><div>{(['auto', 'gpu', 'cpu'] as const).map(mode => <button key={mode} className={backend.requested_mode === mode ? 'active' : ''} onClick={() => void setMode(mode)} disabled={factory.busyAction !== null}>{mode.toUpperCase()}</button>)}</div><p>{message || 'AUTO uses the qualified GPU lookup when available. CPU is the fail-safe fallback. Backend comparison runs only during explicit qualification.'}</p></div>
     <p className="hash-backend-boundary"><strong>GPU boundary:</strong> exact comparison of completed hash records only. Compilation, linking, binary construction, Ghidra analysis and FID generation always stay on the canonical CPU/toolchain path.</p>
+  </section>;
+}
+
+function FidMatchingBackendPanel({ factory }: { factory: FactoryApiState }) {
+  const backend = factory.fidMatchingBackend;
+  const [message, setMessage] = useState('');
+  if (!backend) return <section className="panel"><div className="empty-state compact"><span>◇</span><strong>FID scoring backend unavailable</strong><p>Reconnect the local API to read performance/fid-matching.toml.</p></div></section>;
+  const qualification = backend.gpu.qualification;
+  const setMode = async (mode: 'auto' | 'cpu' | 'gpu') => {
+    setMessage(`Saving ${mode} mode…`);
+    try {
+      const result = await factory.setFidMatchingMode(mode);
+      setMessage(`${result.requested_mode.toUpperCase()} → ${result.effective_backend.device.toUpperCase()} · ${result.effective_backend.id}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'FID scoring backend setting failed.');
+    }
+  };
+  return <section className="panel hash-backend-panel">
+    <header><div><span>FID CANDIDATE SCORER</span><h3>{backend.effective_backend.id}</h3></div><code>{backend.performance.authority_path}</code></header>
+    <div className="hash-backend-metrics">
+      <article><span>DETECTED</span><strong>{backend.gpu.runtime_available ? 'WGPU + GPU' : 'CPU'}</strong><small>{backend.gpu.detected_devices.map(device => `${device.name} ${device.vendor_id}:${device.device_id}`).join(' · ') || 'no DRM GPU exposed'}</small></article>
+      <article><span>REQUESTED → EFFECTIVE</span><strong>{backend.requested_mode.toUpperCase()} → {backend.effective_backend.device.toUpperCase()}</strong><small>{backend.fallback_reason ?? 'no fallback'}</small></article>
+      <article><span>NATIVE ORACLE CANARY</span><strong>{backend.gpu.authoritative ? '0 MISMATCHES' : qualification.state.toUpperCase()}</strong><small>{qualification.backend.effective?.join(' · ') ?? 'no effective backend evidence'} · {((qualification.truth_coverage ?? 0) * 100).toFixed(1)}% truth coverage</small></article>
+      <article><span>GPU CHUNK</span><strong>{backend.performance.candidate_chunk_rows.toLocaleString()}</strong><small>{backend.performance.workgroup_size} threads/workgroup · bounded SQLite stream</small></article>
+      <article><span>GPU WORK</span><strong>FID SCORING</strong><small>candidate scores + equal-highest winner selection</small></article>
+    </div>
+    <div className="hash-backend-controls"><div>{(['auto', 'gpu', 'cpu'] as const).map(mode => <button key={mode} className={backend.requested_mode === mode ? 'active' : ''} onClick={() => void setMode(mode)} disabled={factory.busyAction !== null}>{mode.toUpperCase()}</button>)}</div><p>{message || `${qualification.decision_mismatches ?? '—'} oracle mismatches · ${qualification.backend.fallback_cases?.length ?? 0} canary fallbacks`}</p></div>
+    <p className="hash-backend-boundary"><strong>CPU boundary:</strong> compilation · linking · binary construction · Ghidra analysis · FID generation · query relationship export. <strong>GPU boundary:</strong> FID candidate scoring and winner selection only.</p>
   </section>;
 }
 

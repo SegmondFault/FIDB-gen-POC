@@ -17,6 +17,7 @@ retain_hash_types = ["full", "specific", "complete"]
 retain_oracle_inputs = "canary-only"
 retain_backend_outputs = "canary-only"
 retain_hash_observations = true
+backend_contract = "selected-backend-no-fallback-canary"
 required_link_harness = "whole-archive-shared-image-symbolic-v2"
 
 [execution]

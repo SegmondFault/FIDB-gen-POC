@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 from itertools import groupby
 import json
 import os
@@ -73,6 +74,127 @@ def selected_backend_id(
     return next(
         str(row["id"]) for row in authority["backend"] if row["device"] == device
     )
+
+
+def _detected_gpu_devices() -> list[dict[str, str]]:
+    devices = []
+    for card in sorted(Path("/sys/class/drm").glob("card[0-9]*")):
+        try:
+            vendor = (card / "device" / "vendor").read_text(encoding="utf-8").strip()
+            device_id = (card / "device" / "device").read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        devices.append(
+            {"name": card.name, "vendor_id": vendor, "device_id": device_id}
+        )
+    return devices
+
+
+def compile_fid_matching_backend_status(
+    project_root: str | Path,
+    *,
+    performance_authority: str | Path = DEFAULT_PERFORMANCE,
+) -> dict[str, object]:
+    """Project requested, qualified and effective FID-scoring execution."""
+
+    from .fid_matching import load_matching_authority
+    from .fid_matching_campaign import campaign_status
+
+    root = Path(project_root).expanduser().resolve()
+    performance = load_fid_matching_performance(root, performance_authority)
+    authority = load_matching_authority(root)
+    campaign = campaign_status(root)
+    canary = campaign["canary"]
+    rows = [dict(row) for row in authority["backend"]]
+    by_id = {str(row["id"]): row for row in rows}
+    cpu = next(row for row in rows if row["device"] == "cpu")
+    gpu = next((row for row in rows if row["device"] == "gpu"), None)
+    requested = selected_backend_id(performance, authority)
+    detected_devices = _detected_gpu_devices()
+    wgpu_installed = importlib.util.find_spec("wgpu") is not None
+    runtime_available = bool(detected_devices and wgpu_installed)
+    backend_evidence = canary.get("backend", {})
+    gpu_authoritative = bool(
+        gpu
+        and canary.get("state") == "qualified"
+        and canary.get("oracle", {}).get("decision_mismatches") == 0
+        and backend_evidence.get("contract_met") is True
+        and backend_evidence.get("requested") == gpu["id"]
+        and backend_evidence.get("effective") == [gpu["id"]]
+    )
+    effective = cpu
+    fallback_reason = None
+    if requested != cpu["id"]:
+        if not runtime_available:
+            fallback_reason = "GPU or WGPU runtime unavailable"
+        elif not gpu_authoritative:
+            fallback_reason = "WGPU FID scorer lacks a current zero-mismatch canary"
+        else:
+            effective = by_id[requested]
+    return {
+        "schema_version": "fidb-fid-matching-backend-status/v1",
+        "requested_mode": performance["mode"],
+        "requested_backend": requested,
+        "effective_backend": effective,
+        "fallback_reason": fallback_reason,
+        "performance": performance,
+        "gpu": {
+            "allowed": bool(performance["allow_gpu"]),
+            "runtime_available": runtime_available,
+            "authoritative": gpu_authoritative,
+            "wgpu_installed": wgpu_installed,
+            "detected_devices": detected_devices,
+            "backend": gpu,
+            "qualification": {
+                "state": canary.get("state"),
+                "decision_mismatches": canary.get("oracle", {}).get(
+                    "decision_mismatches"
+                ),
+                "truth_coverage": canary.get("truth", {}).get("coverage"),
+                "backend": backend_evidence,
+            },
+        },
+        "backends": rows,
+    }
+
+
+def save_fid_matching_performance_mode(
+    project_root: str | Path,
+    mode: str,
+    *,
+    authority: str | Path = DEFAULT_PERFORMANCE,
+) -> dict[str, object]:
+    """Atomically save the non-executing FID scorer preference in TOML."""
+
+    if mode not in {"auto", "cpu", "gpu"}:
+        raise ValueError("FID matching performance mode is invalid")
+    root = Path(project_root).expanduser().resolve()
+    current = load_fid_matching_performance(root, authority)
+    path = (root / authority).resolve()
+    rendered = "\n".join(
+        (
+            f'schema_version = "{PERFORMANCE_SCHEMA}"',
+            f'mode = "{mode}"',
+            f'allow_gpu = {str(bool(current["allow_gpu"])).lower()}',
+            "fallback_to_cpu = true",
+            f'candidate_chunk_rows = {int(current["candidate_chunk_rows"])}',
+            f'workgroup_size = {int(current["workgroup_size"])}',
+            "",
+        )
+    )
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{path.name}-", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(rendered)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return compile_fid_matching_backend_status(root)
 
 
 def _input_digest(entries: Sequence[Mapping[str, object]]) -> str:

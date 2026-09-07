@@ -39,6 +39,10 @@ from .ecological_validation import (
 )
 from .hash_discrimination import compile_hash_discrimination
 from .fid_matching_campaign import campaign_status as fid_matching_campaign_status
+from .fid_compact import (
+    compile_fid_matching_backend_status,
+    save_fid_matching_performance_mode,
+)
 from .hash_gpu_trial import compile_hash_backend_status, save_hash_performance_mode
 from .machine_validation import compile_machine_validation
 from .machine_validation_runner import (
@@ -89,6 +93,7 @@ _GET_PATHS = {
     "/api/v1/validation-observatory",
     "/api/v1/hash-discrimination",
     "/api/v1/hash-analysis-backend",
+    "/api/v1/fid-matching-backend",
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
 }
@@ -105,6 +110,7 @@ _POST_PATHS = {
     "/api/v1/machine-validation/resume",
     "/api/v1/noisy-hashes/decision",
     "/api/v1/hash-analysis-backend/mode",
+    "/api/v1/fid-matching-backend/mode",
     "/api/v1/retention/plan",
     "/api/v1/retention/apply",
 }
@@ -920,6 +926,22 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/fid-matching-backend":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "FID matching backend takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                compile_fid_matching_backend_status(
+                    self.api_server.config.project_root
+                ),
+                origin=origin,
+            )
+            return
+
         if path == "/api/v1/retention":
             if query:
                 raise ApiError(
@@ -1214,6 +1236,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "mode must be auto, cpu or gpu",
                 )
             result = save_hash_performance_mode(
+                self.api_server.config.project_root, str(mode)
+            )
+            self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
+        elif path == "/api/v1/fid-matching-backend/mode":
+            self._only_fields(document, {"mode"})
+            mode = document.get("mode")
+            if mode not in {"auto", "cpu", "gpu"}:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-fid-matching-mode",
+                    "mode must be auto, cpu or gpu",
+                )
+            result = save_fid_matching_performance_mode(
                 self.api_server.config.project_root, str(mode)
             )
             self._json_response(HTTPStatus.OK, result, origin=origin)

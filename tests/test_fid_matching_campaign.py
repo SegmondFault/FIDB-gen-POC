@@ -557,6 +557,15 @@ class FidMatchingCampaignTests(unittest.TestCase):
                         },
                     },
                 ),
+                patch(
+                    "fidb_poc.fid_matching_campaign.load_fid_matching_performance",
+                    return_value={
+                        "mode": "cpu",
+                        "allow_gpu": True,
+                        "authority_path": "performance.toml",
+                        "authority_sha256": "performance-digest",
+                    },
+                ),
             ):
                 status = campaign_status(root, "campaign.toml")
 

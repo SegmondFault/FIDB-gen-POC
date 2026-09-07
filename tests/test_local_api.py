@@ -709,6 +709,32 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(document["error"]["code"], "invalid-hash-analysis-mode")
 
+    def test_fid_matching_backend_status_and_toml_mode_control(self):
+        status, document, _ = self.request("GET", "/api/v1/fid-matching-backend")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            document["schema_version"], "fidb-fid-matching-backend-status/v1"
+        )
+
+        status, document, _ = self.request(
+            "POST", "/api/v1/fid-matching-backend/mode", {"mode": "cpu"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(document["requested_mode"], "cpu")
+        self.assertEqual(document["effective_backend"]["device"], "cpu")
+        self.assertIn(
+            'mode = "cpu"',
+            (self.root / "performance/fid-matching.toml").read_text(
+                encoding="utf-8"
+            ),
+        )
+
+        status, document, _ = self.request(
+            "POST", "/api/v1/fid-matching-backend/mode", {"mode": "cuda"}
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(document["error"]["code"], "invalid-fid-matching-mode")
+
     def test_retention_endpoints_preserve_dry_run_and_exact_apply_contract(self):
         self.sync()
 

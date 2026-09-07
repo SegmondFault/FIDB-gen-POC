@@ -1613,6 +1613,50 @@ export type HashAnalysisBackendStatus = {
   backends: Array<Record<string, unknown>>;
 };
 
+export type FidMatchingBackendStatus = {
+  schema_version: 'fidb-fid-matching-backend-status/v1';
+  requested_mode: 'auto' | 'cpu' | 'gpu';
+  requested_backend: string;
+  effective_backend: {
+    id: string;
+    state: string;
+    implementation: string;
+    device: 'cpu' | 'gpu';
+    scope: string;
+  };
+  fallback_reason: string | null;
+  performance: {
+    schema_version: string;
+    mode: 'auto' | 'cpu' | 'gpu';
+    allow_gpu: boolean;
+    fallback_to_cpu: boolean;
+    candidate_chunk_rows: number;
+    workgroup_size: number;
+    authority_path: string;
+    authority_sha256: string;
+  };
+  gpu: {
+    allowed: boolean;
+    runtime_available: boolean;
+    authoritative: boolean;
+    wgpu_installed: boolean;
+    detected_devices: Array<{ name: string; vendor_id: string; device_id: string }>;
+    backend: Record<string, unknown> | null;
+    qualification: {
+      state: string;
+      decision_mismatches: number | null;
+      truth_coverage: number | null;
+      backend: {
+        requested?: string;
+        effective?: string[];
+        fallback_cases?: string[];
+        contract_met?: boolean;
+      };
+    };
+  };
+  backends: Array<Record<string, unknown>>;
+};
+
 export type MachineValidationLive = {
   run: MachineValidationRun;
   canary_gate: MachineValidationCanaryGate;
@@ -2526,6 +2570,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [noisyHashes, setNoisyHashes] = useState<NoisyHashStatus | null>(null);
   const [validationObservatory, setValidationObservatory] = useState<ValidationObservatory | null>(null);
   const [hashAnalysisBackend, setHashAnalysisBackend] = useState<HashAnalysisBackendStatus | null>(null);
+  const [fidMatchingBackend, setFidMatchingBackend] = useState<FidMatchingBackendStatus | null>(null);
   const [retention, setRetention] = useState<RetentionStatus | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
@@ -2611,13 +2656,14 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         || capabilityCache.current === null
         || Date.now() - lastCapabilityRead.current >= capabilityRefreshMilliseconds
       ) {
-        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult, hashBackendResult, noisyResult] = await Promise.all([
+        const [capabilityResult, authorityResult, laneInventoryResult, retentionResult, observatoryResult, hashBackendResult, fidBackendResult, noisyResult] = await Promise.all([
           json<FactoryCapabilities>('capabilities'),
           json<FactoryAuthority>('authority'),
           json<LaneInventory>('lane-inventory'),
           json<RetentionStatus>('retention'),
           json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
           json<HashAnalysisBackendStatus>('hash-analysis-backend'),
+          json<FidMatchingBackendStatus>('fid-matching-backend'),
           json<NoisyHashStatus>('noisy-hashes'),
         ]);
         capabilityCache.current = capabilityResult;
@@ -2632,14 +2678,16 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setRetention(retentionResult);
         setValidationObservatory(observatoryResult);
         setHashAnalysisBackend(hashBackendResult);
+        setFidMatchingBackend(fidBackendResult);
       } else {
-        const [machineResult, ecologicalResult, noisyResult, retentionResult, observatoryResult, hashBackendResult] = await Promise.all([
+        const [machineResult, ecologicalResult, noisyResult, retentionResult, observatoryResult, hashBackendResult, fidBackendResult] = await Promise.all([
           json<MachineValidationLive>('machine-validation/run'),
           json<EcologicalValidation>('ecological-validation'),
           json<NoisyHashStatus>('noisy-hashes'),
           json<RetentionStatus>('retention'),
           json<ValidationObservatory>(`validation-observatory${selectedValidationRun.current ? `?run_id=${encodeURIComponent(selectedValidationRun.current)}` : ''}`),
           json<HashAnalysisBackendStatus>('hash-analysis-backend'),
+          json<FidMatchingBackendStatus>('fid-matching-backend'),
         ]);
         setMachineValidation(current => current ? {
           ...current,
@@ -2652,6 +2700,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         setRetention(retentionResult);
         setValidationObservatory(observatoryResult);
         setHashAnalysisBackend(hashBackendResult);
+        setFidMatchingBackend(fidBackendResult);
       }
       if (health.coordinator.state === 'ready') {
         const [snapshotResult, timingResult, preflightResult] = await Promise.all([
@@ -2935,6 +2984,26 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
+  const setFidMatchingMode = useCallback(async (mode: 'auto' | 'cpu' | 'gpu') => {
+    setBusyAction('fid-matching-mode');
+    try {
+      const result = await json<FidMatchingBackendStatus>('fid-matching-backend/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      setFidMatchingBackend(result);
+      setError(null);
+      return result;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'FID matching backend setting failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
   return {
     connection,
     snapshot,
@@ -2946,6 +3015,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     noisyHashes,
     validationObservatory,
     hashAnalysisBackend,
+    fidMatchingBackend,
     retention,
     events,
     timings,
@@ -2973,6 +3043,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     runMachineValidation,
     selectValidationRun,
     setHashAnalysisMode,
+    setFidMatchingMode,
     pauseMachineValidation: () => controlMachineValidation('pause'),
     resumeMachineValidation: () => controlMachineValidation('resume'),
     decideNoisyHash,
