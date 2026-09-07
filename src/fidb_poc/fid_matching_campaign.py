@@ -274,6 +274,7 @@ def _reusable_case(
     position: int,
     fold: str,
     method_sha256: str,
+    selected_backend: str,
 ) -> bool:
     path = _case_summary_path(root, campaign, position, fold)
     if not path.is_file():
@@ -286,6 +287,7 @@ def _reusable_case(
     return (
         previous.get("state") == "qualified"
         and previous.get("authority_sha256") == method_sha256
+        and previous.get("selected_backend") == selected_backend
         and case.get("run_id") == campaign["source_run_id"]
         and int(case.get("position", -1)) == position
         and case.get("fold") == fold
@@ -329,7 +331,12 @@ def _scheduled_case_chunks(
     reused = 0
     for position, fold in _expected_cases(campaign, mode):
         if _reusable_case(
-            root, campaign, position, fold, str(method["authority_sha256"])
+            root,
+            campaign,
+            position,
+            fold,
+            str(method["authority_sha256"]),
+            str(method["selected"]),
         ):
             reused += 1
             continue
@@ -996,7 +1003,12 @@ def worker_cases(
         position, fold = _parse_case(value)
         summary_path = _case_summary_path(root, campaign, position, fold)
         if _reusable_case(
-            root, campaign, position, fold, str(method["authority_sha256"])
+            root,
+            campaign,
+            position,
+            fold,
+            str(method["authority_sha256"]),
+            str(method["selected"]),
         ):
             continue
         _archive_prior_case_failure(summary_path)
@@ -1009,6 +1021,10 @@ def worker_cases(
                 runtime_path=str(campaign["runtime"]),
                 authority_path=str(campaign["matching_authority"]),
                 output_root=relative_output,
+                reuse_oracle=(
+                    summary_path.is_file()
+                    and summary_path.with_name("oracle-input.json").is_file()
+                ),
                 compare_backends=bool(campaign["execution"]["compare_cpu_and_gpu"]),
             )
         except Exception as error:

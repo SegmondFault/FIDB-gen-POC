@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -25,6 +26,7 @@ from fidb_poc.fid_matching_campaign import (
 )
 from fidb_poc.fid_match_qualification import (
     _linker_truth_intervals,
+    _load_retained_oracle_replay,
     _portable_executions,
     _retained_query_analysis_policy,
     _symbol_address_bias,
@@ -84,6 +86,7 @@ class FidMatchingCampaignTests(unittest.TestCase):
                     {
                         "state": "qualified",
                         "authority_sha256": "old-method",
+                        "selected_backend": "gpu-portable-fid-v1",
                         "case": {
                             "run_id": campaign["source_run_id"],
                             "position": 1,
@@ -97,8 +100,110 @@ class FidMatchingCampaignTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            self.assertFalse(_reusable_case(root, campaign, 1, "A", "new-method"))
-            self.assertTrue(_reusable_case(root, campaign, 1, "A", "old-method"))
+            self.assertFalse(
+                _reusable_case(
+                    root, campaign, 1, "A", "new-method", "gpu-portable-fid-v1"
+                )
+            )
+            self.assertTrue(
+                _reusable_case(
+                    root, campaign, 1, "A", "old-method", "gpu-portable-fid-v1"
+                )
+            )
+            self.assertFalse(
+                _reusable_case(
+                    root, campaign, 1, "A", "old-method", "cpu-portable-fid-v1"
+                )
+            )
+
+    def test_oracle_replay_is_bound_to_exact_query_and_fidb_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "case"
+            destination.mkdir()
+            query = root / "query.elf"
+            fidb = root / "library.fidb"
+            query.write_bytes(b"query")
+            fidb.write_bytes(b"fidb")
+            oracle_path = destination / "oracle-input.json"
+            oracle = {
+                "schema_version": "fidb-portable-fid-input/v1",
+                "oracle": "ghidra-fid-program-seeker",
+                "language_id": "x86:LE:64:default",
+                "compiler_spec_id": "gcc",
+                "score_threshold": 14.6,
+                "medium_code_unit_limit": 24,
+                "functions": [],
+            }
+            oracle_path.write_text(json.dumps(oracle), encoding="utf-8")
+
+            def digest(path):
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+
+            (destination / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "state": "qualified",
+                        "case": {
+                            "run_id": "source-run",
+                            "position": 7,
+                            "fold": "B",
+                            "route_id": "linux-x86-64-gcc",
+                            "treatment_id": "baseline_o2",
+                            "query_sha256": digest(query),
+                            "fidb_sha256": [digest(fidb)],
+                            "link_harness_policy": "harness-v2",
+                        },
+                        "oracle": {
+                            "implementation": "ghidra-fid-program-seeker",
+                            "input_path": "case/oracle-input.json",
+                            "input_sha256": digest(oracle_path),
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            authority = {
+                "oracle": {"implementation": "ghidra-fid-program-seeker"},
+                "semantics": {
+                    "score_threshold": 14.6,
+                    "medium_code_unit_limit": 24,
+                },
+            }
+            loaded = _load_retained_oracle_replay(
+                root,
+                destination,
+                run_id="source-run",
+                position=7,
+                fold="B",
+                route_id="linux-x86-64-gcc",
+                treatment_id="baseline_o2",
+                query_binary=query,
+                fidbs=[fidb],
+                language_id="x86:LE:64:default",
+                compiler_spec_id="gcc",
+                authority=authority,
+                link_harness_policy="harness-v2",
+            )
+            self.assertEqual(loaded, oracle)
+
+            query.write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                _load_retained_oracle_replay(
+                    root,
+                    destination,
+                    run_id="source-run",
+                    position=7,
+                    fold="B",
+                    route_id="linux-x86-64-gcc",
+                    treatment_id="baseline_o2",
+                    query_binary=query,
+                    fidbs=[fidb],
+                    language_id="x86:LE:64:default",
+                    compiler_spec_id="gcc",
+                    authority=authority,
+                    link_harness_policy="harness-v2",
+                )
 
     def test_campaign_lock_recovers_automatically_after_owner_exit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -221,11 +326,12 @@ class FidMatchingCampaignTests(unittest.TestCase):
             )
 
         status = campaign_status(self.root)
+        self.assertEqual(status["canary"]["state"], "stale-authority")
         self.assertEqual(
             [stage["id"] for stage in status["canary"]["pipeline_job"]["stages"]],
             [
                 "native-oracle",
-                "portable-gpu",
+                "portable-cpu",
                 "owner-classification",
                 "hash-population",
             ],

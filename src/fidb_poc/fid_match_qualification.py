@@ -64,6 +64,67 @@ def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _load_retained_oracle_replay(
+    root: Path,
+    destination: Path,
+    *,
+    run_id: str,
+    position: int,
+    fold: str,
+    route_id: str,
+    treatment_id: str,
+    query_binary: Path,
+    fidbs: list[Path],
+    language_id: str,
+    compiler_spec_id: str,
+    authority: Mapping[str, object],
+    link_harness_policy: str,
+) -> dict[str, object]:
+    """Load an immutable native oracle only when all source identities agree."""
+
+    summary_path = destination / "summary.json"
+    oracle_path = destination / "oracle-input.json"
+    if not summary_path.is_file() or not oracle_path.is_file():
+        raise ValueError("replay requested but retained native oracle is unavailable")
+    try:
+        previous = json.loads(summary_path.read_text(encoding="utf-8"))
+        oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise ValueError("retained native oracle evidence is unreadable") from error
+    case = previous.get("case", {})
+    oracle_receipt = previous.get("oracle", {})
+    expected_fidb_sha256 = [_sha256(path) for path in fidbs]
+    if not (
+        previous.get("state") == "qualified"
+        and case.get("run_id") == run_id
+        and int(case.get("position", -1)) == position
+        and case.get("fold") == fold
+        and case.get("route_id") == route_id
+        and case.get("treatment_id") == treatment_id
+        and case.get("query_sha256") == _sha256(query_binary)
+        and case.get("fidb_sha256") == expected_fidb_sha256
+        and case.get("link_harness_policy") == link_harness_policy
+        and oracle_receipt.get("implementation")
+        == authority["oracle"]["implementation"]
+        and oracle_receipt.get("input_path") == str(oracle_path.relative_to(root))
+        and oracle_receipt.get("input_sha256") == _sha256(oracle_path)
+    ):
+        raise ValueError("retained native oracle does not match current source evidence")
+    if not (
+        oracle.get("schema_version") == "fidb-portable-fid-input/v1"
+        and oracle.get("oracle") == authority["oracle"]["implementation"]
+        and oracle.get("language_id") == language_id
+        and oracle.get("compiler_spec_id") == compiler_spec_id
+        and float(oracle.get("score_threshold", -1))
+        == float(authority["semantics"]["score_threshold"])
+        and int(oracle.get("medium_code_unit_limit", -1))
+        == int(authority["semantics"]["medium_code_unit_limit"])
+        and isinstance(oracle.get("functions"), list)
+    ):
+        raise ValueError("retained native oracle uses incompatible matching semantics")
+    return oracle
+
+
 def _fidb_from_signatures(root: Path, source: Path) -> Path:
     text = str(source)
     marker = "/fid-signatures/"
@@ -315,11 +376,21 @@ def qualify_retained_validation(
     destination.mkdir(parents=True, exist_ok=True)
     oracle_path = destination / "oracle-input.json"
     if reuse_oracle:
-        if not oracle_path.is_file():
-            raise ValueError(
-                "replay requested but retained native oracle is unavailable"
-            )
-        oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+        oracle = _load_retained_oracle_replay(
+            root,
+            destination,
+            run_id=run_id,
+            position=position,
+            fold=fold,
+            route_id=route_id,
+            treatment_id=treatment_id,
+            query_binary=query_binary,
+            fidbs=fidbs,
+            language_id=route.ghidra_language,
+            compiler_spec_id=route.ghidra_compiler_spec,
+            authority=authority,
+            link_harness_policy=LINK_HARNESS_POLICY,
+        )
     else:
         project_parent = destination / "work" / "project"
         if project_parent.exists():
