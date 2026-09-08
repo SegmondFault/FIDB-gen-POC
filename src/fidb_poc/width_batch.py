@@ -262,6 +262,28 @@ def load_width_batch(
             }
             for row in selected
         ],
+        "execution_pairs": [
+            {
+                "route_id": row["route_id"],
+                "treatment_id": row["treatment_id"],
+                "target_os": next(
+                    route["target_os"]
+                    for route in width["routes"]
+                    if route["id"] == row["route_id"]
+                ),
+                "architecture": next(
+                    route["architecture"]
+                    for route in width["routes"]
+                    if route["id"] == row["route_id"]
+                ),
+                "compiler_family": next(
+                    route["compiler_family"]
+                    for route in width["routes"]
+                    if route["id"] == row["route_id"]
+                ),
+            }
+            for row in selected_pairs
+        ],
         "summary": {
             **actual,
             "applicable_pairs_per_library": width["summary"][  # type: ignore[index]
@@ -288,6 +310,10 @@ def load_width_batch(
             if not key.startswith("locally_")
         },
     }
+    # This projection is derived entirely from the already-pinned width
+    # authority.  Keep it out of the immutable batch identity so adding
+    # applicability visibility cannot invalidate historical evidence.
+    stable_body.pop("execution_pairs", None)
     canonical = json.dumps(stable_body, sort_keys=True, separators=(",", ":")).encode()
     return {**body, "batch_digest": hashlib.sha256(canonical).hexdigest()}
 
@@ -303,6 +329,7 @@ def project_width_batch_readiness(
     libraries = []
     blockers = []
     ready = 0
+    materializable = 0
     for raw in batch["libraries"]:  # type: ignore[index]
         row = dict(raw)
         recipe = recipes.get(str(row["recipe_id"]))
@@ -318,7 +345,36 @@ def project_width_batch_readiness(
             recipe_state = "recipe-ready"
             reason = ""
             ready += 1
-        libraries.append({**row, "recipe_state": recipe_state, "blocker": reason})
+        applicability = recipe.get("applicability", {}) if recipe else {}
+        applicable_pairs = [
+            pair
+            for pair in batch.get("execution_pairs", [])
+            if (
+                not applicability.get("target_os")
+                or pair["target_os"] in applicability["target_os"]
+            )
+            and (
+                not applicability.get("architectures")
+                or pair["architecture"] in applicability["architectures"]
+            )
+            and (
+                not applicability.get("compiler_families")
+                or pair["compiler_family"] in applicability["compiler_families"]
+            )
+        ]
+        if recipe_state == "recipe-ready":
+            materializable += len(applicable_pairs)
+        libraries.append(
+            {
+                **row,
+                "recipe_state": recipe_state,
+                "blocker": reason,
+                "applicable_route_ids": list(
+                    dict.fromkeys(str(pair["route_id"]) for pair in applicable_pairs)
+                ),
+                "applicable_executions": len(applicable_pairs),
+            }
+        )
 
     executions_per_library = int(
         batch["summary"]["executions_per_library"]  # type: ignore[index]
@@ -332,7 +388,6 @@ def project_width_batch_readiness(
         blockers.append(
             f"{route_profiles - qualified_routes} of {route_profiles} route profiles are not locally qualified"
         )
-    materializable = ready * locally_executable
     projected = {
         **batch,
         "libraries": libraries,

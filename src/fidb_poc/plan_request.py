@@ -708,6 +708,8 @@ def _native_cells_from_configuration(
             for treatment in configuration.treatments:
                 flags = list(treatment.flags_for(route))
                 blockers = []
+                if not library.applies_to(route):
+                    blockers.append("library recipe does not support route")
                 if not treatment.applies_to(route):
                     blockers.append("treatment does not support route")
                 if route.toolchain_state == "unavailable":

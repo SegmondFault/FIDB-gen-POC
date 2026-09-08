@@ -221,6 +221,7 @@ def compile_recipe_qualification(
         }
         for library in batch["libraries"]
         for route_id in authority["route_ids"]
+        if route_id in library.get("applicable_route_ids", authority["route_ids"])
     ]
     evidence_path = authority.pop("evidence_resolved")
     return {
@@ -237,7 +238,7 @@ def compile_recipe_qualification(
         "input_digest": input_digest,
         "summary": {
             "libraries": len(batch["libraries"]),
-            "routes": len(authority["route_ids"]),
+            "routes": len({str(row["route_id"]) for row in cells}),
             "cells": len(cells),
             "workers": authority["workers"],
             "build_jobs_per_cell": authority["build_jobs_per_cell"],

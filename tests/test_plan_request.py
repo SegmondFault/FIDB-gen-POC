@@ -67,6 +67,32 @@ class PlanRequestTests(unittest.TestCase):
         self.assertEqual(macos["routing"]["worker_pool"], "macos-native")
         self.assertEqual(macos["target"]["binary_format"], "Mach-O")
 
+    def test_native_recipe_route_applicability_fails_closed_in_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "unsupported-recipe-route.toml"
+            path.write_text(
+                '''schema_version = "fidb-plan/v1"
+name = "unsupported-recipe-route"
+[policy]
+max_cells = 1
+[[matrix]]
+id = "perl-arm"
+kind = "native"
+recipes = ["libperl@5.44.0"]
+routes = ["linux-arm32-gcc"]
+treatments = ["baseline_o2"]
+''',
+                encoding="utf-8",
+            )
+
+            plan = resolve_plan(path, self.root)
+
+        self.assertEqual(plan["summary"]["planned_cells"], 0)
+        self.assertEqual(plan["summary"]["blocked_cells"], 1)
+        self.assertIn(
+            "library recipe does not support route", plan["cells"][0]["blockers"]
+        )
+
     def test_width_native_routes_preserve_compiler_generation_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "width-native.toml"
