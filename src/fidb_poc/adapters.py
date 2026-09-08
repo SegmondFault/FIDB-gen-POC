@@ -1258,6 +1258,12 @@ def build_environment(
         ndk_bin = ndk_root / "toolchains/llvm/prebuilt/linux-x86_64/bin"
         environment["ANDROID_NDK_ROOT"] = str(ndk_root)
         environment["PATH"] = f"{ndk_bin}:/usr/bin:/bin"
+        if build_system == "libedit-autoconf":
+            # Android uses a 32-bit Unicode wchar_t but does not advertise the
+            # optional ISO 10646 conformance macro expected by libedit.
+            environment["CFLAGS"] = (
+                f'{environment["CFLAGS"]} -D__STDC_ISO_10646__=201103L'
+            ).strip()
     elif route.target_os == "windows":
         toolchain_bin = Path(route.compiler[0]).parent
         environment["PATH"] = f"{toolchain_bin}:/usr/bin:/bin"

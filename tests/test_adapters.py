@@ -238,6 +238,14 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("--host=arm-linux-androideabi", commands[0])
         self.assertEqual(environment["ANDROID_NDK_ROOT"], str(ndk_root))
 
+        libedit_environment = build_environment(
+            "libedit-autoconf", route=android, compiler_flags=("-O2",)
+        )
+        self.assertEqual(
+            libedit_environment["CFLAGS"],
+            "-O2 -D__STDC_ISO_10646__=201103L",
+        )
+
     def test_freetype_adapter_disables_unpinned_optional_dependencies(self):
         commands = build_commands(
             "freetype-autoconf", route=route(), compiler_flags=("-Os",), jobs=6
