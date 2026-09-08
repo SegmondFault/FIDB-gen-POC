@@ -437,7 +437,7 @@ revision. Do not use the Samba-mounted checkout as build scratch. The Samba
 path mapping remains useful for inspection:
 
 ```text
-Linux: /home/fidb-operator/Projects/circl/FIDB-POC-unified
+Linux: $HOME/Projects/circl/FIDB-POC-unified
 macOS: /Volumes/linux-home-share/Projects/circl/FIDB-POC-unified
 ```
 

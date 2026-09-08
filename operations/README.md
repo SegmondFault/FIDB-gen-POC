@@ -5,6 +5,12 @@ run only the repository's native and explicit local cross-build library queue.
 They are not for QEMU cells or malware work.  Nothing in this directory
 installs, enables, arms, or starts an API or worker.
 
+Reusable units resolve the account home through systemd's `%h` specifier and
+expect the checkout at `%h/Projects/circl/FIDB-POC-unified`. Moving the project
+to a dedicated Unix account therefore requires moving that tree, rebuilding
+its environment and reinstalling the reviewed user units; no username is
+embedded in the shared definitions.
+
 On `reference-host`, the first native commissioning run installed these templates
 for `fidb-operator`, completed zlib and bzip2, then paused and disarmed the queue.
 The commissioning record says the two worker instances were disabled after
@@ -41,7 +47,7 @@ must fail closed if a future queue attempts to offer either kind of work.
 Inspect the complete resolution while it is still disarmed:
 
 ```sh
-cd /home/fidb-operator/Projects/circl/FIDB-POC-unified
+cd "$HOME/Projects/circl/FIDB-POC-unified"
 .venv/bin/fidb-poc queue sync --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --full
 .venv/bin/fidb-poc queue status --state var/fidb-coordinator/ledger.sqlite3 --full
 .venv/bin/fidb-poc queue resolve-preflight --state var/fidb-coordinator/ledger.sqlite3
@@ -141,38 +147,23 @@ install -m 0644 operations/fidb-control-panel.service "$HOME/.config/systemd/use
 install -m 0644 operations/fidb-library-local-worker@.service "$HOME/.config/systemd/user/"
 install -m 0644 operations/fidb-library-local-workers.target "$HOME/.config/systemd/user/"
 install -m 0644 operations/fidb-machine-validation-hash-analysis.service "$HOME/.config/systemd/user/"
-install -m 0644 operations/fidb-machine-validation-hash-analysis-afternoon.timer "$HOME/.config/systemd/user/"
 install -m 0644 operations/fidb-machine-validation-hash-analysis-nightly.timer "$HOME/.config/systemd/user/"
 install -m 0600 operations/library-local-worker.env.example "$HOME/.config/fidb-factory/library-local-worker.env"
 systemctl --user daemon-reload
 ```
 
-The hash-analysis timers admit only the latest complete full validation run
-without a current single-hash report. The one-off timer fires at 13:45 on
-2026-09-05; the recurring timer fires at 00:00. The service rechecks the
-TOML-defined window and exits without work outside it. Enable both timers with:
+The recurring hash-analysis timer admits only the latest complete full
+validation run without a current single-hash report. It fires at 00:00; the
+service rechecks the TOML-defined window and exits without work outside it.
+Enable it with:
 
 ```sh
-systemctl --user enable --now fidb-machine-validation-hash-analysis-afternoon.timer
 systemctl --user enable --now fidb-machine-validation-hash-analysis-nightly.timer
 ```
 
-The dated `fidb-c10-repaired-validation-20260906.timer` is retained as the
-inspectable admission record for the repaired C10 methodology. At 12:30
-Europe/Luxembourg it starts one fail-closed service chain: the immutable
-`c10-shared-image-symbolic-v2-full` source run, its required selected-backend
-single-hash postprocess and retention, then the native-FID canary and full
-campaign. The single-hash backend is selected by
-`performance/hash-analysis.toml`; normal execution does not run the CPU/GPU
-equivalence trial. Every later command is skipped if an earlier command fails.
-
-The checkpointed source run was paused again after staged linking exposed a
-bounded Android 32-bit GMP incompatibility. The dated
-`fidb-c10-repaired-validation-resume-20260907.timer` resumes it at 00:00
-Europe/Luxembourg. Its service uses foreground resume so the source run, its
-required hash/retention stages, and the native-FID canary/full passes remain one
-ordered fail-closed chain. `Persistent=false` prevents a late installation from
-starting heavy work outside the intended night.
+Passed one-off timers and their campaign-specific service chain are retained
+under [`operations/history/`](history/README.md). They are provenance, not
+installable current configuration.
 
 Review the copied environment file.  The API reuses it rather than introducing
 a second operator environment.  Starting the API is safe while the queue is
@@ -200,10 +191,10 @@ systemctl --user status fidb-control-panel.service
 curl --fail --silent http://127.0.0.1:3001/api/fidb/health
 ```
 
-The reviewed unit binds only the current `reference-host` Tailscale address,
-`127.0.0.1`, on port 3001 and injects the loopback API origin server-side.
-If the Tailscale address changes, update and reinstall the reviewed unit rather
-than broadening it to an all-interface listener.
+The shared unit binds to loopback by default and injects the loopback API origin
+server-side. To expose the panel on a private network, add a reviewed user-unit
+drop-in that overrides `FIDB_CONTROL_PANEL_BIND` with the host's private address.
+Do not broaden it to an all-interface listener.
 
 ## Tailscale control-panel flow
 

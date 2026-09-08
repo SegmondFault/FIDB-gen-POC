@@ -1,17 +1,18 @@
 [Unit]
-Description=FIDB Tailscale control panel
-Documentation=file:///home/fidb-operator/Projects/circl/FIDB-POC-unified/operations/README.md
+Description=FIDB control panel
+Documentation=file://%h/Projects/circl/FIDB-POC-unified/operations/README.md
 Wants=fidb-coordinator-api.service
 After=fidb-coordinator-api.service
-ConditionPathIsDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified/control-panel/dist
-ConditionFileIsExecutable=/home/fidb-operator/Projects/circl/FIDB-POC-unified/control-panel/node_modules/.bin/vinext
+ConditionPathIsDirectory=%h/Projects/circl/FIDB-POC-unified/control-panel/dist
+ConditionFileIsExecutable=%h/Projects/circl/FIDB-POC-unified/control-panel/node_modules/.bin/vinext
 
 [Service]
 Type=simple
-WorkingDirectory=/home/fidb-operator/Projects/circl/FIDB-POC-unified/control-panel
+WorkingDirectory=%h/Projects/circl/FIDB-POC-unified/control-panel
 Environment=NODE_ENV=production
 Environment=FIDB_API_ORIGIN=http://127.0.0.1:8765
-ExecStart=/home/fidb-operator/Projects/circl/FIDB-POC-unified/control-panel/node_modules/.bin/vinext start --hostname 127.0.0.1 --port 3001
+Environment=FIDB_CONTROL_PANEL_BIND=127.0.0.1
+ExecStart=%h/Projects/circl/FIDB-POC-unified/control-panel/node_modules/.bin/vinext start --hostname ${FIDB_CONTROL_PANEL_BIND} --port 3001
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15

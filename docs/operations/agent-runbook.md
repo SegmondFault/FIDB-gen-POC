@@ -615,7 +615,7 @@ window is 13:45–18:15 Europe/Luxembourg and its recurring window is
 finishes. It consumes retained JSONL and SQLite evidence and does not invoke
 compilers or Ghidra. The checked-in user service and timers are named
 `fidb-machine-validation-hash-analysis.service`,
-`fidb-machine-validation-hash-analysis-afternoon.timer`, and
+the historical `fidb-machine-validation-hash-analysis-afternoon.timer`, and
 `fidb-machine-validation-hash-analysis-nightly.timer`.
 
 C10 must also become generation one of the incremental corpus hash index before

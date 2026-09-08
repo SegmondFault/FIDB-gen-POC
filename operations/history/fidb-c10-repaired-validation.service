@@ -1,0 +1,14 @@
+[Unit]
+Description=FIDB repaired C10 source and native-FID validation chain
+After=local-fs.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/circl/FIDB-POC-unified
+ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation resume --foreground --project-root %h/Projects/circl/FIDB-POC-unified --runtime validation/machine-validation-runtime.toml
+ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation run-matcher --project-root %h/Projects/circl/FIDB-POC-unified --matcher-campaign validation/fid-matching-run.toml --mode canary
+ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/python -m fidb_poc.cli machine-validation run-matcher --project-root %h/Projects/circl/FIDB-POC-unified --matcher-campaign validation/fid-matching-run.toml --mode full
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+TimeoutStartSec=infinity
