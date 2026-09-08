@@ -31,6 +31,30 @@ TimingFactory = Callable[
 ]
 
 
+def _safe_project_name(value: str) -> str:
+    """Return a collision-resistant Ghidra project name.
+
+    Recipe versions legitimately contain characters such as ``+`` that
+    Ghidra rejects in project names.  Preserve its conservative portable
+    alphabet and bind every rewrite to the original value so two punctuation
+    variants cannot silently share a project.
+    """
+
+    normalized = "".join(
+        character
+        if character.isascii()
+        and (character.isalnum() or character in {"_", "."})
+        else "_"
+        for character in value
+    )
+    if not normalized.strip("_."):
+        normalized = "FIDB_project"
+    if normalized == value:
+        return normalized
+    suffix = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return f"{normalized}_{suffix}"
+
+
 def _timed(
     timing: TimingFactory | None,
     stage: str,
@@ -204,6 +228,7 @@ def build_library_fidb(
         raise ValueError(f"no objects submitted for {library}")
 
     project_dir.mkdir(parents=True, exist_ok=True)
+    project_name = _safe_project_name(project_name)
     monitor = pyghidra.task_monitor()
 
     def _prepare_and_analyze(program) -> None:

@@ -9,6 +9,7 @@ from fidb_poc.ghidra_fid import (
     _configure_fid_build_analysis,
     _configure_target_analysis,
     _deduplicated_relation_rows,
+    _safe_project_name,
     _set_registered_analysis_boolean_option,
 )
 from fidb_poc.validation_analysis import (
@@ -36,6 +37,18 @@ class _Options:
 
 
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_project_names_sanitize_recipe_punctuation_without_collisions(self):
+        plus = _safe_project_name("FIDB_boringssl_14.0.0+r45_3_linux_x86")
+        dash = _safe_project_name("FIDB_boringssl_14.0.0-r45_3_linux_x86")
+
+        self.assertNotIn("+", plus)
+        self.assertNotIn("-", dash)
+        self.assertNotEqual(plus, dash)
+        self.assertEqual(
+            _safe_project_name("FIDB_openssl_3.5.8_linux_x86"),
+            "FIDB_openssl_3.5.8_linux_x86",
+        )
+
     def test_fid_build_recovery_layers_on_fid_safe_analysis(self):
         program = object()
         with (
