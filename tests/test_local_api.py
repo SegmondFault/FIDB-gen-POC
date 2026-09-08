@@ -776,9 +776,10 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["error"]["code"], "invalid-query")
 
     @patch("fidb_poc.local_api.build_export")
+    @patch("fidb_poc.local_api.safeguard_export")
     @patch("fidb_poc.local_api.inspect_export")
     def test_export_preview_is_read_only_and_build_is_completeness_gated(
-        self, inspect_export, build_export
+        self, inspect_export, safeguard_export, build_export
     ):
         preview_document = {
             "schema_version": "fidb-export-status/v1",
@@ -790,6 +791,7 @@ class LocalApiTests(unittest.TestCase):
         from fidb_poc.database_export import ExportError
 
         build_export.side_effect = ExportError("export is blocked: 2220 missing")
+        safeguard_export.side_effect = ExportError("safeguard is blocked: 2220 missing")
         status, document, _ = self.request("GET", "/api/v1/export")
         self.assertEqual(status, 200)
         self.assertEqual(document["schema_version"], "fidb-export-status/v1")
@@ -802,6 +804,10 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(preview["population"]["missing"], 2_220)
         self.assertTrue(preview["actions"]["preview"])
         self.assertFalse(preview["actions"]["build"])
+
+        status, error, _ = self.request("POST", "/api/v1/export/safeguard", {})
+        self.assertEqual(status, 409)
+        self.assertEqual(error["error"]["code"], "export-not-ready")
 
         status, error, _ = self.request("POST", "/api/v1/export/build", {})
         self.assertEqual(status, 409)

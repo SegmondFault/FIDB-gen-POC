@@ -8,6 +8,14 @@ package_format = "tar.zst"
 compression_level = 3
 output_root = "artifacts/exports"
 
+[safeguard]
+required = true
+require_idle_ledger = true
+receipt = "artifacts/exports/safeguards/fidb-c10-fidbf-v1-source-receipt.json"
+ledger_snapshot = "artifacts/exports/safeguards/fidb-c10-fidbf-v1-ledger.sqlite3"
+retention_authority = "retention/policy.toml"
+package_path = "evidence/source-safeguard.json"
+
 [population]
 source_pack = "sources/c-top10-v1.toml"
 width_authority = "coverage/c-width-v2.toml"
@@ -45,4 +53,3 @@ sqlite_quick_check = true
 verify_every_fidbf_sha256 = true
 reopen_archive = true
 require_exact_member_set = true
-

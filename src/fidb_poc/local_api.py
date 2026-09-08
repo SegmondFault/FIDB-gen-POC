@@ -31,7 +31,12 @@ from .coordinator import (
     CoordinatorError,
     QueueConfig,
 )
-from .database_export import ExportError, build_export, inspect_export
+from .database_export import (
+    ExportError,
+    build_export,
+    inspect_export,
+    safeguard_export,
+)
 from .lane_inventory import detect_lane_inventory
 from .ecological_validation import (
     compile_ecological_validation,
@@ -116,6 +121,7 @@ _POST_PATHS = {
     "/api/v1/retention/plan",
     "/api/v1/retention/apply",
     "/api/v1/export/preview",
+    "/api/v1/export/safeguard",
     "/api/v1/export/build",
 }
 
@@ -1298,6 +1304,16 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         elif path == "/api/v1/export/preview":
             self._only_fields(document, set())
             result = inspect_export(self.api_server.config.project_root)
+        elif path == "/api/v1/export/safeguard":
+            self._only_fields(document, set())
+            try:
+                result = safeguard_export(self.api_server.config.project_root)
+            except ExportError as error:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "export-not-ready",
+                    str(error),
+                ) from error
         elif path == "/api/v1/export/build":
             self._only_fields(document, set())
             try:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -19,6 +20,7 @@ from .c_width import compile_c_width
 
 EXPORT_STATUS_SCHEMA = "fidb-export-status/v1"
 EXPORT_MANIFEST_SCHEMA = "fidb-export-release/v1"
+EXPORT_SAFEGUARD_SCHEMA = "fidb-export-safeguard/v1"
 CATALOGUE_APPLICATION_ID = 0x46494458  # FIDX
 CATALOGUE_USER_VERSION = 1
 DEFAULT_AUTHORITY = Path("export/c10-fidbf-v1.toml")
@@ -93,6 +95,7 @@ def _load_authority(
         "package_format",
         "compression_level",
         "output_root",
+        "safeguard",
         "population",
         "catalogue",
         "hash_quality",
@@ -108,6 +111,99 @@ def _load_authority(
     document["authority_path"] = str(path.relative_to(root))
     document["authority_sha256"] = _sha256(path)
     return document
+
+
+def _population_digest(artifacts: Iterable[_Artifact]) -> str:
+    digest = hashlib.sha256()
+    for artifact in sorted(artifacts, key=lambda row: row.identity):
+        digest.update(
+            (
+                f"{artifact.identity}\0{artifact.artifact_sha256}\0"
+                f"{artifact.seal_sha256}\0{artifact.artifact_bytes}\n"
+            ).encode("utf-8")
+        )
+    return digest.hexdigest()
+
+
+def _live_jobs(ledger: Path) -> int:
+    if not ledger.is_file():
+        return 0
+    connection = sqlite3.connect(f"file:{ledger}?mode=ro", uri=True)
+    try:
+        return int(
+            connection.execute("""SELECT COUNT(*) FROM jobs
+                   WHERE active = 1 AND state IN ('leased', 'running')""").fetchone()[0]
+        )
+    finally:
+        connection.close()
+
+
+def _safeguard_status(
+    root: Path,
+    authority: Mapping[str, object],
+    *,
+    population_digest: str,
+    artifact_count: int,
+    raw_bytes: int,
+    live_jobs: int,
+    verify_snapshot: bool = False,
+) -> dict[str, object]:
+    config = authority["safeguard"]
+    assert isinstance(config, dict)
+    receipt_path = _managed_path(root, config["receipt"], must_exist=False)
+    snapshot_path = _managed_path(root, config["ledger_snapshot"], must_exist=False)
+    retention = _managed_path(root, config["retention_authority"])
+    expected = {
+        "authority_sha256": authority["authority_sha256"],
+        "population_sha256": population_digest,
+        "artifact_count": artifact_count,
+        "raw_artifact_bytes": raw_bytes,
+        "retention_authority_sha256": _sha256(retention),
+    }
+    state = "missing"
+    error = None
+    receipt = None
+    if receipt_path.is_file() and snapshot_path.is_file():
+        try:
+            loaded = json.loads(receipt_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
+                raise ExportError("safeguard receipt must be an object")
+            receipt = loaded
+            mismatches = [
+                key for key, value in expected.items() if loaded.get(key) != value
+            ]
+            if loaded.get("schema_version") != EXPORT_SAFEGUARD_SCHEMA:
+                mismatches.append("schema_version")
+            snapshot = loaded.get("ledger_snapshot")
+            if not isinstance(snapshot, dict):
+                mismatches.append("ledger_snapshot")
+            else:
+                if snapshot.get("path") != str(snapshot_path.relative_to(root)):
+                    mismatches.append("ledger_snapshot.path")
+                if snapshot.get("bytes") != snapshot_path.stat().st_size:
+                    mismatches.append("ledger_snapshot.bytes")
+                if verify_snapshot and snapshot.get("sha256") != _sha256(snapshot_path):
+                    mismatches.append("ledger_snapshot.sha256")
+            state = "current" if not mismatches else "stale"
+            if mismatches:
+                error = "mismatched: " + ", ".join(sorted(set(mismatches)))
+        except (ExportError, OSError, json.JSONDecodeError) as caught:
+            state = "invalid"
+            error = str(caught)
+    return {
+        "state": state,
+        "required": bool(config["required"]),
+        "receipt_path": str(receipt_path.relative_to(root)),
+        "ledger_snapshot_path": str(snapshot_path.relative_to(root)),
+        "retention_authority_path": str(retention.relative_to(root)),
+        "population_sha256": population_digest,
+        "artifact_count": artifact_count,
+        "raw_artifact_bytes": raw_bytes,
+        "live_jobs": live_jobs,
+        "receipt_sha256": _sha256(receipt_path) if state == "current" else None,
+        "created_at": receipt.get("created_at") if isinstance(receipt, dict) else None,
+        "error": error,
+    }
 
 
 def _source_rows(
@@ -284,7 +380,10 @@ def _sidecar_status(root: Path, authority: Mapping[str, object]) -> dict[str, ob
 
 
 def inspect_export(
-    project_root: str | Path, authority_path: Path = DEFAULT_AUTHORITY
+    project_root: str | Path,
+    authority_path: Path = DEFAULT_AUTHORITY,
+    *,
+    require_safeguard: bool = True,
 ) -> dict[str, object]:
     root = Path(project_root).expanduser().resolve()
     authority = _load_authority(root, authority_path)
@@ -294,6 +393,7 @@ def inspect_export(
     ledger = _managed_path(root, population["ledger"], must_exist=False)
     artifacts, duplicates = _read_artifacts(root, ledger, source_by_id)
     present = set(artifacts) & expected
+    present_artifacts = [artifacts[key] for key in sorted(present)]
     missing = sorted(expected - present)
     unexpected = sorted(set(artifacts) - expected)
     by_library = []
@@ -338,6 +438,19 @@ def inspect_export(
         blockers.append("validation report is missing")
     if not registry.is_file():
         blockers.append("lane compatibility registry is missing")
+    raw_bytes = sum(row.artifact_bytes for row in present_artifacts)
+    live_jobs = _live_jobs(ledger)
+    safeguard = _safeguard_status(
+        root,
+        authority,
+        population_digest=_population_digest(present_artifacts),
+        artifact_count=len(present_artifacts),
+        raw_bytes=raw_bytes,
+        live_jobs=live_jobs,
+    )
+    safeguard_required = bool(safeguard["required"]) and require_safeguard
+    if safeguard_required and safeguard["state"] != "current":
+        blockers.append("export source safeguard is missing, stale or invalid")
     output_root = _managed_path(root, authority["output_root"], must_exist=False)
     package_path = output_root / f"{authority['release_id']}.tar.zst"
     package_checksum = package_path.with_suffix(package_path.suffix + ".sha256")
@@ -371,7 +484,7 @@ def inspect_export(
             "libraries_complete": sum(bool(row["complete"]) for row in by_library),
             "routes": len(routes),
             "treatments": expected_per_library // len(routes),
-            "raw_bytes": sum(artifacts[key].artifact_bytes for key in present),
+            "raw_bytes": raw_bytes,
             "duplicate_completed_identities": len(duplicates),
             "unexpected": len(unexpected),
         },
@@ -388,10 +501,17 @@ def inspect_export(
             "state": "ready" if registry.is_file() else "missing",
             "path": str(registry.relative_to(root)),
         },
+        "safeguard": safeguard,
         "blockers": blockers,
         "ready": not blockers,
         "actions": {
             "preview": True,
+            "safeguard": not [
+                blocker
+                for blocker in blockers
+                if blocker != "export source safeguard is missing, stale or invalid"
+            ]
+            and live_jobs == 0,
             "build": not blockers,
         },
     }
@@ -486,6 +606,100 @@ def _snapshot_sqlite(source: Path, destination: Path) -> None:
         opened.close()
 
 
+def safeguard_export(
+    project_root: str | Path, authority_path: Path = DEFAULT_AUTHORITY
+) -> dict[str, object]:
+    """Freeze and verify the exact source evidence before packaging it."""
+
+    root = Path(project_root).expanduser().resolve()
+    authority = _load_authority(root, authority_path)
+    status = inspect_export(root, authority_path, require_safeguard=False)
+    if status["blockers"]:
+        raise ExportError("safeguard is blocked: " + "; ".join(status["blockers"]))
+    safeguard = authority["safeguard"]
+    population = authority["population"]
+    assert isinstance(safeguard, dict) and isinstance(population, dict)
+    ledger = _managed_path(root, population["ledger"])
+    if bool(safeguard["require_idle_ledger"]) and _live_jobs(ledger):
+        raise ExportError("safeguard requires an idle ledger with no active work")
+
+    output = _managed_path(root, safeguard["receipt"], must_exist=False).parent
+    output.mkdir(parents=True, exist_ok=True)
+    snapshot = _managed_path(root, safeguard["ledger_snapshot"], must_exist=False)
+    snapshot_partial = snapshot.with_suffix(snapshot.suffix + ".partial")
+    receipt = _managed_path(root, safeguard["receipt"], must_exist=False)
+    receipt_partial = receipt.with_suffix(receipt.suffix + ".partial")
+    snapshot_partial.unlink(missing_ok=True)
+    receipt_partial.unlink(missing_ok=True)
+    try:
+        _snapshot_sqlite(ledger, snapshot_partial)
+        source_by_id, expected, _ = _expected_identities(root, authority)
+        artifacts_by_id, _ = _read_artifacts(root, snapshot_partial, source_by_id)
+        missing = expected - set(artifacts_by_id)
+        if missing:
+            raise ExportError(
+                f"safeguard ledger snapshot is missing {len(missing)} exact identities"
+            )
+        artifacts = [artifacts_by_id[key] for key in sorted(expected)]
+        mismatches = [
+            row.identity
+            for row in artifacts
+            if _sha256(row.artifact_path) != row.artifact_sha256
+        ]
+        if mismatches:
+            raise ExportError(
+                f"{len(mismatches)} source FIDBF files failed safeguard SHA-256"
+            )
+        os.replace(snapshot_partial, snapshot)
+        snapshot_sha256 = _sha256(snapshot)
+        retention = _managed_path(root, safeguard["retention_authority"])
+        document = {
+            "schema_version": EXPORT_SAFEGUARD_SCHEMA,
+            "release_id": authority["release_id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "authority_path": authority["authority_path"],
+            "authority_sha256": authority["authority_sha256"],
+            "population_sha256": _population_digest(artifacts),
+            "artifact_count": len(artifacts),
+            "raw_artifact_bytes": sum(row.artifact_bytes for row in artifacts),
+            "retention_authority_path": str(retention.relative_to(root)),
+            "retention_authority_sha256": _sha256(retention),
+            "retention_contract": "preserve-source-attempts-until-lane-import",
+            "ledger_snapshot": {
+                "source_path": str(ledger.relative_to(root)),
+                "path": str(snapshot.relative_to(root)),
+                "bytes": snapshot.stat().st_size,
+                "sha256": snapshot_sha256,
+            },
+            "artifacts": [
+                {
+                    "identity": row.identity,
+                    "path": str(row.artifact_path.relative_to(root)),
+                    "bytes": row.artifact_bytes,
+                    "sha256": row.artifact_sha256,
+                    "seal_path": row.seal_path,
+                    "seal_sha256": row.seal_sha256,
+                    "job_id": row.job_id,
+                    "completed_at": row.completed_at,
+                }
+                for row in artifacts
+            ],
+        }
+        receipt_partial.write_text(
+            json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        os.replace(receipt_partial, receipt)
+    finally:
+        snapshot_partial.unlink(missing_ok=True)
+        receipt_partial.unlink(missing_ok=True)
+
+    completed = inspect_export(root, authority_path)
+    if completed["safeguard"]["state"] != "current":
+        raise ExportError("new safeguard receipt did not pass current-state validation")
+    completed["safeguard"]["ledger_snapshot_sha256"] = snapshot_sha256
+    return completed
+
+
 def _toml_string(value: object) -> str:
     return json.dumps(str(value), ensure_ascii=False)
 
@@ -498,6 +712,8 @@ def _release_toml(
     assert isinstance(population, dict) and isinstance(quality, dict)
     generation = quality.get("generation") or {}
     assert isinstance(generation, dict)
+    safeguard = status["safeguard"]
+    assert isinstance(safeguard, dict)
     return "\n".join(
         [
             f"schema_version = {_toml_string(EXPORT_MANIFEST_SCHEMA)}",
@@ -509,6 +725,11 @@ def _release_toml(
             f"artifact_kind = {_toml_string('fidbf')}",
             f"artifact_count = {int(population['present'])}",
             f"raw_artifact_bytes = {int(population['raw_bytes'])}",
+            "",
+            "[safeguard]",
+            f"receipt = {_toml_string(authority['safeguard']['package_path'])}",  # type: ignore[index]
+            f"receipt_sha256 = {_toml_string(safeguard.get('receipt_sha256', ''))}",
+            f"population_sha256 = {_toml_string(safeguard.get('population_sha256', ''))}",
             "",
             "[catalogue]",
             f"schema_version = {_toml_string('fidb-export-catalogue/v1')}",
@@ -719,6 +940,7 @@ def _manifest_markdown(
             f"- `{authority['validation']['package_path']}` — matching/validation report",  # type: ignore[index]
             f"- `{authority['compatibility']['package_path']}` — lane compatibility authority",  # type: ignore[index]
             "- `release.toml` — machine-readable release identity and generation binding",
+            f"- `{authority['safeguard']['package_path']}` — pre-export source safeguard receipt",  # type: ignore[index]
             "- `checksums.sha256` — SHA-256 for every packaged payload member",
             "",
         ]
@@ -749,6 +971,17 @@ def build_export(
     ledger = _managed_path(root, population["ledger"])
     artifacts_by_id, _ = _read_artifacts(root, ledger, source_by_id)
     artifacts = [artifacts_by_id[key] for key in sorted(expected)]
+    safeguard_status = _safeguard_status(
+        root,
+        authority,
+        population_digest=_population_digest(artifacts),
+        artifact_count=len(artifacts),
+        raw_bytes=sum(row.artifact_bytes for row in artifacts),
+        live_jobs=_live_jobs(ledger),
+        verify_snapshot=True,
+    )
+    if safeguard_status["state"] != "current":
+        raise ExportError("export source safeguard failed full verification")
     if bool(population["require_ledger_sha256"]):
         mismatches = [
             row.identity
@@ -791,10 +1024,12 @@ def build_export(
         )
         validation = _managed_path(root, authority["validation"]["report"])  # type: ignore[index]
         registry = _managed_path(root, authority["compatibility"]["lane_registry"])  # type: ignore[index]
+        safeguard_receipt = _managed_path(root, authority["safeguard"]["receipt"])  # type: ignore[index]
         fixed = [
             (release, "release.toml"),
             (readme, "README.md"),
             (manifest, "manifest.md"),
+            (safeguard_receipt, str(authority["safeguard"]["package_path"])),  # type: ignore[index]
             (catalogue, str(authority["catalogue"]["path"])),  # type: ignore[index]
             (quality_snapshot, str(authority["hash_quality"]["package_path"])),  # type: ignore[index]
             (validation, str(authority["validation"]["package_path"])),  # type: ignore[index]
@@ -872,17 +1107,18 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="fidb-poc export")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "preview", "build"):
+    for name in ("status", "preview", "safeguard", "build"):
         command = commands.add_parser(name)
         command.add_argument("--project-root", type=Path, default=Path.cwd())
         command.add_argument("--authority", type=Path, default=DEFAULT_AUTHORITY)
     arguments = parser.parse_args(argv)
     try:
-        result = (
-            build_export(arguments.project_root, arguments.authority)
-            if arguments.command == "build"
-            else inspect_export(arguments.project_root, arguments.authority)
-        )
+        if arguments.command == "build":
+            result = build_export(arguments.project_root, arguments.authority)
+        elif arguments.command == "safeguard":
+            result = safeguard_export(arguments.project_root, arguments.authority)
+        else:
+            result = inspect_export(arguments.project_root, arguments.authority)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     except (ExportError, OSError, sqlite3.Error, subprocess.SubprocessError) as error:

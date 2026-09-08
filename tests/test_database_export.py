@@ -7,7 +7,15 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from fidb_poc.database_export import _Artifact, build_export, inspect_export
+from fidb_poc.database_export import (
+    EXPORT_SAFEGUARD_SCHEMA,
+    _Artifact,
+    _population_digest,
+    _safeguard_status,
+    build_export,
+    inspect_export,
+    safeguard_export,
+)
 
 
 class DatabaseExportTests(unittest.TestCase):
@@ -31,7 +39,15 @@ class DatabaseExportTests(unittest.TestCase):
             'schema_version = "test-lanes/v1"\n', encoding="utf-8"
         )
         (self.root / "evidence/seal.json").write_text("{}\n", encoding="utf-8")
-        (self.root / "evidence/ledger.sqlite3").write_bytes(b"not opened in test")
+        self.ledger = self.root / "evidence/ledger.sqlite3"
+        connection = sqlite3.connect(self.ledger)
+        connection.execute("CREATE TABLE jobs(active INTEGER, state TEXT)")
+        connection.commit()
+        connection.close()
+        self.retention = self.root / "evidence/retention.toml"
+        self.retention.write_text(
+            'schema_version = "test-retention/v1"\n', encoding="utf-8"
+        )
         digest = hashlib.sha256(self.fidbf.read_bytes()).hexdigest()
         self.identity = "library@1.0:linux-x86-64-gcc:baseline_o2"
         self.artifact = _Artifact(
@@ -66,6 +82,14 @@ class DatabaseExportTests(unittest.TestCase):
             "output_root": "artifacts/exports",
             "authority_path": "export/test.toml",
             "authority_sha256": "c" * 64,
+            "safeguard": {
+                "required": True,
+                "require_idle_ledger": True,
+                "receipt": "evidence/source-receipt.json",
+                "ledger_snapshot": "evidence/ledger-snapshot.sqlite3",
+                "retention_authority": "evidence/retention.toml",
+                "package_path": "evidence/source-safeguard.json",
+            },
             "population": {
                 "ledger": "evidence/ledger.sqlite3",
                 "expected_identities_per_library": 1,
@@ -111,6 +135,37 @@ class DatabaseExportTests(unittest.TestCase):
                 },
             },
         }
+        snapshot = self.root / "evidence/ledger-snapshot.sqlite3"
+        snapshot.write_bytes(self.ledger.read_bytes())
+        receipt = self.root / "evidence/source-receipt.json"
+        receipt.write_text(
+            json.dumps(
+                {
+                    "schema_version": EXPORT_SAFEGUARD_SCHEMA,
+                    "authority_sha256": self.authority["authority_sha256"],
+                    "population_sha256": _population_digest([self.artifact]),
+                    "artifact_count": 1,
+                    "raw_artifact_bytes": self.fidbf.stat().st_size,
+                    "retention_authority_sha256": hashlib.sha256(
+                        self.retention.read_bytes()
+                    ).hexdigest(),
+                    "created_at": "2026-09-08T08:01:00+00:00",
+                    "ledger_snapshot": {
+                        "path": "evidence/ledger-snapshot.sqlite3",
+                        "bytes": snapshot.stat().st_size,
+                        "sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+                    },
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.status["safeguard"] = {
+            "state": "current",
+            "population_sha256": _population_digest([self.artifact]),
+            "receipt_sha256": hashlib.sha256(receipt.read_bytes()).hexdigest(),
+        }
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -151,6 +206,7 @@ class DatabaseExportTests(unittest.TestCase):
         self.assertIn(self.artifact.package_path, members)
         self.assertIn("index/catalogue.sqlite3", members)
         self.assertIn("index/hash-quality.sqlite3", members)
+        self.assertIn("evidence/source-safeguard.json", members)
         self.assertIn("manifest.md", members)
         self.assertIn("checksums.sha256", members)
         self.assertEqual(len(members), len(set(members)))
@@ -176,6 +232,64 @@ class DatabaseExportTests(unittest.TestCase):
         self.assertIn("#### `evidence`", manifest)
         self.assertIn("| Native Ghidra `.fidb` files | 0 |", manifest)
         self.assertIn("| Raw Ghidra `.fidbf` files | 1 |", manifest)
+
+    def test_safeguard_snapshots_idle_ledger_and_receipts_exact_artifacts(self):
+        sources = {"library": {"id": "library", "version": "1.0", "rank": 1}}
+        artifacts = {self.identity: self.artifact}
+        (self.root / self.authority["safeguard"]["receipt"]).unlink()
+        (self.root / self.authority["safeguard"]["ledger_snapshot"]).unlink()
+
+        def status(*_args, require_safeguard=True, **_kwargs):
+            document = dict(self.status)
+            safeguard = _safeguard_status(
+                self.root,
+                self.authority,
+                population_digest=_population_digest([self.artifact]),
+                artifact_count=1,
+                raw_bytes=self.fidbf.stat().st_size,
+                live_jobs=0,
+            )
+            document["safeguard"] = safeguard
+            blocked = require_safeguard and safeguard["state"] != "current"
+            document["blockers"] = (
+                ["export source safeguard is missing, stale or invalid"]
+                if blocked
+                else []
+            )
+            document["ready"] = not blocked
+            return document
+
+        with (
+            patch(
+                "fidb_poc.database_export._load_authority",
+                return_value=self.authority,
+            ),
+            patch(
+                "fidb_poc.database_export._expected_identities",
+                return_value=(sources, {self.identity}, {"linux-x86-64-gcc"}),
+            ),
+            patch(
+                "fidb_poc.database_export._read_artifacts",
+                return_value=(artifacts, []),
+            ),
+            patch("fidb_poc.database_export.inspect_export", side_effect=status),
+        ):
+            result = safeguard_export(self.root)
+
+        receipt = json.loads(
+            (self.root / self.authority["safeguard"]["receipt"]).read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(result["safeguard"]["state"], "current")
+        self.assertEqual(receipt["artifact_count"], 1)
+        self.assertEqual(receipt["artifacts"][0]["identity"], self.identity)
+        self.assertEqual(
+            receipt["artifacts"][0]["sha256"], self.artifact.artifact_sha256
+        )
+        self.assertTrue(
+            (self.root / self.authority["safeguard"]["ledger_snapshot"]).is_file()
+        )
 
     def test_current_authority_preview_finds_the_exact_openssl_gap(self):
         project = Path(__file__).resolve().parents[1]
