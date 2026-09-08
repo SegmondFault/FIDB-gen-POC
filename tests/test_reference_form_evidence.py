@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 import tomllib
 import unittest
@@ -104,6 +105,30 @@ class ReferenceFormEvidenceTests(unittest.TestCase):
                         delta[name], after["rates"][name] - before["rates"][name]
                     )
                 )
+
+    def test_linked_generation_separates_task_span_from_resumed_supervisor(self) -> None:
+        generation = self.receipt["linked_generation"]
+        task_start = datetime.fromisoformat(generation["earliest_task_started_at"])
+        task_finish = datetime.fromisoformat(generation["latest_task_finished_at"])
+        supervisor_start = datetime.fromisoformat(
+            generation["final_supervisor_started_at"]
+        )
+        supervisor_finish = datetime.fromisoformat(
+            generation["final_supervisor_finished_at"]
+        )
+
+        self.assertTrue(
+            math.isclose(
+                generation["observed_task_span_seconds"],
+                (task_finish - task_start).total_seconds(),
+            )
+        )
+        self.assertGreater(supervisor_start, task_start)
+        self.assertGreater(supervisor_finish, task_finish)
+        self.assertGreater(
+            generation["observed_task_span_seconds"],
+            (supervisor_finish - supervisor_start).total_seconds(),
+        )
 
     def test_local_runtime_seals_match_the_tracked_receipt_when_present(self) -> None:
         checks = (

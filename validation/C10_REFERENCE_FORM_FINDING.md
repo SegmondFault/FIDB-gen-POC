@@ -58,6 +58,12 @@ The ignored runtime reports remain under
 `artifacts/fid-matching-runs/`; the tracked receipt binds their paths and
 digests without putting multi-gigabyte candidate indexes in Git.
 
+The 2,220 terminal task seals span 2026-09-07 20:41:23 UTC through
+2026-09-08 00:35:10 UTC: 3h 53m 48s including the stopped pass and its later
+resume. Their summed task wall time is 15.94 worker-hours. The final supervisor
+status interval, 22:55 through 00:35, describes only the resumed pass and must
+not be presented as the complete linked-generation elapsed time.
+
 Recompute and verify the comparison from retained evidence with:
 
 ```sh
@@ -152,4 +158,3 @@ The following atomic commits form the producer and verification chain:
 | `12c72520` | Reuse immutable indexes instead of building a third union copy |
 | `a45a4b89` | Freeze reproducible three-arm comparisons |
 | `3175b270` | Record the tracked measured receipt and consistency tests |
-
