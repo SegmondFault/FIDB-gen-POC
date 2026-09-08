@@ -91,6 +91,16 @@ class DatabaseExportTests(unittest.TestCase):
             "ready": True,
             "blockers": [],
             "population": {"present": 1, "raw_bytes": self.fidbf.stat().st_size},
+            "libraries": [
+                {
+                    "id": "library",
+                    "label": "Library",
+                    "version": "1.0",
+                    "rank": 1,
+                    "present": 1,
+                    "bytes": self.fidbf.stat().st_size,
+                }
+            ],
             "hash_quality": {
                 "state": "ready",
                 "generation": {
@@ -141,8 +151,31 @@ class DatabaseExportTests(unittest.TestCase):
         self.assertIn(self.artifact.package_path, members)
         self.assertIn("index/catalogue.sqlite3", members)
         self.assertIn("index/hash-quality.sqlite3", members)
+        self.assertIn("manifest.md", members)
         self.assertIn("checksums.sha256", members)
         self.assertEqual(len(members), len(set(members)))
+
+        manifest = subprocess.run(
+            [
+                "tar",
+                "--use-compress-program=zstd",
+                "-xOf",
+                str(package),
+                "manifest.md",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        self.assertIn("## Libraries and versions covered", manifest)
+        self.assertIn("| `library` | `1.0` |", manifest)
+        self.assertIn("## Execution variants covered", manifest)
+        self.assertIn("`linux-x86-64-gcc`", manifest)
+        self.assertIn("## Database files", manifest)
+        self.assertIn("#### `fidbf_artifact`", manifest)
+        self.assertIn("#### `evidence`", manifest)
+        self.assertIn("| Native Ghidra `.fidb` files | 0 |", manifest)
+        self.assertIn("| Raw Ghidra `.fidbf` files | 1 |", manifest)
 
     def test_current_authority_preview_finds_the_exact_openssl_gap(self):
         project = Path(__file__).resolve().parents[1]

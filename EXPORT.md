@@ -26,6 +26,8 @@ The direct-use C10 package contains:
 - a consistent SQLite snapshot of the current versioned cross-library
   hash-quality evidence at `index/hash-quality.sqlite3`;
 - the C10 archive-plus-linked validation report and lane registry;
+- `manifest.md`, a human-readable inventory of libraries, versions, execution
+  variants, database files and their table/column structure;
 - `release.toml`, `README.md` and member-level `checksums.sha256`.
 
 The output is `artifacts/exports/fidb-c10-fidbf-v1.tar.zst`, with an adjacent

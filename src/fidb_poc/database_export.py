@@ -538,6 +538,9 @@ This portable research release contains one raw Ghidra `.fidbf` database for
 each C10 library, route and treatment identity. `index/catalogue.sqlite3` maps
 every file back to its library, build identity, provenance seal and digest.
 
+Start with `manifest.md` for the complete human-readable inventory: covered
+libraries and versions, execution variants, database schemas and file counts.
+
 `index/hash-quality.sqlite3` is a separate, versioned evidence sidecar. It
 records cross-library signature ownership and validation observations; it does
 not silently remove or rewrite signatures in the raw FID databases.
@@ -547,6 +550,180 @@ contains raw archive/object-derived FID populations. The linked-reference
 validation report is included as evidence about matching quality, not as an
 additional `.fidbf` population.
 """
+
+
+def _human_bytes(value: int) -> str:
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    amount = float(value)
+    for unit in units:
+        if abs(amount) < 1024 or unit == units[-1]:
+            return f"{amount:,.0f} {unit}" if unit == "B" else f"{amount:,.2f} {unit}"
+        amount /= 1024
+    raise AssertionError("unreachable")
+
+
+def _sqlite_schema(path: Path) -> list[dict[str, object]]:
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        table_names = [
+            str(row[0]) for row in connection.execute("""SELECT name FROM sqlite_master
+                   WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+                   ORDER BY name""")
+        ]
+        tables = []
+        for name in table_names:
+            quoted = name.replace('"', '""')
+            columns = [
+                {
+                    "name": str(row[1]),
+                    "type": str(row[2]) or "ANY",
+                    "not_null": bool(row[3]),
+                    "primary_key": bool(row[5]),
+                }
+                for row in connection.execute(f'PRAGMA table_info("{quoted}")')
+            ]
+            tables.append({"name": name, "columns": columns})
+        return tables
+    finally:
+        connection.close()
+
+
+def _database_structure(database: Path, package_path: str) -> list[str]:
+    lines = [
+        f"### `{package_path}`",
+        "",
+        f"Size: **{_human_bytes(database.stat().st_size)}**",
+        "",
+    ]
+    for table in _sqlite_schema(database):
+        lines.extend(
+            (
+                f"#### `{table['name']}`",
+                "",
+                "| Column | Type | Constraint |",
+                "|---|---|---|",
+            )
+        )
+        for column in table["columns"]:
+            constraints = []
+            if column["primary_key"]:
+                constraints.append("primary key")
+            if column["not_null"]:
+                constraints.append("not null")
+            lines.append(
+                f"| `{column['name']}` | `{column['type']}` | "
+                f"{', '.join(constraints) or '—'} |"
+            )
+        lines.append("")
+    return lines
+
+
+def _manifest_markdown(
+    authority: Mapping[str, object],
+    status: Mapping[str, object],
+    artifacts: list[_Artifact],
+    catalogue: Path,
+    quality: Path,
+    built_at: str,
+) -> str:
+    population = status["population"]
+    libraries = status["libraries"]
+    assert isinstance(population, dict) and isinstance(libraries, list)
+    variants = sorted({(row.route_id, row.treatment_id) for row in artifacts})
+    routes = sorted({route for route, _ in variants})
+    treatments = sorted({treatment for _, treatment in variants})
+    by_route = {
+        route: sorted(
+            treatment for candidate, treatment in variants if candidate == route
+        )
+        for route in routes
+    }
+    lines = [
+        f"# {authority['release_id']} manifest",
+        "",
+        f"Sealed evidence timestamp: `{built_at}`  ",
+        f"Export authority: `{authority['authority_path']}`  ",
+        f"Authority SHA-256: `{authority['authority_sha256']}`",
+        "",
+        "## Contents at a glance",
+        "",
+        "| Item | Count |",
+        "|---|---:|",
+        f"| Libraries | {len(libraries):,} |",
+        f"| Library releases | {len(libraries):,} |",
+        f"| Exact execution variants per library | {len(variants):,} |",
+        f"| Toolchain/target routes | {len(routes):,} |",
+        f"| Treatment profiles | {len(treatments):,} |",
+        "| Native Ghidra `.fidb` files | 0 |",
+        f"| Raw Ghidra `.fidbf` files | {len(artifacts):,} |",
+        f"| Raw `.fidbf` bytes | {_human_bytes(int(population['raw_bytes']))} |",
+        "| SQLite database files | 2 |",
+        "",
+        "This release deliberately exports raw `.fidbf` files. It does not contain a",
+        "merged native `.fidb`; consumers can select or project the raw files using the",
+        "catalogue and compatibility authority supplied here.",
+        "",
+        "## Libraries and versions covered",
+        "",
+        "| Rank | Library | ID | Version | `.fidbf` files | Raw size |",
+        "|---:|---|---|---|---:|---:|",
+    ]
+    for row in libraries:
+        assert isinstance(row, dict)
+        lines.append(
+            f"| {int(row['rank'])} | {row['label']} | `{row['id']}` | "
+            f"`{row['version']}` | {int(row['present']):,} | "
+            f"{_human_bytes(int(row['bytes']))} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Execution variants covered",
+            "",
+            f"Every library has **{len(variants):,}** exact route/treatment executions.",
+            "The table below is the covered applicability set—not a theoretical Cartesian",
+            "product. Each row lists the treatment profiles actually present for that route.",
+            "",
+            "| Route / compiler-target identity | Treatments | Exact variants |",
+            "|---|---|---:|",
+        ]
+    )
+    for route, covered in by_route.items():
+        lines.append(
+            f"| `{route}` | {', '.join(f'`{item}`' for item in covered)} | {len(covered)} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### Treatment profiles",
+            "",
+            *[f"- `{treatment}`" for treatment in treatments],
+            "",
+            "## Database files",
+            "",
+            "- `index/catalogue.sqlite3` is the package map. Its `fidbf_artifact` rows",
+            "  connect each `.fidbf` path to the library release, route, treatment,",
+            "  source/toolchain identity, Ghidra language/compiler specification, job,",
+            "  provenance seal, byte count and SHA-256.",
+            "- `index/hash-quality.sqlite3` is the versioned cross-library evidence",
+            "  sidecar. It keeps signatures, many-to-many library ownership, corpus",
+            "  generations and accumulated validation outcomes separate from immutable",
+            "  raw FID data.",
+            "",
+            "The exact SQL-facing structure of both packaged databases follows.",
+            "",
+            *_database_structure(catalogue, str(authority["catalogue"]["path"])),  # type: ignore[index]
+            *_database_structure(quality, str(authority["hash_quality"]["package_path"])),  # type: ignore[index]
+            "## Other release evidence",
+            "",
+            f"- `{authority['validation']['package_path']}` — matching/validation report",  # type: ignore[index]
+            f"- `{authority['compatibility']['package_path']}` — lane compatibility authority",  # type: ignore[index]
+            "- `release.toml` — machine-readable release identity and generation binding",
+            "- `checksums.sha256` — SHA-256 for every packaged payload member",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _tar_add_file(archive: tarfile.TarFile, source: Path, arcname: str) -> None:
@@ -600,11 +777,24 @@ def build_export(
         release.write_text(_release_toml(authority, status, built_at), encoding="utf-8")
         readme = temp / "README.md"
         readme.write_text(_readme(str(authority["release_id"])), encoding="utf-8")
+        manifest = temp / "manifest.md"
+        manifest.write_text(
+            _manifest_markdown(
+                authority,
+                status,
+                artifacts,
+                catalogue,
+                quality_snapshot,
+                built_at,
+            ),
+            encoding="utf-8",
+        )
         validation = _managed_path(root, authority["validation"]["report"])  # type: ignore[index]
         registry = _managed_path(root, authority["compatibility"]["lane_registry"])  # type: ignore[index]
         fixed = [
             (release, "release.toml"),
             (readme, "README.md"),
+            (manifest, "manifest.md"),
             (catalogue, str(authority["catalogue"]["path"])),  # type: ignore[index]
             (quality_snapshot, str(authority["hash_quality"]["package_path"])),  # type: ignore[index]
             (validation, str(authority["validation"]["package_path"])),  # type: ignore[index]
