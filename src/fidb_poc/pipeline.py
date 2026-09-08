@@ -517,8 +517,8 @@ def _safe_symlink_target(destination: Path, link_path: Path, link_name: str) -> 
     root = destination.resolve()
     if root not in (resolved, *resolved.parents):
         raise PipelineError(f"archive symlink target escapes destination: {link_name}")
-    if not resolved.is_file():
-        raise PipelineError(f"archive symlink target is not a file: {link_name}")
+    if not resolved.exists():
+        raise PipelineError(f"archive symlink target does not exist: {link_name}")
     return resolved
 
 
@@ -775,11 +775,8 @@ def _extract_archive_objects(
         log_path=log_path.with_name(f"{archive.name}-list.log"),
     ).stdout.splitlines()
     members = [name.strip() for name in listing if name.strip()]
-    duplicates = sorted(name for name, count in Counter(members).items() if count > 1)
-    if duplicates:
-        raise PipelineError(
-            f"archive {archive.name} has duplicate member names: {duplicates}"
-        )
+    counts = Counter(members)
+    duplicates = sorted(name for name, count in counts.items() if count > 1)
     invalid_members = sorted(
         name
         for name in members
@@ -797,6 +794,36 @@ def _extract_archive_objects(
         environment=environment,
         log_path=log_path.with_name(f"{archive.name}-extract.log"),
     )
+    observed_members = [name for name in members if name not in duplicates]
+    if duplicates:
+        with tempfile.TemporaryDirectory(
+            prefix=f".{archive.name}-duplicates-", dir=destination.parent
+        ) as temporary:
+            extraction = Path(temporary)
+            for member in duplicates:
+                (destination / member).unlink(missing_ok=True)
+                for occurrence in range(1, counts[member] + 1):
+                    run_command(
+                        [
+                            *route.archiver,
+                            "xN",
+                            str(occurrence),
+                            str(archive),
+                            member,
+                        ],
+                        cwd=extraction,
+                        environment=environment,
+                        log_path=log_path.with_name(
+                            f"{archive.name}-{member}-{occurrence}-extract.log"
+                        ),
+                    )
+                    extracted = extraction / member
+                    if not extracted.is_file():
+                        raise PipelineError(
+                            f"archive did not extract occurrence {occurrence} of {member}"
+                        )
+                    extracted.replace(destination / f"{occurrence:04d}-{member}")
+                    observed_members.append(member)
     objects = sorted(
         path
         for path in destination.iterdir()
@@ -804,7 +831,6 @@ def _extract_archive_objects(
     )
     if not objects:
         raise PipelineError(f"archive {archive} contains no object members")
-    observed_members = [path.name for path in objects]
     if Counter(observed_members) != Counter(members):
         raise PipelineError(
             f"archive extraction did not reconcile for {archive.name}; "
@@ -813,7 +839,11 @@ def _extract_archive_objects(
     unexpected = sorted(
         path.name
         for path in destination.iterdir()
-        if not path.is_file() or path.name not in members
+        if not path.is_file()
+        or (
+            path.name not in members
+            and not any(path.name.endswith(f"-{member}") for member in duplicates)
+        )
     )
     if unexpected:
         raise PipelineError(

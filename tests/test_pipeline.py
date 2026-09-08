@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -22,6 +23,7 @@ from fidb_poc.pipeline import (
     find_pyghidra,
     ghidra_environment,
     _safe_member_path,
+    _extract_archive_objects,
     _validate_objects,
     execute,
     extract_source,
@@ -542,6 +544,73 @@ class PipelineTests(unittest.TestCase):
 
             with self.assertRaisesRegex(PipelineError, "symlink target escapes"):
                 extract_source(library, archive, root / "sources")
+
+    def test_source_archive_can_preserve_an_internal_directory_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "demo.tar.gz"
+            with tarfile.open(archive, "w:gz") as source_tar:
+                for name in ("demo-1.0", "demo-1.0/include"):
+                    directory = tarfile.TarInfo(name)
+                    directory.type = tarfile.DIRTYPE
+                    source_tar.addfile(directory)
+                header = tarfile.TarInfo("demo-1.0/include/demo.h")
+                header.size = 7
+                source_tar.addfile(header, io.BytesIO(b"header\n"))
+                link = tarfile.TarInfo("demo-1.0/current")
+                link.type = tarfile.SYMTYPE
+                link.linkname = "include"
+                source_tar.addfile(link)
+            demo = Library(
+                name="demo",
+                version="1.0",
+                url="https://example.invalid/demo.tar.gz",
+                sha256=sha256(archive),
+                source_directory="demo-1.0",
+                project_markers=("current",),
+                allowed_build_systems=("make",),
+                preferred_build_system="make",
+                static_archives=("libdemo.a",),
+            )
+
+            source = extract_source(demo, archive, root / "sources")
+
+            self.assertTrue((source / "current").is_symlink())
+            self.assertEqual((source / "current/demo.h").read_text(), "header\n")
+
+    def test_archive_object_extraction_preserves_duplicate_member_names(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first = root / "first"
+            second = root / "second"
+            first.mkdir()
+            second.mkdir()
+            (first / "parser.o").write_bytes(b"first")
+            (second / "parser.o").write_bytes(b"second")
+            archive = root / "libdemo.a"
+            subprocess.run(
+                ["ar", "qc", str(archive), str(first / "parser.o"), str(second / "parser.o")],
+                check=True,
+            )
+
+            objects = _extract_archive_objects(
+                archive,
+                root / "objects",
+                load_configuration(
+                    Path(__file__).resolve().parents[1] / "worker.toml",
+                    request_override=("zlib@1.3.2",),
+                ).routes[0],
+                pipeline_environment(),
+                root / "extract.log",
+            )
+
+            self.assertEqual(
+                [path.name for path in objects],
+                ["0001-parser.o", "0002-parser.o"],
+            )
+            self.assertEqual(
+                {path.read_bytes() for path in objects}, {b"first", b"second"}
+            )
 
     def test_java_identity_prefers_java_home(self):
         with tempfile.TemporaryDirectory() as temporary:
