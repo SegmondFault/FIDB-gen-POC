@@ -638,6 +638,12 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "-DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF",
             "-DENABLE_OPENCL_LAYERS=OFF",
             "-DENABLE_OPENCL_LAYERINFO=OFF",
+            # Static-library try-compiles cannot prove these functions link.
+            # Force the portable getenv fallback for cross targets.
+            "-DHAVE_SECURE_GETENV=OFF",
+            "-DHAVE___SECURE_GETENV=OFF",
+            # Keep the reviewed archive name stable on Windows as well.
+            "-DCMAKE_STATIC_LIBRARY_PREFIX=lib",
         ),
         ("OpenCL",),
     ),
@@ -674,6 +680,9 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "-DWOLFSSL_ASM=no",
             "-DWOLFSSL_EXAMPLES=no",
             "-DWOLFSSL_CRYPT_TESTS=no",
+            # Windows has gmtime_s, not the POSIX gmtime_r contract. A static
+            # try-compile otherwise reports a false positive while crossing.
+            "-DHAVE_GMTIME_R=OFF",
         ),
         ("wolfssl",),
     ),
@@ -924,6 +933,7 @@ def build_commands(
             "-DWOLFSSL_ASM=no",
             "-DWOLFSSL_EXAMPLES=no",
             "-DWOLFSSL_CRYPT_TESTS=no",
+            "-DHAVE_GMTIME_R=OFF",
             f"-DCMAKE_INSTALL_PREFIX={dependency_install}",
             "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
             "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",

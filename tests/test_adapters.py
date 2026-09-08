@@ -334,8 +334,18 @@ class AdapterTests(unittest.TestCase):
             jobs=4,
             source_root=source_root,
         )
+        wolfssl = build_commands(
+            "wolfssl-cmake",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
 
         self.assertIn("-DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF", opencl[0])
+        self.assertIn("-DHAVE_SECURE_GETENV=OFF", opencl[0])
+        self.assertIn("-DHAVE___SECURE_GETENV=OFF", opencl[0])
+        self.assertIn("-DCMAKE_STATIC_LIBRARY_PREFIX=lib", opencl[0])
         self.assertIn(
             f"-DOPENCL_ICD_LOADER_HEADERS_DIR={source_root}/fidb-inputs/opencl-headers-2026.05.29",
             opencl[0],
@@ -346,6 +356,7 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(protobuf[1][-1], "libprotobuf")
         self.assertEqual(mbedtls[1][-3:], ("tfpsacrypto", "mbedx509", "mbedtls"))
+        self.assertIn("-DHAVE_GMTIME_R=OFF", wolfssl[0])
 
     def test_priority_specialist_adapters_are_bounded_and_reproducible(self):
         source_root = Path("/work/priority").resolve()
@@ -399,6 +410,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("vi.h", libedit[-2])
         self.assertIn("-DWOLFSSL_OPENSSLEXTRA=yes", libssh2[0])
         self.assertIn("-DBUILD_SHARED_LIBS=OFF", libssh2[0])
+        self.assertIn("-DHAVE_GMTIME_R=OFF", libssh2[0])
         self.assertEqual(musl[0][1], "./configure")
         self.assertIn("-Dlocincpth=/nonexistent", perl[0])
 
