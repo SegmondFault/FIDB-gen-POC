@@ -2,9 +2,11 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fidb_poc.auto_batch_builder import (
     _pack_route_bundles,
+    _route_bundles,
     _render_plan,
     _render_queue,
     check_auto_batches,
@@ -45,6 +47,60 @@ class AutoBatchBuilderTests(unittest.TestCase):
                 for chunk in chunks
             )
         )
+
+    def test_route_bundles_omit_recipe_inapplicable_routes(self):
+        time_plan = {
+            "blocks": [
+                {
+                    "items": [
+                        {
+                            "rank": 1,
+                            "source_id": "demo",
+                            "label": "Demo",
+                            "version": "1.0",
+                            "batch_authority": "batches/demo.toml",
+                            "executions": 2,
+                            "estimated_hours": 1.0,
+                        }
+                    ]
+                }
+            ]
+        }
+        raw_batch = {
+            "libraries": [
+                {"id": "demo", "version": "1.0", "recipe_id": "demo@1.0"}
+            ]
+        }
+        projected = {
+            "libraries": [
+                {
+                    "id": "demo",
+                    "version": "1.0",
+                    "recipe_id": "demo@1.0",
+                    "applicable_route_ids": ["route-a"],
+                }
+            ]
+        }
+        with (
+            patch("fidb_poc.auto_batch_builder.load_width_batch", return_value=raw_batch),
+            patch(
+                "fidb_poc.auto_batch_builder.project_width_batch_readiness",
+                return_value=projected,
+            ),
+            patch(
+                "fidb_poc.auto_batch_builder._ordered_width_axes",
+                return_value=(("route-a", "route-b"), ("o2", "o3")),
+            ),
+            patch(
+                "fidb_poc.auto_batch_builder._reviewed_recipe_projections",
+                return_value=[],
+            ),
+        ):
+            bundles = _route_bundles(self.root, time_plan)
+
+        self.assertEqual(len(bundles), 1)
+        self.assertEqual(bundles[0]["route_id"], "route-a")
+        self.assertEqual(bundles[0]["treatment_ids"], ["o2", "o3"])
 
     def test_one_route_plan_keeps_all_treatments_and_resolves(self):
         chunk = {

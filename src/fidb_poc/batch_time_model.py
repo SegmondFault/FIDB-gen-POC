@@ -12,7 +12,7 @@ import tomllib
 
 from .c_width import compile_c_width
 from .performance_profiles import load_performance_profiles
-from .width_batch import load_width_batch
+from .width_batch import load_width_batch, project_width_batch_readiness
 
 BATCH_TIME_MODEL_SCHEMA = "fidb-batch-time-model/v1"
 TIME_BLOCK_PLAN_SCHEMA = "fidb-time-block-plan/v1"
@@ -37,6 +37,32 @@ _TOP_FIELDS = {
     "libraries",
     "treatments",
 }
+
+
+def _reviewed_recipe_projections(root: Path) -> list[dict[str, object]]:
+    """Read the applicability fields needed by planning without loading builds."""
+
+    rows = []
+    for path in sorted((root / "recipes").glob("*.toml")):
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+        rows.append(
+            {
+                "id": f'{document["name"]}@{document["version"]}',
+                "kind": "native",
+                "url": document["url"],
+                "sha256": document["sha256"],
+                "applicability": {
+                    "target_os": list(document.get("supported_target_os", [])),
+                    "architectures": list(document.get("supported_architectures", [])),
+                    "compiler_families": list(
+                        document.get("supported_compiler_families", [])
+                    ),
+                    "excluded_routes": list(document.get("unsupported_routes", [])),
+                },
+                "authority_path": str(path.relative_to(root)),
+            }
+        )
+    return rows
 
 
 def _number(value: object, field: str, *, positive: bool = True) -> float:
@@ -246,12 +272,15 @@ def compile_time_block_plan(
     if not isinstance(raw_batch_paths, list) or not raw_batch_paths:
         raise ValueError("batch time model campaign_batch_paths must be non-empty")
     compiled_batches = []
+    reviewed_recipes = _reviewed_recipe_projections(root)
     width_cache: dict[str, dict[str, object]] = {}
     for index, value in enumerate(raw_batch_paths):
         relative, batch_path = _project_path(
             root, value, f"campaign_batch_paths[{index}]"
         )
-        batch = load_width_batch(root, batch_path)
+        batch = project_width_batch_readiness(
+            load_width_batch(root, batch_path), reviewed_recipes
+        )
         if batch["language_id"] != language_id:
             raise ValueError("batch time model campaign mixes languages")
         compiled_batches.append((relative, batch))
@@ -275,19 +304,14 @@ def compile_time_block_plan(
                 f"batch time model lacks treatment costs for: {', '.join(missing_costs)}"
             )
         base_pair_count = len(selected_pairs)
-        execution_count = int(batch["summary"]["executions_per_library"])  # type: ignore[index]
-        if base_pair_count == 0 or execution_count % base_pair_count:
+        maximum_execution_count = int(
+            batch["summary"]["executions_per_library"]  # type: ignore[index]
+        )
+        if base_pair_count == 0 or maximum_execution_count % base_pair_count:
             raise ValueError(
                 "batch execution count cannot be attributed to treatment pairs"
             )
-        downstream_multiplier = execution_count // base_pair_count
-        weighted_cells = downstream_multiplier * sum(
-            treatment_costs[str(row["treatment_id"])] for row in selected_pairs
-        )
-        android_pairs = (
-            sum(str(row["route_id"]).startswith("android-") for row in selected_pairs)
-            * downstream_multiplier
-        )
+        downstream_multiplier = maximum_execution_count // base_pair_count
         for library in batch["libraries"]:  # type: ignore[index]
             source_id = str(library["id"])
             source = libraries.get(source_id)
@@ -295,6 +319,27 @@ def compile_time_block_plan(
                 raise ValueError(
                     f"batch time model lacks source metrics for {source_id}"
                 )
+            applicable_routes = set(map(str, library["applicable_route_ids"]))
+            library_pairs = [
+                row
+                for row in selected_pairs
+                if str(row["route_id"]) in applicable_routes
+            ]
+            execution_count = len(library_pairs) * downstream_multiplier
+            if execution_count != int(library["applicable_executions"]):
+                raise ValueError(
+                    f"batch applicability drifted for {source_id}: "
+                    f"{execution_count} != {library['applicable_executions']}"
+                )
+            weighted_cells = downstream_multiplier * sum(
+                treatment_costs[str(row["treatment_id"])] for row in library_pairs
+            )
+            android_pairs = (
+                sum(
+                    str(row["route_id"]).startswith("android-") for row in library_pairs
+                )
+                * downstream_multiplier
+            )
             raw_complexity = (source["source_lines"] / reference_lines) ** exponent
             complexity = min(maximum, max(minimum, raw_complexity))
             hours = weighted_cells / estimated_rate * complexity

@@ -22,9 +22,11 @@ from .batch_materializer import (
     _resolve_rendered_plan,
 )
 from .batch_time_model import DEFAULT_MODEL_PATH, compile_time_block_plan
+from .batch_time_model import _reviewed_recipe_projections
 from .plan_request import queue_identity_digest
 from .qualification_pipeline import require_qualification_gates
 from .width_batch import load_width_batch
+from .width_batch import project_width_batch_readiness
 
 AUTO_BATCH_SCHEMA = "fidb-auto-batch-campaign/v1"
 AUTO_BATCH_BUILDER_VERSION = "route-treatment-bundles-v1"
@@ -76,7 +78,10 @@ def _route_bundles(root: Path, time_plan: dict[str, object]) -> list[dict[str, o
     for item in items:
         authority = str(item["batch_authority"])
         if authority not in batches:
-            batches[authority] = load_width_batch(root, root / authority)
+            batches[authority] = project_width_batch_readiness(
+                load_width_batch(root, root / authority),
+                _reviewed_recipe_projections(root),
+            )
             axes[authority] = _ordered_width_axes(root, batches[authority])
         routes, treatments = axes[authority]
         library_matches = [
@@ -90,14 +95,16 @@ def _route_bundles(root: Path, time_plan: dict[str, object]) -> list[dict[str, o
                 f"matches {authority}"
             )
         recipe_id = str(library_matches[0]["recipe_id"])
-        expected = len(routes) * len(treatments)
+        applicable_routes = set(map(str, library_matches[0]["applicable_route_ids"]))
+        selected_routes = tuple(route for route in routes if route in applicable_routes)
+        expected = len(selected_routes) * len(treatments)
         if int(item["executions"]) != expected:
             raise ValueError(
                 f"{item['source_id']} cannot be split into native route bundles: "
                 f"{item['executions']} executions != {expected}"
             )
-        route_hours = float(item["estimated_hours"]) / len(routes)
-        for route in routes:
+        route_hours = float(item["estimated_hours"]) / len(selected_routes)
+        for route in selected_routes:
             bundles.append(
                 {
                     "rank": int(item["rank"]),
