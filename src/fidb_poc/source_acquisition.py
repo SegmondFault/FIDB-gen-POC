@@ -280,7 +280,7 @@ def load_acquisition(root: Path, acquisition_id: str) -> dict[str, object]:
     }
 
 
-def _candidates(path: Path) -> list[dict[str, object]]:
+def _csv_candidates(path: Path) -> list[dict[str, object]]:
     with path.open("r", encoding="utf-8", newline="") as stream:
         reader = csv.DictReader(stream)
         if tuple(reader.fieldnames or ()) != _CANDIDATE_HEADER:
@@ -298,6 +298,43 @@ def _candidates(path: Path) -> list[dict[str, object]]:
             }
         )
     return result
+
+
+def _priority_source_families(path: Path) -> list[dict[str, object]]:
+    """Project one ordered priority overlay into unique source acquisitions.
+
+    The priority authority orders detection subjects.  Some subjects deliberately
+    share one source tree (libgcc/libstdc++ and ncurses/libtinfo), so acquisition
+    preserves first appearance while downloading each source family only once.
+    """
+
+    from .priority_schedule import load_priority_overlay
+
+    root = path.resolve().parents[1]
+    overlay = load_priority_overlay(root, path)
+    seen: set[str] = set()
+    result = []
+    for subject in overlay["subjects"]:
+        family = str(subject["source_family"])
+        if family in seen:
+            continue
+        seen.add(family)
+        result.append(
+            {
+                "rank": len(result) + 1,
+                "candidate_key": family,
+                "display_name": family,
+            }
+        )
+    return result
+
+
+def _candidates(path: Path) -> list[dict[str, object]]:
+    if path.suffix == ".csv":
+        return _csv_candidates(path)
+    if path.suffix == ".toml":
+        return _priority_source_families(path)
+    raise ValueError("source acquisition candidate authority must be CSV or TOML")
 
 
 def _metadata_state_path(root: Path, acquisition_id: str) -> Path:

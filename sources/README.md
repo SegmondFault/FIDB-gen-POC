@@ -60,6 +60,34 @@ or invoke Ghidra. Moving a source into the build matrix still requires a
 reviewed `fidb-recipe/v3` recipe, a supported fixed adapter, route-specific
 qualification, and an explicitly armed campaign.
 
+## Malware-priority source families
+
+`coverage/c-malware-priority-v1.toml` orders 25 detection subjects but only 23
+source families: GCC is shared by libgcc/libstdc++ and ncurses is shared by
+libncurses/libtinfo. The `c-malware-priority-v1` acquisition projects that
+operator-owned order into one checksum-pinned download per unique family.
+
+```sh
+.venv/bin/fidb-poc source acquisition status \
+  c-malware-priority-v1 --project-root .
+.venv/bin/fidb-poc source acquisition pull \
+  c-malware-priority-v1 --project-root .
+```
+
+The tracked lock records the precise resolver snapshot, source version, URL
+and SHA-256. The ignored per-lock receipt under `var/fidb-sources/acquisition/`
+records what this host actually downloaded or found in the shared verified
+cache, when it was observed, and the exact byte count. Pulling sources does not
+extract them or begin qualification, compilation, Ghidra or validation.
+
+BoringSSL deliberately begins with Debian's checksum-pinned AOSP BoringSSL
+source because upstream does not publish a stable release archive. That choice
+is explicit rather than silently treating a moving VCS head as a release. An
+upstream-commit corpus can later be added as a distinct version. glibc, uClibc,
+musl and wolfSSL likewise use checksum-and-size-bearing Debian source records;
+the remaining families use checksum-bearing upstream archives frozen through
+the registry snapshot.
+
 To extend the pack, add a new `[[source]]` row or create a separately versioned
 pack. Never use a floating `latest` URL: choose an explicit stable release,
 download it from the upstream project, record the exact byte count and SHA-256,

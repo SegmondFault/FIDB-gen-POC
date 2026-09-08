@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from fidb_poc.source_acquisition import (
+    _candidates,
     _debian_records,
     _homebrew_records,
     acquisition_status,
@@ -17,6 +18,40 @@ from fidb_poc.source_acquisition import (
 
 
 class SourceAcquisitionTests(unittest.TestCase):
+    def test_priority_overlay_projects_unique_source_families_in_first_seen_order(self):
+        root = Path(__file__).resolve().parents[1]
+
+        rows = _candidates(root / "coverage/c-malware-priority-v1.toml")
+
+        self.assertEqual(len(rows), 23)
+        self.assertEqual(
+            [row["candidate_key"] for row in rows[:6]],
+            ["boringssl", "glibc", "uclibc", "gcc", "zlib", "curl"],
+        )
+        self.assertEqual([row["candidate_key"] for row in rows].count("gcc"), 1)
+        self.assertEqual([row["candidate_key"] for row in rows].count("ncurses"), 1)
+
+    def test_priority_source_lock_pins_every_unique_source_family(self):
+        root = Path(__file__).resolve().parents[1]
+
+        acquisition = load_acquisition(root, "c-malware-priority-v1")
+        lock = load_acquisition_lock(root, "c-malware-priority-v1")
+
+        self.assertEqual(
+            acquisition["candidate_authority"],
+            "coverage/c-malware-priority-v1.toml",
+        )
+        self.assertEqual(len(lock["candidate"]), 23)
+        self.assertTrue(all(row["status"] == "pinned" for row in lock["candidate"]))
+        by_id = {row["candidate_key"]: row for row in lock["candidate"]}
+        self.assertEqual(
+            by_id["boringssl"]["registry_key"],
+            "android-platform-external-boringssl",
+        )
+        self.assertEqual(by_id["boringssl"]["resolver_id"], "debian-sid")
+        self.assertEqual(by_id["opencl-loader"]["registry_key"], "opencl-icd-loader")
+        self.assertEqual(by_id["wolfssl"]["resolver_id"], "debian-sid")
+
     def test_frozen_c80_lock_covers_every_material_candidate(self):
         root = Path(__file__).resolve().parents[1]
 
