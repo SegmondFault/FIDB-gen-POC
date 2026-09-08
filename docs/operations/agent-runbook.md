@@ -140,7 +140,7 @@ count in the GUI therefore never means that a library is queueable.
 The priority overlay has three independent execution authorities:
 
 - `batches/c-malware-priority-native-v1.toml` binds 21 reviewed source recipes
-  to 3,432 applicable full-width cells. It remains blocked until the 250-cell
+  to 3,426 applicable full-width cells. It remains blocked until the 249-cell
   compilation authority in `qualification/c-malware-priority-native-v1.toml`
   is deliberately run and sealed.
 - `plans/c-malware-priority-runtime-v1.toml` resolves 72 glibc/libgcc/libstdc++
@@ -165,6 +165,35 @@ After native qualification, materialise short disarmed chunks, run one
 representative full-path canary for native, route-owned runtime and uClibc
 archive cells, then admit them explicitly. Never infer permission to start from
 source/cache readiness alone.
+
+The first complete native qualification generation on 2026-09-08 retained
+242 successful cells and eight diagnostic failures before repair. Five Android
+libedit cells lacked BSD `NBBY`; define the target fact as eight bits in the
+libedit adapter rather than patching a cached source tree. Two llvm-mingw
+OpenCL archives contained `OpenCL.rc.res`; `llvm-readobj` proved these were
+relocatable COFF objects, so the archive extractor admits `.res` only for
+PE/COFF and still relies on binary-header validation. The eighth cell was
+protobuf on its explicitly listed unsupported oldest llvm-mingw route; recipe
+applicability must apply `unsupported_routes` as well as OS, architecture and
+compiler-family bounds. Do not retry any of these by weakening validation or
+editing evidence. Commit the general fix and regression test, then use
+`qualify-recipes --restart-stale` so the failed generation is archived and the
+new seal binds the complete execution implementation.
+
+`performance/c-malware-priority-native-v1.toml` is the inspectable 3,426-cell
+time model and `plans/c-malware-priority-native-v1-queue-policy.toml` supplies
+the 00:00–05:30 resource and chaining policy. Generate its host-sealed,
+still-disarmed short chunks with explicit paths:
+
+```sh
+uv run fidb-poc auto-batches --project-root . \
+  --model performance/c-malware-priority-native-v1.toml \
+  --source-queue plans/c-malware-priority-native-v1-queue-policy.toml
+```
+
+The applicability-aware materializer must report exactly 3,426 executions;
+4,662 is the rectangular maximum and would manufacture 1,236 unsupported
+recipe/route cells. This native cross-compilation path does not require QEMU.
 
 ## Route resolution lessons
 
