@@ -1348,6 +1348,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(tokens[1:])
+    if tokens and tokens[0] == "export":
+        from .database_export import main as export_main
+
+        return export_main(tokens[1:])
     if tokens and tokens[0] == "run-width":
         return _run_width_main(tokens[1:])
     if tokens and tokens[0] == "benchmark-width":

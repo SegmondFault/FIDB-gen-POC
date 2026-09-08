@@ -1,0 +1,48 @@
+schema_version = "fidb-export/v1"
+id = "c10-fidbf-v1"
+label = "C10 portable raw FID package"
+state = "defined"
+release_id = "fidb-c10-fidbf-v1"
+language_id = "c"
+package_format = "tar.zst"
+compression_level = 3
+output_root = "artifacts/exports"
+
+[population]
+source_pack = "sources/c-top10-v1.toml"
+width_authority = "coverage/c-width-v2.toml"
+ledger = "var/fidb-coordinator/ledger.sqlite3"
+artifact_kind = "fidbf"
+expected_libraries = 10
+expected_identities_per_library = 222
+expected_artifacts = 2220
+include_inactive_completed_jobs = true
+require_unique_exact_identities = true
+require_ledger_sha256 = true
+
+[catalogue]
+path = "index/catalogue.sqlite3"
+schema_version = "fidb-export-catalogue/v1"
+
+[hash_quality]
+authority = "validation/corpus-hash-index-v2.toml"
+database = "artifacts/hash-discrimination/corpus-index-v2.sqlite3"
+package_path = "index/hash-quality.sqlite3"
+required_generation_owners = 10
+required = true
+
+[validation]
+report = "artifacts/fid-matching-runs/c10-archive-linked-fid-methodology-v1/full-report.json"
+package_path = "validation/c10-archive-linked-report.json"
+required = true
+
+[compatibility]
+lane_registry = "lanes/registry.toml"
+package_path = "authority/lanes.toml"
+
+[verification]
+sqlite_quick_check = true
+verify_every_fidbf_sha256 = true
+reopen_archive = true
+require_exact_member_set = true
+

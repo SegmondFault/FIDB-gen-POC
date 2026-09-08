@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fidb_poc.authority_catalog import authority_catalog
 from fidb_poc.plan_request import resolve_plan
-from fidb_poc.width_batch import load_width_batch
+from fidb_poc.width_batch import load_width_batch, project_width_batch_readiness
 
 
 class WidthBatchTests(unittest.TestCase):

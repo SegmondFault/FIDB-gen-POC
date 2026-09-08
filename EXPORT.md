@@ -1,20 +1,43 @@
 # Database export
 
-**Operations → Export (panel 14)** is the read-only release boundary for FIDB
-database packages. The first implementation deliberately does not assemble,
-copy, activate or publish anything. It projects existing coordinator results,
-lane inventory, lane compatibility authority and hash-discrimination state so
-that missing release work cannot be mistaken for a usable package.
+**Operations → Export (panel 14)** previews and builds the current portable C10
+research release. Its reviewed authority is
+`export/c10-fidbf-v1.toml`; the same preview and build operations are available
+from the console:
 
-The panel distinguishes three things that are currently separate:
+```bash
+uv run fidb-poc export preview --project-root .
+uv run fidb-poc export build --project-root .
+```
 
-- sealed per-cell `.fidb`/`.fidbf` build evidence;
-- immutable experimental lane-database generations;
-- analyst-admitted lane packs suitable for distribution.
+Preview is read-only. Build remains disabled unless all 2,220 exact C10
+library/route/treatment identities have a readable sealed `.fidbf`, the
+ten-owner hash-quality generation passes SQLite integrity checks, and the
+compatibility authority and validation report exist. Historical retries are
+not counted as width: the newest completed seal supplies the one exported file
+for an exact identity, while duplicate rows remain in the coordinator ledger.
 
-A sealed cell is not an export pack. A raw or compact lane generation is not an
-active pack. The build buttons remain disarmed until the release contract below
-has an implementation and tests.
+The direct-use C10 package contains:
+
+- 2,220 raw `.fidbf` files under `fidbf/`;
+- `index/catalogue.sqlite3`, mapping each packaged file to library, route,
+  treatment, source, toolchain, Ghidra language/compiler specification,
+  coordinator job, provenance seal and SHA-256;
+- a consistent SQLite snapshot of the current versioned cross-library
+  hash-quality evidence at `index/hash-quality.sqlite3`;
+- the C10 archive-plus-linked validation report and lane registry;
+- `release.toml`, `README.md` and member-level `checksums.sha256`.
+
+The output is `artifacts/exports/fidb-c10-fidbf-v1.tar.zst`, with an adjacent
+archive checksum. Packaging uses stable member order and metadata. The evidence
+completion timestamp is used as the release timestamp, so rebuilding from
+unchanged inputs produces the same bytes. The builder verifies every FIDBF
+against its ledger digest, snapshots and checks SQLite, tests the zstd stream,
+and reopens the tar member list before atomically replacing the final package.
+
+This is a usable raw-FIDBF research bundle for the downstream maintainer's integration work. It is
+not the later admitted lane-pack publication boundary: sealed per-cell FIDBFs,
+immutable lane generations and analyst-admitted lane packs remain distinct.
 
 ## Required release contract
 
@@ -35,15 +58,17 @@ has an implementation and tests.
 
 ## Configuration boundary
 
-The eventual exporter must be driven by a reviewed TOML authority under an
-`export/` directory. That authority should name the release ID, selected lane
-generations and overlay generation, output root, package format, consumer
-compatibility target and verification policy. It must not infer those choices
-from the current contents of `var/` or silently select “latest”.
+The exporter is driven by `export/c10-fidbf-v1.toml`. It names the exact source
+pack, width authority, expected counts, ledger, sidecar authority, validation
+report, compatibility registry, package paths, compression and verification
+policy. Changing any of those choices requires a reviewed TOML change. The
+builder never infers a different cohort or widens to arbitrary completed jobs.
 
-No export TOML has been added yet because those fields and the portable package
-format have not been frozen. The panel reports this as a blocking gate rather
-than inventing a configuration that later code might treat as authoritative.
+The quality database is selected by an explicit authority path, then snapshotted
+consistently at build time. Its exact generation digest is written into the
+release manifest. This is intentional: validation generations can advance
+without changing raw `.fidbf` bytes, and every export records which evidence
+generation accompanied it.
 
 ## Current placement of hash-noise evidence
 
