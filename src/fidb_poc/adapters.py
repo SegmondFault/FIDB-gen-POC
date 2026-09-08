@@ -673,10 +673,7 @@ def _cmake_target_options(route: Route) -> tuple[str, ...]:
         raise AdapterError(
             f"no reviewed CMake target for {route.target_os}/{route.architecture}"
         )
-    options = [
-        f"-DCMAKE_SYSTEM_NAME={system}",
-        f"-DCMAKE_SYSTEM_PROCESSOR={route.architecture}",
-    ]
+    options = [f"-DCMAKE_SYSTEM_NAME={system}"]
     if route.target_os == "android":
         abi = {
             "aarch64": "arm64-v8a",
@@ -695,6 +692,8 @@ def _cmake_target_options(route: Route) -> tuple[str, ...]:
                 "-DCMAKE_SYSTEM_VERSION=21",
             )
         )
+    else:
+        options.append(f"-DCMAKE_SYSTEM_PROCESSOR={route.architecture}")
     return tuple(options)
 
 

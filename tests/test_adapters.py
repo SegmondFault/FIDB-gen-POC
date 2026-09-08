@@ -484,6 +484,7 @@ class AdapterTests(unittest.TestCase):
 
         self.assertIn("-DCMAKE_SYSTEM_NAME=Android", commands[0])
         self.assertIn("-DCMAKE_ANDROID_ARCH_ABI=x86", commands[0])
+        self.assertNotIn("-DCMAKE_SYSTEM_PROCESSOR=i686", commands[0])
         self.assertIn("-DCMAKE_SYSTEM_VERSION=21", commands[0])
         self.assertIn("-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY", commands[0])
 
