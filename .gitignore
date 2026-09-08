@@ -29,3 +29,5 @@ __pycache__/
 .coverage
 experiments/rust-staged/target/
 .claude/
+# Private chronological operator notes; stable findings belong in reviewed docs.
+docs/history/*-dev-notes.md

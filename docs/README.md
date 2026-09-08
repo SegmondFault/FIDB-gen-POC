@@ -40,9 +40,12 @@ stable contracts from operational procedures and historical research notes.
 Documents under [`history/`](history/) preserve design reasoning and experiment
 history. They are evidence, not current operating authority:
 
-- `operator-dev-notes.md` — chronological research and implementation findings;
 - `operator-workbench.md` — detailed accumulated operator notes;
 - `unification-plan.md` — the completed recipe/malware unification design.
+
+Personal chronological operator notes are local-only and ignored by Git.
+Stable findings must be promoted into the relevant reviewed document before
+they are relied upon by another operator or agent.
 
 When historical prose conflicts with code, tests or current TOML, the reviewed
 TOML and executable validation gates win.
