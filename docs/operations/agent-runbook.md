@@ -6,6 +6,11 @@ and `artifacts/runs/` as evidence governed by the explicit retention boundary.
 A green unit test or resolution
 preflight is necessary, but a real end-to-end canary is the execution boundary.
 
+Do not add work to a default execution path without a representative end-to-end
+benchmark showing neutral or lower wall time. Extra bounded storage is an
+acceptable trade when documented in TOML; continuous tracing, duplicate
+backends, and other slower diagnostics remain opt-in experiments.
+
 The operational recovery procedure is
 [`operations/RECOVERY_RUNBOOK.md`](../../operations/RECOVERY_RUNBOOK.md). Start every
 incident with the read-only queue doctor; do not reconstruct recovery SQL from

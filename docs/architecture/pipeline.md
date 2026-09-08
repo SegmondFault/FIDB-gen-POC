@@ -13,6 +13,19 @@ bzip2 x linux-x86_64-gnu-gcc x baseline_o2
 > one bzip2 FIDB
 ```
 
+## Performance acceptance boundary
+
+Changes to the default build, validation, indexing, and export paths must be
+wall-time neutral or produce a measured end-to-end speedup on a representative
+batch. A local microbenchmark is not sufficient when the change merely moves
+work into another stage. Record the before/after batch wall time and retain the
+same output-equivalence and provenance checks.
+
+Additional disk or index space is acceptable when it is bounded, measured, and
+declared in the relevant TOML authority. Slower diagnostics and experimental
+implementations must remain explicit opt-ins; they must not add instrumentation
+or duplicated work to the normal execution path.
+
 ## End-to-end flow
 
 ```text
