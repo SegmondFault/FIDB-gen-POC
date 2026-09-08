@@ -249,6 +249,7 @@ def _machine_validation_main(argv: list[str]) -> int:
         "qualify-matcher",
         "run-matcher",
         "scheduled-matcher",
+        "freeze-reference-comparison",
         "_matcher-worker",
         "scheduled-hashes",
         "_worker",
@@ -272,6 +273,12 @@ def _machine_validation_main(argv: list[str]) -> int:
                 "--qualification",
                 type=Path,
                 default=Path("validation/machine-validation-link-qualification.toml"),
+            )
+        elif command == "freeze-reference-comparison":
+            child.add_argument(
+                "--comparison",
+                type=Path,
+                default=Path("validation/fid-reference-comparison.toml"),
             )
         else:
             child.add_argument(
@@ -453,6 +460,14 @@ def _machine_validation_main(argv: list[str]) -> int:
             )
             print(json.dumps(document, indent=2, sort_keys=True))
             return 0 if document["state"] == "qualified" else 1
+        if arguments.command == "freeze-reference-comparison":
+            from .fid_reference_comparison import freeze_reference_comparison
+
+            document = freeze_reference_comparison(
+                arguments.project_root, arguments.comparison
+            )
+            print(json.dumps(document, indent=2, sort_keys=True))
+            return 0
         if arguments.command in {"run-matcher", "scheduled-matcher", "_matcher-worker"}:
             from .fid_matching_campaign import (
                 run_campaign,
