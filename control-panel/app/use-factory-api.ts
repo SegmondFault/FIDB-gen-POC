@@ -655,6 +655,35 @@ export type PerformanceProfiles = {
   authority_path: string;
   automatic_policy: FactoryCapabilities['automatic_performance']['policy'];
   profiles: PerformanceProfile[];
+  linked_reference?: {
+    schema_version: 'fidb-linked-reference-performance-resolution/v1';
+    state: 'ready' | 'blocked';
+    mode: 'auto' | 'fixed';
+    authority_path: string;
+    authority_sha256: string;
+    host: {
+      physical_cores: number;
+      logical_cpus: number;
+      total_memory_mib: number;
+      available_memory_mib: number;
+    };
+    selected_profile: null | {
+      id: string;
+      workers: number;
+      jvm_max_heap_mib: number;
+      jvm_active_processors: number;
+      qualification: string;
+      guidance: string;
+    };
+    profiles: Array<{
+      id: string;
+      workers: number;
+      qualification: string;
+      eligible: boolean;
+      blockers: string[];
+    }>;
+    blockers: string[];
+  };
 };
 
 export type LaneDatabaseGeneration = {

@@ -1,0 +1,64 @@
+schema_version = "fidb-linked-reference-performance/v1"
+mode = "auto"
+fixed_profile = "linked-6-measured"
+
+[automatic]
+memory_reserve_mib = 16384
+native_overhead_per_worker_mib = 1024
+allowed_qualifications = ["measured-c10", "capacity-qualified"]
+
+[[profiles]]
+id = "linked-6-measured"
+workers = 6
+jvm_initial_heap_mib = 256
+jvm_max_heap_mib = 6144
+jvm_active_processors = 4
+minimum_physical_cores = 12
+minimum_logical_cpus = 24
+minimum_total_memory_mib = 65536
+maximum_cpu_oversubscription = 1.0
+qualification = "measured-c10"
+evidence_path = "artifacts/linked-reference-runs/c10-linked-reference-v1/generation-seal.json"
+guidance = "Measured C10 producer profile and fail-safe reproduction route."
+
+[[profiles]]
+id = "linked-8-reference-host-94g"
+workers = 8
+jvm_initial_heap_mib = 256
+jvm_max_heap_mib = 6144
+jvm_active_processors = 4
+minimum_physical_cores = 16
+minimum_logical_cpus = 32
+minimum_total_memory_mib = 90112
+maximum_cpu_oversubscription = 1.0
+qualification = "capacity-qualified"
+evidence_path = "benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml"
+guidance = "Fits 94 GiB OS-visible RAM with 16 GiB reserved and exactly fills 32 logical processor slots; benchmark before calling it performance-qualified."
+
+[[profiles]]
+id = "linked-10-reference-host-112g"
+workers = 10
+jvm_initial_heap_mib = 256
+jvm_max_heap_mib = 6144
+jvm_active_processors = 4
+minimum_physical_cores = 16
+minimum_logical_cpus = 32
+minimum_total_memory_mib = 110592
+maximum_cpu_oversubscription = 1.25
+qualification = "capacity-qualified"
+evidence_path = "benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml"
+guidance = "Requires about 112 GiB OS-visible RAM and permits bounded SMT oversubscription; qualify against representative linked tasks."
+
+[[profiles]]
+id = "linked-12-experimental"
+workers = 12
+jvm_initial_heap_mib = 256
+jvm_max_heap_mib = 6144
+jvm_active_processors = 4
+minimum_physical_cores = 16
+minimum_logical_cpus = 32
+minimum_total_memory_mib = 126976
+maximum_cpu_oversubscription = 1.5
+qualification = "experimental"
+evidence_path = ""
+guidance = "Manual experiment only; requires a larger OS-visible memory allocation and representative failure, thermal and throughput evidence."

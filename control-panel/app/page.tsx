@@ -2427,6 +2427,8 @@ function PerformanceProfilesPanel({ catalog, capabilities, snapshot }: { catalog
     : selected.qualification === 'derived-from-measured-openssl'
       ? 'warning'
       : 'cold';
+  const linked = catalog.linked_reference;
+  const linkedProfile = linked?.selected_profile;
   return <section className="panel performance-profile-panel">
     <div className="panel-header"><h3>Host policy · {catalog.authority_path}</h3><span className="authority-badge">TOML SOURCE OF TRUTH</span></div>
     <div className="performance-host-strip">
@@ -2440,6 +2442,11 @@ function PerformanceProfilesPanel({ catalog, capabilities, snapshot }: { catalog
       <article><span>AUTO SELECTOR POLICY</span><strong>{automatic?.selector_version ?? '—'}</strong><small>{automatic ? `physical weight ${automatic.policy.physical_core_weight} · SMT weight ${automatic.policy.smt_sibling_weight} · reserve ${automatic.bounds.memory_reserve_mib.toLocaleString()} MiB · worker budget ${automatic.bounds.per_worker_budget_mib.toLocaleString()} MiB` : 'waiting for resolution'}</small></article>
       <article><span>CONFIGURATION AUTHORITIES</span><strong>{catalog.authority_path}</strong><small>active binding and lease cap: plans/priority-queue.toml · runtime settings are frozen into ledger evidence</small></article>
     </div>
+    {linked && <div className="performance-detection-detail">
+      <article><span>LINKED REFERENCE PRODUCERS</span><strong>{linkedProfile ? `${linkedProfile.workers} workers · ${linkedProfile.jvm_max_heap_mib.toLocaleString()} MiB heap ceiling` : 'BLOCKED'}</strong><small>{linkedProfile ? `${linkedProfile.id} · ${linkedProfile.qualification} · ${linkedProfile.jvm_active_processors} processors/JVM` : linked.blockers.join(' · ')}</small></article>
+      <article><span>LINKED CAPACITY LADDER</span><strong>{linked.profiles.map(profile => `${profile.workers}${profile.eligible ? '✓' : '×'}`).join(' · ')}</strong><small>6 / 8 / 10 / 12 are separate TOML profiles; experimental profiles never auto-select</small></article>
+      <article><span>LINKED AUTHORITY</span><strong>{linked.authority_path}</strong><small>{linkedProfile?.guidance ?? 'No reviewed profile currently fits detected resources'}</small></article>
+    </div>}
     <div className="performance-override-ledger">
       <header><span>Setting</span><span>Detected auto</span><span>Active TOML</span><span>Resolution</span></header>
       {settingRows.map(row => <article key={row.name}><div><strong>{row.label}</strong><small>{row.name}</small></div><code>{displaySetting(row.name, row.automaticValue)}</code><code>{displaySetting(row.name, row.activeValue)}</code><span className={`evidence-badge ${row.tone}`}>{row.state}</span></article>)}

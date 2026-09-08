@@ -93,6 +93,11 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             len(document["source_digests"]["performance_profiles_sha256"]), 64
         )
+        self.assertIn("linked_reference", document["performance_profiles"])
+        self.assertIn(
+            document["performance_profiles"]["linked_reference"]["state"],
+            {"ready", "blocked"},
+        )
         self.assertEqual(len(document["recipes"]), 30)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)

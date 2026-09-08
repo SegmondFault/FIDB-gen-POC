@@ -1000,3 +1000,14 @@ cross-check. Its canary must demonstrate identical owner decisions, confusion
 matrices and per-hash observations before a future cohort selects engine 2.
 Do not make a cached or partial C10 comparison into performance evidence, and
 do not remove engine 1 while any sealed authority or export names it.
+
+Linked-reference generation has its own capacity authority at
+`performance/linked-reference.toml`. The v2 production supervisor resolves it
+once before workers start and freezes the result into run status. On the
+94-GiB-visible 16-core/32-thread host, eight workers are the current automatic
+capacity result; the historical v1 six-worker supervisor remains available at
+`validation/linked-reference-supervisor.toml` for exact reproduction. Never
+raise the pool solely because free RAM exists: the profile must also satisfy
+JVM processor demand, host reserve and available-memory bounds. Twelve workers
+remain manual/experimental until representative throughput, peak RSS,
+thermals and failures are recorded.

@@ -94,10 +94,28 @@ class LinkedReferenceRetrofitTests(unittest.TestCase):
 
     def test_checked_in_supervisor_bounds_individual_tasks(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        supervisor = load_supervisor_authority(root)
+        supervisor = load_supervisor_authority(
+            root, "validation/linked-reference-supervisor.toml"
+        )
         self.assertEqual(supervisor["workers"], 6)
         self.assertEqual(supervisor["task_timeout_seconds"], 900)
         self.assertEqual(supervisor["task_timeout_retries"], 1)
+
+    def test_production_supervisor_resolves_toml_capacity_profile(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        resolution = {
+            "state": "ready",
+            "selected_profile": {"workers": 8},
+            "blockers": [],
+        }
+        with patch(
+            "fidb_poc.linked_reference_performance.resolve_linked_reference_performance",
+            return_value=resolution,
+        ):
+            supervisor = load_supervisor_authority(root)
+
+        self.assertEqual(supervisor["workers"], 8)
+        self.assertEqual(supervisor["performance_resolution"], resolution)
 
     def test_task_timeout_requires_an_active_aware_timestamp(self) -> None:
         now = datetime.now(timezone.utc)

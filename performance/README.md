@@ -9,6 +9,24 @@ silently changing a materialized campaign. The worker receives the resolved
 build-job and JVM settings. Selecting or binding a profile does not arm a queue
 or start a run.
 
+`linked-reference.toml` separately sizes the long-lived Ghidra workers which
+turn sealed archive cells into executable-shaped linked references. It does
+not change compiler flags, FID analysis policy or matching semantics. The
+automatic selector accounts for physical and logical CPUs, OS-visible total
+and currently available memory, a 16 GiB host reserve, each JVM heap ceiling,
+and one GiB of native/JVM overhead per worker.
+
+The ladder is explicit: six workers reproduce measured C10, eight fit the
+current 94 GiB-visible `reference-host` allocation, ten require about 112 GiB
+visible, and twelve is experimental and never auto-selected. A
+capacity-qualified profile means the resource arithmetic passed; it is not a
+claim of measured throughput. Inspect the live resolution without starting
+Ghidra:
+
+```sh
+uv run fidb-poc linked-references performance --project-root .
+```
+
 All FIDB performance and operations configuration remains TOML. The active
 queue selects a profile and fixes its lease cap in `plans/priority-queue.toml`;
 the profile values live here in `performance/profiles.toml`. The control panel

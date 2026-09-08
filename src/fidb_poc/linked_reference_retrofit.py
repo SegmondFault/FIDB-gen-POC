@@ -40,8 +40,9 @@ PLAN_SCHEMA = "fidb-linked-reference-plan/v1"
 TASK_SEAL_SCHEMA = "fidb-linked-reference-task-seal/v1"
 GENERATION_SEAL_SCHEMA = "fidb-linked-reference-generation-seal/v1"
 SUPERVISOR_SCHEMA = "fidb-linked-reference-supervisor/v1"
+SUPERVISOR_SCHEMA_V2 = "fidb-linked-reference-supervisor/v2"
 DEFAULT_AUTHORITY = Path("validation/linked-reference-retrofit.toml")
-DEFAULT_SUPERVISOR = Path("validation/linked-reference-supervisor.toml")
+DEFAULT_SUPERVISOR = Path("validation/linked-reference-production-supervisor.toml")
 
 
 def _now() -> str:
@@ -199,25 +200,47 @@ def load_supervisor_authority(
     root = Path(project_root).expanduser().resolve()
     path = _inside(root, supervisor, "linked-reference supervisor authority")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    expected = {
+    common = {
         "schema_version",
-        "workers",
         "task_timeout_seconds",
         "task_timeout_retries",
         "termination_grace_seconds",
         "poll_seconds",
     }
-    if set(document) != expected or document.get("schema_version") != SUPERVISOR_SCHEMA:
+    schema = document.get("schema_version")
+    if schema == SUPERVISOR_SCHEMA:
+        expected = common | {"workers"}
+    elif schema == SUPERVISOR_SCHEMA_V2:
+        expected = common | {"performance"}
+    else:
+        expected = set()
+    if set(document) != expected:
         raise ValueError("linked-reference supervisor has unsupported fields or schema")
-    for name in expected - {"schema_version"}:
+    for name in common - {"schema_version"}:
         value = document[name]
         minimum = 0 if name == "task_timeout_retries" else 1
         if type(value) is not int or int(value) < minimum:
             raise ValueError(f"linked-reference supervisor.{name} is invalid")
-    if int(document["workers"]) > 16:
+    performance_resolution = None
+    if schema == SUPERVISOR_SCHEMA_V2:
+        from .linked_reference_performance import resolve_linked_reference_performance
+
+        performance_resolution = resolve_linked_reference_performance(
+            root, str(document["performance"])
+        )
+        if performance_resolution["state"] != "ready":
+            raise ValueError(
+                "; ".join(str(value) for value in performance_resolution["blockers"])
+            )
+        workers = int(performance_resolution["selected_profile"]["workers"])
+    else:
+        workers = int(document["workers"])
+    if workers > 16:
         raise ValueError("linked-reference supervisor worker count exceeds the bound")
     return {
         **document,
+        "workers": workers,
+        "performance_resolution": performance_resolution,
         "authority_path": str(path.relative_to(root)),
         "authority_sha256": _sha256(path),
     }
@@ -1171,6 +1194,22 @@ def run(
     plan = compile_plan(root, authority_path)
     authority = plan["_authority"]
     supervisor = load_supervisor_authority(root, supervisor_path)
+    selected_profile = (
+        (supervisor.get("performance_resolution") or {}).get("selected_profile")
+    )
+    if selected_profile is not None:
+        expected_execution = {
+            "jvm_initial_heap_mib": int(selected_profile["jvm_initial_heap_mib"]),
+            "jvm_max_heap_mib": int(selected_profile["jvm_max_heap_mib"]),
+            "jvm_active_processors": int(selected_profile["jvm_active_processors"]),
+        }
+        observed_execution = {
+            key: int(authority["execution"][key]) for key in expected_execution
+        }
+        if observed_execution != expected_execution:
+            raise ValueError(
+                "linked-reference performance profile conflicts with generation authority"
+            )
     by_key = {str(task["task_key"]): task for task in plan["tasks"]}
     requested = (
         [by_key[str(key)] for key in authority["canary"]["tasks"]]
@@ -1237,6 +1276,9 @@ def run(
                     "estimated_archive_byte_loads": loads,
                     "supervisor_authority_path": supervisor["authority_path"],
                     "supervisor_authority_sha256": supervisor["authority_sha256"],
+                    "performance_resolution": supervisor.get(
+                        "performance_resolution"
+                    ),
                     "worker_ids": [
                         f"worker-{index:02d}"
                         for index in range(1, len(chunks) + 1)
@@ -1260,6 +1302,7 @@ def run(
         result["worker_return_codes"] = return_codes
         result["supervisor_authority_path"] = supervisor["authority_path"]
         result["supervisor_authority_sha256"] = supervisor["authority_sha256"]
+        result["performance_resolution"] = supervisor.get("performance_resolution")
         result["supervisor_timeouts"] = timeout_events
         if mode == "full" and result["state"] == "complete":
             result["generation"] = _generation_seal(root, refreshed)
@@ -1273,7 +1316,7 @@ def run(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("status", "preflight", "run", "_worker"):
+    for command in ("status", "preflight", "performance", "run", "_worker"):
         child = commands.add_parser(command)
         child.add_argument("--project-root", type=Path, default=Path.cwd())
         child.add_argument("--authority", type=Path, default=DEFAULT_AUTHORITY)
@@ -1281,6 +1324,12 @@ def main(argv: list[str] | None = None) -> int:
             child.add_argument("--mode", choices=("canary", "full"), required=True)
             child.add_argument(
                 "--supervisor", type=Path, default=DEFAULT_SUPERVISOR
+            )
+        if command == "performance":
+            child.add_argument(
+                "--performance",
+                type=Path,
+                default=Path("performance/linked-reference.toml"),
             )
         if command == "_worker":
             child.add_argument("--tasks", required=True)
@@ -1291,6 +1340,14 @@ def main(argv: list[str] | None = None) -> int:
             document = status(arguments.project_root, arguments.authority)
         elif arguments.command == "preflight":
             document = preflight(arguments.project_root, arguments.authority)
+        elif arguments.command == "performance":
+            from .linked_reference_performance import (
+                resolve_linked_reference_performance,
+            )
+
+            document = resolve_linked_reference_performance(
+                arguments.project_root, arguments.performance
+            )
         elif arguments.command == "run":
             document = run(
                 arguments.project_root,
