@@ -1,0 +1,43 @@
+# Exact C10 export recovery. Synchronization preserves all previous ledger rows;
+# the queue remains disarmed until its resolution and export-gap gates pass.
+schema_version = "fidb-queue/v1"
+name = "c-openssl-fidbf-recovery"
+
+[queue]
+armed = false
+performance_profile = "reference-host-94g-balanced"
+max_workers = 20
+batch_order = ["c-openssl-fidbf-recovery"]
+poll_seconds = 5
+lease_seconds = 3600
+max_attempts = 3
+retry_backoff_seconds = 30
+retry_backoff_max_seconds = 900
+authority_failure_threshold = 5
+
+[schedule]
+enabled = false
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_claiming = "05:30"
+finish_started_batch = true
+
+[resources]
+min_available_memory_gib = 12
+min_free_disk_gib = 200
+max_load_per_cpu = 1.0
+max_temperature_c = 90
+
+[notifications]
+events = ["job-failed", "job-requeued", "queue-drained", "resource-blocked"]
+outbox = "var/fidb-notifications/openssl-fidbf-recovery.jsonl"
+timeout_seconds = 10
+
+[[batch]]
+id = "c-openssl-fidbf-recovery"
+name = "OpenSSL 174-cell non-Android FIDBF recovery"
+plan = "plans/materialized/c-openssl-fidbf-recovery.toml"
+plan_sha256 = "a5e0544cde963e9a9eed64067e5da040d6dcc0c71a8328c09bd837d4e1ef6a6e"
+queue_digest = "f253ed40f090f81ec84538911fcc7c90e6d7bf94f93b58abd4e804fb0d0411b0"
+executions = 174

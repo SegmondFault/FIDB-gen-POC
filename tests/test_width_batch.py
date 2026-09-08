@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 
 from fidb_poc.authority_catalog import authority_catalog
-from fidb_poc.width_batch import load_width_batch, project_width_batch_readiness
+from fidb_poc.plan_request import resolve_plan
+from fidb_poc.width_batch import load_width_batch
 
 
 class WidthBatchTests(unittest.TestCase):
@@ -50,6 +51,49 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(batch["summary"]["executions_per_library"], 48)
         self.assertEqual(batch["summary"]["total_executions"], 48)
         self.assertEqual(batch["summary"]["locally_executable_per_library"], 48)
+
+    def test_openssl_fidbf_recovery_restores_only_original_width(self):
+        batch = load_width_batch(
+            self.root, self.root / "batches/c-openssl-fidbf-recovery.toml"
+        )
+
+        self.assertEqual([row["id"] for row in batch["libraries"]], ["openssl"])
+        self.assertEqual(batch["summary"]["route_profiles"], 29)
+        self.assertEqual(batch["summary"]["compiler_identities"], 8)
+        self.assertEqual(batch["summary"]["executable_treatments"], 6)
+        self.assertEqual(batch["summary"]["executions_per_library"], 174)
+        self.assertEqual(batch["summary"]["total_executions"], 174)
+        self.assertEqual(batch["summary"]["locally_executable_per_library"], 174)
+
+        catalog = authority_catalog(self.root)
+        projected = next(
+            row
+            for row in catalog["width_batches"]
+            if row["id"] == "batch-openssl-fidbf-recovery"
+        )
+        self.assertEqual(
+            projected["readiness"]["qualification_state"], "historical-exempt"
+        )
+        self.assertEqual(projected["readiness"]["queue_eligible_executions"], 174)
+
+        plan = resolve_plan(
+            self.root / "plans/materialized/c-openssl-fidbf-recovery.toml",
+            self.root,
+        )
+        self.assertEqual(len(plan["cells"]), 174)
+        self.assertEqual(len(plan["queue_preview"]), 174)
+        self.assertEqual(
+            {row["state"] for row in plan["queue_preview"]}, {"planned"}
+        )
+        self.assertEqual(
+            {cell["recipe"]["name"] for cell in plan["cells"]}, {"openssl"}
+        )
+        self.assertFalse(
+            any(
+                str(cell["toolchain"]["route"]).startswith("android-")
+                for cell in plan["cells"]
+            )
+        )
 
     def test_c11_to_c20_batch_preserves_global_rank_and_width(self):
         batch = load_width_batch(

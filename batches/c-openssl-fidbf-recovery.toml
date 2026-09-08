@@ -1,0 +1,25 @@
+schema_version = "fidb-width-batch/v1"
+id = "batch-openssl-fidbf-recovery"
+name = "c-openssl-fidbf-recovery"
+label = "OpenSSL · recover retained non-Android FIDBF width"
+state = "defined-disarmed"
+language_id = "c"
+purpose = "Re-execute the 174 completed c-width-v1 OpenSSL identities through the current sealed native exporter because the original width run retained signature evidence but not one raw FIDBF per exact cell."
+source_pack = "sources/c-top10-v1.toml"
+source_pack_sha256 = "97544e2c51d791be6ecfadbe5c493915914651a8db967070736333652be05c57"
+source_ids = ["openssl"]
+width_authority = "coverage/c-width-v1.toml"
+width_authority_sha256 = "fd1849f1821559b735dbd9eb1e0af9a5eacd3f94d197d8355812c80bc0a7cd30"
+width_route_profile_digest = "433c95107adfc64095308e10f886d1a06d4c4ef0f7f08595146ac23d0bdcce95"
+width_study = "coverage/c-top10-width-study.toml"
+width_study_sha256 = "111c67c238e0779eabfbcc47470e5cdabee77eee32b435e8efee9d82090a475f"
+recipe_policy = "Resolve only openssl@3.5.8 from the pinned C10 source pack and require the current reviewed OpenSSL native adapter before execution."
+queue_policy = "Recovery-only authority. Keep disarmed until all 174 exact cells resolve, the active C10 ledger is drained and the export preview proves that these are precisely the missing non-Android FIDBF identities."
+
+[expected]
+libraries = 1
+route_profiles = 29
+compiler_identities = 8
+executable_treatments = 6
+executions_per_library = 174
+total_executions = 174

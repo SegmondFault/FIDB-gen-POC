@@ -21,3 +21,8 @@ reason = "C2-C10 completed and sealed before the formal recipe-qualification pip
 batch_id = "batch-020-android-gap"
 batch_digest = "35ff5858e9d979ac473ac3882a62f48ac5fa9525dd0ab7b270af53e111622388"
 reason = "The OpenSSL Android gap completed and sealed before the formal recipe-qualification pipeline."
+
+[[legacy_exemptions]]
+batch_id = "batch-openssl-fidbf-recovery"
+batch_digest = "1500807baab90f1617bb1922fade468ee8d3989623172098acefc9de03d86680"
+reason = "This recovery re-executes only the immutable 174-cell OpenSSL c-width-v1 population that completed before the formal recipe-qualification pipeline; it introduces no new recipe, route or treatment identity."
