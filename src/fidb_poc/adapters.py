@@ -439,6 +439,8 @@ AUTOCONF_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "--without-quiche",
             "--without-libssh2",
             "--without-librtmp",
+            "--disable-ldap",
+            "--disable-ldaps",
             "--without-ldap",
         ),
         ("-C", "lib", "libcurl.la"),

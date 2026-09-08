@@ -303,6 +303,8 @@ class AdapterTests(unittest.TestCase):
 
         self.assertIn("--without-ssl", curl[0])
         self.assertIn("--without-zlib", curl[0])
+        self.assertIn("--disable-ldap", curl[0])
+        self.assertIn("--disable-ldaps", curl[0])
         self.assertEqual(curl[1], ("make", "-j6", "-C", "lib", "libcurl.la"))
         self.assertIn("--with-termlib", ncurses[0])
         self.assertEqual(ncurses[1], ("make", "-j4", "libs"))
