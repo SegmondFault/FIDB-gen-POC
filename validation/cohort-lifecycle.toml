@@ -16,12 +16,23 @@ stages = [
   "recipe-qualification",
   "width-build",
   "validation-composites",
+  "linked-reference-generation",
   "query-evidence-export",
   "incremental-corpus-query",
   "hash-discrimination",
   "retention",
   "corpus-admission",
 ]
+
+[reference_population]
+routine = "archive-plus-linked"
+forms = ["archive", "linked-shared-image"]
+linked_input = "sealed-static-archive"
+compile_source = false
+link_harness = "whole-archive-shared-image-symbolic-v2"
+population_engine = "alpha_engine_2"
+promotion_gate = "zero-mismatch-alpha-engine-1-cross-check"
+ablation_populations = ["archive-only", "linked-only"]
 
 [execution]
 scientific_boundary = "completed-library-cohort"

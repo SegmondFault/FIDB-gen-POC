@@ -1416,6 +1416,16 @@ export type CohortValidationLifecycle = {
     routine_backfill: string;
     legacy_backfill: string;
   };
+  reference_population: {
+    routine: 'archive-plus-linked';
+    forms: string[];
+    linked_input: 'sealed-static-archive';
+    compile_source: false;
+    link_harness: string;
+    population_engine: 'alpha_engine_2';
+    promotion_gate: string;
+    ablation_populations: string[];
+  };
   incremental: {
     primary_confusion_scope: string;
     corpus_noise_scope: string;

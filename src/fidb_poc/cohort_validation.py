@@ -29,6 +29,7 @@ _TOP_LEVEL_FIELDS = {
     "cohort_registry_sha256",
     "query_evidence_contract",
     "stages",
+    "reference_population",
     "execution",
     "fusion",
     "incremental",
@@ -37,6 +38,16 @@ _TOP_LEVEL_FIELDS = {
     "performance",
 }
 _SECTION_FIELDS = {
+    "reference_population": {
+        "routine",
+        "forms",
+        "linked_input",
+        "compile_source",
+        "link_harness",
+        "population_engine",
+        "promotion_gate",
+        "ablation_populations",
+    },
     "execution": {
         "scientific_boundary",
         "scheduler_boundary",
@@ -97,6 +108,7 @@ _STAGES = (
     "recipe-qualification",
     "width-build",
     "validation-composites",
+    "linked-reference-generation",
     "query-evidence-export",
     "incremental-corpus-query",
     "hash-discrimination",
@@ -162,6 +174,18 @@ def load_cohort_validation_lifecycle(
         or fusion["routine_backfill"] != "forbidden"
     ):
         raise ValueError("cohort validation fused evidence policy is invalid")
+    reference = document["reference_population"]
+    if reference != {
+        "routine": "archive-plus-linked",
+        "forms": ["archive", "linked-shared-image"],
+        "linked_input": "sealed-static-archive",
+        "compile_source": False,
+        "link_harness": "whole-archive-shared-image-symbolic-v2",
+        "population_engine": "alpha_engine_2",
+        "promotion_gate": "zero-mismatch-alpha-engine-1-cross-check",
+        "ablation_populations": ["archive-only", "linked-only"],
+    }:
+        raise ValueError("cohort validation reference population is unsupported")
     scheduling = document["scheduling"]
     admission = document["admission"]
     if (
@@ -336,10 +360,20 @@ def _programme_cohort(
             "ready-disarmed" if qualification_complete else "blocked",
             f"{capacity * identities:,} planned exact build cells",
         ),
+        _stage(
+            "validation-composites",
+            "blocked",
+            f"{composites:,} deterministic fold images",
+        ),
+        _stage(
+            "linked-reference-generation",
+            "blocked",
+            f"{capacity * identities:,} archive-derived linked images; no recompilation",
+        ),
     ]
     stages.extend(
         _stage(identifier, "blocked", "depends on sealed cohort width")
-        for identifier in _STAGES[3:]
+        for identifier in _STAGES[5:]
     )
     return {
         "id": cohort["id"],
@@ -350,6 +384,7 @@ def _programme_cohort(
         "state": "preparation" if recipes_complete else "candidate-work",
         "work": {
             "width_build_cells": capacity * identities,
+            "linked_reference_images": capacity * identities,
             "exact_identities": identities,
             "validation_composites": composites,
             "query_projections": projections,
@@ -428,6 +463,7 @@ def compile_cohort_validation_lifecycle(
         "query_evidence_contract": lifecycle["query_evidence_contract"],
         "execution": lifecycle["execution"],
         "fusion": lifecycle["fusion"],
+        "reference_population": lifecycle["reference_population"],
         "incremental": lifecycle["incremental"],
         "scheduling": lifecycle["scheduling"],
         "admission": lifecycle["admission"],

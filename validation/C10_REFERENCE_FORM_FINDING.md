@@ -141,6 +141,18 @@ the policy must be tested against held-out real executables before release.
 Archive-delta reuse, lazy archive escalation and future-cohort pipeline changes
 remain separate implementations and must receive their own commits and tests.
 
+### Subsequent implementation choice
+
+The measurements above remain immutable. The later operator decision is to
+retain both archive and linked evidence routinely because the union did not
+materially reduce precision and pre-link evidence remains useful context. The
+new lifecycle compiles each width cell once, consumes its sealed archives to
+produce the linked form, and never recompiles merely to make the second
+reference representation. `alpha_engine_1` preserves the measured sequential
+union path; `alpha_engine_2` is a separately named single-stream implementation
+which requires a zero-mismatch canary before promotion. This changes the
+future production policy, not the interpretation of the sealed C10 result.
+
 ## Implementation history
 
 The following atomic commits form the producer and verification chain:
