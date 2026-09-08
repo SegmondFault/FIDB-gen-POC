@@ -480,6 +480,14 @@ def parser() -> argparse.ArgumentParser:
         help="claim at most one cell, then exit (useful for service tests)",
     )
     worker.add_argument(
+        "--use-synced-queue",
+        action="store_true",
+        help=(
+            "require the ledger to match the configured queue summary instead of "
+            "resolving every plan again at worker startup"
+        ),
+    )
+    worker.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -1477,7 +1485,35 @@ def _run_worker(arguments: argparse.Namespace) -> int:
     signal.signal(signal.SIGTERM, interrupt_worker)
     try:
         with Coordinator(state, root) as coordinator:
-            coordinator.sync_queue(config, actor=arguments.worker_id)
+            if arguments.use_synced_queue:
+                if any(batch.executions is None for batch in config.batches):
+                    raise QueueCliError(
+                        "synced worker startup requires executions on every batch"
+                    )
+                expected_jobs = sum(
+                    int(batch.executions) for batch in config.batches
+                )
+                status = coordinator.status()
+                actual_jobs = sum(int(value) for value in status["counts"].values())
+                mismatches = []
+                if status["config_name"] != config.name:
+                    mismatches.append(
+                        f"config {status['config_name']!r} != {config.name!r}"
+                    )
+                if Path(str(status["config_path"])).resolve() != config.source_path:
+                    mismatches.append("config path differs from synchronized authority")
+                if actual_jobs != expected_jobs:
+                    mismatches.append(
+                        f"active jobs {actual_jobs} != {expected_jobs}"
+                    )
+                if not bool(status["armed"]):
+                    mismatches.append("synchronized queue is disarmed")
+                if mismatches:
+                    raise QueueCliError(
+                        "synced worker startup rejected: " + "; ".join(mismatches)
+                    )
+            else:
+                coordinator.sync_queue(config, actor=arguments.worker_id)
             last_resource_block: tuple[str, ...] | None = None
             drained_notified = False
             while True:

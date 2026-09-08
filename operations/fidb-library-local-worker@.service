@@ -12,7 +12,7 @@ Environment=PYTHONUNBUFFERED=1
 # Required and deliberately installed by the operator.  The repository copy is
 # operations/library-local-worker.env.example.
 EnvironmentFile=%h/.config/fidb-factory/library-local-worker.env
-ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc queue run --project-root %h/Projects/circl/FIDB-POC-unified --campaign-registry operations/campaigns.toml --worker-id fidb-library-local-%i --pool library-local
+ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc queue run --project-root %h/Projects/circl/FIDB-POC-unified --campaign-registry operations/campaigns.toml --worker-id fidb-library-local-%i --pool library-local --use-synced-queue
 # The CLI maps deliberate SIGINT/SIGTERM shutdown to conventional shell status.
 # Treat those operator stops as clean; build/configuration errors still fail.
 SuccessExitStatus=130 143

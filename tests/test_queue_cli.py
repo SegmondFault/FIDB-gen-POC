@@ -1390,6 +1390,40 @@ finish_started_batch = true
 
         self.assertEqual(status, 0)
 
+    def test_worker_can_use_exact_synchronized_queue_without_resolving_plans(self) -> None:
+        queue = self._queue(armed=True)
+        queue.write_text(
+            queue.read_text(encoding="utf-8").replace(
+                'plan = "plans/mirai-baseline.toml"',
+                'plan = "plans/mirai-baseline.toml"\nexecutions = 1',
+            ),
+            encoding="utf-8",
+        )
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync_queue(queue, now=10)
+            coordinator.start_next_block("manual:test", scheduled=False, now=11)
+
+        arguments = self._arguments("run", queue)
+        arguments.extend(
+            (
+                "--worker-id",
+                "synced-worker",
+                "--once",
+                "--use-synced-queue",
+            )
+        )
+        with (
+            patch(
+                "fidb_poc.queue_cli.Coordinator.sync_queue",
+                side_effect=AssertionError("unexpected full queue resynchronization"),
+            ),
+            patch("fidb_poc.queue_cli._execute_claim", return_value=True) as execute,
+        ):
+            status = main(arguments)
+
+        self.assertEqual(status, 0)
+        execute.assert_called_once()
+
     def test_queue_performance_profile_reaches_worker_execution(self) -> None:
         queue = self._mixed_pool_queue()
         queue.write_text(
