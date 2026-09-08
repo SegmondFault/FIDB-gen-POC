@@ -1414,6 +1414,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                 block = coordinator.execution_block() if finish_started else None
                 if (
                     finish_started
+                    and config.operations.schedule.enabled
                     and not bool(block["active"])
                     and bool(schedule["claims_allowed"])
                     and bool(resources["passed"])

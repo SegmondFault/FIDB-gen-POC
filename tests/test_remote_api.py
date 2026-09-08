@@ -168,6 +168,26 @@ plan = "plans/bzip2-native.toml"
         with Coordinator(self.state, self.root) as coordinator:
             self.assertEqual(coordinator.status()["counts"]["leased"], 0)
 
+    def test_disabled_schedule_waits_for_manual_block_without_window_identity(self):
+        self.queue.write_text(
+            self.queue.read_text(encoding="utf-8") + """
+[schedule]
+enabled = false
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_claiming = "05:30"
+finish_started_batch = true
+""",
+            encoding="utf-8",
+        )
+
+        status, document, _ = self.request("claim", {"pool": "library-local"})
+
+        self.assertEqual(status, 200)
+        self.assertIsNone(document["lease"])
+        self.assertFalse(document["gate"]["execution_block"]["active"])
+
     def test_external_worker_registers_reviewed_capabilities_and_keeps_them(self):
         definition = load_external_toolchain("macos-arm64-apple-clang", self.root)
         metadata = {name: f"test-{name}" for name in definition.required_metadata}

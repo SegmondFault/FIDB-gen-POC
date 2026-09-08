@@ -524,6 +524,43 @@ finish_started_batch = true
         execute.assert_called_once()
         timer.assert_not_called()
 
+    def test_disabled_schedule_waits_for_manual_block_without_window_identity(
+        self,
+    ) -> None:
+        queue = self._queue(armed=True)
+        queue.write_text(
+            queue.read_text(encoding="utf-8") + """
+[schedule]
+enabled = false
+timezone = "Europe/Luxembourg"
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+start = "00:00"
+stop_claiming = "05:30"
+finish_started_batch = true
+""",
+            encoding="utf-8",
+        )
+        operations = {
+            "schedule": {
+                "claims_allowed": True,
+                "window_started_at": None,
+                "hard_cutoff_at": None,
+            },
+            "resources": {"passed": True, "reasons": [], "metrics": {}},
+        }
+        arguments = self._arguments("run", queue)
+        arguments.extend(("--worker-id", "manual-only-worker", "--once"))
+        with (
+            patch("fidb_poc.queue_cli.evaluate_operations", return_value=operations),
+            patch("fidb_poc.queue_cli._execute_claim") as execute,
+        ):
+            status = main(arguments)
+
+        self.assertEqual(status, 0)
+        execute.assert_not_called()
+        with Coordinator(self.database, self.project_root) as coordinator:
+            self.assertFalse(coordinator.execution_block()["active"])
+
     def test_preflight_reports_schedule_and_resources_without_state_mutation(
         self,
     ) -> None:

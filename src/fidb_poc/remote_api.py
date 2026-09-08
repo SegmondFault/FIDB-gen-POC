@@ -789,6 +789,7 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                 )
                 if (
                     block is not None
+                    and queue.operations.schedule.enabled
                     and not bool(block["active"])
                     and schedule.claims_allowed
                 ):
