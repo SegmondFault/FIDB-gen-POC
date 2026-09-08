@@ -8,6 +8,14 @@ artifacts/width-runs/
 artifacts/benchmarks/
 artifacts/canaries/
 artifacts/validation-runs/
+# Durable, generated research evidence. These trees are retained and exported
+# through their own manifests; they are not source-control inputs.
+artifacts/exports/
+artifacts/fid-matching-runs/
+artifacts/hash-discrimination/
+artifacts/linked-reference-runs/
+artifacts/repository-safeguards/
+qualification/evidence/
 var/
 dist/
 build/
