@@ -353,7 +353,6 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("-DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF", opencl[0])
         self.assertIn("-DHAVE_SECURE_GETENV=OFF", opencl[0])
         self.assertIn("-DHAVE___SECURE_GETENV=OFF", opencl[0])
-        self.assertIn("-DCMAKE_STATIC_LIBRARY_PREFIX=lib", opencl[0])
         self.assertIn(
             f"-DOPENCL_ICD_LOADER_HEADERS_DIR={source_root}/fidb-inputs/opencl-headers-2026.05.29",
             opencl[0],
@@ -366,6 +365,24 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(protobuf[1][-1], "libprotobuf")
         self.assertEqual(mbedtls[1][-3:], ("tfpsacrypto", "mbedx509", "mbedtls"))
         self.assertIn("-DHAVE_GMTIME_R=OFF", wolfssl[0])
+
+        windows_opencl = build_commands(
+            "opencl-loader-cmake",
+            route=replace(route(), target_os="windows"),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        self.assertEqual(
+            windows_opencl[-1],
+            (
+                "cmake",
+                "-E",
+                "copy",
+                "fidb-build/OpenCL.a",
+                "fidb-build/libOpenCL.a",
+            ),
+        )
 
     def test_priority_specialist_adapters_are_bounded_and_reproducible(self):
         source_root = Path("/work/priority").resolve()
@@ -456,6 +473,37 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("err_data_generate.go", shim)
         self.assertIn("target is not built", gtest_placeholder)
         self.assertEqual(warning_policy, 'set(C_CXX_FLAGS "-Wall")\n')
+
+    def test_libedit_workspace_disables_unavailable_android_user_enumeration(self):
+        source = """char *
+username_completion_function(const char *text, int state)
+{
+\tstruct passwd *pass = NULL;
+\treturn strdup(pass->pw_name);
+}
+
+
+/*
+ * el-compatible wrapper to send TSTP on ^Z
+ */
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary).resolve()
+            (source_root / "src").mkdir()
+            readline = source_root / "src/readline.c"
+            readline.write_text(source, encoding="utf-8")
+
+            prepare_build_workspace(
+                "libedit-autoconf",
+                route=route(),
+                compiler_flags=("-O2",),
+                source_root=source_root,
+            )
+            patched = readline.read_text(encoding="utf-8")
+
+        self.assertIn("#if defined(__ANDROID__)", patched)
+        self.assertIn("return NULL;", patched)
+        self.assertIn("#endif", patched)
 
     def test_harfbuzz_cmake_adapter_pins_compilers_and_library_targets(self):
         commands = build_commands(

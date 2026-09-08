@@ -254,6 +254,48 @@ def prepare_build_workspace(
         )
         shim.chmod(0o755)
         return
+    if build_system == "libedit-autoconf":
+        readline = source_root / "src/readline.c"
+        text = readline.read_text(encoding="utf-8")
+        original = """char *
+username_completion_function(const char *text, int state)
+{
+	struct passwd *pass = NULL;
+"""
+        replacement = """char *
+username_completion_function(const char *text, int state)
+{
+#if defined(__ANDROID__)
+	(void)text;
+	(void)state;
+	return NULL;
+#else
+	struct passwd *pass = NULL;
+"""
+        ending = """	return strdup(pass->pw_name);
+}
+
+
+/*
+ * el-compatible wrapper to send TSTP on ^Z
+ */
+"""
+        patched_ending = """	return strdup(pass->pw_name);
+#endif
+}
+
+
+/*
+ * el-compatible wrapper to send TSTP on ^Z
+ */
+"""
+        if text.count(original) != 1 or text.count(ending) != 1:
+            raise AdapterError("libedit Android compatibility patch no longer applies")
+        readline.write_text(
+            text.replace(original, replacement, 1).replace(ending, patched_ending, 1),
+            encoding="utf-8",
+        )
+        return
     if build_system != "glib-meson":
         return
     machines = {
@@ -642,8 +684,6 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             # Force the portable getenv fallback for cross targets.
             "-DHAVE_SECURE_GETENV=OFF",
             "-DHAVE___SECURE_GETENV=OFF",
-            # Keep the reviewed archive name stable on Windows as well.
-            "-DCMAKE_STATIC_LIBRARY_PREFIX=lib",
         ),
         ("OpenCL",),
     ),
@@ -1098,6 +1138,18 @@ def build_commands(
             *targets,
         )
         if build_system != "libpng-cmake":
+            if build_system == "opencl-loader-cmake" and route.target_os == "windows":
+                return (
+                    configure,
+                    build,
+                    (
+                        "cmake",
+                        "-E",
+                        "copy",
+                        "fidb-build/OpenCL.a",
+                        "fidb-build/libOpenCL.a",
+                    ),
+                )
             return (configure, build)
         if source_root is None or not source_root.is_absolute():
             raise AdapterError("libpng adapter requires an absolute source root")
