@@ -1,0 +1,13 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libkrb5"
+version = "1.22.2"
+url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.2.tar.gz"
+sha256 = "3243ffbc8ea4d4ac22ddc7dd2a1dc54c57874c40648b60ff97009763554eaf13"
+source_directory = "krb5-1.22.2"
+project_markers = ["src/configure", "src/include/krb5.h"]
+allowed_build_systems = ["krb5-autoconf"]
+preferred_build_system = "krb5-autoconf"
+static_archives = ["libkrb5.a"]
+supported_target_os = ["linux"]
+supported_architectures = ["x86_64"]

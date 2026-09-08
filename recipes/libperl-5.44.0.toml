@@ -1,0 +1,13 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libperl"
+version = "5.44.0"
+url = "https://www.cpan.org/src/5.0/perl-5.44.0.tar.xz"
+sha256 = "505cf43912e9480495c344c70260452e32aa2a73c546a026b3f100053b23ce91"
+source_directory = "perl-5.44.0"
+project_markers = ["Configure", "perl.h"]
+allowed_build_systems = ["perl-native", "openssl-configure"]
+preferred_build_system = "perl-native"
+static_archives = ["libperl.a"]
+supported_target_os = ["linux"]
+supported_architectures = ["x86_64"]

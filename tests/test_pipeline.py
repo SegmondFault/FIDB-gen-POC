@@ -589,7 +589,13 @@ class PipelineTests(unittest.TestCase):
             (second / "parser.o").write_bytes(b"second")
             archive = root / "libdemo.a"
             subprocess.run(
-                ["ar", "qc", str(archive), str(first / "parser.o"), str(second / "parser.o")],
+                [
+                    "ar",
+                    "qc",
+                    str(archive),
+                    str(first / "parser.o"),
+                    str(second / "parser.o"),
+                ],
                 check=True,
             )
 
@@ -610,6 +616,34 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertEqual(
                 {path.read_bytes() for path in objects}, {b"first", b"second"}
+            )
+
+    def test_archive_object_extraction_normalizes_musl_and_uclibc_suffixes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "musl.lo").write_bytes(b"musl")
+            (root / "uclibc.os").write_bytes(b"uclibc")
+            archive = root / "libc.a"
+            subprocess.run(
+                ["ar", "qc", str(archive), "musl.lo", "uclibc.os"],
+                cwd=root,
+                check=True,
+            )
+
+            objects = _extract_archive_objects(
+                archive,
+                root / "objects",
+                load_configuration(
+                    Path(__file__).resolve().parents[1] / "worker.toml",
+                    request_override=("zlib@1.3.2",),
+                ).routes[0],
+                pipeline_environment(),
+                root / "extract.log",
+            )
+
+            self.assertEqual([path.name for path in objects], ["musl.o", "uclibc.o"])
+            self.assertEqual(
+                {path.read_bytes() for path in objects}, {b"musl", b"uclibc"}
             )
 
     def test_java_identity_prefers_java_home(self):

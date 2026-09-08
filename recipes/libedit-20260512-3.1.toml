@@ -1,0 +1,21 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libedit"
+version = "20260512-3.1"
+url = "https://thrysoee.dk/editline/libedit-20260512-3.1.tar.gz"
+sha256 = "432d5e7ea8b0116dd39f2eca7bc11d0eed77faa6b77ea526ace89907c23ea4a0"
+source_directory = "libedit-20260512-3.1"
+project_markers = ["configure", "src/histedit.h"]
+allowed_build_systems = ["libedit-autoconf", "autoconf"]
+preferred_build_system = "libedit-autoconf"
+static_archives = ["libedit.a"]
+supported_target_os = ["linux", "android"]
+
+[[build_inputs]]
+kind = "source-tree"
+name = "ncurses"
+version = "6.6"
+url = "https://invisible-mirror.net/archives/ncurses/ncurses-6.6.tar.gz"
+sha256 = "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11"
+filename = "ncurses-6.6.tar.gz"
+source_directory = "ncurses-6.6"

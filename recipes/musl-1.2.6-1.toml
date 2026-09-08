@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "musl"
+version = "1.2.6-1"
+url = "https://deb.debian.org/debian/pool/main/m/musl/musl_1.2.6.orig.tar.gz"
+sha256 = "d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a"
+source_directory = "musl-1.2.6"
+project_markers = ["configure", "src/internal/libc.h"]
+allowed_build_systems = ["musl-cross", "autoconf", "make"]
+preferred_build_system = "musl-cross"
+static_archives = ["libc.a"]
+supported_target_os = ["linux"]

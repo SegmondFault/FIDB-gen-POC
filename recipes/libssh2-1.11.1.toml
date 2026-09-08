@@ -1,0 +1,21 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libssh2"
+version = "1.11.1"
+url = "https://libssh2.org/download/libssh2-1.11.1.tar.gz"
+sha256 = "d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7"
+source_directory = "libssh2-1.11.1"
+project_markers = ["configure", "include/libssh2.h"]
+allowed_build_systems = ["libssh2-autoconf", "autoconf", "cmake"]
+preferred_build_system = "libssh2-autoconf"
+static_archives = ["libssh2.a"]
+supported_target_os = ["linux", "android", "windows"]
+
+[[build_inputs]]
+kind = "source-tree"
+name = "wolfssl"
+version = "5.9.2-1"
+url = "https://deb.debian.org/debian/pool/main/w/wolfssl/wolfssl_5.9.2.orig.tar.gz"
+sha256 = "2f4ef3d4fd387a9b3191d36a6316d69116c46ff69bb9583b6c82b36d7b8ca114"
+filename = "wolfssl-5.9.2.orig.tar.gz"
+source_directory = "wolfssl-5.9.2-stable"

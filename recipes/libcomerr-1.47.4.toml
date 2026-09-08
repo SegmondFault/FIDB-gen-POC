@@ -1,0 +1,13 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libcomerr"
+version = "1.47.4"
+url = "https://downloads.sourceforge.net/project/e2fsprogs/e2fsprogs/v1.47.4/e2fsprogs-1.47.4.tar.gz"
+sha256 = "2cec05f39c20ee621f14926195664e66e6017190ac8e4bbdb16d86082e43c5da"
+source_directory = "e2fsprogs-1.47.4"
+project_markers = ["configure", "lib/et/com_err.h"]
+allowed_build_systems = ["e2fsprogs-comerr-autoconf", "autoconf"]
+preferred_build_system = "e2fsprogs-comerr-autoconf"
+static_archives = ["libcom_err.a"]
+supported_target_os = ["linux"]
+supported_architectures = ["x86_64"]

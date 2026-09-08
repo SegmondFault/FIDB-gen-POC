@@ -768,6 +768,10 @@ def _extract_archive_objects(
     environment: dict[str, str],
     log_path: Path,
 ) -> list[Path]:
+    # Native archives are not consistent about the suffix used for a real
+    # relocatable object. musl uses .lo and uClibc commonly uses .os; validate
+    # the binary content later, but admit these established archive forms here.
+    object_suffixes = {".o", ".obj", ".lo", ".os"}
     listing = run_command(
         [*route.archiver, "t", str(archive)],
         cwd=archive.parent,
@@ -780,7 +784,7 @@ def _extract_archive_objects(
     invalid_members = sorted(
         name
         for name in members
-        if Path(name).name != name or Path(name).suffix.lower() not in {".o", ".obj"}
+        if Path(name).name != name or Path(name).suffix.lower() not in object_suffixes
     )
     if invalid_members:
         raise PipelineError(
@@ -827,7 +831,7 @@ def _extract_archive_objects(
     objects = sorted(
         path
         for path in destination.iterdir()
-        if path.is_file() and path.suffix.lower() in {".o", ".obj"}
+        if path.is_file() and path.suffix.lower() in object_suffixes
     )
     if not objects:
         raise PipelineError(f"archive {archive} contains no object members")
@@ -850,7 +854,19 @@ def _extract_archive_objects(
             f"archive extraction produced unexpected entries for {archive.name}: "
             f"{unexpected}"
         )
-    return objects
+    normalized: list[Path] = []
+    for path in objects:
+        if path.suffix.lower() not in {".lo", ".os"}:
+            normalized.append(path)
+            continue
+        destination_path = path.with_suffix(".o")
+        if destination_path.exists():
+            raise PipelineError(
+                f"archive object suffix normalization collides for {path.name}"
+            )
+        path.rename(destination_path)
+        normalized.append(destination_path)
+    return normalized
 
 
 def _validate_objects(

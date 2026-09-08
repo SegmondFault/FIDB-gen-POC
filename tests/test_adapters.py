@@ -345,6 +345,61 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(protobuf[1][-1], "libprotobuf")
         self.assertEqual(mbedtls[1][-3:], ("tfpsacrypto", "mbedx509", "mbedtls"))
 
+    def test_priority_specialist_adapters_are_bounded_and_reproducible(self):
+        source_root = Path("/work/priority").resolve()
+        krb5 = build_commands(
+            "krb5-autoconf",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        comerr = build_commands(
+            "e2fsprogs-comerr-autoconf",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        libedit = build_commands(
+            "libedit-autoconf",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        libssh2 = build_commands(
+            "libssh2-autoconf",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        musl = build_commands(
+            "musl-cross",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        perl = build_commands(
+            "perl-native",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+
+        self.assertIn("--without-system-verto", krb5[1])
+        self.assertEqual(krb5[-1][-1], "fidb-build/lib/libkrb5.a")
+        self.assertIn("--disable-fuse2fs", comerr[0])
+        self.assertEqual(comerr[-1][-1], "lib/libcom_err.a")
+        self.assertIn("vi.h", libedit[-2])
+        self.assertIn("-DWOLFSSL_OPENSSLEXTRA=yes", libssh2[0])
+        self.assertIn("-DBUILD_SHARED_LIBS=OFF", libssh2[0])
+        self.assertEqual(musl[0][1], "./configure")
+        self.assertIn("-Dlocincpth=/nonexistent", perl[0])
+
     def test_boringssl_adapter_uses_only_the_pinned_generator_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             source_root = Path(temporary).resolve()

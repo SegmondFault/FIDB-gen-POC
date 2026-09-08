@@ -39,6 +39,12 @@ BUILD_MARKERS = {
     "libmicrohttpd-autoconf": ("configure", "src/include/microhttpd.h"),
     "hwloc-autoconf": ("configure", "include/hwloc.h"),
     "libpcap-autoconf": ("configure", "pcap/pcap.h"),
+    "krb5-autoconf": ("src/configure", "src/include/krb5.h"),
+    "e2fsprogs-comerr-autoconf": ("configure", "lib/et/com_err.h"),
+    "libedit-autoconf": ("configure", "src/histedit.h"),
+    "libssh2-autoconf": ("configure", "include/libssh2.h"),
+    "musl-cross": ("configure", "src/internal/libc.h"),
+    "perl-native": ("Configure", "perl.h"),
     "scotch-cmake": ("CMakeLists.txt", "src/libscotch/CMakeLists.txt"),
     "opencl-loader-cmake": ("CMakeLists.txt", "loader/icd.c"),
     "protobuf-cmake": ("CMakeLists.txt", "src/google/protobuf/descriptor.h"),
@@ -768,6 +774,217 @@ def build_commands(
                 f"RANLIB={ranlib}",
             ),
         )
+    if build_system == "krb5-autoconf":
+        return (
+            ("cmake", "-E", "make_directory", "fidb-build"),
+            (
+                "cmake",
+                "-E",
+                "chdir",
+                "fidb-build",
+                "sh",
+                "../src/configure",
+                f"--host={_configure_host(route)}",
+                "--disable-shared",
+                "--enable-static",
+                "--without-libedit",
+                "--without-readline",
+                "--without-system-verto",
+                "--without-ldap",
+                "--without-hesiod",
+            ),
+            ("make", f"-j{jobs}", "-C", "fidb-build/util", "all"),
+            ("make", f"-j{jobs}", "-C", "fidb-build/include", "all"),
+            ("make", f"-j{jobs}", "-C", "fidb-build/lib", "all"),
+            # The top-level library directory contains a convenience symlink
+            # to the real archive in lib/krb5. Keep only the real archive so
+            # discovery has one unambiguous, inspectable input.
+            ("cmake", "-E", "remove", "fidb-build/lib/libkrb5.a"),
+        )
+    if build_system == "e2fsprogs-comerr-autoconf":
+        return (
+            (
+                "sh",
+                "configure",
+                f"--host={_configure_host(route)}",
+                "--disable-elf-shlibs",
+                "--disable-bsd-shlibs",
+                "--enable-libuuid",
+                "--enable-libblkid",
+                "--disable-debugfs",
+                "--disable-imager",
+                "--disable-resizer",
+                "--disable-defrag",
+                "--disable-fsck",
+                "--disable-uuidd",
+                "--disable-fuse2fs",
+            ),
+            ("make", f"-j{jobs}", "-C", "lib/et", "libcom_err.a"),
+            # e2fsprogs hard-links the same archive into lib/. Archive
+            # discovery intentionally rejects duplicate paths, so retain the
+            # canonical lib/et output only.
+            ("cmake", "-E", "remove", "lib/libcom_err.a"),
+        )
+    if build_system == "libedit-autoconf":
+        if source_root is None or not source_root.is_absolute():
+            raise AdapterError("libedit adapter requires an absolute source root")
+        dependency_source = source_root / "fidb-inputs/ncurses-6.6"
+        dependency_build = source_root / "fidb-deps/ncurses-build"
+        dependency_install = source_root / "fidb-deps/ncurses-install"
+        return (
+            ("cmake", "-E", "make_directory", str(dependency_build)),
+            (
+                "cmake",
+                "-E",
+                "chdir",
+                str(dependency_build),
+                "sh",
+                str(dependency_source / "configure"),
+                f"--host={_configure_host(route)}",
+                f"--prefix={dependency_install}",
+                "--without-shared",
+                "--with-normal",
+                "--with-termlib",
+                "--without-ada",
+                "--without-cxx",
+                "--without-cxx-binding",
+                "--without-progs",
+                "--without-tests",
+                "--without-manpages",
+                "--disable-widec",
+            ),
+            ("make", f"-j{jobs}", "-C", str(dependency_build), "libs"),
+            (
+                "make",
+                "-C",
+                str(dependency_build),
+                "install.includes",
+                "install.libs",
+            ),
+            (
+                "env",
+                (
+                    f"CPPFLAGS=-I{dependency_install}/include "
+                    f"-I{dependency_install}/include/ncurses"
+                ),
+                f"LDFLAGS=-L{dependency_install}/lib",
+                "sh",
+                "configure",
+                f"--host={_configure_host(route)}",
+                "--disable-shared",
+                "--enable-static",
+                "--disable-examples",
+            ),
+            (
+                "make",
+                "-C",
+                "src",
+                "vi.h",
+                "emacs.h",
+                "common.h",
+                "fcns.h",
+                "help.h",
+                "func.h",
+            ),
+            ("make", f"-j{jobs}", "-C", "src", "libedit.la"),
+        )
+    if build_system == "libssh2-autoconf":
+        if source_root is None or not source_root.is_absolute():
+            raise AdapterError("libssh2 adapter requires an absolute source root")
+        dependency_source = source_root / "fidb-inputs/wolfssl-5.9.2-1"
+        dependency_build = source_root / "fidb-deps/wolfssl-build"
+        dependency_install = source_root / "fidb-deps/wolfssl-install"
+        dependency_configure = (
+            "cmake",
+            "-S",
+            str(dependency_source),
+            "-B",
+            str(dependency_build),
+            "-G",
+            "Ninja",
+            "-DWOLFSSL_REPRODUCIBLE_BUILD=yes",
+            "-DWOLFSSL_INSTALL=yes",
+            "-DWOLFSSL_OPENSSLEXTRA=yes",
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DWOLFSSL_ASM=no",
+            "-DWOLFSSL_EXAMPLES=no",
+            "-DWOLFSSL_CRYPT_TESTS=no",
+            f"-DCMAKE_INSTALL_PREFIX={dependency_install}",
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+            f"-DCMAKE_C_COMPILER={compiler}",
+            f"-DCMAKE_CXX_COMPILER={_cxx_compiler(route)}",
+            f"-DCMAKE_AR={archiver}",
+            f"-DCMAKE_RANLIB={ranlib}",
+            f"-DCMAKE_C_FLAGS={flags}",
+            f"-DCMAKE_CXX_FLAGS={flags}",
+            *_cmake_target_options(route),
+        )
+        return (
+            dependency_configure,
+            (
+                "cmake",
+                "--build",
+                str(dependency_build),
+                "--parallel",
+                str(jobs),
+                "--target",
+                "wolfssl",
+            ),
+            ("cmake", "--install", str(dependency_build)),
+            (
+                "sh",
+                "./configure",
+                f"--host={_configure_host(route)}",
+                "--disable-shared",
+                "--enable-static",
+                "--disable-examples-build",
+                "--disable-docker-tests",
+                "--disable-sshd-tests",
+                "--with-crypto=wolfssl",
+                f"--with-libwolfssl-prefix={dependency_install}",
+                "--without-libz",
+            ),
+            ("make", f"-j{jobs}", "-C", "src", "libssh2.la"),
+        )
+    if build_system == "musl-cross":
+        if route.target_os != "linux":
+            raise AdapterError("musl source builds are reviewed only for Linux")
+        return (
+            (
+                "sh",
+                "./configure",
+                f"--target={_configure_host(route)}",
+                "--disable-shared",
+            ),
+            ("make", f"-j{jobs}", "lib/libc.a"),
+        )
+    if build_system == "perl-native":
+        if route.target_os != "linux" or route.architecture != "x86_64":
+            raise AdapterError(
+                "libperl is reviewed only for native-compatible Linux x86-64"
+            )
+        return (
+            (
+                "sh",
+                "Configure",
+                "-des",
+                "-Dprefix=/usr",
+                f"-Dcc={compiler}",
+                f"-Dar={archiver}",
+                f"-Dranlib={ranlib}",
+                f"-Doptimize={flags}",
+                f"-Dccflags={flags}",
+                "-Dldflags=",
+                "-Dlocincpth=/nonexistent",
+                "-Dloclibpth=/nonexistent",
+                "-Dlibs=-lpthread -ldl -lm -lutil -lc",
+                "-Duseshrplib=false",
+                "-Duseithreads=undef",
+                "-Dusemultiplicity=undef",
+            ),
+            ("make", f"-j{jobs}", "libperl.a"),
+        )
     if build_system in AUTOCONF_ADAPTERS:
         configure_options, make_targets = AUTOCONF_ADAPTERS[build_system]
         commands = [
@@ -801,7 +1018,9 @@ def build_commands(
         source = "src" if build_system == "boringssl-cmake" else "."
         if build_system == "opencl-loader-cmake":
             if source_root is None or not source_root.is_absolute():
-                raise AdapterError("OpenCL loader adapter requires an absolute source root")
+                raise AdapterError(
+                    "OpenCL loader adapter requires an absolute source root"
+                )
             project_options = (
                 *project_options,
                 "-DOPENCL_ICD_LOADER_HEADERS_DIR="
@@ -981,6 +1200,7 @@ def build_environment(
         }
         and not build_system.endswith("-autoconf")
         and build_system not in CMAKE_ADAPTERS
+        and build_system not in {"musl-cross", "perl-native"}
     ):
         return {}
     environment = {
@@ -1002,6 +1222,8 @@ def build_environment(
         # build. Its fallback can incorrectly reuse CC and then attempt to run
         # a Windows target executable on the Linux build host.
         environment["CC_FOR_BUILD"] = "/usr/bin/cc"
+    if build_system in {"krb5-autoconf", "e2fsprogs-comerr-autoconf"}:
+        environment["BUILD_CC"] = "/usr/bin/cc"
     if build_system == "gettext-autoconf":
         environment["CXX"] = _cxx_compiler(route)
     if route.target_os == "android":

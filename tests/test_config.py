@@ -259,6 +259,9 @@ class ConfigurationTests(unittest.TestCase):
         by_family = {row["candidate_key"]: row for row in lock["candidate"]}
         recipes = {
             "boringssl": ("boringssl",),
+            "e2fsprogs": ("libcomerr",),
+            "krb5": ("libkrb5",),
+            "perl": ("libperl",),
             "zlib": ("zlib",),
             "curl": ("libcurl",),
             "libxml2": ("libxml2",),
@@ -267,10 +270,13 @@ class ConfigurationTests(unittest.TestCase):
             "scotch": ("libscotch",),
             "libmicrohttpd": ("libmicrohttpd",),
             "hwloc": ("libhwloc",),
+            "libedit": ("libedit",),
             "opencl-loader": ("libopencl",),
+            "musl": ("musl",),
             "protobuf": ("protobuf",),
             "mbedtls": ("mbedtls",),
             "wolfssl": ("wolfssl",),
+            "libssh2": ("libssh2",),
             "libpcap": ("libpcap",),
         }
 
@@ -293,6 +299,12 @@ class ConfigurationTests(unittest.TestCase):
         protobuf = load_configuration(
             root / "worker.toml", request_override=("protobuf@36.1",)
         ).libraries[0]
+        libedit = load_configuration(
+            root / "worker.toml", request_override=("libedit@20260512-3.1",)
+        ).libraries[0]
+        libssh2 = load_configuration(
+            root / "worker.toml", request_override=("libssh2@1.11.1",)
+        ).libraries[0]
 
         self.assertEqual(opencl.build_inputs[0].identifier, "opencl-headers-2026.05.29")
         self.assertEqual(
@@ -303,6 +315,16 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(
             protobuf.build_inputs[0].sha256,
             "9b7a064305e9fd94d124ffa6cc358592eb42b5da588fb4e07d09254aa40086db",
+        )
+        self.assertEqual(libedit.build_inputs[0].identifier, "ncurses-6.6")
+        self.assertEqual(
+            libedit.build_inputs[0].sha256,
+            "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11",
+        )
+        self.assertEqual(libssh2.build_inputs[0].identifier, "wolfssl-5.9.2-1")
+        self.assertEqual(
+            libssh2.build_inputs[0].sha256,
+            "2f4ef3d4fd387a9b3191d36a6316d69116c46ff69bb9583b6c82b36d7b8ca114",
         )
 
     def test_libpng_recipe_pins_its_route_matched_zlib_input(self):
