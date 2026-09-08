@@ -127,6 +127,15 @@ def _reviewed_recipes(root: Path) -> list[dict[str, object]]:
                 "kind": "native",
                 "url": document["url"],
                 "sha256": document["sha256"],
+                "applicability": {
+                    "target_os": list(document.get("supported_target_os", [])),
+                    "architectures": list(
+                        document.get("supported_architectures", [])
+                    ),
+                    "compiler_families": list(
+                        document.get("supported_compiler_families", [])
+                    ),
+                },
                 "authority_path": str(path.relative_to(root)),
             }
         )

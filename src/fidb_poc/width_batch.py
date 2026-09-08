@@ -10,6 +10,7 @@ import tomllib
 
 from .c_width import compile_c_width
 from .source_packs import load_source_pack, select_sources
+from .priority_schedule import load_priority_overlay
 from .width_study import load_width_study
 
 WIDTH_BATCH_SCHEMA = "fidb-width-batch/v1"
@@ -166,12 +167,19 @@ def load_width_batch(
         raise ValueError("width batch source pack language does not match")
     if source_pack["study_path"] != study_relative:
         raise ValueError("width batch source pack and width study do not match")
-    study = load_width_study(study_path)
+    study_document = tomllib.loads(study_path.read_text(encoding="utf-8"))
+    if study_document.get("schema_version") == "fidb-priority-overlay/v1":
+        study = load_priority_overlay(root, study_relative)
+        study_source_ids = {str(row["id"]) for row in study["subjects"]}
+    else:
+        study = load_width_study(study_path)
+        if study["state"] != "defined-disarmed":
+            raise ValueError(
+                "width batch study must remain explicitly defined-disarmed"
+            )
+        study_source_ids = {str(row["id"]) for row in study["families"]}
     if study["language_id"] != document["language_id"]:
         raise ValueError("width batch study language does not match")
-    if study["state"] != "defined-disarmed":
-        raise ValueError("width batch study must remain explicitly defined-disarmed")
-    study_source_ids = {str(row["id"]) for row in study["families"]}
     if not set(source_ids) <= study_source_ids:
         raise ValueError("width batch selects sources outside its width study")
 

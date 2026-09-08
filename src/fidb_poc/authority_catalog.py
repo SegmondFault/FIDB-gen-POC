@@ -761,6 +761,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                 root, f"recipes/preparation/{Path(priority_path).stem}.toml"
             ),
             runtime_libraries=runtime_libraries,
+            width_batches=width_batches,
         )
         for priority_path, programme_path in priority_bindings
     ]

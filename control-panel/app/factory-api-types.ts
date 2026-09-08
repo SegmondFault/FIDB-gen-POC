@@ -1335,6 +1335,7 @@ export type CampaignProgrammeCandidate = {
   source_cached: boolean;
   recipe_ready: boolean;
   width_batch_bound: boolean;
+  width_batch_ids: string[];
   width_batch_id: string | null;
   qualification_state: string;
   qualification_satisfied: boolean;

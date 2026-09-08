@@ -228,6 +228,7 @@ class AuthorityCatalogTests(unittest.TestCase):
                 "batch-020-android-gap",
                 "batch-c11-20",
                 "batch-c21-30",
+                "batch-c-malware-priority-native-v1",
                 "batch-openssl-fidbf-recovery",
             },
         )

@@ -118,6 +118,29 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(batch["summary"]["total_executions"], 2_220)
         self.assertEqual(batch["summary"]["locally_qualified_routes"], 37)
 
+    def test_priority_batch_accepts_priority_overlay_and_applies_recipe_bounds(self):
+        path = self.root / "batches/c-malware-priority-native-v1.toml"
+        batch = load_width_batch(self.root, path)
+        projected = project_width_batch_readiness(
+            batch, authority_catalog(self.root)["recipes"]
+        )
+
+        self.assertEqual(len(batch["libraries"]), 21)
+        self.assertEqual(batch["authorities"]["study"], "coverage/c-malware-priority-v1.toml")
+        self.assertEqual(projected["readiness"]["recipe_ready_libraries"], 21)
+        self.assertEqual(projected["readiness"]["materializable_executions"], 3_714)
+        self.assertEqual(projected["readiness"]["blocked_executions"], 948)
+        perl = next(row for row in projected["libraries"] if row["id"] == "libperl")
+        self.assertEqual(perl["applicable_executions"], 18)
+        self.assertEqual(
+            perl["applicable_route_ids"],
+            [
+                "linux-x86-64-gcc-12",
+                "linux-x86-64-gcc-13",
+                "linux-x86-64-gcc",
+            ],
+        )
+
     def test_c21_to_c30_batch_exposes_partial_recipe_readiness(self):
         path = self.root / "batches/c-21-30-mega-width.toml"
         batch = load_width_batch(self.root, path)

@@ -176,6 +176,7 @@ def compile_priority_schedule(
     source_acquisition: Mapping[str, object] | None = None,
     recipe_preparation: Mapping[str, object] | None = None,
     runtime_libraries: Mapping[str, object] | None = None,
+    width_batches: Sequence[Mapping[str, object]] = (),
 ) -> dict[str, object]:
     """Join priority order to C80 membership and current build readiness."""
 
@@ -201,6 +202,12 @@ def compile_priority_schedule(
         str(row["subject_id"]): row
         for row in (runtime_libraries or {}).get("providers", [])  # type: ignore[union-attr]
     }
+    subject_batches: dict[str, list[Mapping[str, object]]] = {}
+    for batch in width_batches:
+        if batch.get("authorities", {}).get("study") != overlay["authority_path"]:
+            continue
+        for library in batch.get("libraries", []):
+            subject_batches.setdefault(str(library["id"]), []).append(batch)
 
     projected = []
     for raw in overlay["subjects"]:  # type: ignore[assignment]
@@ -210,6 +217,7 @@ def compile_priority_schedule(
         priority_source = priority_sources.get(str(subject["source_family"]))
         prepared = prepared_families.get(str(subject["source_family"]))
         runtime_provider = runtime_providers.get(str(subject["id"]))
+        bound_batches = subject_batches.get(str(subject["id"]), [])
         matching_recipes = []
         for key in (subject["id"], subject["source_family"]):
             matching_recipes.extend(recipe_rows.get(str(key), []))
@@ -254,8 +262,17 @@ def compile_priority_schedule(
                 or matching_recipes
             )
         )
-        width_batch_bound = bool(research and research["width_batch_bound"])
-        qualification_satisfied = bool(research and research["qualification_satisfied"])
+        width_batch_bound = bool(bound_batches) or bool(
+            research and research["width_batch_bound"]
+        )
+        qualification_satisfied = bool(bound_batches) and all(
+            bool(batch.get("readiness", {}).get("qualification_satisfied"))
+            for batch in bound_batches
+        )
+        if not bound_batches:
+            qualification_satisfied = bool(
+                research and research["qualification_satisfied"]
+            )
         runtime_provider_ready = bool(
             runtime_provider
             and int(runtime_provider["cells"]) > 0
@@ -317,6 +334,7 @@ def compile_priority_schedule(
                     int(runtime_provider["blocked_cells"]) if runtime_provider else 0
                 ),
                 "width_batch_bound": width_batch_bound,
+                "width_batch_ids": [str(batch["id"]) for batch in bound_batches],
                 "qualification_satisfied": qualification_satisfied,
                 "stage": _stage(
                     source_available=source_available,

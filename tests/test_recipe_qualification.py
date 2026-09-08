@@ -28,6 +28,22 @@ class RecipeQualificationTests(unittest.TestCase):
             {row["treatment_id"] for row in plan["cells"]}, {"baseline_o2"}
         )
 
+    def test_priority_plan_omits_unreviewed_recipe_route_edges(self) -> None:
+        authority = self.root / "qualification/c-malware-priority-native-v1.toml"
+        plan = compile_recipe_qualification(self.root, authority)
+
+        self.assertEqual(plan["summary"]["libraries"], 21)
+        self.assertEqual(plan["summary"]["routes"], 16)
+        self.assertEqual(plan["summary"]["cells"], 268)
+        perl_routes = {
+            row["route_id"]
+            for row in plan["cells"]
+            if row["recipe_id"] == "libperl@5.44.0"
+        }
+        self.assertEqual(
+            perl_routes, {"linux-x86-64-gcc", "linux-x86-64-gcc-12"}
+        )
+
     def test_execution_checkpoints_concise_results_and_resumes(self) -> None:
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
             authority = Path(temporary) / "qualification.toml"
