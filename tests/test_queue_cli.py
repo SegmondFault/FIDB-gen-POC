@@ -486,6 +486,61 @@ matrices = ["native-libraries"]
                 "batch-mirai",
             )
 
+    def test_start_block_can_admit_exact_synchronized_generation_without_resync(
+        self,
+    ) -> None:
+        queue = self._queue(armed=True)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync_queue(queue, now=10)
+            synchronized = coordinator.status()
+
+        output = io.StringIO()
+        arguments = self._arguments("start-block", queue)
+        arguments.extend(
+            (
+                "--expected-sync-generation",
+                str(synchronized["sync_generation"]),
+                "--expected-active-jobs",
+                "1",
+            )
+        )
+        with (
+            patch(
+                "fidb_poc.queue_cli.Coordinator.sync_queue",
+                side_effect=AssertionError("unexpected full queue resynchronization"),
+            ),
+            contextlib.redirect_stdout(output),
+        ):
+            status = main(arguments)
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(status, 0)
+        self.assertEqual(document["batch_id"], "batch-mirai")
+
+    def test_start_block_rejects_stale_synchronized_generation(self) -> None:
+        queue = self._queue(armed=True)
+        with Coordinator(self.database, self.project_root) as coordinator:
+            coordinator.sync_queue(queue, now=10)
+            synchronized = coordinator.status()
+
+        errors = io.StringIO()
+        arguments = self._arguments("start-block", queue)
+        arguments.extend(
+            (
+                "--expected-sync-generation",
+                str(int(synchronized["sync_generation"]) + 1),
+                "--expected-active-jobs",
+                "1",
+            )
+        )
+        with contextlib.redirect_stderr(errors):
+            status = main(arguments)
+
+        self.assertEqual(status, 1)
+        self.assertIn("already-synchronized admission rejected", errors.getvalue())
+        with Coordinator(self.database, self.project_root) as coordinator:
+            self.assertFalse(coordinator.status()["execution_block"]["active"])
+
     def test_started_block_claims_after_window_without_cutoff_timer(self) -> None:
         queue = self._queue(armed=True)
         queue.write_text(

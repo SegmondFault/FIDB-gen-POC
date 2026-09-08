@@ -438,13 +438,26 @@ def parser() -> argparse.ArgumentParser:
         help="also inspect live worker limits using read-only systemctl show",
     )
 
-    commands.add_parser(
+    start_block = commands.add_parser(
         "start-block",
         parents=[_common_parser(queue=True)],
         help=(
             "manually admit the next batch outside the schedule window; "
             "workers still enforce queue arming and resource gates"
         ),
+    )
+    start_block.add_argument(
+        "--expected-sync-generation",
+        type=int,
+        help=(
+            "admit an already-synchronized ledger without resolving every plan "
+            "again; requires --expected-active-jobs"
+        ),
+    )
+    start_block.add_argument(
+        "--expected-active-jobs",
+        type=int,
+        help="fail closed unless the synchronized active-job count matches exactly",
     )
 
     worker = commands.add_parser(
@@ -1391,7 +1404,38 @@ def _start_block(arguments: argparse.Namespace) -> int:
     if not config.armed:
         raise QueueCliError(f"queue is disarmed in {queue_path}; no block was admitted")
     with Coordinator(state, root) as coordinator:
-        coordinator.sync_queue(config, actor="operator")
+        expected_generation = arguments.expected_sync_generation
+        expected_jobs = arguments.expected_active_jobs
+        if (expected_generation is None) != (expected_jobs is None):
+            raise QueueCliError(
+                "--expected-sync-generation and --expected-active-jobs must be used together"
+            )
+        if expected_generation is None:
+            coordinator.sync_queue(config, actor="operator")
+        else:
+            if expected_generation < 1 or expected_jobs < 1:
+                raise QueueCliError("synchronized admission expectations must be positive")
+            status = coordinator.status()
+            actual_jobs = sum(int(value) for value in status["counts"].values())
+            mismatches = []
+            if int(status["sync_generation"]) != expected_generation:
+                mismatches.append(
+                    f"generation {status['sync_generation']} != {expected_generation}"
+                )
+            if actual_jobs != expected_jobs:
+                mismatches.append(f"active jobs {actual_jobs} != {expected_jobs}")
+            if status["config_name"] != config.name:
+                mismatches.append(
+                    f"config {status['config_name']!r} != {config.name!r}"
+                )
+            if Path(str(status["config_path"])).resolve() != config.source_path:
+                mismatches.append("config path differs from synchronized authority")
+            if not bool(status["armed"]):
+                mismatches.append("synchronized queue is disarmed")
+            if mismatches:
+                raise QueueCliError(
+                    "already-synchronized admission rejected: " + "; ".join(mismatches)
+                )
         admission_id = f"manual:{datetime.now().astimezone().isoformat()}"
         block = coordinator.start_next_block(
             admission_id, scheduled=False, actor="operator"
