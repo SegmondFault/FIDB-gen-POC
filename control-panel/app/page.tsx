@@ -421,14 +421,6 @@ export default function Home() {
               <span>{factory.snapshot?.config_name ?? 'coordinator not loaded'}</span>
             </div>
           </div>
-          <button className="operator-button" aria-label="Operator menu">
-            <span className="avatar">GA</span>
-            <span>
-              <strong>Local operator</strong>
-              <small>full control</small>
-            </span>
-            <b>•••</b>
-          </button>
         </div>
       </aside>
 
@@ -461,11 +453,6 @@ export default function Home() {
               <span />
               {connectionLabel}
             </div>
-            <button className="icon-button" aria-label="Notifications">
-              <span className="notification-dot" />
-              ⌁
-            </button>
-            <button className="command-button"><kbd>⌘</kbd> Command</button>
           </div>
         </header>
 
@@ -557,7 +544,6 @@ export default function Home() {
                   <p className="panel-kicker">EXECUTION</p>
                   <h3>Worker pool</h3>
                 </div>
-                <button className="round-add" aria-label="Worker enrollment is configured on the coordinator" disabled>+</button>
               </div>
               <div className="worker-list">
                 {factory.capabilities ? [{
@@ -627,7 +613,7 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Provenance') return <ProvenanceView snapshot={factory.snapshot} />;
-  if (view === 'Automation') return <AutomationView factory={factory} />;
+  if (view === 'Automation') return <AutomationView factory={factory} navigateTo={navigateTo} />;
   return <ActivityView events={factory.events} connection={factory.connection} />;
 }
 
@@ -2052,11 +2038,11 @@ function ProvenanceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) 
     });
   });
   return <div className="view-stack">
-    <ViewIntro kicker="SEALED PROVENANCE" title="Artifacts & provenance" action={<button className="secondary-action" disabled>{snapshot ? `${artifacts.length} preview artifacts` : 'Coordinator offline'}</button>} />
+    <ViewIntro kicker="SEALED PROVENANCE" title="Artifacts & provenance" action={<span className={`validation-state ${snapshot ? 'ready' : 'waiting'}`}>{snapshot ? `${artifacts.length} artifacts` : 'Coordinator offline'}</span>} />
     {snapshot?.result_jobs_truncated && <div className="inline-warning">Showing artifact details for {snapshot.result_jobs_included?.toLocaleString()} recent jobs. Queue state and build coverage still include all {snapshot.result_jobs_total?.toLocaleString()} completed jobs.</div>}
     <div className="evidence-layout">
       <section className="panel artifact-list"><div className="panel-header"><h3>Sealed artifacts</h3><span className="plan-state">LIVE</span></div>
-        {artifacts.map(artifact => <button className="artifact-row" key={`${artifact.job.job_id}-${artifact.kind}`}><span className="file-glyph">{artifact.kind.toUpperCase()}</span><div><strong>{artifact.path.split('/').pop()}</strong><small>{artifact.job.base_cell}</small></div><span>{artifact.kind === 'fidbf' ? 'Raw FID export' : artifact.kind === 'fidb' ? 'FID database' : 'Provenance seal'}</span><code>{artifact.sha256.slice(0, 16)}…</code><b>→</b></button>)}
+        {artifacts.map(artifact => <article className="artifact-row" key={`${artifact.job.job_id}-${artifact.kind}`}><span className="file-glyph">{artifact.kind.toUpperCase()}</span><div><strong>{artifact.path.split('/').pop()}</strong><small>{artifact.job.base_cell}</small></div><span>{artifact.kind === 'fidbf' ? 'Raw FID export' : artifact.kind === 'fidb' ? 'FID database' : 'Provenance seal'}</span><code>{artifact.sha256.slice(0, 16)}…</code></article>)}
         {!artifacts.length && <div className="empty-state"><span>◇</span><strong>No sealed queue artifacts yet</strong><p>Disarmed or unfinished jobs do not create evidence entries.</p></div>}
       </section>
       <section className="panel provenance-card"><div className="panel-header"><h3>{selected?.base_cell ?? 'No completed cell'}</h3><span className={`worker-state ${selected ? 'ready' : 'offline'}`}>{selected ? 'Sealed' : 'Empty'}</span></div>
@@ -2066,7 +2052,7 @@ function ProvenanceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) 
   </div>;
 }
 
-function AutomationView({ factory }: { factory: FactoryApiState }) {
+function AutomationView({ factory, navigateTo }: { factory: FactoryApiState; navigateTo: (view: string) => void }) {
   const snapshot = factory.snapshot;
   const pool = factory.capabilities?.worker_pools['library-local'];
   const preflight = factory.preflight;
@@ -2079,9 +2065,17 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
     : snapshot?.armed
       ? { label: 'Pause new claims', action: () => factory.pause('operator pause from control panel') }
       : { label: 'Synchronize queue', action: factory.sync };
+  const operationSections = [
+    ['Timing', factory.timings?.eta ? 'ETA available' : 'Collecting evidence'],
+    ['Performance', factory.capabilities?.automatic_performance ? 'Host resolved' : 'Host unavailable'],
+    ['Retention', factory.retention?.latest_plan ? `${factory.retention.latest_plan.summary.actions} planned actions` : 'No active plan'],
+    ['Activity', `${factory.events.length} retained events`],
+    ['Export', factory.exportStatus?.ready ? 'Ready to package' : 'Not ready'],
+  ];
   return <div className="view-stack">
-    <ViewIntro kicker="UNATTENDED OPERATION" title="Automation" action={<button className="secondary-action" onClick={() => void control.action()} disabled={factory.busyAction !== null}>{factory.busyAction ? 'Working…' : control.label}</button>} />
+    <ViewIntro kicker="OPERATIONS & UNATTENDED EXECUTION" title="Automation" action={<button className="secondary-action" onClick={() => void control.action()} disabled={factory.busyAction !== null}>{factory.busyAction ? 'Working…' : control.label}</button>} />
     {factory.error && <div className="toast warning" role="alert">! {factory.error}</div>}
+    <section className="panel operations-index"><header><h3>Operations</h3><span>LIVE CONTROL SURFACES</span></header><div>{operationSections.map(([view, state]) => <button key={view} onClick={() => navigateTo(view)}><strong>{view}</strong><small>{state}</small><span>→</span></button>)}</div></section>
     <div className="automation-layout">
       <section className="panel automation-form">
         <div className="panel-header"><h3>plans/priority-queue.toml</h3><span className={`plan-state ${snapshot?.armed && !snapshot.paused ? 'ready' : ''}`}>{snapshot?.status.toUpperCase() ?? 'NOT SYNCED'}</span></div>
@@ -2109,7 +2103,7 @@ function AutomationView({ factory }: { factory: FactoryApiState }) {
 
 function ActivityView({ events, connection }: { events: CoordinatorEvent[]; connection: string }) {
   const displayed = [...events].reverse();
-  return <div className="view-stack"><ViewIntro kicker="DURABLE TELEMETRY" title="Activity" action={<button className="secondary-action" disabled>{connection === 'live' ? `${events.length} events` : 'Coordinator offline'}</button>} />
+  return <div className="view-stack"><ViewIntro kicker="DURABLE TELEMETRY" title="Activity" action={<span className={`validation-state ${connection === 'live' ? 'ready' : 'waiting'}`}>{connection === 'live' ? `${events.length} events` : 'Coordinator offline'}</span>} />
     <section className="panel terminal-panel"><div className="terminal-toolbar"><div><span /><span /><span /></div><code>var/fidb-coordinator/ledger.sqlite3 / events</code><button disabled>{connection === 'live' ? 'Live poll' : 'Not live'}</button></div><div className="terminal-events">{displayed.map(event => <div key={event.event_id}><time>{eventTime(event, true)}</time><span className={`event-dot ${eventTone(event)}`} /><strong>{event.event_type}</strong><p>{eventDetail(event)}</p></div>)}{!displayed.length && <div className="empty-state"><time>—</time><span className="event-dot info"/><strong>No events</strong><p>Synchronize the queue to begin the ledger.</p></div>}</div></section>
   </div>;
 }
