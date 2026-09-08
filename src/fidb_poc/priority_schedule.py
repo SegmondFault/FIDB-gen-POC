@@ -151,7 +151,11 @@ def _stage(
     native_recipe: bool,
     width_batch_bound: bool,
     qualification_satisfied: bool,
+    runtime_provider: bool = False,
+    runtime_provider_ready: bool = False,
 ) -> str:
+    if runtime_provider:
+        return "runtime-batch" if runtime_provider_ready else "runtime-acquisition"
     if not source_available:
         return "source-pin-cache"
     if not native_recipe:
@@ -171,6 +175,7 @@ def compile_priority_schedule(
     recipes: Sequence[Mapping[str, object]],
     source_acquisition: Mapping[str, object] | None = None,
     recipe_preparation: Mapping[str, object] | None = None,
+    runtime_libraries: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Join priority order to C80 membership and current build readiness."""
 
@@ -192,6 +197,10 @@ def compile_priority_schedule(
         str(row["source_family"]): row
         for row in (recipe_preparation or {}).get("families", [])  # type: ignore[union-attr]
     }
+    runtime_providers = {
+        str(row["subject_id"]): row
+        for row in (runtime_libraries or {}).get("providers", [])  # type: ignore[union-attr]
+    }
 
     projected = []
     for raw in overlay["subjects"]:  # type: ignore[assignment]
@@ -200,6 +209,7 @@ def compile_priority_schedule(
         research = candidates.get(str(research_key)) if research_key else None
         priority_source = priority_sources.get(str(subject["source_family"]))
         prepared = prepared_families.get(str(subject["source_family"]))
+        runtime_provider = runtime_providers.get(str(subject["id"]))
         matching_recipes = []
         for key in (subject["id"], subject["source_family"]):
             matching_recipes.extend(recipe_rows.get(str(key), []))
@@ -246,6 +256,11 @@ def compile_priority_schedule(
         )
         width_batch_bound = bool(research and research["width_batch_bound"])
         qualification_satisfied = bool(research and research["qualification_satisfied"])
+        runtime_provider_ready = bool(
+            runtime_provider
+            and int(runtime_provider["cells"]) > 0
+            and int(runtime_provider["ready_cells"]) == int(runtime_provider["cells"])
+        )
         projected.append(
             {
                 **subject,
@@ -266,8 +281,9 @@ def compile_priority_schedule(
                 "build_source_cached": priority_source_cached
                 or bool(research and research["source_cached"]),
                 "recipe_state": (
-                    "reviewed-native"
-                    if native_recipe
+                    "reviewed-runtime"
+                    if runtime_provider
+                    else "reviewed-native" if native_recipe
                     else (
                         "source-mismatch"
                         if native_source_mismatch
@@ -288,6 +304,18 @@ def compile_priority_schedule(
                 "planned_adapter": (
                     prepared.get("planned_adapter") if prepared else None
                 ),
+                "runtime_provider_kind": (
+                    runtime_provider.get("kind") if runtime_provider else None
+                ),
+                "runtime_provider_cells": (
+                    int(runtime_provider["cells"]) if runtime_provider else 0
+                ),
+                "runtime_provider_ready_cells": (
+                    int(runtime_provider["ready_cells"]) if runtime_provider else 0
+                ),
+                "runtime_provider_blocked_cells": (
+                    int(runtime_provider["blocked_cells"]) if runtime_provider else 0
+                ),
                 "width_batch_bound": width_batch_bound,
                 "qualification_satisfied": qualification_satisfied,
                 "stage": _stage(
@@ -295,6 +323,8 @@ def compile_priority_schedule(
                     native_recipe=native_recipe,
                     width_batch_bound=width_batch_bound,
                     qualification_satisfied=qualification_satisfied,
+                    runtime_provider=runtime_provider is not None,
+                    runtime_provider_ready=runtime_provider_ready,
                 ),
             }
         )
@@ -360,6 +390,19 @@ def compile_priority_schedule(
         "native_recipe_ready": sum(
             row["recipe_state"] == "reviewed-native" for row in projected
         ),
+        "runtime_provider_ready": sum(
+            row["recipe_state"] == "reviewed-runtime"
+            and row["runtime_provider_blocked_cells"] == 0
+            for row in projected
+        ),
+        "executable_provider_ready": sum(
+            row["recipe_state"] == "reviewed-native"
+            or (
+                row["recipe_state"] == "reviewed-runtime"
+                and row["runtime_provider_blocked_cells"] == 0
+            )
+            for row in projected
+        ),
         "limited_recipe_only": sum(
             row["recipe_state"] == "reviewed-limited" for row in projected
         ),
@@ -408,6 +451,16 @@ def compile_priority_schedule(
                 "summary": recipe_preparation["summary"],
             }
             if recipe_preparation
+            else None
+        ),
+        "runtime_libraries": (
+            {
+                "authority_path": runtime_libraries["authority_path"],
+                "authority_sha256": runtime_libraries["authority_sha256"],
+                "provider_digest": runtime_libraries["provider_digest"],
+                "summary": runtime_libraries["summary"],
+            }
+            if runtime_libraries
             else None
         ),
         "programme_id": programme["id"],

@@ -1421,14 +1421,59 @@ export type PriorityScheduleSubject = {
   priority_source_version: string | null;
   priority_source_last_verified_utc: string | null;
   build_source_cached: boolean;
-  recipe_state: 'reviewed-native' | 'reviewed-limited' | 'source-mismatch' | 'prepared-not-executable' | 'required';
+  recipe_state: 'reviewed-native' | 'reviewed-runtime' | 'reviewed-limited' | 'source-mismatch' | 'prepared-not-executable' | 'required';
   recipe_ids: string[];
   recipe_preparation_state: string | null;
   recipe_preparation_blockers: string[];
   planned_adapter: string | null;
+  runtime_provider_kind: 'qualified-route-query' | 'archive-registry-family' | null;
+  runtime_provider_cells: number;
+  runtime_provider_ready_cells: number;
+  runtime_provider_blocked_cells: number;
   width_batch_bound: boolean;
   qualification_satisfied: boolean;
   stage: string;
+};
+
+export type RuntimeLibraryStatus = {
+  schema_version: 'fidb-runtime-library-status/v1';
+  id: string;
+  label: string;
+  state: 'defined-disarmed';
+  policy: string;
+  probe: boolean;
+  authority_path: string;
+  authority_sha256: string;
+  registry_path: string;
+  registry_sha256: string;
+  width_authority: string;
+  width_compilation_digest: string;
+  provider_digest: string;
+  summary: {
+    subjects: number;
+    cells: number;
+    ready_cells: number;
+    blocked_cells: number;
+    qualified_route_cells: number;
+    archive_registry_cells: number;
+    archive_bytes: number;
+    states: Record<string, number>;
+  };
+  providers: Array<{
+    order: number;
+    subject_id: string;
+    label: string;
+    kind: 'qualified-route-query' | 'archive-registry-family';
+    library_name: string;
+    query: string | false;
+    target_os: string[];
+    compiler_families: string[];
+    registry_family: string | false;
+    cells: number;
+    ready_cells: number;
+    blocked_cells: number;
+  }>;
+  cells: Array<Record<string, unknown> & { id: string; subject_id: string; state: string }>;
 };
 
 export type PrioritySchedule = {
@@ -1455,7 +1500,13 @@ export type PrioritySchedule = {
   recipe_preparation: {
     authority_path: string;
     authority_sha256: string;
-    summary: { source_families: number; detection_subjects: number; recipe_ready: number; prepared_not_executable: number };
+    summary: { source_families: number; detection_subjects: number; recipe_ready: number; runtime_provider_ready: number; prepared_not_executable: number };
+  } | null;
+  runtime_libraries: {
+    authority_path: string;
+    authority_sha256: string;
+    provider_digest: string;
+    summary: RuntimeLibraryStatus['summary'];
   } | null;
   programme_id: string;
   schedule_digest: string;
@@ -1471,6 +1522,8 @@ export type PrioritySchedule = {
     source_families_cached: number;
     recipe_families_prepared: number;
     native_recipe_ready: number;
+    runtime_provider_ready: number;
+    executable_provider_ready: number;
     limited_recipe_only: number;
     qualification_satisfied: number;
     maximum_subject_executions: number;
@@ -1628,6 +1681,7 @@ export type FactoryAuthority = {
   width_batches: WidthBatch[];
   campaign_programmes: CampaignProgramme[];
   priority_schedules: PrioritySchedule[];
+  runtime_libraries: RuntimeLibraryStatus;
   qualification_pipeline: QualificationPipeline;
   time_block_plan: TimeBlockPlan;
   materialized_campaigns: MaterializedCampaign[];

@@ -35,6 +35,7 @@ _FAMILY_FIELDS = {
 }
 _STATES = {
     "recipe-ready",
+    "runtime-provider-ready",
     "adapter-required",
     "component-contract-required",
     "dependency-contract-required",
@@ -117,7 +118,8 @@ def load_recipe_preparation(
         if state not in _STATES:
             raise ValueError(f"recipe family {family} state is unsupported")
         blockers = _strings(row["blockers"], f"{family} blockers", empty=True)
-        if (state == "recipe-ready") != (not blockers):
+        ready_state = state in {"recipe-ready", "runtime-provider-ready"}
+        if ready_state != (not blockers):
             raise ValueError(
                 f"recipe family {family} must have blockers exactly when not ready"
             )
@@ -167,8 +169,13 @@ def load_recipe_preparation(
                 len(row["detection_subjects"]) for row in normalized
             ),
             "recipe_ready": sum(row["state"] == "recipe-ready" for row in normalized),
+            "runtime_provider_ready": sum(
+                row["state"] == "runtime-provider-ready" for row in normalized
+            ),
             "prepared_not_executable": sum(
-                row["state"] != "recipe-ready" for row in normalized
+                row["state"]
+                not in {"recipe-ready", "runtime-provider-ready"}
+                for row in normalized
             ),
         },
         "families": normalized,

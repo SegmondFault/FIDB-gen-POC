@@ -34,6 +34,7 @@ from .plan_request import (
 )
 from .performance_profiles import load_performance_profiles
 from .priority_schedule import compile_priority_schedule
+from .runtime_libraries import runtime_library_status
 from .recipe_preparation import load_recipe_preparation
 from .source_acquisition import acquisition_receipt_projection
 from .linked_reference_performance import resolve_linked_reference_performance
@@ -725,6 +726,9 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
     programme_by_path = {
         str(row["authorities"]["programme"]): row for row in campaign_programmes
     }
+    runtime_libraries = runtime_library_status(
+        root, probe=False, _catalog=toolchain_pack_catalog
+    )
     registry_path = root / "operations/campaigns.toml"
     if registry_path.is_file():
         registry = load_campaign_registry(root)
@@ -756,6 +760,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             recipe_preparation=load_recipe_preparation(
                 root, f"recipes/preparation/{Path(priority_path).stem}.toml"
             ),
+            runtime_libraries=runtime_libraries,
         )
         for priority_path, programme_path in priority_bindings
     ]
@@ -826,6 +831,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "width_batches": width_batches,
         "campaign_programmes": campaign_programmes,
         "priority_schedules": priority_schedules,
+        "runtime_libraries": runtime_libraries,
         "qualification_pipeline": qualification_pipeline,
         "time_block_plan": time_block_plan,
         "materialized_campaigns": materialized_campaigns,
@@ -861,6 +867,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "width_batches": "batches/*.toml",
             "campaign_programmes": "campaigns/*.toml + coverage/evidence/four-source-n80-v1.csv",
             "priority_schedules": "operations/campaigns.toml + coverage/*-priority-*.toml + sources/acquisition/ + recipes/preparation/",
+            "runtime_libraries": "toolchains/runtime-libraries.toml + toolchains/registry.toml + qualified toolchain packs",
             "qualification_pipeline": "qualification/pipeline.toml + qualification/*.toml",
             "time_block_plan": "performance/batch-planning.toml",
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
@@ -910,6 +917,10 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                     ).read_bytes()
                     for row in priority_schedules
                 )
+            ).hexdigest(),
+            "runtime_libraries_sha256": hashlib.sha256(
+                (root / str(runtime_libraries["authority_path"])).read_bytes()
+                + (root / str(runtime_libraries["registry_path"])).read_bytes()
             ).hexdigest(),
             "qualification_pipeline_sha256": hashlib.sha256(
                 b"".join(

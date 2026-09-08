@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fidb_poc.campaign_programme import compile_campaign_programme
 from fidb_poc.priority_schedule import compile_priority_schedule
+from fidb_poc.runtime_libraries import runtime_library_status
 
 
 class PriorityScheduleTests(unittest.TestCase):
@@ -28,6 +29,7 @@ class PriorityScheduleTests(unittest.TestCase):
             "coverage/c-malware-priority-v1.toml",
             programme=programme,
             recipes=recipes,
+            runtime_libraries=runtime_library_status(cls.root),
         )
 
     def test_exact_operator_order_is_frozen_into_three_disarmed_cohorts(self):
@@ -71,6 +73,18 @@ class PriorityScheduleTests(unittest.TestCase):
         self.assertEqual(summary["maximum_subject_executions"], 25 * 222)
         self.assertEqual(summary["maximum_source_qualification_cells"], 23 * 16)
         self.assertEqual(len(self.schedule["schedule_digest"]), 64)
+
+    def test_runtime_owned_subjects_are_explicit_execution_providers(self):
+        subjects = {
+            row["id"]: row
+            for cohort in self.schedule["cohorts"]
+            for row in cohort["subjects"]
+        }
+
+        self.assertEqual(self.schedule["summary"]["runtime_provider_ready"], 4)
+        self.assertEqual(subjects["glibc"]["runtime_provider_cells"], 24)
+        self.assertEqual(subjects["uclibc"]["runtime_provider_cells"], 23)
+        self.assertEqual(subjects["libgcc"]["stage"], "runtime-batch")
 
 
 if __name__ == "__main__":

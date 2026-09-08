@@ -1,0 +1,51 @@
+schema_version = "fidb-runtime-library-catalog/v1"
+id = "c-priority-runtime-libraries-v1"
+label = "C priority toolchain-owned runtime libraries"
+state = "defined-disarmed"
+width_authority = "c-width-v2"
+registry = "toolchains/registry.toml"
+policy = "A runtime archive is attributable to the exact qualified compiler route or checksum-pinned archive registry row that supplied it. Compiler settings are not fanned out because the archive is already compiled; compiler and runtime generations remain distinct cells."
+
+[[provider]]
+order = 1
+subject_id = "glibc"
+label = "GNU C Library"
+kind = "qualified-route-query"
+library_name = "glibc"
+query = "-print-file-name=libc.a"
+target_os = ["linux"]
+compiler_families = ["gcc"]
+registry_family = false
+
+[[provider]]
+order = 2
+subject_id = "uclibc"
+label = "uClibc / uClibc-ng"
+kind = "archive-registry-family"
+library_name = "uclibc"
+query = false
+target_os = ["linux"]
+compiler_families = ["gcc"]
+registry_family = "uclibc"
+
+[[provider]]
+order = 3
+subject_id = "libgcc"
+label = "GCC low-level runtime"
+kind = "qualified-route-query"
+library_name = "libgcc"
+query = "-print-libgcc-file-name"
+target_os = ["linux"]
+compiler_families = ["gcc"]
+registry_family = false
+
+[[provider]]
+order = 4
+subject_id = "libstdcxx"
+label = "GNU C++ standard library"
+kind = "qualified-route-query"
+library_name = "libstdcxx"
+query = "-print-file-name=libstdc++.a"
+target_os = ["linux"]
+compiler_families = ["gcc"]
+registry_family = false
