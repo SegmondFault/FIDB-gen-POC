@@ -1000,6 +1000,8 @@ cross-check. Its canary must demonstrate identical owner decisions, confusion
 matrices and per-hash observations before a future cohort selects engine 2.
 Do not make a cached or partial C10 comparison into performance evidence, and
 do not remove engine 1 while any sealed authority or export names it.
+Engine 2 is the code default for new unpinned calls; reproducible campaign work
+must still name its engine in TOML.
 
 Linked-reference generation has its own capacity authority at
 `performance/linked-reference.toml`. The v2 production supervisor resolves it

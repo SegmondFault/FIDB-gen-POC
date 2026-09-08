@@ -988,7 +988,7 @@ def match_compact_population(
     authority: Mapping[str, object],
     *,
     backend_id: str,
-    engine_id: str = ALPHA_ENGINE_1,
+    engine_id: str = ALPHA_ENGINE_2,
     chunk_rows: int = 262_144,
     workgroup_size: int = 256,
     fallback_to_cpu: bool = True,

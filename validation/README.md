@@ -335,6 +335,9 @@ indexes through one bounded scorer, interns exact duplicate score inputs, and
 retains the supplying component identities on winners. The disarmed
 `fid-matching-alpha-engine-2-run.toml` authority exists for a bounded oracle
 and timing cross-check; it cannot auto-chain into a full run.
+Engine 2 is the default for unpinned new callers. Historical campaign TOMLs
+remain explicitly pinned to the legacy engine identity and therefore cannot
+change underneath their sealed evidence.
 The canary retains its replay input, selected-backend decision and oracle
 comparison. Routine full cases retain classifications, truth attribution,
 per-hash observations and summary receipts, but neither native-oracle input nor

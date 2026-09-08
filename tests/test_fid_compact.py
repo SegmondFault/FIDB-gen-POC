@@ -296,9 +296,19 @@ class CompactFidTests(unittest.TestCase):
                 backend_id="cpu-portable-fid-v1",
                 engine_id=ALPHA_ENGINE_2,
             )
+            default = match_compact_population(
+                [index],
+                self.query(),
+                "linux-x86",
+                "o2",
+                self.authority,
+                backend_id="cpu-portable-fid-v1",
+            )
 
             self.assertEqual(old["engine"], ALPHA_ENGINE_1)
             self.assertEqual(new["engine"], ALPHA_ENGINE_2)
+            self.assertEqual(default["engine"], ALPHA_ENGINE_2)
+            self.assertEqual(default["functions"], new["functions"])
             self.assertEqual(old["functions"], [
                 {
                     **new["functions"][0],

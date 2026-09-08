@@ -532,7 +532,7 @@ def qualify_retained_validation(
     performance_path: str | Path = "performance/fid-matching.toml",
     reference_population: Mapping[str, object] | None = None,
     campaign_authority_sha256: str | None = None,
-    engine_id: str = "alpha_engine_1",
+    engine_id: str = "alpha_engine_2",
     classification_encoding: str = "json-pretty-v1",
 ) -> dict[str, object]:
     """Run native FID and either qualify all or verify the selected backend."""
@@ -864,7 +864,7 @@ def run_compact_retained_validation(
     ghidra_user_home: str | Path | None = None,
     reference_population: Mapping[str, object] | None = None,
     campaign_authority_sha256: str | None = None,
-    engine_id: str = "alpha_engine_1",
+    engine_id: str = "alpha_engine_2",
     classification_encoding: str = "json-pretty-v1",
 ) -> dict[str, object]:
     """Run the selected compact backend without constructing a native oracle."""
