@@ -46,7 +46,7 @@ unchanged inputs produces the same bytes. The builder verifies every FIDBF
 against its ledger digest, snapshots and checks SQLite, tests the zstd stream,
 and reopens the tar member list before atomically replacing the final package.
 
-This is a usable raw-FIDBF research bundle for the downstream maintainer's integration work. It is
+This is a usable raw-FIDBF research bundle for downstream integration work. It is
 not the later admitted lane-pack publication boundary: sealed per-cell FIDBFs,
 immutable lane generations and analyst-admitted lane packs remain distinct.
 Accordingly, the direct-use export does not run the future queue-to-lane
@@ -146,7 +146,7 @@ native databases, containing at least:
   false-positive contribution;
 - `metadata`: schema, compatibility, source corpus generation and checksums.
 
-a downstream maintainer or another consumer can then take the hashes exposed by a FID match,
+A downstream consumer can then take the hashes exposed by a FID match,
 look up one complete-signature row, show its relative noise and owners, and use
 the score as evidence quality without changing Ghidra's matching database. A
 small integration helper or documented SQL view should ship with the bundle so
