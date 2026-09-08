@@ -24,6 +24,15 @@ produced it. The supplemental, operator-ordered detection subjects are frozen
 in `coverage/c-malware-priority-v1.toml`; they supplement the published C80
 ranking rather than changing its research evidence.
 
+The priority overlay is an ordered schedule, not an executable queue. Its 25
+detection subjects are grouped as 10 + 10 + 5, while the two shared component
+pairs reduce preparation to 23 source families. Fourteen subjects map onto 12
+existing C80 research candidates; those candidates move forward in planning
+instead of being duplicated. The remaining 11 are explicit priority additions.
+The Matrix displays every subject's current source, recipe and qualification
+gate. Only a qualified, digest-bound materialisation may add runnable blocks to
+the selected campaign queue.
+
 ## C80 four-source programme
 
 `c80-four-source-n80-v1.toml` freezes the published four-source N80 frontier

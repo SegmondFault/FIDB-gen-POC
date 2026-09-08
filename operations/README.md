@@ -57,6 +57,12 @@ M1 Max is a later reviewed transition, not something campaign selection may
 invent. Both Apple and non-Apple slices share the parent campaign identity but
 retain different queue and ledger authorities.
 
+The Matrix reads the priority authority through the campaign registry. It shows
+the exact operator order as planned/disarmed cohorts, including C80 overlaps
+and the earliest unmet gate. This is intentionally earlier than the executable
+queue: priority controls what source and recipe work happens next, but cannot
+bypass qualification or arm itself.
+
 The host has 16 physical cores/32 hardware threads, and each reviewed build
 adapter may use four make jobs while every worker embeds one reusable Ghidra
 JVM. The queue binds `reference-host-94g-balanced`: twenty active leases, four build

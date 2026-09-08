@@ -10,6 +10,7 @@ import tomllib
 from .batch_time_model import compile_time_block_plan
 from .batch_materializer import load_materialization_manifest
 from .campaign_programme import compile_campaign_programme
+from .campaign_registry import load_campaign_registry
 from .cohort_validation import compile_cohort_validation_lifecycle
 from .config import load_configuration
 from .c_width import compile_c_width
@@ -32,6 +33,7 @@ from .plan_request import (
     resolve_plan,
 )
 from .performance_profiles import load_performance_profiles
+from .priority_schedule import compile_priority_schedule
 from .linked_reference_performance import resolve_linked_reference_performance
 from .qualification_pipeline import compile_qualification_pipeline
 from .recipe_generator import load_recipes as load_source_recipes
@@ -41,7 +43,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v19"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v20"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -713,6 +715,37 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         )
         for path in sorted((root / "campaigns").glob("*.toml"))
     ]
+    programme_by_path = {
+        str(row["authorities"]["programme"]): row for row in campaign_programmes
+    }
+    registry_path = root / "operations/campaigns.toml"
+    if registry_path.is_file():
+        registry = load_campaign_registry(root)
+        priority_bindings = sorted(
+            {
+                (str(binding.priority_ref), str(binding.programme_ref))
+                for binding in registry.campaigns
+                if binding.priority_ref is not None
+                and binding.programme_ref is not None
+            }
+        )
+    else:
+        # A copied read-only authority tree may omit operational service files.
+        # Retain deterministic planning visibility without inventing a binding.
+        default_programme = str(campaign_programmes[0]["authorities"]["programme"])
+        priority_bindings = [
+            (str(path.relative_to(root)), default_programme)
+            for path in sorted((root / "coverage").glob("*-priority-*.toml"))
+        ]
+    priority_schedules = [
+        compile_priority_schedule(
+            root,
+            priority_path,
+            programme=programme_by_path[programme_path],
+            recipes=recipes,
+        )
+        for priority_path, programme_path in priority_bindings
+    ]
     time_block_plan = compile_time_block_plan(root)
     materialized_campaigns = _materialized_campaign_authority(root)
     auto_batch_campaigns = _auto_batch_campaign_authority(root)
@@ -779,6 +812,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "width_studies": width_studies,
         "width_batches": width_batches,
         "campaign_programmes": campaign_programmes,
+        "priority_schedules": priority_schedules,
         "qualification_pipeline": qualification_pipeline,
         "time_block_plan": time_block_plan,
         "materialized_campaigns": materialized_campaigns,
@@ -813,6 +847,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "width_studies": "coverage/*-width-study.toml",
             "width_batches": "batches/*.toml",
             "campaign_programmes": "campaigns/*.toml + coverage/evidence/four-source-n80-v1.csv",
+            "priority_schedules": "operations/campaigns.toml + coverage/*-priority-*.toml",
             "qualification_pipeline": "qualification/pipeline.toml + qualification/*.toml",
             "time_block_plan": "performance/batch-planning.toml",
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
@@ -848,6 +883,12 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
                     (root / str(row["authorities"]["programme"])).read_bytes()
                     + (root / str(row["authorities"]["candidates"])).read_bytes()
                     for row in campaign_programmes
+                )
+            ).hexdigest(),
+            "priority_schedules_sha256": hashlib.sha256(
+                b"".join(
+                    (root / str(row["authority_path"])).read_bytes()
+                    for row in priority_schedules
                 )
             ).hexdigest(),
             "qualification_pipeline_sha256": hashlib.sha256(

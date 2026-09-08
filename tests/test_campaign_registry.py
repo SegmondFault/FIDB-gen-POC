@@ -108,15 +108,19 @@ class CampaignRegistryTests(unittest.TestCase):
 schema_version = "fidb-priority-overlay/v1"
 id = "priority"
 label = "Priority"
+state = "planned-disarmed"
 language_id = "c"
+cohort_size = 10
 selection_basis = "test"
 component_policy = "test"
+scheduling_policy = "test"
 
 [[subject]]
 order = 1
 id = "zlib"
 source_family = "zlib"
 aliases = ["libz"]
+research_key = "zlib"
 """)
         (self.root / "operations/campaigns.toml").write_text(REGISTRY)
 

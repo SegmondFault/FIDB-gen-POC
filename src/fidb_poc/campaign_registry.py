@@ -22,6 +22,7 @@ from typing import Mapping, Sequence
 
 from .coordinator import Coordinator
 from .coordinator_config import QueueConfig
+from .priority_schedule import load_priority_overlay
 
 REGISTRY_SCHEMA = "fidb-campaign-registry/v1"
 SELECTION_SCHEMA = "fidb-campaign-selection/v1"
@@ -140,64 +141,6 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _validate_priority_authority(path: Path) -> int:
-    document = tomllib.loads(path.read_text(encoding="utf-8"))
-    _only_keys(
-        document,
-        {
-            "schema_version",
-            "id",
-            "label",
-            "language_id",
-            "selection_basis",
-            "component_policy",
-            "subject",
-        },
-        "priority authority",
-    )
-    if document.get("schema_version") != "fidb-priority-overlay/v1":
-        raise ValueError("priority authority has an unsupported schema_version")
-    _identifier(document.get("id"), "priority authority id")
-    _text(document.get("label"), "priority authority label")
-    _identifier(document.get("language_id"), "priority authority language_id")
-    _text(document.get("selection_basis"), "priority authority selection_basis")
-    _text(document.get("component_policy"), "priority authority component_policy")
-    subjects = document.get("subject")
-    if not isinstance(subjects, list) or not subjects:
-        raise ValueError("priority authority must contain [[subject]] rows")
-    seen: set[str] = set()
-    for position, raw in enumerate(subjects, start=1):
-        if not isinstance(raw, dict):
-            raise ValueError(f"priority subject {position} must be a table")
-        _only_keys(
-            raw,
-            {"order", "id", "source_family", "aliases"},
-            f"priority subject {position}",
-        )
-        if raw.get("order") != position:
-            raise ValueError(
-                "priority subject order must be contiguous and file-ordered"
-            )
-        subject_id = _identifier(raw.get("id"), f"priority subject {position} id")
-        if subject_id in seen:
-            raise ValueError(f"duplicate priority subject: {subject_id}")
-        seen.add(subject_id)
-        _identifier(
-            raw.get("source_family"), f"priority subject {subject_id} source_family"
-        )
-        aliases = raw.get("aliases")
-        if not isinstance(aliases, list) or any(
-            not isinstance(alias, str) or not alias or alias != alias.strip()
-            for alias in aliases
-        ):
-            raise ValueError(f"priority subject {subject_id} aliases must be strings")
-        if len(set(aliases)) != len(aliases):
-            raise ValueError(
-                f"priority subject {subject_id} aliases contain duplicates"
-            )
-    return len(subjects)
-
-
 def load_campaign_registry(
     project_root: str | Path,
     authority: str | Path = DEFAULT_REGISTRY,
@@ -287,7 +230,9 @@ def load_campaign_registry(
                 raw["priority_authority"],
                 f"campaign {campaign_id} priority authority",
             )
-            priority_subjects = _validate_priority_authority(priority_path)
+            priority_subjects = len(
+                load_priority_overlay(root, priority_path)["subjects"]
+            )
             authority_digests["priority_sha256"] = _sha256(priority_path)
         identity = {
             "id": campaign_id,

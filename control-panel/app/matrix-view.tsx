@@ -8,6 +8,7 @@ import {
   type CoverageLanguage,
   type FactoryCapabilities,
   type PlanDraftResult,
+  type PrioritySchedule,
   type WidthAxisId,
   type WidthCompilation,
   type WidthStudy,
@@ -791,6 +792,10 @@ export function MatrixView({ batchOrder, rows, factory, selectedLanguageId, setS
         <CohortValidationLifecyclePanel lifecycle={authority.cohort_validation} />
       )}
 
+      {selectedLanguageId === 'c' && authority?.priority_schedules.map(schedule => (
+        <PrioritySchedulePanel key={schedule.id} schedule={schedule} />
+      ))}
+
       {selectedLanguageId === 'c' && authority?.campaign_programmes.map(programme => (
         <CampaignProgrammePanel
           key={programme.id}
@@ -1052,6 +1057,29 @@ function CampaignProgrammePanel({ programme, lifecycle }: { programme: CampaignP
       })}
     </div>
     <footer><code>{programme.authorities.source_lock}</code><span>Research archive cache ≠ accepted C-library cohort. Screening, recipe review and qualification remain independent gates.</span></footer>
+  </section>;
+}
+
+function PrioritySchedulePanel({ schedule }: { schedule: PrioritySchedule }) {
+  const summary = schedule.summary;
+  const stageLabel = (stage: string) => stage.replaceAll('-', ' ').toUpperCase();
+  return <section className="panel priority-schedule-panel">
+    <header>
+      <div><span>CAMPAIGN PRIORITY · EXACT OPERATOR ORDER</span><h3>{schedule.label}</h3><small>{schedule.id} · {schedule.schedule_digest.slice(0, 16)}…</small></div>
+      <article><strong>{summary.subjects}</strong><small>detection subjects</small></article>
+      <article><strong>{summary.source_families}</strong><small>source families</small></article>
+      <article><strong>{summary.research_overlap_subjects}</strong><small>C80-overlap subjects</small></article>
+      <article><strong>{summary.priority_additions}</strong><small>priority additions</small></article>
+      <span className="operational-state blocked">PLANNED · DISARMED</span>
+    </header>
+    <div className="priority-schedule-facts"><span><b>{summary.cohorts}</b> cohorts · 10 + 10 + {summary.final_cohort_size}</span><span><b>{summary.maximum_subject_executions.toLocaleString()}</b> maximum subject-width cells</span><span><b>{summary.maximum_source_qualification_cells.toLocaleString()}</b> maximum source-family qualification cells</span><span><b>{summary.native_recipe_ready}</b> full-width recipes ready · <b>{summary.limited_recipe_only}</b> limited recipe</span></div>
+    <div className="priority-schedule-cohorts">
+      {schedule.cohorts.map(cohort => <details key={cohort.id}>
+        <summary><b>{String(cohort.order).padStart(2, '0')}</b><div><strong>Priority {cohort.priority_start}–{cohort.priority_end}</strong><small>{cohort.subjects.map(row => row.id).join(' · ')}</small></div><span>{cohort.capacity} subjects</span><span>{cohort.source_families} source families</span><span>{cohort.planned_subject_executions.toLocaleString()} max cells</span><em>EXPAND</em></summary>
+        <section><header><span>Priority / subject</span><span>C80 relationship</span><span>Source</span><span>Recipe</span><span>Qualification</span><span>Current gate</span></header>{cohort.subjects.map(subject => <article key={subject.id}><div><b>#{subject.order} {subject.id}</b><small>{subject.source_family}{subject.aliases.length ? ` · ${subject.aliases.join(', ')}` : ''}</small></div><span className={subject.research_overlap ? 'pass' : 'new'}>{subject.research_overlap ? `C80 #${subject.research_rank}${subject.research_key !== subject.id ? ` · ${subject.research_key}` : ''}` : 'PRIORITY ADDITION'}</span><span className={subject.build_source_cached ? 'pass' : subject.research_source_cached ? 'staged' : 'pending'}>{subject.build_source_cached ? 'BUILD CACHE' : subject.research_source_cached ? 'RESEARCH CACHE' : subject.recipe_ids.length ? 'RECIPE PIN' : 'PIN REQUIRED'}</span><span className={subject.recipe_state === 'reviewed-native' ? 'pass' : 'pending'}>{subject.recipe_state.replaceAll('-', ' ').toUpperCase()}</span><span className={subject.qualification_satisfied ? 'pass' : 'pending'}>{subject.qualification_satisfied ? 'SEALED' : 'REQUIRED'}</span><strong>{stageLabel(subject.stage)}</strong></article>)}</section>
+      </details>)}
+    </div>
+    <footer><code>{schedule.authority_path}</code><span>{schedule.scheduling_policy}</span></footer>
   </section>;
 }
 

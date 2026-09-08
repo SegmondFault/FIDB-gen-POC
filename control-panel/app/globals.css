@@ -326,6 +326,37 @@ button { font: inherit; }
 .c80-cohort-ledger > details > section > article > span.pending { color: var(--amber); }
 .c80-programme-panel > footer { padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #657387; background: #0d141c; font-size: 6px; }
 .c80-programme-panel > footer code { color: var(--cyan); font-size: 6px; }
+.priority-schedule-panel { overflow: hidden; }
+.priority-schedule-panel > header { min-height: 64px; padding: 10px 13px; display: grid; grid-template-columns: minmax(250px, 1.5fr) repeat(4, minmax(86px, .42fr)) auto; gap: 11px; align-items: center; border-bottom: 1px solid var(--line-soft); background: linear-gradient(90deg, rgba(71,215,208,.08), #10151e 58%); }
+.priority-schedule-panel > header > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.priority-schedule-panel > header > div > span { color: var(--cyan); font: 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; }
+.priority-schedule-panel > header h3 { margin: 0; color: #d0d8e1; font-size: 11px; }
+.priority-schedule-panel > header small { color: var(--muted-2); font-size: 6px; }
+.priority-schedule-panel > header > article { min-height: 35px; padding-left: 10px; display: flex; flex-direction: column; gap: 3px; border-left: 1px solid #293442; }
+.priority-schedule-panel > header > article strong { color: #d4dde6; font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.priority-schedule-facts { min-height: 31px; padding: 6px 13px; display: flex; align-items: center; gap: 22px; color: #748398; border-bottom: 1px solid var(--line-soft); font: 600 6px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.priority-schedule-facts b { color: #b9c6d3; }
+.priority-schedule-cohorts > details > summary { min-height: 42px; padding: 6px 13px; display: grid; grid-template-columns: 28px minmax(280px, 1fr) repeat(3, minmax(90px, .35fr)) 48px; gap: 9px; align-items: center; border-bottom: 1px solid var(--line-soft); cursor: pointer; list-style: none; }
+.priority-schedule-cohorts > details > summary::-webkit-details-marker { display: none; }
+.priority-schedule-cohorts > details > summary:hover, .priority-schedule-cohorts > details[open] > summary { background: rgba(71,215,208,.035); }
+.priority-schedule-cohorts > details > summary > b { color: var(--cyan); font: 700 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.priority-schedule-cohorts > details > summary > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.priority-schedule-cohorts > details > summary strong { color: #bdc8d3; font-size: 8px; }
+.priority-schedule-cohorts > details > summary small { overflow: hidden; color: var(--muted-2); font-size: 6px; text-overflow: ellipsis; white-space: nowrap; }
+.priority-schedule-cohorts > details > summary > span { color: #8997a8; font: 650 7px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+.priority-schedule-cohorts > details > summary > em { color: var(--cyan); font: normal 700 6px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
+.priority-schedule-cohorts > details > section { padding: 0 13px 8px; background: #0b1118; }
+.priority-schedule-cohorts > details > section > header, .priority-schedule-cohorts > details > section > article { min-height: 36px; display: grid; grid-template-columns: minmax(160px, 1.1fr) repeat(4, minmax(95px, .55fr)) minmax(120px, .7fr); gap: 8px; align-items: center; border-bottom: 1px solid #1b2531; }
+.priority-schedule-cohorts > details > section > header { min-height: 23px; color: #526176; font: 700 5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.priority-schedule-cohorts > details > section > article > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.priority-schedule-cohorts > details > section > article b { color: #adb8c5; font-size: 7px; }
+.priority-schedule-cohorts > details > section > article small { color: #5d6b7e; font-size: 5px; }
+.priority-schedule-cohorts > details > section > article > span, .priority-schedule-cohorts > details > section > article > strong { color: #7b899a; font: 650 6px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.priority-schedule-cohorts > details > section > article > span.pass { color: var(--green); }
+.priority-schedule-cohorts > details > section > article > span.new, .priority-schedule-cohorts > details > section > article > span.staged { color: var(--cyan); }
+.priority-schedule-cohorts > details > section > article > span.pending { color: var(--amber); }
+.priority-schedule-panel > footer { padding: 8px 13px; display: flex; justify-content: space-between; gap: 18px; color: #657387; background: #0d141c; font-size: 6px; }
+.priority-schedule-panel > footer code { flex: 0 0 auto; color: var(--cyan); font-size: 6px; }
 .cohort-lifecycle-panel { overflow: hidden; }
 .cohort-lifecycle-panel > header { min-height: 48px; padding: 8px 13px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line-soft); background: linear-gradient(90deg, #111d25, #10151e); }
 .cohort-lifecycle-panel > header > div { display: flex; flex-direction: column; gap: 3px; }
@@ -2056,6 +2087,10 @@ button { font: inherit; }
   .c80-funnel > i:nth-of-type(3) { display: none; }
   .c80-cohort-ledger { overflow-x: auto; }
   .c80-cohort-ledger > header, .c80-cohort-ledger > details { min-width: 850px; }
+  .priority-schedule-panel > header { grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(90px, .5fr)); }
+  .priority-schedule-panel > header > article:nth-of-type(n+3), .priority-schedule-panel > header > .operational-state { grid-column: auto; }
+  .priority-schedule-cohorts { overflow-x: auto; }
+  .priority-schedule-cohorts > details { min-width: 790px; }
   .operational-gap-grid { grid-template-columns: 1fr; }
   .operational-gap-grid > section { border-right: 0; }
   .lane-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2166,6 +2201,10 @@ button { font: inherit; }
   .c80-programme-head { grid-template-columns: 1fr 1fr; }
   .c80-programme-head > div:first-child { grid-column: 1 / -1; }
   .c80-programme-head > .operational-state { justify-self: start; }
+  .priority-schedule-panel > header { grid-template-columns: 1fr 1fr; }
+  .priority-schedule-panel > header > div { grid-column: 1 / -1; }
+  .priority-schedule-panel > header > .operational-state { justify-self: start; }
+  .priority-schedule-facts { align-items: flex-start; flex-direction: column; gap: 5px; }
   .c80-funnel { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .c80-funnel > i { display: none; }
   .c80-workload-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }

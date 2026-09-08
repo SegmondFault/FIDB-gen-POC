@@ -24,6 +24,8 @@ itself. File placement never implies that work is safe to execute.
 Operational campaign selection does not rename or overwrite these files.
 `operations/campaigns.toml` binds a named campaign slice to a queue and an
 isolated ledger; the local active selection lives under `var/`.
+- `coverage/c-malware-priority-v1.toml` is a gated subject schedule. It becomes
+  queue work only after the normal source, recipe and qualification stages.
 - `auto-materialized/` contains time-sized queue chunks.
 - `validation-materialized/` contains cohort-validation plans and manifests.
 

@@ -1406,6 +1406,66 @@ export type CampaignProgramme = {
   cohorts: CampaignProgrammeCohort[];
 };
 
+export type PriorityScheduleSubject = {
+  order: number;
+  id: string;
+  source_family: string;
+  aliases: string[];
+  research_key: string | null;
+  research_overlap: boolean;
+  research_rank: number | null;
+  research_display_name: string | null;
+  research_source_cached: boolean;
+  build_source_cached: boolean;
+  recipe_state: 'reviewed-native' | 'reviewed-limited' | 'required';
+  recipe_ids: string[];
+  width_batch_bound: boolean;
+  qualification_satisfied: boolean;
+  stage: string;
+};
+
+export type PrioritySchedule = {
+  schema_version: 'fidb-priority-schedule-status/v1';
+  id: string;
+  label: string;
+  state: 'planned-disarmed';
+  language_id: 'c';
+  cohort_size: number;
+  selection_basis: string;
+  component_policy: string;
+  scheduling_policy: string;
+  authority_path: string;
+  authority_sha256: string;
+  programme_id: string;
+  schedule_digest: string;
+  summary: {
+    subjects: number;
+    source_families: number;
+    cohorts: number;
+    final_cohort_size: number;
+    research_overlap_subjects: number;
+    research_overlap_candidates: number;
+    priority_additions: number;
+    native_recipe_ready: number;
+    limited_recipe_only: number;
+    qualification_satisfied: number;
+    maximum_subject_executions: number;
+    maximum_source_qualification_cells: number;
+  };
+  cohorts: Array<{
+    id: string;
+    order: number;
+    state: 'planned-disarmed';
+    priority_start: number;
+    priority_end: number;
+    capacity: number;
+    source_families: number;
+    planned_subject_executions: number;
+    planned_source_qualification_cells: number;
+    subjects: PriorityScheduleSubject[];
+  }>;
+};
+
 export type CohortValidationStage = {
   id: string;
   label: string;
@@ -1537,12 +1597,13 @@ export type CohortValidationLifecycle = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v19';
+  schema_version: 'fidb-authority-catalog/v20';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
   width_batches: WidthBatch[];
   campaign_programmes: CampaignProgramme[];
+  priority_schedules: PrioritySchedule[];
   qualification_pipeline: QualificationPipeline;
   time_block_plan: TimeBlockPlan;
   materialized_campaigns: MaterializedCampaign[];
