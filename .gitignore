@@ -1,6 +1,7 @@
 .venv/
 work/
 artifacts/libs/
+artifacts/fidbs/
 # compiled malware corpus never gets pushed -- fidb/fidbf output + recipes do
 artifacts/malware/
 artifacts/runs/
