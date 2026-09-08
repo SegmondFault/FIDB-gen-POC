@@ -60,6 +60,28 @@ class FidMatchingCampaignTests(unittest.TestCase):
         )
         self.assertTrue(self.campaign["safety"]["require_no_active_production_jobs"])
         self.assertFalse(self.campaign["safety"]["execute_target_binaries"])
+        self.assertEqual(self.campaign["reference"]["population"], "archive-only")
+        self.assertTrue(self.campaign["reference"]["legacy_default"])
+
+    def test_linked_and_union_campaigns_name_sealed_reference_components(self):
+        linked = load_campaign(
+            self.root, "validation/fid-matching-linked-run.toml"
+        )
+        union = load_campaign(
+            self.root, "validation/fid-matching-union-run.toml"
+        )
+
+        self.assertEqual(linked["reference"]["population"], "linked-only")
+        self.assertEqual(
+            [row["kind"] for row in linked["reference"]["component"]],
+            ["linked-generation"],
+        )
+        self.assertEqual(union["reference"]["population"], "archive-plus-linked")
+        self.assertEqual(
+            [row["kind"] for row in union["reference"]["component"]],
+            ["archive-evidence", "linked-generation"],
+        )
+        self.assertFalse(union["reference"]["legacy_default"])
 
     def test_largest_first_scheduler_balances_periodic_expensive_cases(self):
         weighted = [

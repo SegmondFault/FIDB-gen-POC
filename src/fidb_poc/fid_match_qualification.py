@@ -13,7 +13,7 @@ import struct
 import subprocess
 import tempfile
 import time
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .fid_matching import (
     classify_matches,
@@ -454,6 +454,11 @@ def qualify_retained_validation(
     reuse_oracle: bool = False,
     oracle_replay_source: str | Path | None = None,
     compare_backends: bool = True,
+    candidate_fidbs: Sequence[str | Path] | None = None,
+    candidate_indexes: Sequence[str | Path] | None = None,
+    performance_path: str | Path = "performance/fid-matching.toml",
+    reference_population: Mapping[str, object] | None = None,
+    campaign_authority_sha256: str | None = None,
 ) -> dict[str, object]:
     """Run native FID and either qualify all or verify the selected backend."""
 
@@ -503,7 +508,7 @@ def qualify_retained_validation(
     )
     if query_binary is None:
         raise ValueError("retained validation query binary is unavailable")
-    fidbs = []
+    truth_fidbs = []
     signature_paths = {}
     for owner in evidence["cohort"]:
         item = evidence["signatures"].get((owner, route_id, treatment_id))
@@ -511,7 +516,19 @@ def qualify_retained_validation(
             raise ValueError(f"signature evidence is absent for {owner}")
         signature_path = Path(item["path"])
         signature_paths[owner] = signature_path
-        fidbs.append(_fidb_from_signatures(root, signature_path))
+        truth_fidbs.append(_fidb_from_signatures(root, signature_path))
+    fidbs = (
+        [Path(path).resolve() for path in candidate_fidbs]
+        if candidate_fidbs is not None
+        else truth_fidbs
+    )
+    if not fidbs or len(set(fidbs)) != len(fidbs):
+        raise ValueError("native oracle candidate FIDBs are absent or duplicated")
+    for fidb in fidbs:
+        if root not in fidb.parents or not fidb.is_file():
+            raise ValueError("native oracle candidate FIDB is unavailable")
+    if reuse_oracle and candidate_fidbs is not None:
+        raise ValueError("a retained archive oracle cannot replay another population")
 
     case_id = f"{run_id}-{position:03d}-{fold}"
     destination = (root / output_root / case_id).resolve()
@@ -567,12 +584,49 @@ def qualify_retained_validation(
     _annotate_truth(root, oracle, fold_root, signature_paths, query_binary)
     if oracle_evidence_path == oracle_path:
         _atomic_json(oracle_path, oracle)
-    executions = _portable_executions(
-        oracle,
-        authority,
-        compare_backends=compare_backends,
+    performance_receipt = None
+    requested_backend = str(authority["selected"])
+    if candidate_indexes is not None:
+        from .fid_compact import (
+            load_fid_matching_performance,
+            match_compact_population,
+            selected_backend_id,
+        )
+
+        performance = load_fid_matching_performance(root, performance_path)
+        requested_backend = selected_backend_id(performance, authority)
+        indexes = [Path(path).resolve() for path in candidate_indexes]
+        if not indexes or len(set(indexes)) != len(indexes):
+            raise ValueError("native canary candidate indexes are absent or duplicated")
+        for index in indexes:
+            if root not in index.parents or not index.is_file():
+                raise ValueError("native canary candidate index is unavailable")
+        execution = match_compact_population(
+            indexes,
+            oracle["functions"],
+            route_id,
+            treatment_id,
+            authority,
+            backend_id=requested_backend,
+            chunk_rows=int(performance["candidate_chunk_rows"]),
+            workgroup_size=int(performance["workgroup_size"]),
+            fallback_to_cpu=bool(performance["fallback_to_cpu"]),
+        )
+        executions = [execution]
+        performance_receipt = {
+            "authority_path": performance["authority_path"],
+            "authority_sha256": performance["authority_sha256"],
+            "fallback_reason": execution["fallback_reason"],
+        }
+    else:
+        executions = _portable_executions(
+            oracle,
+            authority,
+            compare_backends=compare_backends,
+        )
+    classification = classify_matches(
+        oracle, evidence["cohort"], executions[-1]
     )
-    classification = classify_matches(oracle, evidence["cohort"])
     execution_paths = []
     for execution in executions:
         device = str(authority["backends"][execution["backend"]]["device"])
@@ -598,7 +652,9 @@ def qualify_retained_validation(
             if compare_backends
             else "selected-backend-only"
         ),
-        "selected_backend": authority["selected"],
+        "selected_backend": executions[-1]["backend"],
+        "requested_backend": requested_backend,
+        "performance": performance_receipt or {"fallback_reason": None},
         "case": {
             "validation_id": runtime["validation_id"],
             "run_id": run_id,
@@ -616,6 +672,15 @@ def qualify_retained_validation(
             "link_harness_policy": LINK_HARNESS_POLICY,
             "fidb_count": len(fidbs),
             "fidb_sha256": [_sha256(path) for path in fidbs],
+            "candidate_indexes": [
+                {
+                    "path": str(Path(path).resolve().relative_to(root)),
+                    "sha256": _sha256(Path(path).resolve()),
+                }
+                for path in (candidate_indexes or [])
+            ],
+            "reference_population": dict(reference_population or {}),
+            "campaign_authority_sha256": campaign_authority_sha256,
         },
         "authority_path": authority["authority_path"],
         "authority_sha256": authority["authority_sha256"],
@@ -671,13 +736,16 @@ def run_compact_retained_validation(
     *,
     position: int,
     fold: str,
-    candidate_index: str | Path,
+    candidate_index: str | Path | None = None,
+    candidate_indexes: Sequence[str | Path] | None = None,
     runtime_path: str | Path = "validation/machine-validation-runtime.toml",
     authority_path: str | Path = "validation/fid-matching.toml",
     performance_path: str | Path = "performance/fid-matching.toml",
     output_root: str | Path = "qualification/evidence",
     oracle_replay_source: str | Path | None = None,
     ghidra_user_home: str | Path | None = None,
+    reference_population: Mapping[str, object] | None = None,
+    campaign_authority_sha256: str | None = None,
 ) -> dict[str, object]:
     """Run the selected compact backend without constructing a native oracle."""
 
@@ -686,7 +754,7 @@ def run_compact_retained_validation(
     from .fid_compact import (
         load_fid_matching_performance,
         load_query_evidence,
-        match_compact,
+        match_compact_population,
         selected_backend_id,
     )
     from .fid_matching import MATCH_INPUT_SCHEMA
@@ -771,12 +839,20 @@ def run_compact_retained_validation(
         fidbs.append(_fidb_from_signatures(root, Path(item["path"])))
     _annotate_truth(root, document, fold_root, signature_paths, query_binary)
 
-    index_path = Path(candidate_index).resolve()
-    if root not in index_path.parents or not index_path.is_file():
-        raise ValueError("compact FID candidate index is unavailable")
+    raw_indexes = (
+        list(candidate_indexes)
+        if candidate_indexes is not None
+        else ([] if candidate_index is None else [candidate_index])
+    )
+    index_paths = [Path(path).resolve() for path in raw_indexes]
+    if not index_paths or len(set(index_paths)) != len(index_paths):
+        raise ValueError("compact FID candidate indexes are absent or duplicated")
+    for index_path in index_paths:
+        if root not in index_path.parents or not index_path.is_file():
+            raise ValueError("compact FID candidate index is unavailable")
     requested_backend = selected_backend_id(performance, authority)
-    execution = match_compact(
-        index_path,
+    execution = match_compact_population(
+        index_paths,
         document["functions"],
         route_id,
         treatment_id,
@@ -870,8 +946,17 @@ def run_compact_retained_validation(
             "query_evidence_sha256": _sha256(query_path),
             "query_evidence_source": query_source,
             "link_harness_policy": LINK_HARNESS_POLICY,
-            "candidate_index_path": str(index_path.relative_to(root)),
-            "candidate_index_sha256": _sha256(index_path),
+            "candidate_index_path": str(index_paths[0].relative_to(root)),
+            "candidate_index_sha256": _sha256(index_paths[0]),
+            "candidate_indexes": [
+                {
+                    "path": str(path.relative_to(root)),
+                    "sha256": _sha256(path),
+                }
+                for path in index_paths
+            ],
+            "reference_population": dict(reference_population or {}),
+            "campaign_authority_sha256": campaign_authority_sha256,
         },
         "authority_path": authority["authority_path"],
         "authority_sha256": authority["authority_sha256"],

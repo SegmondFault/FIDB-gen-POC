@@ -20,14 +20,17 @@ from zoneinfo import ZoneInfo
 
 from .fid_match_qualification import (
     _fidb_from_signatures,
+    qualify_retained_validation,
     run_compact_retained_validation,
 )
 from .fid_compact import (
     build_compact_candidate_index,
     load_fid_matching_performance,
     selected_backend_id,
+    validate_compact_candidate_index,
 )
 from .fid_matching import load_matching_authority
+from .fid_reference_population import resolve_linked_generation
 from .machine_validation import LINK_HARNESS_POLICY
 
 CAMPAIGN_SCHEMA = "fidb-fid-matching-campaign/v1"
@@ -104,6 +107,81 @@ def _clock_minutes(value: str) -> int:
     return hour * 60 + minute
 
 
+def _reference_policy(document: Mapping[str, object]) -> dict[str, object]:
+    raw = document.get("reference")
+    if raw is None:
+        return {
+            "population": "archive-only",
+            "component": [
+                {
+                    "id": "archive",
+                    "kind": "archive-evidence",
+                    "candidate_index": None,
+                }
+            ],
+            "legacy_default": True,
+        }
+    if not isinstance(raw, dict) or set(raw) != {"population", "component"}:
+        raise ValueError("FID matching reference population is invalid")
+    population = str(raw["population"])
+    expected_kinds = {
+        "archive-only": ["archive-evidence"],
+        "linked-only": ["linked-generation"],
+        "archive-plus-linked": ["archive-evidence", "linked-generation"],
+    }
+    if population not in expected_kinds or not isinstance(raw["component"], list):
+        raise ValueError("FID matching reference population is unsupported")
+    components = []
+    ids = set()
+    for item in raw["component"]:
+        if not isinstance(item, dict):
+            raise ValueError("FID matching reference component is invalid")
+        kind = str(item.get("kind"))
+        component_id = str(item.get("id"))
+        if not component_id or component_id in ids:
+            raise ValueError("FID matching reference component identity is invalid")
+        ids.add(component_id)
+        if kind == "archive-evidence" and set(item) == {
+            "id",
+            "kind",
+            "candidate_index",
+        }:
+            candidate_index = str(item["candidate_index"])
+            if not candidate_index:
+                raise ValueError("archive reference index path is empty")
+            components.append(
+                {
+                    "id": component_id,
+                    "kind": kind,
+                    "candidate_index": candidate_index,
+                }
+            )
+        elif kind == "linked-generation" and set(item) == {
+            "id",
+            "kind",
+            "generation_seal",
+        }:
+            generation_seal = str(item["generation_seal"])
+            if not generation_seal:
+                raise ValueError("linked reference generation seal path is empty")
+            components.append(
+                {
+                    "id": component_id,
+                    "kind": kind,
+                    "generation_seal": generation_seal,
+                }
+            )
+        else:
+            raise ValueError("FID matching reference component is unsupported")
+    if [str(row["kind"]) for row in components] != expected_kinds[population]:
+        raise ValueError("FID matching reference components do not match population")
+    return {
+        "population": population,
+        "component": components,
+        "legacy_default": False,
+    }
+
+
 def load_campaign(
     project_root: str | Path, authority: str | Path = DEFAULT_CAMPAIGN
 ) -> dict[str, object]:
@@ -126,7 +204,11 @@ def load_campaign(
         "safety",
         "schedule",
     }
-    if set(document) != expected or document.get("schema_version") != CAMPAIGN_SCHEMA:
+    if (
+        frozenset(document)
+        not in {frozenset(expected), frozenset(expected | {"reference"})}
+        or document.get("schema_version") != CAMPAIGN_SCHEMA
+    ):
         raise ValueError("FID matching campaign has unsupported fields or schema")
     if document["state"] != "scheduled" or document["enabled"] is not True:
         raise ValueError("FID matching campaign is not scheduled")
@@ -220,6 +302,7 @@ def load_campaign(
             raise ValueError("FID matching schedule window cannot span a full day")
     return {
         **document,
+        "reference": _reference_policy(document),
         "authority_path": str(path.relative_to(root)),
         "authority_sha256": _sha256(path),
     }
@@ -333,26 +416,93 @@ def _compact_index_entries(
     return entries
 
 
-def _ensure_compact_candidate_index(
+def _entries_identity(entries: Iterable[Mapping[str, object]]) -> str:
+    rows = sorted(
+        (
+            str(row["owner"]),
+            str(row["route_id"]),
+            str(row["treatment_id"]),
+            str(row["fidb_sha256"]),
+        )
+        for row in entries
+    )
+    return hashlib.sha256(
+        json.dumps(rows, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _reference_components(
+    root: Path,
+    campaign: Mapping[str, object],
+    evidence: Mapping[str, object],
+) -> dict[str, object]:
+    archive_entries = _compact_index_entries(root, evidence)
+    expected = [tuple(map(str, key)) for key in evidence["signatures"]]
+    components = []
+    for specification in campaign["reference"]["component"]:
+        kind = str(specification["kind"])
+        if kind == "archive-evidence":
+            entries = [dict(row) for row in archive_entries]
+            identity = {
+                "id": str(specification["id"]),
+                "kind": kind,
+                "entries_sha256": _entries_identity(entries),
+                "entry_count": len(entries),
+                "candidate_index": specification.get("candidate_index"),
+            }
+        else:
+            generation = resolve_linked_generation(
+                root,
+                str(specification["generation_seal"]),
+                source_run_id=str(campaign["source_run_id"]),
+                expected_identities=expected,
+            )
+            entries = [dict(row) for row in generation.pop("entries")]
+            generation_id = str(generation.pop("id"))
+            identity = {
+                "id": str(specification["id"]),
+                "kind": kind,
+                "generation_id": generation_id,
+                **generation,
+            }
+        components.append({**identity, "entries": entries})
+    population_identity = {
+        "population": campaign["reference"]["population"],
+        "components": [
+            {key: value for key, value in row.items() if key != "entries"}
+            for row in components
+        ],
+    }
+    return {
+        **population_identity,
+        "population_sha256": hashlib.sha256(
+            json.dumps(
+                population_identity, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest(),
+        "components": components,
+    }
+
+
+def _ensure_compact_candidate_indexes(
     root: Path,
     campaign: Mapping[str, object],
     evidence: Mapping[str, object],
     runtime: Mapping[str, object],
     ghidra_user_home: Path,
 ) -> dict[str, object]:
-    """Build the campaign-wide FID index once while peer workers wait."""
+    """Resolve every population component while peer workers wait."""
 
     from . import ghidra_fid
     from .pipeline import find_ghidra, ghidra_environment
 
     campaign_root = _campaign_root(root, campaign)
     campaign_root.mkdir(parents=True, exist_ok=True)
-    destination = campaign_root / "compact-candidate-index.sqlite3"
     lock_path = campaign_root / ".compact-index.lock"
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
-        entries = _compact_index_entries(root, evidence)
+        population = _reference_components(root, campaign, evidence)
         ghidra_started = False
 
         def inspect(path: Path) -> Mapping[str, object]:
@@ -367,7 +517,46 @@ def _ensure_compact_candidate_index(
                 ghidra_started = True
             return ghidra_fid.inspect_fid_candidate_source(path)
 
-        return build_compact_candidate_index(entries, destination, inspect)
+        indexes = []
+        for component in population["components"]:
+            external = component.get("candidate_index")
+            if external:
+                destination = _inside(root, str(external), "archive candidate index")
+                status = validate_compact_candidate_index(
+                    component["entries"], destination
+                )
+                index_mode = "immutable-reuse"
+            else:
+                suffix = "" if campaign["reference"]["legacy_default"] else (
+                    f'-{component["id"]}'
+                )
+                destination = campaign_root / f"compact-candidate-index{suffix}.sqlite3"
+                status = build_compact_candidate_index(
+                    component["entries"], destination, inspect
+                )
+                index_mode = "campaign-local"
+            indexes.append(
+                {
+                    **status,
+                    "component_id": component["id"],
+                    "component_kind": component["kind"],
+                    "index_mode": index_mode,
+                }
+            )
+        return {
+            "population": population["population"],
+            "population_sha256": population["population_sha256"],
+            "components": [
+                {key: value for key, value in row.items() if key != "entries"}
+                for row in population["components"]
+            ],
+            "indexes": indexes,
+            "_entries": [
+                dict(entry)
+                for component in population["components"]
+                for entry in component["entries"]
+            ],
+        }
     finally:
         fcntl.flock(descriptor, fcntl.LOCK_UN)
         os.close(descriptor)
@@ -409,6 +598,11 @@ def _reusable_case(
         and case.get("fold") == fold
         and case.get("link_harness_policy")
         == campaign["methodology"]["required_link_harness"]
+        and (
+            campaign["reference"]["legacy_default"]
+            or case.get("campaign_authority_sha256")
+            == campaign["authority_sha256"]
+        )
     )
 
 
@@ -537,6 +731,7 @@ def _aggregate(
     selected_backends = set()
     requested_backends = set()
     fallback_cases = []
+    reference_receipts: dict[str, dict[str, object]] = {}
     for position, fold in expected:
         path = _case_summary_path(root, campaign, position, fold)
         if not path.is_file():
@@ -558,6 +753,10 @@ def _aggregate(
             failures.append({"case": f"{position}:{fold}", "error": summary["state"]})
             continue
         summaries.append(summary)
+        receipt = summary.get("case", {}).get("reference_population", {})
+        if isinstance(receipt, dict) and receipt:
+            identity = str(receipt.get("population_sha256", ""))
+            reference_receipts[identity] = receipt
         selected_backends.add(str(summary["selected_backend"]))
         requested_backends.add(str(summary["requested_backend"]))
         if summary.get("performance", {}).get("fallback_reason"):
@@ -573,6 +772,14 @@ def _aggregate(
     total_truth = truth_labelled + truth_unlabelled
     truth_coverage = truth_labelled / total_truth if total_truth else 0.0
     complete = len(summaries) == len(expected) and not failures
+    if len(reference_receipts) > 1:
+        failures.append(
+            {
+                "case": "reference-population",
+                "error": "case evidence used multiple reference populations",
+            }
+        )
+        complete = False
     performance = load_fid_matching_performance(
         root, str(campaign["execution"]["performance"])
     )
@@ -631,6 +838,11 @@ def _aggregate(
         "authority_path": campaign["authority_path"],
         "authority_sha256": campaign["authority_sha256"],
         "source_run_id": campaign["source_run_id"],
+        "reference_population": (
+            next(iter(reference_receipts.values()))
+            if reference_receipts
+            else campaign["reference"]
+        ),
         "workers": (
             campaign["canary"]["workers"]
             if mode == "canary"
@@ -671,7 +883,14 @@ def _aggregate(
             "materialized_with_batch": True,
             "required_for_run_completion": True,
             "stages": [
-                {"id": "compact-candidate-index", "state": stage_state},
+                {
+                    "id": "compact-candidate-index",
+                    "state": stage_state,
+                    "components": [
+                        str(row["id"])
+                        for row in campaign["reference"]["component"]
+                    ],
+                },
                 {"id": "query-relationship-evidence", "state": stage_state},
                 *(
                     [{"id": "native-oracle-replay", "state": stage_state}]
@@ -1166,9 +1385,29 @@ def worker_cases(
     worker_scratch = (
         _campaign_root(root, campaign) / "worker-scratch" / f"worker-{os.getpid()}"
     )
-    compact_index = _ensure_compact_candidate_index(
+    reference = _ensure_compact_candidate_indexes(
         root, campaign, evidence, runtime, worker_scratch / "ghidra-user"
-    )["path"]
+    )
+    index_paths = [str(row["path"]) for row in reference["indexes"]]
+    reference_receipt = {
+        "population": reference["population"],
+        "population_sha256": reference["population_sha256"],
+        "components": reference["components"],
+        "indexes": [
+            {
+                "component_id": row["component_id"],
+                "component_kind": row["component_kind"],
+                "index_mode": row["index_mode"],
+                "path": str(Path(str(row["path"])).resolve().relative_to(root)),
+                "sha256": row["sha256"],
+                "input_digest": row["input_digest"],
+                "sources": row["sources"],
+                "candidates": row["candidates"],
+                "relations": row["relations"],
+            }
+            for row in reference["indexes"]
+        ],
+    }
     failed = 0
     for value in cases:
         position, fold = _parse_case(value)
@@ -1193,19 +1432,62 @@ def worker_cases(
                 if mode == "canary"
                 else None
             )
-            run_compact_retained_validation(
-                root,
-                str(campaign["source_run_id"]),
-                position=position,
-                fold=fold,
-                candidate_index=str(compact_index),
-                runtime_path=str(campaign["runtime"]),
-                authority_path=str(campaign["matching_authority"]),
-                performance_path=str(campaign["execution"]["performance"]),
-                output_root=relative_output,
-                oracle_replay_source=replay_root,
-                ghidra_user_home=worker_scratch / "ghidra-user",
-            )
+            if mode == "canary" and not campaign["reference"]["legacy_default"]:
+                source_matches = list(
+                    (
+                        _inside(
+                            root,
+                            Path(str(runtime["output_root"]))
+                            / str(campaign["source_run_id"]),
+                            "FID matching source run",
+                        )
+                        / "units"
+                    ).glob(f"{position:03d}-*/result.json")
+                )
+                if len(source_matches) != 1:
+                    raise ValueError("native canary source unit is missing")
+                source_result = json.loads(
+                    source_matches[0].read_text(encoding="utf-8")
+                )
+                route_id = str(source_result["route_id"])
+                treatment_id = str(source_result["treatment_id"])
+                candidate_fidbs = [
+                    str(row["fidb_path"])
+                    for row in reference["_entries"]
+                    if row["route_id"] == route_id
+                    and row["treatment_id"] == treatment_id
+                ]
+                qualify_retained_validation(
+                    root,
+                    str(campaign["source_run_id"]),
+                    position=position,
+                    fold=fold,
+                    runtime_path=str(campaign["runtime"]),
+                    authority_path=str(campaign["matching_authority"]),
+                    output_root=relative_output,
+                    compare_backends=False,
+                    candidate_fidbs=candidate_fidbs,
+                    candidate_indexes=index_paths,
+                    performance_path=str(campaign["execution"]["performance"]),
+                    reference_population=reference_receipt,
+                    campaign_authority_sha256=str(campaign["authority_sha256"]),
+                )
+            else:
+                run_compact_retained_validation(
+                    root,
+                    str(campaign["source_run_id"]),
+                    position=position,
+                    fold=fold,
+                    candidate_indexes=index_paths,
+                    runtime_path=str(campaign["runtime"]),
+                    authority_path=str(campaign["matching_authority"]),
+                    performance_path=str(campaign["execution"]["performance"]),
+                    output_root=relative_output,
+                    oracle_replay_source=replay_root,
+                    ghidra_user_home=worker_scratch / "ghidra-user",
+                    reference_population=reference_receipt,
+                    campaign_authority_sha256=str(campaign["authority_sha256"]),
+                )
         except Exception as error:
             failed += 1
             _atomic_json(
