@@ -65,6 +65,7 @@ class LocalApiTests(unittest.TestCase):
             "benchmarks",
             "campaigns",
             "coverage",
+            "export",
             "lanes",
             "performance",
             "plans",
@@ -724,9 +725,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(document["effective_backend"]["device"], "cpu")
         self.assertIn(
             'mode = "cpu"',
-            (self.root / "performance/fid-matching.toml").read_text(
-                encoding="utf-8"
-            ),
+            (self.root / "performance/fid-matching.toml").read_text(encoding="utf-8"),
         )
 
         status, document, _ = self.request(
@@ -775,6 +774,38 @@ class LocalApiTests(unittest.TestCase):
         status, document, _ = self.request("GET", "/api/v1/lane-inventory?path=outside")
         self.assertEqual(status, 400)
         self.assertEqual(document["error"]["code"], "invalid-query")
+
+    @patch("fidb_poc.local_api.build_export")
+    @patch("fidb_poc.local_api.inspect_export")
+    def test_export_preview_is_read_only_and_build_is_completeness_gated(
+        self, inspect_export, build_export
+    ):
+        preview_document = {
+            "schema_version": "fidb-export-status/v1",
+            "ready": False,
+            "population": {"present": 0, "expected": 2_220, "missing": 2_220},
+            "actions": {"preview": True, "build": False},
+        }
+        inspect_export.return_value = preview_document
+        from fidb_poc.database_export import ExportError
+
+        build_export.side_effect = ExportError("export is blocked: 2220 missing")
+        status, document, _ = self.request("GET", "/api/v1/export")
+        self.assertEqual(status, 200)
+        self.assertEqual(document["schema_version"], "fidb-export-status/v1")
+        self.assertFalse(document["ready"])
+        self.assertEqual(document["population"]["present"], 0)
+        self.assertEqual(document["population"]["expected"], 2_220)
+
+        status, preview, _ = self.request("POST", "/api/v1/export/preview", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(preview["population"]["missing"], 2_220)
+        self.assertTrue(preview["actions"]["preview"])
+        self.assertFalse(preview["actions"]["build"])
+
+        status, error, _ = self.request("POST", "/api/v1/export/build", {})
+        self.assertEqual(status, 409)
+        self.assertEqual(error["error"]["code"], "export-not-ready")
 
     def test_capabilities_detection_never_mutates_cache(self):
         managed_cache = self.root / capabilities.TOOLCHAIN_CACHE

@@ -13,6 +13,7 @@ test('proxy exposes every control-panel read route', () => {
     'capabilities',
     'ecological-validation',
     'events',
+    'export',
     'fid-matching-backend',
     'hash-analysis-backend',
     'hash-discrimination',
@@ -34,6 +35,8 @@ test('proxy exposes every control-panel mutation route', () => {
   assert.deepEqual([...writeRoutes].sort(), [
     'ecological-validation/import',
     'ecological-validation/run',
+    'export/build',
+    'export/preview',
     'fid-matching-backend/mode',
     'hash-analysis-backend/mode',
     'machine-validation/pause',

@@ -31,6 +31,7 @@ from .coordinator import (
     CoordinatorError,
     QueueConfig,
 )
+from .database_export import ExportError, build_export, inspect_export
 from .lane_inventory import detect_lane_inventory
 from .ecological_validation import (
     compile_ecological_validation,
@@ -96,6 +97,7 @@ _GET_PATHS = {
     "/api/v1/fid-matching-backend",
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
+    "/api/v1/export",
 }
 _POST_PATHS = {
     "/api/v1/sync",
@@ -113,6 +115,8 @@ _POST_PATHS = {
     "/api/v1/fid-matching-backend/mode",
     "/api/v1/retention/plan",
     "/api/v1/retention/apply",
+    "/api/v1/export/preview",
+    "/api/v1/export/build",
 }
 
 log = logging.getLogger(__name__)
@@ -956,6 +960,20 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/export":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "export status takes no query",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                inspect_export(self.api_server.config.project_root),
+                origin=origin,
+            )
+            return
+
         if path == "/api/v1/preflight":
             if query:
                 raise ApiError(
@@ -1277,6 +1295,19 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self.api_server.config.state_path,
             )
             result = retention_status(self.api_server.config.project_root)
+        elif path == "/api/v1/export/preview":
+            self._only_fields(document, set())
+            result = inspect_export(self.api_server.config.project_root)
+        elif path == "/api/v1/export/build":
+            self._only_fields(document, set())
+            try:
+                result = build_export(self.api_server.config.project_root)
+            except ExportError as error:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "export-not-ready",
+                    str(error),
+                ) from error
         elif path == "/api/v1/sync":
             self._only_fields(document, set())
             with Coordinator(

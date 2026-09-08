@@ -1972,7 +1972,10 @@ button { font: inherit; }
 .export-noise-key code { color: #b7addd; font: 7px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .export-noise-key small { color: var(--muted-2); font-size: 6px; line-height: 1.4; overflow-wrap: anywhere; }
 .export-control-actions { padding: 11px 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #0d1219; }
-.export-control-actions button { width: 100%; min-width: 0; cursor: not-allowed; }
+.export-control-actions button { width: 100%; min-width: 0; }
+.export-control-actions button:disabled { cursor: not-allowed; }
+.export-blockers { padding: 9px 13px; display: flex; flex-direction: column; gap: 5px; border-bottom: 1px solid var(--line-soft); background: rgba(240,182,87,.045); }
+.export-blockers p { margin: 0; color: var(--amber); font: 7px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .export-lanes-panel > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .export-lanes-panel > div:last-child > article { min-height: 59px; padding: 8px 13px; display: grid; grid-template-columns: 84px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
 .export-lanes-panel > div:last-child > article:nth-child(2n) { border-right: 0; }

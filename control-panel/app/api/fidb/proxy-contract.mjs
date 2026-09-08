@@ -16,6 +16,7 @@ export const readRoutes = new Set([
   'fid-matching-backend',
   'noisy-hashes',
   'retention',
+  'export',
   'preflight',
 ]);
 
@@ -35,6 +36,8 @@ export const writeRoutes = new Set([
   'fid-matching-backend/mode',
   'retention/plan',
   'retention/apply',
+  'export/preview',
+  'export/build',
 ]);
 
 const queryKeys = new Map([

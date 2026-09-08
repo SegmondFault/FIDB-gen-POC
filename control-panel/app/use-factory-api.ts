@@ -11,6 +11,7 @@ export type PanelReadKey =
   | 'capabilities'
   | 'ecological-validation'
   | 'events'
+  | 'export'
   | 'fid-matching-backend'
   | 'hash-analysis-backend'
   | 'lane-inventory'
@@ -2435,6 +2436,81 @@ export type RetentionPlanSummary = {
   quarantined: number;
 };
 
+export type ExportStatus = {
+  schema_version: 'fidb-export-status/v1';
+  authority: {
+    id: string;
+    label: string;
+    path: string;
+    sha256: string;
+  };
+  release: {
+    id: string;
+    language_id: string;
+    package_format: string;
+    output_path: string;
+    exists: boolean;
+    bytes: number;
+    sha256: string | null;
+  };
+  population: {
+    expected: number;
+    present: number;
+    missing: number;
+    libraries_expected: number;
+    libraries_complete: number;
+    routes: number;
+    treatments: number;
+    raw_bytes: number;
+    duplicate_completed_identities: number;
+    unexpected: number;
+  };
+  libraries: Array<{
+    id: string;
+    label: string;
+    version: string;
+    rank: number;
+    present: number;
+    expected: number;
+    missing: number;
+    complete: boolean;
+    bytes: number;
+  }>;
+  missing_examples: string[];
+  hash_quality: {
+    state: string;
+    path?: string;
+    bytes?: number;
+    sha256?: string | null;
+    error?: string;
+    generation?: {
+      ordinal: number;
+      digest: string;
+      owners: number;
+      signatures: number;
+      query_observations: number;
+      true_positives: number;
+      false_positives: number;
+      true_negatives: number;
+      false_negatives: number;
+    };
+  };
+  validation: { state: string; path: string; bytes: number };
+  compatibility: { state: string; path: string };
+  blockers: string[];
+  ready: boolean;
+  actions: { preview: boolean; build: boolean };
+  build?: {
+    state: string;
+    built_at: string;
+    path: string;
+    bytes: number;
+    sha256: string;
+    checksum_path: string;
+    members: number;
+  };
+};
+
 export type RetentionStatus = {
   schema_version: 'fidb-retention-status/v1';
   policy: {
@@ -2781,6 +2857,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
   const [hashAnalysisBackend, setHashAnalysisBackend] = useState<HashAnalysisBackendStatus | null>(null);
   const [fidMatchingBackend, setFidMatchingBackend] = useState<FidMatchingBackendStatus | null>(null);
   const [retention, setRetention] = useState<RetentionStatus | null>(null);
+  const [exportStatus, setExportStatus] = useState<ExportStatus | null>(null);
   const [events, setEvents] = useState<CoordinatorEvent[]>([]);
   const [timings, setTimings] = useState<TimingSnapshot | null>(null);
   const [preflight, setPreflight] = useState<OperationsPreflight | null>(null);
@@ -2886,9 +2963,10 @@ export function useFactoryApi(pollMilliseconds = 5000) {
           panelJson<HashAnalysisBackendStatus>('hash-analysis-backend', 'hash-analysis-backend'),
           panelJson<FidMatchingBackendStatus>('fid-matching-backend', 'fid-matching-backend'),
           panelJson<NoisyHashStatus>('noisy-hashes', 'noisy-hashes'),
+          panelJson<ExportStatus>('export', 'export'),
         ]);
         recordPanelReads(reads as Array<PanelReadResult<unknown>>);
-        const [capabilityRead, authorityRead, laneInventoryRead, ecologicalRead, retentionRead, observatoryRead, hashBackendRead, fidBackendRead, noisyRead] = reads;
+        const [capabilityRead, authorityRead, laneInventoryRead, ecologicalRead, retentionRead, observatoryRead, hashBackendRead, fidBackendRead, noisyRead, exportRead] = reads;
         if (capabilityRead.value) {
           capabilityCache.current = capabilityRead.value;
           setCapabilities(capabilityRead.value);
@@ -2903,6 +2981,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
         if (ecologicalRead.value) setEcologicalValidation(ecologicalRead.value);
         if (noisyRead.value) setNoisyHashes(noisyRead.value);
         if (retentionRead.value) setRetention(retentionRead.value);
+        if (exportRead.value) setExportStatus(exportRead.value);
         if (observatoryRead.value) setValidationObservatory(observatoryRead.value);
         if (hashBackendRead.value) setHashAnalysisBackend(hashBackendRead.value);
         if (fidBackendRead.value) setFidMatchingBackend(fidBackendRead.value);
@@ -3201,6 +3280,26 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
+  const runExport = useCallback(async (action: 'preview' | 'build') => {
+    setBusyAction(`export-${action}`);
+    try {
+      const result = await json<ExportStatus>(`export/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      setExportStatus(result);
+      setError(null);
+      return result;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : `Export ${action} failed`;
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
   const setHashAnalysisMode = useCallback(async (mode: 'auto' | 'cpu' | 'gpu') => {
     setBusyAction('hash-analysis-mode');
     try {
@@ -3254,6 +3353,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     hashAnalysisBackend,
     fidMatchingBackend,
     retention,
+    exportStatus,
     events,
     timings,
     preflight,
@@ -3287,5 +3387,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     decideNoisyHash,
     planRetention: () => runRetention('plan'),
     applyRetention: (planDigest: string) => runRetention('apply', planDigest),
+    previewExport: () => runExport('preview'),
+    buildExport: () => runExport('build'),
   };
 }

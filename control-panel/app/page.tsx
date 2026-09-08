@@ -2224,87 +2224,72 @@ function RetentionView({ factory }: { factory: FactoryApiState }) {
 }
 
 function ExportView({ factory }: { factory: FactoryApiState }) {
-  const snapshot = factory.snapshot;
-  const laneInventory = factory.laneInventory;
-  const laneRegistry = factory.authority?.lane_registry;
-  const hashDiscrimination = factory.authority?.hash_discrimination;
-  const completedResults = snapshot?.jobs.filter(job => job.state === 'complete' && job.result) ?? [];
-  const artifactCount = (kind: 'fidb' | 'fidbf' | 'seal') => completedResults.filter(job => {
-    const value = job.result?.[kind];
-    if (!value || typeof value !== 'object') return false;
-    const record = value as Record<string, unknown>;
-    return typeof record.path === 'string' && typeof record.sha256 === 'string';
-  }).length;
-  const visibleFidbs = artifactCount('fidb');
-  const visibleFidbfs = artifactCount('fidbf');
-  const visibleSeals = artifactCount('seal');
-  const sealedJobs = snapshot?.result_jobs_total ?? completedResults.length;
-  const databases = laneInventory?.databases ?? [];
-  const materializedGenerations = laneInventory?.summary.materialized_generations ?? 0;
-  const activePacks = laneInventory?.summary.active_packs ?? 0;
-  const corpusIndex = hashDiscrimination?.corpus_index;
-  const scoredSignatures = hashDiscrimination?.summary.scored_signatures;
-  const releaseReady = activePacks > 0 && materializedGenerations > 0;
-  const lanes = laneRegistry?.lanes ?? [];
+  const status = factory.exportStatus;
+  const population = status?.population;
+  const releaseReady = status?.ready ?? false;
+  const buildBusy = factory.busyAction === 'export-build';
+  const previewBusy = factory.busyAction === 'export-preview';
+  const generation = status?.hash_quality.generation;
+  const completeness = population && population.expected > 0
+    ? Math.round((population.present / population.expected) * 100)
+    : 0;
+  const runPreview = () => void factory.previewExport().catch(() => undefined);
+  const runBuild = () => void factory.buildExport().catch(() => undefined);
 
   return <div className="view-stack export-view">
     <ViewIntro
       kicker="PORTABLE DATABASE RELEASES"
       title="Export"
-      action={<div className="view-intro-actions"><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Refresh inventory' : 'Retry connection'}</button><button className="primary-action" disabled>Build export</button></div>}
+      action={<div className="view-intro-actions"><button className="secondary-action" onClick={runPreview} disabled={previewBusy || buildBusy}>{previewBusy ? 'Checking…' : 'Preview manifest'}</button><button className="primary-action" onClick={runBuild} disabled={!releaseReady || previewBusy || buildBusy}>{buildBusy ? 'Building…' : 'Build export'}</button></div>}
     />
-    <PanelReadWarning factory={factory} endpoints={['authority', 'lane-inventory', 'noisy-hashes', 'snapshot']} />
+    <PanelReadWarning factory={factory} endpoints={['export']} />
 
     <section className="export-metrics">
-      <article className="panel"><span>SEALED JOBS</span><strong>{snapshot ? sealedJobs.toLocaleString() : '—'}</strong><small>{snapshot?.result_jobs_truncated ? `${completedResults.length.toLocaleString()} recent results loaded` : `${visibleSeals.toLocaleString()} seals visible`}</small></article>
-      <article className="panel"><span>VISIBLE FIDB / FIDBF</span><strong>{snapshot ? `${visibleFidbs} / ${visibleFidbfs}` : '—'}</strong><small>per-cell artifacts in this snapshot</small></article>
-      <article className="panel"><span>LANE GENERATIONS</span><strong>{laneInventory ? materializedGenerations.toLocaleString() : '—'}</strong><small>{formatBytes(laneInventory?.summary.lane_database_bytes ?? 0)} managed</small></article>
-      <article className="panel"><span>ACTIVE PACKS</span><strong>{laneInventory ? activePacks.toLocaleString() : '—'}</strong><small>analyst-admitted releases</small></article>
-      <article className="panel"><span>CORPUS HASHES</span><strong>{corpusIndex?.generation ? corpusIndex.generation.signatures.toLocaleString() : '—'}</strong><small>{corpusIndex?.generation ? `generation ${corpusIndex.generation.ordinal} · ${formatBytes(corpusIndex.database_bytes ?? 0)}` : corpusIndex?.state.replaceAll('-', ' ') ?? 'authority unavailable'}</small></article>
-      <article className={`panel ${releaseReady ? 'ready' : 'blocked'}`}><span>EXPORT STATE</span><strong>{releaseReady ? 'READY' : 'BLOCKED'}</strong><small>{releaseReady ? 'admitted lane payload exists' : 'no admitted lane pack'}</small></article>
+      <article className="panel"><span>FIDBF IDENTITIES</span><strong>{population ? `${population.present.toLocaleString()} / ${population.expected.toLocaleString()}` : '—'}</strong><small>{status ? `${completeness}% complete · ${population?.missing.toLocaleString()} missing` : 'loading export authority'}</small></article>
+      <article className="panel"><span>LIBRARIES COMPLETE</span><strong>{population ? `${population.libraries_complete} / ${population.libraries_expected}` : '—'}</strong><small>{population ? `${population.routes} routes × ${population.treatments} treatments` : 'exact width pending'}</small></article>
+      <article className="panel"><span>RAW FIDBF SIZE</span><strong>{population ? formatBytes(population.raw_bytes) : '—'}</strong><small>before tar.zst compression</small></article>
+      <article className="panel"><span>HASH EVIDENCE</span><strong>{generation ? generation.signatures.toLocaleString() : '—'}</strong><small>{generation ? `generation ${generation.ordinal} · ${generation.owners} owners` : status?.hash_quality.state.replaceAll('-', ' ') ?? 'loading'}</small></article>
+      <article className="panel"><span>PACKAGE</span><strong>{status?.release.exists ? formatBytes(status.release.bytes) : 'NOT BUILT'}</strong><small>{status?.release.output_path ?? 'output path loading'}</small></article>
+      <article className={`panel ${releaseReady ? 'ready' : 'blocked'}`}><span>EXPORT STATE</span><strong>{releaseReady ? 'READY' : 'BLOCKED'}</strong><small>{releaseReady ? 'all release gates pass' : status?.blockers[0] ?? 'authority loading'}</small></article>
     </section>
 
     <section className="panel export-assembly-panel">
-      <header><div><h3>Release assembly</h3><code>read-only projection · no files will be written</code></div><span className={`validation-state ${releaseReady ? 'ready' : 'waiting'}`}>{releaseReady ? 'PACKAGE INPUT READY' : 'DESIGN GATE'}</span></header>
+      <header><div><h3>Release assembly</h3><code>{status?.authority.path ?? 'export/c10-fidbf-v1.toml'}</code></div><span className={`validation-state ${releaseReady ? 'ready' : 'waiting'}`}>{releaseReady ? 'PACKAGE INPUT READY' : `${population?.missing ?? '—'} FIDBF MISSING`}</span></header>
       <div className="export-assembly-flow">
-        <article className={sealedJobs > 0 ? 'ready' : 'waiting'}><b>01</b><p><strong>SEALED INPUTS</strong><small>{sealedJobs.toLocaleString()} complete result jobs</small></p></article>
-        <article className={materializedGenerations > 0 ? 'ready' : 'blocked'}><b>02</b><p><strong>LANE IMPORT</strong><small>{materializedGenerations > 0 ? `${materializedGenerations} immutable generations` : 'queue-to-lane importer required'}</small></p></article>
-        <article className={corpusIndex?.state === 'ready' ? 'ready' : 'waiting'}><b>03</b><p><strong>NOISE OVERLAY</strong><small>{corpusIndex?.generation ? `${corpusIndex.generation.signatures.toLocaleString()} signatures` : corpusIndex?.state.replaceAll('-', ' ') ?? 'not loaded'}</small></p></article>
-        <article className="blocked"><b>04</b><p><strong>RELEASE MANIFEST</strong><small>schema + TOML authority required</small></p></article>
-        <article className="blocked"><b>05</b><p><strong>VERIFY PACKAGE</strong><small>checksums + reopen test required</small></p></article>
-        <article className={activePacks > 0 ? 'ready' : 'blocked'}><b>06</b><p><strong>PUBLISH</strong><small>{activePacks > 0 ? `${activePacks} admitted packs` : 'activation remains disabled'}</small></p></article>
+        <article className={population?.missing === 0 ? 'ready' : 'waiting'}><b>01</b><p><strong>FIDBF POPULATION</strong><small>{population ? `${population.present.toLocaleString()} exact sealed identities` : 'loading'}</small></p></article>
+        <article className={status?.compatibility.state === 'ready' ? 'ready' : 'blocked'}><b>02</b><p><strong>CATALOGUE + LANES</strong><small>identity lookup and compatibility registry</small></p></article>
+        <article className={status?.hash_quality.state === 'ready' ? 'ready' : 'blocked'}><b>03</b><p><strong>HASH QUALITY</strong><small>{generation ? `${generation.signatures.toLocaleString()} signatures` : 'sidecar unavailable'}</small></p></article>
+        <article className={status?.validation.state === 'ready' ? 'ready' : 'blocked'}><b>04</b><p><strong>VALIDATION</strong><small>archive + linked C10 report</small></p></article>
+        <article className={status ? 'ready' : 'waiting'}><b>05</b><p><strong>MANIFEST + SHA-256</strong><small>every package member bound</small></p></article>
+        <article className={status?.release.exists ? 'ready' : releaseReady ? 'waiting' : 'blocked'}><b>06</b><p><strong>REOPEN PACKAGE</strong><small>{status?.release.exists ? `${formatBytes(status.release.bytes)} verified` : 'runs during build'}</small></p></article>
       </div>
     </section>
 
     <div className="export-layout">
       <section className="panel export-contract-panel">
-        <div className="panel-header"><h3>Package contract</h3><span className="plan-state">NOT FROZEN</span></div>
+        <div className="panel-header"><h3>Package contents</h3><span className="plan-state">{status?.release.package_format.toUpperCase() ?? '—'}</span></div>
         <div className="export-contract-list">
-          <article><span className={`operational-state ${laneRegistry ? 'complete' : 'blocked'}`}>{laneRegistry ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Compatibility registry</strong><small>{laneRegistry?.authority_path ?? 'lanes/registry.toml'} · {lanes.length} broad lanes</small></p><code>TOML</code></article>
-          <article><span className={`operational-state ${materializedGenerations > 0 ? 'complete' : 'blocked'}`}>{materializedGenerations > 0 ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Database payload</strong><small>{materializedGenerations > 0 ? `${materializedGenerations} immutable lane generations` : 'relationship-complete lane import is not implemented'}</small></p><code>.fidb / lane DB</code></article>
-          <article><span className={`operational-state ${visibleSeals > 0 ? 'complete' : 'blocked'}`}>{visibleSeals > 0 ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Provenance evidence</strong><small>{visibleSeals} visible seals bind cell, source, toolchain and treatment identity</small></p><code>manifest + SHA-256</code></article>
-          <article><span className={`operational-state ${corpusIndex?.state === 'ready' ? 'complete' : 'blocked'}`}>{corpusIndex?.state === 'ready' ? 'EVIDENCE READY' : 'PENDING'}</span><p><strong>Hash-discrimination overlay</strong><small>{corpusIndex?.generation ? `generation ${corpusIndex.generation.ordinal} · raw noise evidence ready · ${scoredSignatures === null || scoredSignatures === undefined ? 'HDI not fit' : `${scoredSignatures} HDI scores`}` : 'preserved as a versioned sidecar, not an in-place lane mutation'}</small></p><code>derived sidecar</code></article>
-          <article><span className="operational-state blocked">REQUIRED</span><p><strong>Release manifest and checksums</strong><small>package identity, component digests, schema versions and compatibility policy</small></p><code>not implemented</code></article>
-          <article><span className="operational-state blocked">REQUIRED</span><p><strong>Consumer verification</strong><small>reopen packaged databases and prove query equivalence before publication</small></p><code>BSimVis / Ghidra</code></article>
+          <article><span className={`operational-state ${population?.missing === 0 ? 'complete' : 'blocked'}`}>{population?.missing === 0 ? 'COMPLETE' : 'INCOMPLETE'}</span><p><strong>Raw Ghidra FID databases</strong><small>one `.fidbf` for each library × route × treatment identity</small></p><code>fidbf/*.fidbf</code></article>
+          <article><span className="operational-state complete">GENERATED</span><p><strong>Artifact catalogue</strong><small>library, route, treatment, source, toolchain, seal and digest joins</small></p><code>index/catalogue.sqlite3</code></article>
+          <article><span className={`operational-state ${status?.hash_quality.state === 'ready' ? 'complete' : 'blocked'}`}>{status?.hash_quality.state === 'ready' ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Hash-quality evidence</strong><small>cross-library ownership and validation observations remain separate from raw FID</small></p><code>index/hash-quality.sqlite3</code></article>
+          <article><span className={`operational-state ${status?.validation.state === 'ready' ? 'complete' : 'blocked'}`}>{status?.validation.state === 'ready' ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Matching report</strong><small>archive + linked C10 precision, recall and error evidence</small></p><code>validation/*.json</code></article>
+          <article><span className={`operational-state ${status?.compatibility.state === 'ready' ? 'complete' : 'blocked'}`}>{status?.compatibility.state === 'ready' ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Compatibility registry</strong><small>{status?.compatibility.path ?? 'lanes/registry.toml'}</small></p><code>authority/lanes.toml</code></article>
+          <article><span className="operational-state complete">GENERATED</span><p><strong>Release manifest and checksums</strong><small>member paths, bytes, SHA-256, schema and generation identity</small></p><code>release.toml + checksums</code></article>
         </div>
       </section>
 
       <section className="panel export-release-panel">
-        <div className="panel-header"><h3>Release controls</h3><span className="plan-state">DISARMED</span></div>
-        <dl><div><dt>Release ID</dt><dd>unassigned</dd></div><div><dt>Output root</dt><dd>not configured</dd></div><div><dt>Package format</dt><dd>not frozen</dd></div><div><dt>Authority</dt><dd>export TOML required</dd></div></dl>
-        <div className="export-noise-key"><span>NOISE JOIN KEY</span><code>scope + language + full + specific + additional size + code size</code><small>{corpusIndex?.database_path ?? 'corpus sidecar unavailable'} · {scoredSignatures === null || scoredSignatures === undefined ? 'HDI values and reason tags not yet fit' : `${scoredSignatures.toLocaleString()} scored signatures`}</small></div>
-        <div className="export-control-actions"><button className="secondary-action" disabled>Preview manifest</button><button className="primary-action" disabled>Build package</button></div>
+        <div className="panel-header"><h3>Release controls</h3><span className="plan-state">{releaseReady ? 'READY' : 'BLOCKED'}</span></div>
+        <dl><div><dt>Release ID</dt><dd>{status?.release.id ?? '—'}</dd></div><div><dt>Output path</dt><dd>{status?.release.output_path ?? '—'}</dd></div><div><dt>Package format</dt><dd>{status?.release.package_format ?? '—'}</dd></div><div><dt>Authority</dt><dd>{status?.authority.path ?? '—'}</dd></div><div><dt>Authority SHA-256</dt><dd><code>{status?.authority.sha256 ? `${status.authority.sha256.slice(0, 16)}…` : '—'}</code></dd></div><div><dt>Historical retries</dt><dd>{population?.duplicate_completed_identities.toLocaleString() ?? '—'} recorded; newest seal selected</dd></div></dl>
+        <div className="export-noise-key"><span>HASH-QUALITY GENERATION</span><code>{generation?.digest ?? 'not available'}</code><small>{status?.hash_quality.path ?? 'sidecar unavailable'} · signatures may associate with multiple libraries</small></div>
+        {!!status?.blockers.length && <div className="export-blockers">{status.blockers.map(blocker => <p key={blocker}>{blocker}</p>)}</div>}
+        <div className="export-control-actions"><button className="secondary-action" onClick={runPreview} disabled={previewBusy || buildBusy}>{previewBusy ? 'Checking…' : 'Preview manifest'}</button><button className="primary-action" onClick={runBuild} disabled={!releaseReady || previewBusy || buildBusy}>{buildBusy ? 'Building package…' : 'Build package'}</button></div>
       </section>
     </div>
 
     <section className="panel export-lanes-panel">
-      <div className="panel-header"><h3>Lane release candidates</h3><span className="plan-state">{lanes.length} BROAD LANES</span></div>
-      <div>{lanes.map(lane => {
-        const laneDatabases = databases.filter(database => database.lane_id === lane.id);
-        const active = laneDatabases.filter(database => database.active).length;
-        const mapped = lane.sublanes.filter(sublane => sublane.definition_state === 'mapped').length;
-        return <article key={lane.id}><span className={`operational-state ${active > 0 ? 'complete' : laneDatabases.length > 0 ? 'waiting' : 'blocked'}`}>{active > 0 ? 'ACTIVE' : laneDatabases.length > 0 ? 'EVIDENCE ONLY' : 'NO GENERATION'}</span><p><strong>{lane.label}</strong><small>{lane.id} · {mapped}/{lane.sublanes.length} exact sublanes mapped</small></p><div><b>{laneDatabases.length}</b><span>generations</span></div><div><b>{formatBytes(laneDatabases.reduce((total, row) => total + row.bytes, 0))}</b><span>managed</span></div></article>;
-      })}{!lanes.length && <div className="operational-empty"><strong>Lane registry unavailable</strong><small>Reconnect the local authority API.</small></div>}</div>
+      <div className="panel-header"><h3>C10 artifact completeness</h3><span className="plan-state">{population ? `${population.libraries_complete}/${population.libraries_expected} COMPLETE` : 'LOADING'}</span></div>
+      <div>{status?.libraries.map(library => <article key={library.id}><span className={`operational-state ${library.complete ? 'complete' : 'blocked'}`}>{library.complete ? 'COMPLETE' : `${library.missing} MISSING`}</span><p><strong>{library.rank}. {library.label}</strong><small>{library.id}@{library.version}</small></p><div><b>{library.present} / {library.expected}</b><span>FIDBF identities</span></div><div><b>{formatBytes(library.bytes)}</b><span>raw size</span></div></article>)}{!status?.libraries.length && <div className="operational-empty"><strong>Export authority unavailable</strong><small>Reconnect the local API.</small></div>}</div>
     </section>
   </div>;
 }
