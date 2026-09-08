@@ -1013,3 +1013,32 @@ raise the pool solely because free RAM exists: the profile must also satisfy
 JVM processor demand, host reserve and available-memory bounds. Twelve workers
 remain manual/experimental until representative throughput, peak RSS,
 thermals and failures are recorded.
+
+# C10 FIDBF recovery and export
+
+The original OpenSSL width run retained aggregate hash evidence but not the 174
+individual non-Android `.fidbf` files. Do not reinterpret the validation
+ledger's 2,220 identities as 2,220 exportable files. The recovery authority is
+`batches/c-openssl-fidbf-recovery.toml`, materialized as exactly 29 historical
+routes × six treatments in
+`plans/materialized/c-openssl-fidbf-recovery.toml`. Before execution, sync it
+to an isolated state and require the resolution preflight to report 174/174,
+29 routes and six treatments. It must not contain Android routes or any library
+other than OpenSSL. Preserve the existing main-ledger completed jobs; queue
+synchronization deactivates historical rows but must never delete them.
+
+The portable direct-use release is governed by
+`export/c10-fidbf-v1.toml`. `fidb-poc export preview` is the authoritative
+completeness check. It groups retries by exact
+`library@version:route:treatment`, selects the newest completed seal, and
+requires 2,220 unique identities. Do not bypass the 2,220 gate or package the
+current 2,046 files as a complete C10 release.
+
+`fidb-poc export build` verifies all FIDBF ledger hashes, generates the compact
+catalogue, snapshots the hash-quality SQLite sidecar, includes the named C10
+validation report and lane registry, writes member checksums, tests the zstd
+archive and reopens its exact member set. The GUI invokes the same functions;
+it is not a second export implementation. The package contains archive/object
+derived raw FIDBFs. Linked-reference validation is included as a report, not as
+another FIDBF population. Future admitted lane-pack exports remain a separate
+publication phase.
