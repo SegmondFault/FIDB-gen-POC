@@ -65,6 +65,19 @@ class BatchTimeModelTests(unittest.TestCase):
             balanced["summary"]["estimated_hours"],
         )
 
+    def test_priority_model_counts_only_recipe_applicable_width(self):
+        document = compile_time_block_plan(
+            self.root,
+            "performance/c-malware-priority-native-v1.toml",
+        )
+
+        self.assertEqual(document["summary"]["libraries"], 21)
+        self.assertEqual(document["summary"]["executions"], 3_426)
+        self.assertEqual(document["summary"]["android_executions"], 720)
+        self.assertTrue(
+            all(block["estimated_hours"] <= 5.0 for block in document["blocks"])
+        )
+
     def test_cli_is_read_only_and_prints_plan(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
