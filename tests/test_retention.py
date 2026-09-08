@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
@@ -33,7 +34,7 @@ class RetentionTests(unittest.TestCase):
         shutil.copytree(self.source_root / "retention", self.root / "retention")
         self.database = self.root / "var/fidb-coordinator/ledger.sqlite3"
         self.database.parent.mkdir(parents=True)
-        with sqlite3.connect(self.database) as connection:
+        with closing(sqlite3.connect(self.database)) as connection, connection:
             connection.executescript("""
                 CREATE TABLE coordinator_state (
                     singleton INTEGER PRIMARY KEY, sync_generation INTEGER,
@@ -75,7 +76,7 @@ class RetentionTests(unittest.TestCase):
         result: dict[str, object] | None = None,
     ) -> str:
         job_id = self.job_id(number)
-        with sqlite3.connect(self.database) as connection:
+        with closing(sqlite3.connect(self.database)) as connection, connection:
             connection.execute(
                 "INSERT INTO jobs VALUES (?, ?, ?, 'batch-test', 'cell-test', 1)",
                 (job_id, state, json.dumps(result) if result is not None else None),
@@ -97,7 +98,7 @@ class RetentionTests(unittest.TestCase):
         logs.mkdir(parents=True)
         (logs / "build.log").write_text(f"failure: {error}\n", encoding="utf-8")
         (attempt / "work/disposable.bin").write_bytes(b"x" * 1024)
-        with sqlite3.connect(self.database) as connection:
+        with closing(sqlite3.connect(self.database)) as connection, connection:
             connection.execute(
                 "INSERT INTO attempts VALUES (?, ?, ?, ?, 'failed', ?, ?, ?)",
                 (
@@ -370,7 +371,7 @@ class RetentionTests(unittest.TestCase):
             apply_retention_plan(self.root, plan["plan_digest"])
 
         path.write_text(json.dumps(plan), encoding="utf-8")
-        with sqlite3.connect(self.database) as connection:
+        with closing(sqlite3.connect(self.database)) as connection, connection:
             connection.execute(
                 "UPDATE coordinator_state SET sync_generation=8 WHERE singleton=1"
             )

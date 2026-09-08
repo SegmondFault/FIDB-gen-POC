@@ -9,6 +9,7 @@ there is no command string or recipe-provided shell escape in this interface.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from datetime import datetime, timedelta
 import hashlib
 import json
@@ -159,7 +160,7 @@ def _terminal_queue_has_pending_work(state: Path) -> bool:
     """Check the durable queue cheaply without rebuilding its resolved plans."""
 
     uri = f"{state.resolve().as_uri()}?mode=ro"
-    with sqlite3.connect(uri, uri=True, timeout=5) as connection:
+    with closing(sqlite3.connect(uri, uri=True, timeout=5)) as connection:
         row = connection.execute("""
             SELECT 1 FROM jobs
             WHERE active = 1 AND state IN ('queued', 'leased', 'running')
