@@ -34,7 +34,16 @@ class RecipeQualificationTests(unittest.TestCase):
 
         self.assertEqual(plan["summary"]["libraries"], 21)
         self.assertEqual(plan["summary"]["routes"], 16)
-        self.assertEqual(plan["summary"]["cells"], 268)
+        self.assertEqual(plan["summary"]["cells"], 264)
+        boringssl_routes = {
+            row["route_id"]
+            for row in plan["cells"]
+            if row["recipe_id"] == "boringssl@14.0.0+r45-3"
+        }
+        self.assertNotIn("linux-mips32-be-gcc", boringssl_routes)
+        self.assertNotIn("linux-powerpc32-be-gcc", boringssl_routes)
+        self.assertNotIn("linux-sh32-gcc", boringssl_routes)
+        self.assertNotIn("linux-m68k-gcc", boringssl_routes)
         perl_routes = {
             row["route_id"]
             for row in plan["cells"]

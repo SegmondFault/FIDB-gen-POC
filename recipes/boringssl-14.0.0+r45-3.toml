@@ -10,3 +10,4 @@ allowed_build_systems = ["boringssl-cmake"]
 preferred_build_system = "boringssl-cmake"
 static_archives = ["libcrypto.a", "libssl.a"]
 supported_target_os = ["linux", "android", "windows"]
+supported_architectures = ["x86_64", "i686", "aarch64", "arm", "mipsel"]

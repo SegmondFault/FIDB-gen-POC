@@ -398,6 +398,20 @@ class ConfigurationTests(unittest.TestCase):
             recipe.applies_to(replace(configuration.routes[0], target_os="windows"))
         )
 
+    def test_boringssl_excludes_architectures_rejected_by_its_source(self):
+        root = Path(__file__).resolve().parents[1]
+        configuration = load_configuration(
+            root / "worker.toml", request_override=("boringssl",)
+        )
+        recipe = configuration.libraries[0]
+        routes = {route.id: route for route in configuration.routes}
+
+        self.assertTrue(recipe.applies_to(routes["linux-mips32-le-gcc"]))
+        self.assertFalse(recipe.applies_to(routes["linux-mips32-be-gcc"]))
+        self.assertFalse(recipe.applies_to(routes["linux-powerpc32-be-gcc"]))
+        self.assertFalse(recipe.applies_to(routes["linux-sh32-gcc"]))
+        self.assertFalse(recipe.applies_to(routes["linux-m68k-gcc"]))
+
     def test_all_unknown_library_requests_are_reported(self):
         root = Path(__file__).resolve().parents[1]
         with self.assertRaises(RecipesNotFoundError) as raised:
