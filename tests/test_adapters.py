@@ -406,6 +406,10 @@ class AdapterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             source_root = Path(temporary).resolve()
             (source_root / "err_data.c").write_text("generated", encoding="utf-8")
+            (source_root / "src").mkdir()
+            (source_root / "src/CMakeLists.txt").write_text(
+                'set(C_CXX_FLAGS "-Werror -Wall")\n', encoding="utf-8"
+            )
             prepare_build_workspace(
                 "boringssl-cmake",
                 route=route(),
@@ -423,12 +427,14 @@ class AdapterTests(unittest.TestCase):
             gtest_placeholder = (
                 source_root / "src/third_party/googletest/src/gtest-all.cc"
             ).read_text()
+            warning_policy = (source_root / "src/CMakeLists.txt").read_text()
 
         self.assertEqual(commands[0][1:3], ("-S", "src"))
         self.assertIn(f"-DGO_EXECUTABLE={source_root}/fidb-boringssl-go", commands[0])
         self.assertEqual(commands[1][-2:], ("crypto", "ssl"))
         self.assertIn("err_data_generate.go", shim)
         self.assertIn("target is not built", gtest_placeholder)
+        self.assertEqual(warning_policy, 'set(C_CXX_FLAGS "-Wall")\n')
 
     def test_harfbuzz_cmake_adapter_pins_compilers_and_library_targets(self):
         commands = build_commands(

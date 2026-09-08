@@ -217,6 +217,20 @@ def prepare_build_workspace(
         generated = source_root / "err_data.c"
         if not generated.is_file():
             raise AdapterError("BoringSSL source lacks its pinned err_data.c")
+        # This pinned Android source snapshot promotes all warnings to errors.
+        # Cross sysroots can legitimately provide newer ARM HWCAP definitions
+        # than the snapshot, producing harmless macro-redefinition warnings.
+        # Remove only the exact upstream -Werror token: warning policy must not
+        # make an otherwise valid compilation route unusable.
+        cmake_lists = source_root / "src/CMakeLists.txt"
+        cmake_text = cmake_lists.read_text(encoding="utf-8")
+        warning_policy = 'set(C_CXX_FLAGS "-Werror '
+        if cmake_text.count(warning_policy) != 1:
+            raise AdapterError("BoringSSL warning-policy patch no longer applies")
+        cmake_lists.write_text(
+            cmake_text.replace(warning_policy, 'set(C_CXX_FLAGS "', 1),
+            encoding="utf-8",
+        )
         # Debian's source-only BoringSSL archive omits googletest, while the
         # upstream CMake graph still declares (but need not build) its test
         # target.  A source-less translation unit lets CMake generate the
