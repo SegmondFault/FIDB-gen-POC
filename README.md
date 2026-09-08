@@ -805,6 +805,13 @@ verification under **Operations → Retention**. Recycled workers with no durabl
 pending work park before full queue resolution and wake through a lightweight
 TOML-controlled ledger check.
 
+Database release readiness is visible under **Operations → Export**. Panel 14
+is currently a read-only projection of sealed per-cell outputs, immutable lane
+generations, compatibility metadata and the versioned hash-discrimination
+sidecar. It intentionally keeps package construction disarmed until the
+relationship-complete importer, export TOML, manifest/checksum writer and
+package reopen test described in [`EXPORT.md`](EXPORT.md) exist.
+
 Measured-complete machine-validation runs enter the same dry-run-first system
 under a separate scope. The collector verifies and hashes the retained
 single-hash report and evidence database, unit results, truth maps, query

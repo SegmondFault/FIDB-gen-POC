@@ -498,6 +498,10 @@ export default function Home() {
             <span>13</span>
             Activity
           </button>
+          <button className={activeView === 'Export' ? 'nav-item operations-nav-item active' : 'nav-item operations-nav-item'} onClick={() => setActiveView('Export')}>
+            <span>14</span>
+            Export
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -722,6 +726,7 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
   if (view === 'Performance') return <PerformanceView factory={factory} />;
   if (view === 'Retention') return <RetentionView factory={factory} />;
   if (view === 'Timing') return <TimingView factory={factory} />;
+  if (view === 'Export') return <ExportView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Evidence') return <EvidenceView snapshot={factory.snapshot} />;
@@ -2214,6 +2219,92 @@ function RetentionView({ factory }: { factory: FactoryApiState }) {
     <section className="retention-evidence-grid">
       <article className="panel"><header><h3>Protected evidence</h3><span>{plan?.summary.preserved ?? 0}</span></header><div className="retention-example-list">{plan?.preserved_examples.map(exampleRow)}{!plan?.preserved_examples.length && <div className="operational-empty"><strong>No sampled holds</strong></div>}</div></article>
       <article className="panel"><header><h3>Quarantine</h3><span>{plan?.summary.quarantined ?? 0}</span></header><div className="retention-example-list">{plan?.quarantine_examples.map(exampleRow)}{!plan?.quarantine_examples.length && <div className="operational-empty"><strong>No quarantined paths</strong></div>}</div></article>
+    </section>
+  </div>;
+}
+
+function ExportView({ factory }: { factory: FactoryApiState }) {
+  const snapshot = factory.snapshot;
+  const laneInventory = factory.laneInventory;
+  const laneRegistry = factory.authority?.lane_registry;
+  const hashDiscrimination = factory.authority?.hash_discrimination;
+  const completedResults = snapshot?.jobs.filter(job => job.state === 'complete' && job.result) ?? [];
+  const artifactCount = (kind: 'fidb' | 'fidbf' | 'seal') => completedResults.filter(job => {
+    const value = job.result?.[kind];
+    if (!value || typeof value !== 'object') return false;
+    const record = value as Record<string, unknown>;
+    return typeof record.path === 'string' && typeof record.sha256 === 'string';
+  }).length;
+  const visibleFidbs = artifactCount('fidb');
+  const visibleFidbfs = artifactCount('fidbf');
+  const visibleSeals = artifactCount('seal');
+  const sealedJobs = snapshot?.result_jobs_total ?? completedResults.length;
+  const databases = laneInventory?.databases ?? [];
+  const materializedGenerations = laneInventory?.summary.materialized_generations ?? 0;
+  const activePacks = laneInventory?.summary.active_packs ?? 0;
+  const corpusIndex = hashDiscrimination?.corpus_index;
+  const scoredSignatures = hashDiscrimination?.summary.scored_signatures;
+  const releaseReady = activePacks > 0 && materializedGenerations > 0;
+  const lanes = laneRegistry?.lanes ?? [];
+
+  return <div className="view-stack export-view">
+    <ViewIntro
+      kicker="PORTABLE DATABASE RELEASES"
+      title="Export"
+      action={<div className="view-intro-actions"><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>{factory.connection === 'live' ? 'Refresh inventory' : 'Retry connection'}</button><button className="primary-action" disabled>Build export</button></div>}
+    />
+    <PanelReadWarning factory={factory} endpoints={['authority', 'lane-inventory', 'noisy-hashes', 'snapshot']} />
+
+    <section className="export-metrics">
+      <article className="panel"><span>SEALED JOBS</span><strong>{snapshot ? sealedJobs.toLocaleString() : '—'}</strong><small>{snapshot?.result_jobs_truncated ? `${completedResults.length.toLocaleString()} recent results loaded` : `${visibleSeals.toLocaleString()} seals visible`}</small></article>
+      <article className="panel"><span>VISIBLE FIDB / FIDBF</span><strong>{snapshot ? `${visibleFidbs} / ${visibleFidbfs}` : '—'}</strong><small>per-cell artifacts in this snapshot</small></article>
+      <article className="panel"><span>LANE GENERATIONS</span><strong>{laneInventory ? materializedGenerations.toLocaleString() : '—'}</strong><small>{formatBytes(laneInventory?.summary.lane_database_bytes ?? 0)} managed</small></article>
+      <article className="panel"><span>ACTIVE PACKS</span><strong>{laneInventory ? activePacks.toLocaleString() : '—'}</strong><small>analyst-admitted releases</small></article>
+      <article className="panel"><span>CORPUS HASHES</span><strong>{corpusIndex?.generation ? corpusIndex.generation.signatures.toLocaleString() : '—'}</strong><small>{corpusIndex?.generation ? `generation ${corpusIndex.generation.ordinal} · ${formatBytes(corpusIndex.database_bytes ?? 0)}` : corpusIndex?.state.replaceAll('-', ' ') ?? 'authority unavailable'}</small></article>
+      <article className={`panel ${releaseReady ? 'ready' : 'blocked'}`}><span>EXPORT STATE</span><strong>{releaseReady ? 'READY' : 'BLOCKED'}</strong><small>{releaseReady ? 'admitted lane payload exists' : 'no admitted lane pack'}</small></article>
+    </section>
+
+    <section className="panel export-assembly-panel">
+      <header><div><h3>Release assembly</h3><code>read-only projection · no files will be written</code></div><span className={`validation-state ${releaseReady ? 'ready' : 'waiting'}`}>{releaseReady ? 'PACKAGE INPUT READY' : 'DESIGN GATE'}</span></header>
+      <div className="export-assembly-flow">
+        <article className={sealedJobs > 0 ? 'ready' : 'waiting'}><b>01</b><p><strong>SEALED INPUTS</strong><small>{sealedJobs.toLocaleString()} complete result jobs</small></p></article>
+        <article className={materializedGenerations > 0 ? 'ready' : 'blocked'}><b>02</b><p><strong>LANE IMPORT</strong><small>{materializedGenerations > 0 ? `${materializedGenerations} immutable generations` : 'queue-to-lane importer required'}</small></p></article>
+        <article className={corpusIndex?.state === 'ready' ? 'ready' : 'waiting'}><b>03</b><p><strong>NOISE OVERLAY</strong><small>{corpusIndex?.generation ? `${corpusIndex.generation.signatures.toLocaleString()} signatures` : corpusIndex?.state.replaceAll('-', ' ') ?? 'not loaded'}</small></p></article>
+        <article className="blocked"><b>04</b><p><strong>RELEASE MANIFEST</strong><small>schema + TOML authority required</small></p></article>
+        <article className="blocked"><b>05</b><p><strong>VERIFY PACKAGE</strong><small>checksums + reopen test required</small></p></article>
+        <article className={activePacks > 0 ? 'ready' : 'blocked'}><b>06</b><p><strong>PUBLISH</strong><small>{activePacks > 0 ? `${activePacks} admitted packs` : 'activation remains disabled'}</small></p></article>
+      </div>
+    </section>
+
+    <div className="export-layout">
+      <section className="panel export-contract-panel">
+        <div className="panel-header"><h3>Package contract</h3><span className="plan-state">NOT FROZEN</span></div>
+        <div className="export-contract-list">
+          <article><span className={`operational-state ${laneRegistry ? 'complete' : 'blocked'}`}>{laneRegistry ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Compatibility registry</strong><small>{laneRegistry?.authority_path ?? 'lanes/registry.toml'} · {lanes.length} broad lanes</small></p><code>TOML</code></article>
+          <article><span className={`operational-state ${materializedGenerations > 0 ? 'complete' : 'blocked'}`}>{materializedGenerations > 0 ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Database payload</strong><small>{materializedGenerations > 0 ? `${materializedGenerations} immutable lane generations` : 'relationship-complete lane import is not implemented'}</small></p><code>.fidb / lane DB</code></article>
+          <article><span className={`operational-state ${visibleSeals > 0 ? 'complete' : 'blocked'}`}>{visibleSeals > 0 ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Provenance evidence</strong><small>{visibleSeals} visible seals bind cell, source, toolchain and treatment identity</small></p><code>manifest + SHA-256</code></article>
+          <article><span className={`operational-state ${corpusIndex?.state === 'ready' ? 'complete' : 'blocked'}`}>{corpusIndex?.state === 'ready' ? 'EVIDENCE READY' : 'PENDING'}</span><p><strong>Hash-discrimination overlay</strong><small>{corpusIndex?.generation ? `generation ${corpusIndex.generation.ordinal} · raw noise evidence ready · ${scoredSignatures === null || scoredSignatures === undefined ? 'HDI not fit' : `${scoredSignatures} HDI scores`}` : 'preserved as a versioned sidecar, not an in-place lane mutation'}</small></p><code>derived sidecar</code></article>
+          <article><span className="operational-state blocked">REQUIRED</span><p><strong>Release manifest and checksums</strong><small>package identity, component digests, schema versions and compatibility policy</small></p><code>not implemented</code></article>
+          <article><span className="operational-state blocked">REQUIRED</span><p><strong>Consumer verification</strong><small>reopen packaged databases and prove query equivalence before publication</small></p><code>BSimVis / Ghidra</code></article>
+        </div>
+      </section>
+
+      <section className="panel export-release-panel">
+        <div className="panel-header"><h3>Release controls</h3><span className="plan-state">DISARMED</span></div>
+        <dl><div><dt>Release ID</dt><dd>unassigned</dd></div><div><dt>Output root</dt><dd>not configured</dd></div><div><dt>Package format</dt><dd>not frozen</dd></div><div><dt>Authority</dt><dd>export TOML required</dd></div></dl>
+        <div className="export-noise-key"><span>NOISE JOIN KEY</span><code>scope + language + full + specific + additional size + code size</code><small>{corpusIndex?.database_path ?? 'corpus sidecar unavailable'} · {scoredSignatures === null || scoredSignatures === undefined ? 'HDI values and reason tags not yet fit' : `${scoredSignatures.toLocaleString()} scored signatures`}</small></div>
+        <div className="export-control-actions"><button className="secondary-action" disabled>Preview manifest</button><button className="primary-action" disabled>Build package</button></div>
+      </section>
+    </div>
+
+    <section className="panel export-lanes-panel">
+      <div className="panel-header"><h3>Lane release candidates</h3><span className="plan-state">{lanes.length} BROAD LANES</span></div>
+      <div>{lanes.map(lane => {
+        const laneDatabases = databases.filter(database => database.lane_id === lane.id);
+        const active = laneDatabases.filter(database => database.active).length;
+        const mapped = lane.sublanes.filter(sublane => sublane.definition_state === 'mapped').length;
+        return <article key={lane.id}><span className={`operational-state ${active > 0 ? 'complete' : laneDatabases.length > 0 ? 'waiting' : 'blocked'}`}>{active > 0 ? 'ACTIVE' : laneDatabases.length > 0 ? 'EVIDENCE ONLY' : 'NO GENERATION'}</span><p><strong>{lane.label}</strong><small>{lane.id} · {mapped}/{lane.sublanes.length} exact sublanes mapped</small></p><div><b>{laneDatabases.length}</b><span>generations</span></div><div><b>{formatBytes(laneDatabases.reduce((total, row) => total + row.bytes, 0))}</b><span>managed</span></div></article>;
+      })}{!lanes.length && <div className="operational-empty"><strong>Lane registry unavailable</strong><small>Reconnect the local authority API.</small></div>}</div>
     </section>
   </div>;
 }
