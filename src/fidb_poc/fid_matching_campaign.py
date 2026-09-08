@@ -24,6 +24,9 @@ from .fid_match_qualification import (
     run_compact_retained_validation,
 )
 from .fid_compact import (
+    ALPHA_ENGINE_1,
+    ALPHA_ENGINE_2,
+    LEGACY_ENGINE_ID,
     build_compact_candidate_index,
     load_fid_matching_performance,
     selected_backend_id,
@@ -243,7 +246,8 @@ def load_campaign(
         }
         or not 1 <= int(execution["workers"]) <= 16
         or execution["scheduling"] != "largest-query-first-greedy-v1"
-        or execution["engine"] != "compact-selected-backend-v1"
+        or execution["engine"]
+        not in {LEGACY_ENGINE_ID, ALPHA_ENGINE_1, ALPHA_ENGINE_2}
     ):
         raise ValueError("FID matching execution policy is invalid")
     if (
@@ -593,10 +597,21 @@ def _reusable_case(
     except (OSError, ValueError, json.JSONDecodeError):
         return False
     case = previous.get("case", {})
+    requested_engine = str(campaign["execution"]["engine"])
+    normalized_engine = (
+        ALPHA_ENGINE_1 if requested_engine == LEGACY_ENGINE_ID else requested_engine
+    )
+    previous_engine = previous.get("matching_engine")
+    engine_matches = (
+        previous_engine in {None, ALPHA_ENGINE_1}
+        if normalized_engine == ALPHA_ENGINE_1
+        else previous_engine == normalized_engine
+    )
     return (
         previous.get("state") == "qualified"
         and previous.get("authority_sha256") == method_sha256
         and previous.get("selected_backend") == selected_backend
+        and engine_matches
         and case.get("run_id") == campaign["source_run_id"]
         and int(case.get("position", -1)) == position
         and case.get("fold") == fold
@@ -1486,6 +1501,7 @@ def worker_cases(
                     performance_path=str(campaign["execution"]["performance"]),
                     reference_population=reference_receipt,
                     campaign_authority_sha256=str(campaign["authority_sha256"]),
+                    engine_id=str(campaign["execution"]["engine"]),
                 )
             else:
                 run_compact_retained_validation(
@@ -1502,6 +1518,7 @@ def worker_cases(
                     ghidra_user_home=worker_scratch / "ghidra-user",
                     reference_population=reference_receipt,
                     campaign_authority_sha256=str(campaign["authority_sha256"]),
+                    engine_id=str(campaign["execution"]["engine"]),
                 )
         except Exception as error:
             failed += 1

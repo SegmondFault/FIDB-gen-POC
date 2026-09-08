@@ -328,6 +328,13 @@ uv run fidb-poc machine-validation scheduled-matcher --project-root .
 The backend and bounded dispatch settings live in
 `performance/fid-matching.toml`. The Performance page exposes the requested,
 effective and qualified FID scorer independently of the exact-hash analyser.
+Population orchestration is also explicit. `alpha_engine_1` is the original
+sequential archive/linked implementation and remains the identity used by the
+sealed C10 reference-form results. `alpha_engine_2` streams both immutable
+indexes through one bounded scorer, interns exact duplicate score inputs, and
+retains the supplying component identities on winners. The disarmed
+`fid-matching-alpha-engine-2-run.toml` authority exists for a bounded oracle
+and timing cross-check; it cannot auto-chain into a full run.
 The canary retains its replay input, selected-backend decision and oracle
 comparison. Routine full cases retain classifications, truth attribution,
 per-hash observations and summary receipts, but neither native-oracle input nor

@@ -985,3 +985,18 @@ map, query-evidence seal, reports, observation database, hash-discrimination
 output, admission decision and timing receipt. The expected 888-to-444 Ghidra
 analysis reduction is a projection until replaced by terminal evidence from a
 future integrated cohort.
+
+# FID population engine identities
+
+Never reinterpret the sealed C10 archive/linked results as output from the
+optimized matcher. `alpha_engine_1` is the original implementation: each
+component index is scored independently and the per-index winners are merged.
+`alpha_engine_2` uses the same scorer and immutable indexes but feeds them
+through one bounded scoring stream and interns only exact duplicate score
+inputs. It records the contributing reference components on a winning match.
+
+Use `validation/fid-matching-alpha-engine-2-run.toml` for the bounded
+cross-check. Its canary must demonstrate identical owner decisions, confusion
+matrices and per-hash observations before a future cohort selects engine 2.
+Do not make a cached or partial C10 comparison into performance evidence, and
+do not remove engine 1 while any sealed authority or export names it.

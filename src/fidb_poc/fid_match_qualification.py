@@ -486,6 +486,7 @@ def qualify_retained_validation(
     performance_path: str | Path = "performance/fid-matching.toml",
     reference_population: Mapping[str, object] | None = None,
     campaign_authority_sha256: str | None = None,
+    engine_id: str = "alpha_engine_1",
 ) -> dict[str, object]:
     """Run native FID and either qualify all or verify the selected backend."""
 
@@ -658,6 +659,7 @@ def qualify_retained_validation(
             treatment_id,
             authority,
             backend_id=requested_backend,
+            engine_id=engine_id,
             chunk_rows=int(performance["candidate_chunk_rows"]),
             workgroup_size=int(performance["workgroup_size"]),
             fallback_to_cpu=bool(performance["fallback_to_cpu"]),
@@ -703,6 +705,9 @@ def qualify_retained_validation(
             else "selected-backend-only"
         ),
         "selected_backend": executions[-1]["backend"],
+        "matching_engine": (
+            executions[-1].get("engine") if candidate_indexes is not None else None
+        ),
         "requested_backend": requested_backend,
         "performance": performance_receipt or {"fallback_reason": None},
         "case": {
@@ -808,6 +813,7 @@ def run_compact_retained_validation(
     ghidra_user_home: str | Path | None = None,
     reference_population: Mapping[str, object] | None = None,
     campaign_authority_sha256: str | None = None,
+    engine_id: str = "alpha_engine_1",
 ) -> dict[str, object]:
     """Run the selected compact backend without constructing a native oracle."""
 
@@ -920,6 +926,7 @@ def run_compact_retained_validation(
         treatment_id,
         authority,
         backend_id=requested_backend,
+        engine_id=engine_id,
         chunk_rows=int(performance["candidate_chunk_rows"]),
         workgroup_size=int(performance["workgroup_size"]),
         fallback_to_cpu=bool(performance["fallback_to_cpu"]),
@@ -982,6 +989,7 @@ def run_compact_retained_validation(
         "scope": "compact-portable-fid-routine-execution",
         "execution_policy": "selected-backend-only",
         "selected_backend": execution["backend"],
+        "matching_engine": execution["engine"],
         "requested_backend": requested_backend,
         "performance": {
             "authority_path": performance["authority_path"],

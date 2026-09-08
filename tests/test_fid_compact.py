@@ -7,6 +7,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from fidb_poc.fid_compact import (
+    ALPHA_ENGINE_1,
+    ALPHA_ENGINE_2,
     INDEX_SCHEMA,
     _relation_smash,
     build_compact_candidate_index,
@@ -203,6 +205,7 @@ class CompactFidTests(unittest.TestCase):
                 "o2",
                 self.authority,
                 backend_id="cpu-portable-fid-v1",
+                engine_id=ALPHA_ENGINE_2,
                 chunk_rows=1,
             )
 
@@ -255,6 +258,7 @@ class CompactFidTests(unittest.TestCase):
                     "o2",
                     self.authority,
                     backend_id="cpu-portable-fid-v1",
+                    engine_id=ALPHA_ENGINE_2,
                     chunk_rows=16,
                 )
 
@@ -266,6 +270,47 @@ class CompactFidTests(unittest.TestCase):
                 result["functions"][0]["matches"][0]["reference_components"],
                 [0, 1],
             )
+
+    def test_alpha_engine_1_remains_selectable_for_cross_checking(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entries, inspect = self.fixture(root)
+            index = root / "archive.sqlite3"
+            build_compact_candidate_index(entries, index, inspect)
+
+            old = match_compact_population(
+                [index],
+                self.query(),
+                "linux-x86",
+                "o2",
+                self.authority,
+                backend_id="cpu-portable-fid-v1",
+                engine_id=ALPHA_ENGINE_1,
+            )
+            new = match_compact_population(
+                [index],
+                self.query(),
+                "linux-x86",
+                "o2",
+                self.authority,
+                backend_id="cpu-portable-fid-v1",
+                engine_id=ALPHA_ENGINE_2,
+            )
+
+            self.assertEqual(old["engine"], ALPHA_ENGINE_1)
+            self.assertEqual(new["engine"], ALPHA_ENGINE_2)
+            self.assertEqual(old["functions"], [
+                {
+                    **new["functions"][0],
+                    "matches": [
+                        {
+                            key: value
+                            for key, value in new["functions"][0]["matches"][0].items()
+                            if key != "reference_components"
+                        }
+                    ],
+                }
+            ])
 
     def test_gpu_startup_failure_uses_explicit_cpu_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -88,6 +88,15 @@ class FidMatchingCampaignTests(unittest.TestCase):
         )
         self.assertFalse(union["reference"]["legacy_default"])
 
+        alpha_two = load_campaign(
+            self.root, "validation/fid-matching-alpha-engine-2-run.toml"
+        )
+        self.assertEqual(alpha_two["execution"]["engine"], "alpha_engine_2")
+        self.assertEqual(
+            alpha_two["reference"]["population"], "archive-plus-linked"
+        )
+        self.assertFalse(alpha_two["canary"]["auto_chain_full"])
+
     def test_largest_first_scheduler_balances_periodic_expensive_cases(self):
         weighted = [
             (f"{position}:A", 100 if position % 2 == 0 else 10)
@@ -159,6 +168,16 @@ class FidMatchingCampaignTests(unittest.TestCase):
             self.assertFalse(
                 _reusable_case(
                     root, campaign, 1, "A", "new-method", "gpu-portable-fid-v1"
+                )
+            )
+
+            alpha_two = {
+                **campaign,
+                "execution": {**campaign["execution"], "engine": "alpha_engine_2"},
+            }
+            self.assertFalse(
+                _reusable_case(
+                    root, alpha_two, 1, "A", "old-method", "gpu-portable-fid-v1"
                 )
             )
             self.assertTrue(

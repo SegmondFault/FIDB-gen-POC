@@ -22,6 +22,9 @@ FNV_64_PRIME = 1099511628211
 MASK_64 = (1 << 64) - 1
 PERFORMANCE_SCHEMA = "fidb-fid-matching-performance/v1"
 DEFAULT_PERFORMANCE = Path("performance/fid-matching.toml")
+ALPHA_ENGINE_1 = "alpha_engine_1"
+ALPHA_ENGINE_2 = "alpha_engine_2"
+LEGACY_ENGINE_ID = "compact-selected-backend-v1"
 
 CandidateInspector = Callable[[Path], Mapping[str, object]]
 
@@ -625,7 +628,127 @@ def match_compact(
     }
 
 
-def match_compact_population(
+def _match_compact_population_alpha_engine_1(
+    index_paths: Sequence[Path],
+    functions: Sequence[Mapping[str, object]],
+    route_id: str,
+    treatment_id: str,
+    authority: Mapping[str, object],
+    *,
+    backend_id: str,
+    chunk_rows: int,
+    workgroup_size: int,
+    fallback_to_cpu: bool,
+) -> dict[str, object]:
+    """Original independently-scored component implementation."""
+
+    paths = [Path(path).resolve() for path in index_paths]
+    started_ns = time.monotonic_ns()
+    components = [
+        match_compact(
+            path,
+            functions,
+            route_id,
+            treatment_id,
+            authority,
+            backend_id=backend_id,
+            chunk_rows=chunk_rows,
+            workgroup_size=workgroup_size,
+            fallback_to_cpu=fallback_to_cpu,
+        )
+        for path in paths
+    ]
+    effective = {str(row["backend"]) for row in components}
+    requested = {str(row["requested_backend"]) for row in components}
+    if len(effective) != 1 or requested != {backend_id}:
+        raise ValueError("compact FID population components used different backends")
+
+    by_component = [
+        {str(row["address"]): row for row in execution["functions"]}
+        for execution in components
+    ]
+    if any(len(rows) != len(functions) for rows in by_component):
+        raise ValueError("compact FID population component lost query functions")
+    decisions = []
+    for function in functions:
+        address = str(function["address"])
+        candidates: dict[str, dict[str, object]] = {}
+        for component in by_component:
+            row = component.get(address)
+            if row is None:
+                raise ValueError("compact FID population component addresses differ")
+            if (
+                str(row["full_hash"]) != str(function["full_hash"])
+                or str(row["specific_hash"]) != str(function["specific_hash"])
+            ):
+                raise ValueError("compact FID population component query identity differs")
+            for match in row["matches"]:
+                candidate_id = str(match["candidate_id"])
+                previous = candidates.get(candidate_id)
+                if previous is None or float(match["score"]) > float(
+                    previous["score"]
+                ):
+                    candidates[candidate_id] = dict(match)
+        maximum = max(
+            (float(row["score"]) for row in candidates.values()), default=None
+        )
+        winners = (
+            sorted(
+                (
+                    row
+                    for row in candidates.values()
+                    if float(row["score"]) == maximum
+                ),
+                key=lambda row: str(row["candidate_id"]),
+            )
+            if maximum is not None
+            else []
+        )
+        decisions.append(
+            {
+                "address": address,
+                "full_hash": str(function["full_hash"]),
+                "specific_hash": str(function["specific_hash"]),
+                "matches": winners,
+            }
+        )
+    fallback_reasons = sorted(
+        {
+            str(row["fallback_reason"])
+            for row in components
+            if row.get("fallback_reason")
+        }
+    )
+    return {
+        "engine": ALPHA_ENGINE_1,
+        "backend": next(iter(effective)),
+        "requested_backend": backend_id,
+        "fallback_reason": "; ".join(fallback_reasons) or None,
+        "device": next(
+            (row.get("device") for row in components if row.get("device")), None
+        ),
+        "functions": decisions,
+        "candidate_count": sum(int(row["candidate_count"]) for row in components),
+        "scored_candidate_count": sum(
+            int(row["candidate_count"]) for row in components
+        ),
+        "deduplicated_candidate_count": 0,
+        "matched_functions": sum(bool(row["matches"]) for row in decisions),
+        "candidate_chunk_rows": chunk_rows,
+        "component_indexes": [
+            {
+                "path": str(path),
+                "sha256": _sha256(path),
+                "candidate_count": int(execution["candidate_count"]),
+                "wall_time_ns": int(execution["wall_time_ns"]),
+            }
+            for path, execution in zip(paths, components, strict=True)
+        ],
+        "wall_time_ns": time.monotonic_ns() - started_ns,
+    }
+
+
+def _match_compact_population_alpha_engine_2(
     index_paths: Sequence[Path],
     functions: Sequence[Mapping[str, object]],
     route_id: str,
@@ -834,6 +957,7 @@ def match_compact_population(
         )
 
     return {
+        "engine": ALPHA_ENGINE_2,
         "backend": effective_backend,
         "requested_backend": backend_id,
         "fallback_reason": fallback_reason,
@@ -854,3 +978,50 @@ def match_compact_population(
         ],
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }
+
+
+def match_compact_population(
+    index_paths: Sequence[Path],
+    functions: Sequence[Mapping[str, object]],
+    route_id: str,
+    treatment_id: str,
+    authority: Mapping[str, object],
+    *,
+    backend_id: str,
+    engine_id: str = ALPHA_ENGINE_1,
+    chunk_rows: int = 262_144,
+    workgroup_size: int = 256,
+    fallback_to_cpu: bool = True,
+) -> dict[str, object]:
+    """Run an explicitly identified, reproducible population engine.
+
+    ``compact-selected-backend-v1`` is retained as an alias for the original
+    engine because it appears in already-sealed C10 campaign authorities.
+    """
+
+    paths = [Path(path).resolve() for path in index_paths]
+    if not paths:
+        raise ValueError("compact FID population requires at least one index")
+    if len(set(paths)) != len(paths):
+        raise ValueError("compact FID population contains a duplicate index")
+    normalized = (
+        ALPHA_ENGINE_1 if engine_id == LEGACY_ENGINE_ID else str(engine_id)
+    )
+    engines = {
+        ALPHA_ENGINE_1: _match_compact_population_alpha_engine_1,
+        ALPHA_ENGINE_2: _match_compact_population_alpha_engine_2,
+    }
+    engine = engines.get(normalized)
+    if engine is None:
+        raise ValueError(f"compact FID population engine is unsupported: {engine_id}")
+    return engine(
+        paths,
+        functions,
+        route_id,
+        treatment_id,
+        authority,
+        backend_id=backend_id,
+        chunk_rows=chunk_rows,
+        workgroup_size=workgroup_size,
+        fallback_to_cpu=fallback_to_cpu,
+    )
