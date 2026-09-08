@@ -1312,9 +1312,11 @@ def build_environment(
         environment["PATH"] = f"{ndk_bin}:/usr/bin:/bin"
         if build_system == "libedit-autoconf":
             # Android uses a 32-bit Unicode wchar_t but does not advertise the
-            # optional ISO 10646 conformance macro expected by libedit.
+            # optional ISO 10646 conformance macro expected by libedit. Its
+            # BSD-derived vis implementation also expects NBBY, which Android
+            # deliberately does not expose through sys/param.h.
             environment["CFLAGS"] = (
-                f'{environment["CFLAGS"]} -D__STDC_ISO_10646__=201103L'
+                f'{environment["CFLAGS"]} -D__STDC_ISO_10646__=201103L -DNBBY=8'
             ).strip()
     elif route.target_os == "windows":
         toolchain_bin = Path(route.compiler[0]).parent

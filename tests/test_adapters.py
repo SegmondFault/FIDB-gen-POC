@@ -243,7 +243,7 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(
             libedit_environment["CFLAGS"],
-            "-O2 -D__STDC_ISO_10646__=201103L",
+            "-O2 -D__STDC_ISO_10646__=201103L -DNBBY=8",
         )
 
     def test_freetype_adapter_disables_unpinned_optional_dependencies(self):
