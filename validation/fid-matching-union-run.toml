@@ -20,6 +20,7 @@ candidate_index = "artifacts/fid-matching-runs/c10-compact-fid-methodology-v2/co
 id = "linked"
 kind = "linked-generation"
 generation_seal = "artifacts/linked-reference-runs/c10-linked-reference-v1/generation-seal.json"
+candidate_index = "artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/compact-candidate-index-linked.sqlite3"
 
 [methodology]
 decision_unit = "query-function-library-owner"

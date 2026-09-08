@@ -82,6 +82,10 @@ class FidMatchingCampaignTests(unittest.TestCase):
             [row["kind"] for row in union["reference"]["component"]],
             ["archive-evidence", "linked-generation"],
         )
+        self.assertEqual(
+            union["reference"]["component"][1]["candidate_index"],
+            "artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/compact-candidate-index-linked.sqlite3",
+        )
         self.assertFalse(union["reference"]["legacy_default"])
 
     def test_largest_first_scheduler_balances_periodic_expensive_cases(self):

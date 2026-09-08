@@ -156,21 +156,24 @@ def _reference_policy(document: Mapping[str, object]) -> dict[str, object]:
                     "candidate_index": candidate_index,
                 }
             )
-        elif kind == "linked-generation" and set(item) == {
-            "id",
-            "kind",
-            "generation_seal",
-        }:
+        elif kind == "linked-generation" and set(item) in (
+            {"id", "kind", "generation_seal"},
+            {"id", "kind", "generation_seal", "candidate_index"},
+        ):
             generation_seal = str(item["generation_seal"])
             if not generation_seal:
                 raise ValueError("linked reference generation seal path is empty")
-            components.append(
-                {
-                    "id": component_id,
-                    "kind": kind,
-                    "generation_seal": generation_seal,
-                }
-            )
+            component = {
+                "id": component_id,
+                "kind": kind,
+                "generation_seal": generation_seal,
+            }
+            if "candidate_index" in item:
+                candidate_index = str(item["candidate_index"])
+                if not candidate_index:
+                    raise ValueError("linked reference index path is empty")
+                component["candidate_index"] = candidate_index
+            components.append(component)
         else:
             raise ValueError("FID matching reference component is unsupported")
     if [str(row["kind"]) for row in components] != expected_kinds[population]:
@@ -463,6 +466,7 @@ def _reference_components(
                 "id": str(specification["id"]),
                 "kind": kind,
                 "generation_id": generation_id,
+                "candidate_index": specification.get("candidate_index"),
                 **generation,
             }
         components.append({**identity, "entries": entries})
