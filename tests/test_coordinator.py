@@ -827,6 +827,66 @@ matrices = ["tier0-uclibc-powerpc"]
         self.assertEqual(status["execution_block"]["counts"]["queued"], 4)
         self.assertEqual(status["execution_block"]["counts"]["failed"], 0)
 
+    def test_operator_requeue_interrupted_fences_worker_and_preserves_attempt(self):
+        armed_path = self.write_queue(filename="armed.toml", armed=True)
+        disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            block = coordinator.start_next_block(
+                "manual:interruption-test", scheduled=False, now=11
+            )
+            lease = coordinator.claim(
+                "stopped-worker", batch_id=block["batch_id"], now=20
+            )
+            coordinator.record_stage(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "compile",
+                now=21,
+            )
+            coordinator.sync(self.config(disarmed_path), now=22)
+            coordinator.pause("worker pool stopped", now=23)
+
+            result = coordinator.requeue_interrupted_batch(
+                "batch-baseline", 1, "reviewed operator stop", now=24
+            )
+            snapshot = coordinator.snapshot()
+            with self.assertRaises(LeaseConflictError):
+                coordinator.complete(
+                    lease["job_id"],
+                    lease["lease_token"],
+                    lease["lease_generation"],
+                    result={"late": True},
+                    now=25,
+                )
+
+        self.assertEqual(result["requeued"], 1)
+        self.assertTrue(result["attempt_evidence_preserved"])
+        self.assertTrue(result["stale_workers_fenced"])
+        recovered = next(
+            job for job in snapshot["jobs"] if job["job_id"] == lease["job_id"]
+        )
+        self.assertEqual(recovered["state"], "queued")
+        self.assertEqual(recovered["attempt_count"], 1)
+        self.assertEqual(snapshot["attempts"][0]["state"], "failed")
+        self.assertIn("operator interrupted", snapshot["attempts"][0]["error"])
+        self.assertEqual(snapshot["stage_attempts"][0]["state"], "interrupted")
+
+    def test_operator_requeue_interrupted_fails_closed_on_count_drift(self):
+        armed_path = self.write_queue(filename="armed.toml", armed=True)
+        disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            coordinator.claim("stopped-worker", now=20)
+            coordinator.sync(self.config(disarmed_path), now=22)
+            coordinator.pause("worker pool stopped", now=23)
+
+            with self.assertRaisesRegex(CoordinatorError, "expected 2, found 1"):
+                coordinator.requeue_interrupted_batch(
+                    "batch-baseline", 2, "incorrect recovery set", now=24
+                )
+
     def test_operator_requeue_fails_closed_on_state_or_count_drift(self):
         armed_path = self.write_queue(filename="armed.toml", armed=True)
         disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)

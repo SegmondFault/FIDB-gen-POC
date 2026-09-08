@@ -373,6 +373,22 @@ def parser() -> argparse.ArgumentParser:
     )
     requeue.add_argument("--reason", required=True, help="durable operator rationale")
 
+    interrupted = commands.add_parser(
+        "requeue-interrupted",
+        parents=[_common_parser(queue=False)],
+        help="fence and requeue an exact stopped-worker set while preserving evidence",
+    )
+    interrupted.add_argument("--batch", required=True, help="exact active batch id")
+    interrupted.add_argument(
+        "--expected-count",
+        required=True,
+        type=int,
+        help="fail closed unless exactly this many live jobs are selected",
+    )
+    interrupted.add_argument(
+        "--reason", required=True, help="durable operator rationale"
+    )
+
     commands.add_parser(
         "preflight",
         parents=[_common_parser(queue=True)],
@@ -1240,6 +1256,21 @@ def _requeue_failed(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _requeue_interrupted(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        result = coordinator.requeue_interrupted_batch(
+            arguments.batch,
+            arguments.expected_count,
+            arguments.reason,
+            actor="operator",
+        )
+        result["queue"] = coordinator.status()
+        _print_json(result)
+    return 0
+
+
 def _preflight(arguments: argparse.Namespace) -> int:
     root, _, queue_path = _paths(arguments, require_queue=True)
     assert queue_path is not None
@@ -1589,6 +1620,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pause": _pause,
         "resume": _resume,
         "requeue-failed": _requeue_failed,
+        "requeue-interrupted": _requeue_interrupted,
         "preflight": _preflight,
         "resolve-preflight": _resolution_preflight,
         "doctor": _doctor,

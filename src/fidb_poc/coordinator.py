@@ -2240,6 +2240,132 @@ class Coordinator:
             )
         return summary
 
+    def requeue_interrupted_batch(
+        self,
+        batch_id: str,
+        expected_count: int,
+        reason: str,
+        *,
+        actor: str = "operator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Fence and requeue an exact stopped-worker set without losing evidence.
+
+        A service-manager stop can terminate workers before they return a
+        fenced result, leaving otherwise healthy leases live until their
+        expiry. This guarded transition closes open stage spans, terminalises
+        their attempts, and preserves every attempt and event before requeueing.
+        """
+
+        selected_batch = _identifier(batch_id, "interrupted batch id")
+        count = _positive_integer(expected_count, "interrupted expected count")
+        reason_text = _text(reason, "interrupted reason")
+        timestamp = self._now(now)
+        interruption = f"operator interrupted: {reason_text}"
+        with self._transaction():
+            state = self._state_locked()
+            if bool(state["armed"]):
+                raise CoordinatorError(
+                    "interrupted-job recovery requires a disarmed queue"
+                )
+            if not bool(state["paused"]):
+                raise CoordinatorError(
+                    "interrupted-job recovery requires a paused queue"
+                )
+            if state["active_batch_id"] not in (None, selected_batch):
+                raise CoordinatorError(
+                    "interrupted-job recovery cannot cross an active batch admission"
+                )
+            all_live = self._connection.execute(
+                "SELECT * FROM jobs WHERE state IN ('leased', 'running') "
+                "ORDER BY batch_id, position, job_id"
+            ).fetchall()
+            rows = [row for row in all_live if row["batch_id"] == selected_batch]
+            if len(rows) != count or len(all_live) != count:
+                raise CoordinatorError(
+                    f"interrupted-job recovery count mismatch for {selected_batch}: "
+                    f"expected {count}, found {len(rows)} in batch and "
+                    f"{len(all_live)} globally"
+                )
+            batch = self._connection.execute(
+                "SELECT * FROM batches WHERE batch_id = ? AND active = 1",
+                (selected_batch,),
+            ).fetchone()
+            if batch is None:
+                raise CoordinatorError(f"unknown active batch: {selected_batch}")
+            digest = hashlib.sha256()
+            for row in rows:
+                job_id = str(row["job_id"])
+                digest.update(job_id.encode("ascii"))
+                digest.update(b"\n")
+                self._close_open_stage_attempts_locked(
+                    row,
+                    now=timestamp,
+                    reason=interruption,
+                    actor=actor,
+                )
+                self._connection.execute(
+                    """
+                    UPDATE attempts
+                    SET state = 'failed', ended_at = ?, error = ?
+                    WHERE job_id = ? AND lease_generation = ?
+                      AND state IN ('leased', 'running')
+                    """,
+                    (
+                        self._timestamp(timestamp),
+                        interruption,
+                        job_id,
+                        row["lease_generation"],
+                    ),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE jobs
+                    SET state = 'queued', lease_token = NULL, leased_by = NULL,
+                        lease_expires_at = NULL, current_stage = NULL,
+                        error = NULL, failure_class = NULL, eligible_at = 0,
+                        updated_at = ?
+                    WHERE job_id = ? AND lease_generation = ?
+                      AND state IN ('leased', 'running')
+                    """,
+                    (
+                        self._timestamp(timestamp),
+                        job_id,
+                        row["lease_generation"],
+                    ),
+                )
+                self._event_locked(
+                    "job.operator-interrupted-requeued",
+                    now=timestamp,
+                    actor=actor,
+                    batch_id=selected_batch,
+                    job_id=job_id,
+                    plan_digest=str(row["plan_digest"]),
+                    payload={
+                        "reason": reason_text,
+                        "attempt_count": int(row["attempt_count"]),
+                        "interrupted_generation": int(row["lease_generation"]),
+                        "interrupted_worker": str(row["leased_by"]),
+                    },
+                )
+            summary = {
+                "batch_id": selected_batch,
+                "requeued": len(rows),
+                "job_ids_sha256": digest.hexdigest(),
+                "reason": reason_text,
+                "attempt_evidence_preserved": True,
+                "stale_workers_fenced": True,
+            }
+            self._event_locked(
+                "batch.interrupted-jobs-requeued",
+                now=timestamp,
+                actor=actor,
+                batch_id=selected_batch,
+                plan_digest=str(batch["plan_digest"]),
+                payload=summary,
+            )
+        return summary
+
     def pause(
         self,
         reason: str = "operator request",
