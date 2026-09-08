@@ -202,7 +202,6 @@ button { font: inherit; }
 .view-intro { min-height: 46px; padding: 0 2px 7px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .view-intro h2 { margin: 0; font-size: 18px; font-weight: 590; letter-spacing: -.025em; }
 .view-intro-actions { display: flex; align-items: center; gap: 8px; }
-.under-construction { padding: 6px 8px; color: var(--amber); border: 1px solid rgba(240,182,87,.34); border-radius: 4px; background: rgba(240,182,87,.07); font: 700 7px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; white-space: nowrap; }
 .primary-action, .secondary-action, .danger-action { min-width: 120px; height: 36px; padding: 0 14px; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; }
 .primary-action { color: #081313; background: var(--cyan); border: 1px solid var(--cyan); }
 .secondary-action { color: #aab3c0; background: #141a24; border: 1px solid #2a3443; }

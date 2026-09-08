@@ -36,9 +36,9 @@ import {
   TimingView,
 } from './operations-views';
 import {
+  BatchValidationView,
   EcologicalValidationView,
   HashDiscriminationView,
-  MachineValidationView,
 } from './validation-views';
 
 const navItems = [
@@ -46,11 +46,11 @@ const navItems = [
   ['02', 'Matrix'],
   ['03', 'Batches'],
   ['04', 'Targets & toolchains'],
-  ['05', 'Evidence'],
+  ['05', 'Provenance'],
 ];
 
 const validationNavItems = [
-  ['06', 'Machine validation'],
+  ['06', 'Batch validation'],
   ['07', 'Ecological validation'],
   ['08', 'Hash discrimination'],
 ];
@@ -617,7 +617,7 @@ export default function Home() {
 
 function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   if (view === 'Matrix') return <PlannerView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
-  if (view === 'Machine validation') return <MachineValidationView factory={factory} navigateTo={navigateTo} />;
+  if (view === 'Batch validation') return <BatchValidationView factory={factory} navigateTo={navigateTo} />;
   if (view === 'Ecological validation') return <EcologicalValidationView factory={factory} />;
   if (view === 'Hash discrimination') return <HashDiscriminationView factory={factory} />;
   if (view === 'Performance') return <PerformanceView factory={factory} />;
@@ -626,7 +626,7 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
   if (view === 'Export') return <ExportView factory={factory} />;
   if (view === 'Batches') return <BatchesView onNewBatch={() => navigateTo('Matrix')} batchOrder={batchOrder} setBatchOrder={setBatchOrder} rows={rows} live={Boolean(factory.snapshot)} factory={factory} />;
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
-  if (view === 'Evidence') return <EvidenceView snapshot={factory.snapshot} />;
+  if (view === 'Provenance') return <ProvenanceView snapshot={factory.snapshot} />;
   if (view === 'Automation') return <AutomationView factory={factory} />;
   return <ActivityView events={factory.events} connection={factory.connection} />;
 }
@@ -1449,7 +1449,7 @@ function PlannerView({ batchOrder, rows, factory, selectedLanguageId, setSelecte
         {machineValidation && <section className="operational-matrix-band validation-band">
           <div className="operational-band-title"><b>04</b><span><strong>Validation and hash discrimination</strong><small>Machine cohorts measure controlled width; held-out binaries test the corpus; HDI learns how strongly each compatible hash distinguishes provenance.</small></span><em>{machineValidation.summary.complete_libraries}/{machineValidation.summary.cohort_libraries} cohort · {ecologicalValidation?.summary.completed_cases ?? 0} ecological · HDI {hashDiscrimination?.summary.scored_signatures ?? '—'}</em></div>
           <div className="operational-validation-stack">
-            <div className="operational-validation-row"><span className={`operational-state ${machineValidation.run.state === 'complete' ? 'ready' : ['queued', 'preparing-index', 'running', 'pausing', 'paused', 'interrupted'].includes(machineValidation.run.state) ? 'next' : machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{['queued', 'preparing-index', 'running', 'pausing'].includes(machineValidation.run.state) ? machineValidation.run.state.replaceAll('-', ' ').toUpperCase() : ['paused', 'interrupted'].includes(machineValidation.run.state) ? 'PAUSED · RESUMABLE' : machineValidation.run.state === 'complete' ? 'MEASURED' : machineValidation.run.state === 'failed' && (machineValidation.run.expected_work_units ?? 0) > machineValidation.run.complete_work_units ? 'RETRY · RESUMABLE' : machineValidation.readiness.eligible ? 'READY TO RUN' : 'WAITING'}</span><p><strong>Machine validation · {machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · fixed RNG seed · {machineValidation.summary.composite_programs} composites</small></p><div><b>{machineValidation.run.expected_work_units ? `${machineValidation.run.complete_work_units}/${machineValidation.run.expected_work_units}` : machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>{machineValidation.run.expected_work_units ? 'run units' : 'libraries to gate'}</span></div><div><b>{machineValidation.canary_gate.ready ? 'PASS' : `≈${machineValidation.planning.central_wall_hours.toFixed(0)}h`}</b><span>{machineValidation.canary_gate.ready ? 'canary gate' : 'planning wall'}</span></div></div>
+            <div className="operational-validation-row"><span className={`operational-state ${machineValidation.run.state === 'complete' ? 'ready' : ['queued', 'preparing-index', 'running', 'pausing', 'paused', 'interrupted'].includes(machineValidation.run.state) ? 'next' : machineValidation.readiness.eligible ? 'ready' : 'blocked'}`}>{['queued', 'preparing-index', 'running', 'pausing'].includes(machineValidation.run.state) ? machineValidation.run.state.replaceAll('-', ' ').toUpperCase() : ['paused', 'interrupted'].includes(machineValidation.run.state) ? 'PAUSED · RESUMABLE' : machineValidation.run.state === 'complete' ? 'MEASURED' : machineValidation.run.state === 'failed' && (machineValidation.run.expected_work_units ?? 0) > machineValidation.run.complete_work_units ? 'RETRY · RESUMABLE' : machineValidation.readiness.eligible ? 'READY TO RUN' : 'WAITING'}</span><p><strong>Batch validation · {machineValidation.id}</strong><small>{machineValidation.summary.exact_identities} live identities ({machineValidation.summary.width_delta_from_baseline >= 0 ? '+' : ''}{machineValidation.summary.width_delta_from_baseline} from baseline) · fixed RNG seed · {machineValidation.summary.composite_programs} composites</small></p><div><b>{machineValidation.run.expected_work_units ? `${machineValidation.run.complete_work_units}/${machineValidation.run.expected_work_units}` : machineValidation.summary.cohort_libraries - machineValidation.summary.complete_libraries}</b><span>{machineValidation.run.expected_work_units ? 'run units' : 'libraries to gate'}</span></div><div><b>{machineValidation.canary_gate.ready ? 'PASS' : `≈${machineValidation.planning.central_wall_hours.toFixed(0)}h`}</b><span>{machineValidation.canary_gate.ready ? 'canary gate' : 'planning wall'}</span></div></div>
             <div className="operational-validation-row"><span className={`operational-state ${ecologicalValidation?.corpus.materialized_generations ? 'ready' : 'blocked'}`}>{ecologicalValidation?.corpus.materialized_generations ? 'CORPUS READY' : 'NO CORPUS'}</span><p><strong>Ecological validation · held-out binaries</strong><small>{ecologicalValidation?.summary.imported_cases ?? 0} imports · {ecologicalValidation?.aggregate.measured_cases ?? 0} measured · entire compatible lane corpus · never execute imports</small></p><div><b>{ecologicalValidation?.aggregate.failure_summary.collisions ?? 0}</b><span>collisions</span></div><div><b>{ecologicalValidation?.aggregate.failure_summary.misses ?? 0}</b><span>misses</span></div></div>
             <div className="operational-validation-row"><span className={`operational-state ${hashDiscrimination?.readiness.ready_for_first_fit ? 'ready' : 'blocked'}`}>{hashDiscrimination?.readiness.ready_for_first_fit ? 'READY TO FIT' : 'WAITING HDI'}</span><p><strong>Hash Discrimination Index</strong><small>{hashDiscrimination?.readiness.complete_library_families ?? 0}/{hashDiscrimination?.readiness.required_library_families ?? 10} complete families · {noisyHashes?.summary.observed_hashes ?? 0} collision-bearing hashes · unweighted baseline preserved · no automatic filtering</small></p><div><b>{hashDiscrimination?.summary.scored_signatures ?? '—'}</b><span>scored hashes</span></div><div><b>{noisyHashes?.summary.confirmed_noisy ?? 0}</b><span>confirmed noisy</span></div></div>
           </div>
@@ -2037,7 +2037,7 @@ function ToolchainsView({ factory, selectedLanguageId, setSelectedLanguageId }: 
   </div>;
 }
 
-function EvidenceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) {
+function ProvenanceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) {
   const completed = snapshot?.jobs.filter(job => job.state === 'complete' && job.result) ?? [];
   const selected = completed[0];
   const selectedResult = selected?.result ?? {};

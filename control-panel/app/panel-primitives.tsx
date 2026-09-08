@@ -23,7 +23,3 @@ export function PanelReadWarning({
 export function ViewIntro({ title, action }: { kicker: string; title: string; copy?: string; action?: ReactNode }) {
   return <section className="view-intro"><h2>{title}</h2>{action}</section>;
 }
-
-export function UnderConstruction() {
-  return <span className="under-construction">UNDER CONSTRUCTION</span>;
-}

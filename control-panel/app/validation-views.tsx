@@ -4,14 +4,14 @@ import { useState, type CSSProperties } from 'react';
 
 import type { HashDiscriminationStatus, HashTypeAnalysis, NoisyHashRow } from './use-factory-api';
 import { formatBytes } from './formatters';
-import { PanelReadWarning, UnderConstruction, ViewIntro, type FactoryApiState } from './panel-primitives';
+import { PanelReadWarning, ViewIntro, type FactoryApiState } from './panel-primitives';
 
 function validationRate(numerator: number | null, denominator: number | null) {
   if (numerator === null || denominator === null || denominator === 0) return '—';
   return `${((numerator / denominator) * 100).toFixed(2)}%`;
 }
 
-export function MachineValidationView({ factory, navigateTo }: { factory: FactoryApiState; navigateTo: (view: string) => void }) {
+export function BatchValidationView({ factory, navigateTo }: { factory: FactoryApiState; navigateTo: (view: string) => void }) {
   const liveValidation = factory.machineValidation;
   const validationBatches = (factory.authority?.machine_validations ?? (liveValidation ? [liveValidation] : []))
     .map(validation => validation.id === liveValidation?.id ? liveValidation : validation);
@@ -19,7 +19,7 @@ export function MachineValidationView({ factory, navigateTo }: { factory: Factor
   const validation = validationBatches.find(validation => validation.id === selectedBatchId)
     ?? liveValidation
     ?? validationBatches[0];
-  if (!validation) return <div className="view-stack"><ViewIntro kicker="MACHINE VALIDATION" title="Machine validation" action={<UnderConstruction />} /><PanelReadWarning factory={factory} endpoints={['authority', 'machine-validation/run']} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No validation authority loaded</strong><p>Reconnect the local API or add validation/machine-validation.toml.</p></div></section></div>;
+  if (!validation) return <div className="view-stack"><ViewIntro kicker="BATCH VALIDATION" title="Batch validation" action={<span className="validation-state waiting">UNAVAILABLE</span>} /><PanelReadWarning factory={factory} endpoints={['authority', 'machine-validation/run']} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No validation authority loaded</strong><p>Reconnect the local API or add validation/machine-validation.toml.</p></div></section></div>;
   const matrix = validation.results.confusion_matrix;
   const matrixCells = [
     ['TP', 'True positives', matrix.true_positives, 'Expected signature recovered for a present library'],
@@ -40,6 +40,18 @@ export function MachineValidationView({ factory, navigateTo }: { factory: Factor
   const runRecoveryRequired = run.state === 'postprocess-failed';
   const runResumable = ['paused', 'interrupted', 'failed'].includes(run.state)
     && runExpected > run.complete_work_units;
+  const capabilityLabel = validation.results.state === 'measured-complete'
+    ? 'MEASURED'
+    : runActive
+      ? run.state.replaceAll('-', ' ').toUpperCase()
+      : runResumable
+        ? 'RESUMABLE'
+        : validation.readiness.eligible
+          ? 'READY'
+          : 'WAITING';
+  const capabilityTone = validation.results.state === 'measured-complete' || validation.readiness.eligible
+    ? 'ready'
+    : 'waiting';
   const currentBatch = validation.id === liveValidation?.id;
   const reportPending = runExpected > 0 && run.complete_work_units < runExpected;
   const reportState = validation.results.state === 'measured-complete'
@@ -79,7 +91,7 @@ export function MachineValidationView({ factory, navigateTo }: { factory: Factor
     ['B', validation.randomization.fold_b],
   ] as const;
   return <div className="view-stack machine-validation-view">
-    <ViewIntro kicker="BATCH VALIDATION" title="Batch validation" action={<div className="view-intro-actions"><UnderConstruction />{currentBatch && runPauseable && <button className="secondary-action" onClick={pauseRun} disabled={run.state === 'pausing' || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-pause' || run.state === 'pausing' ? '⏸ Pausing…' : '⏸ Pause'}</button>}{currentBatch && runResumable && <button className="primary-action" onClick={resumeRun} disabled={factory.busyAction !== null}>{factory.busyAction === 'machine-validation-resume' ? '▶ Resuming…' : '▶ Resume'}</button>}<button className="secondary-action" onClick={() => startRun('canary')} disabled={!currentBatch || !validation.readiness.eligible || runActive || runResumable || runRecoveryRequired || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-canary' ? 'Starting…' : 'Run canary'}</button><button className="primary-action" onClick={() => startRun('full')} disabled={!currentBatch || !validation.readiness.eligible || !validation.canary_gate.ready || runActive || runResumable || runRecoveryRequired || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-full' ? 'Starting…' : 'Run full validation'}</button><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
+    <ViewIntro kicker="BATCH VALIDATION" title="Batch validation" action={<div className="view-intro-actions"><span className={`validation-state ${capabilityTone}`}>{capabilityLabel}</span>{currentBatch && runPauseable && <button className="secondary-action" onClick={pauseRun} disabled={run.state === 'pausing' || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-pause' || run.state === 'pausing' ? '⏸ Pausing…' : '⏸ Pause'}</button>}{currentBatch && runResumable && <button className="primary-action" onClick={resumeRun} disabled={factory.busyAction !== null}>{factory.busyAction === 'machine-validation-resume' ? '▶ Resuming…' : '▶ Resume'}</button>}<button className="secondary-action" onClick={() => startRun('canary')} disabled={!currentBatch || !validation.readiness.eligible || runActive || runResumable || runRecoveryRequired || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-canary' ? 'Starting…' : 'Run canary'}</button><button className="primary-action" onClick={() => startRun('full')} disabled={!currentBatch || !validation.readiness.eligible || !validation.canary_gate.ready || runActive || runResumable || runRecoveryRequired || factory.busyAction !== null}>{factory.busyAction === 'machine-validation-full' ? 'Starting…' : 'Run full validation'}</button><button className="secondary-action" onClick={() => void factory.refresh()} disabled={factory.connection === 'connecting'}>Refresh</button></div>} />
     <PanelReadWarning factory={factory} endpoints={['authority', 'machine-validation/run', 'noisy-hashes']} />
 
     <section className="panel validation-batch-panel">
@@ -151,7 +163,7 @@ export function EcologicalValidationView({ factory }: { factory: FactoryApiState
   const [expectedAbsent, setExpectedAbsent] = useState('');
   const [truthComplete, setTruthComplete] = useState(false);
   const [message, setMessage] = useState('');
-  if (!validation) return <div className="view-stack"><ViewIntro kicker="ECOLOGICAL VALIDATION" title="Ecological validation" action={<UnderConstruction />} /><PanelReadWarning factory={factory} endpoints={['ecological-validation']} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No ecological authority loaded</strong><p>Reconnect the local API or inspect validation/ecological-validation.toml.</p></div></section></div>;
+  if (!validation) return <div className="view-stack"><ViewIntro kicker="ECOLOGICAL VALIDATION" title="Ecological validation" action={<span className="validation-state waiting">UNAVAILABLE</span>} /><PanelReadWarning factory={factory} endpoints={['ecological-validation']} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No ecological authority loaded</strong><p>Reconnect the local API or inspect validation/ecological-validation.toml.</p></div></section></div>;
   const matrix = validation.aggregate.confusion_matrix;
   const matrixCells = [
     ['TP', 'True positives', matrix.true_positives, 'Expected corpus library detected'],
@@ -160,6 +172,13 @@ export function EcologicalValidationView({ factory }: { factory: FactoryApiState
     ['FN', 'False negatives', matrix.false_negatives, 'Expected library not detected'],
   ] as const;
   const importing = factory.busyAction === 'ecological-import';
+  const ecologicalCapability = validation.summary.running_cases
+    ? 'RUNNING'
+    : validation.aggregate.measured_cases
+      ? 'MEASURED'
+      : validation.corpus.materialized_generations
+        ? 'READY'
+        : 'WAITING';
   const importFile = async () => {
     if (!file || !label.trim()) return;
     setMessage('Importing and routing preserved bytes…');
@@ -178,7 +197,7 @@ export function EcologicalValidationView({ factory }: { factory: FactoryApiState
     }
   };
   return <div className="view-stack ecological-validation-view">
-    <ViewIntro kicker="HELD-OUT ECOLOGICAL VALIDATION" title="Ecological validation" action={<div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div>} />
+    <ViewIntro kicker="HELD-OUT ECOLOGICAL VALIDATION" title="Ecological validation" action={<div className="view-intro-actions"><span className={`validation-state ${ecologicalCapability === 'WAITING' ? 'waiting' : 'ready'}`}>{ecologicalCapability}</span><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div>} />
     <PanelReadWarning factory={factory} endpoints={['ecological-validation']} />
 
     <section className="panel ecological-corpus-panel">
@@ -375,7 +394,7 @@ export function HashDiscriminationView({ factory }: { factory: FactoryApiState }
   const [draftStates, setDraftStates] = useState<Record<string, NoisyHashRow['disposition']>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
-  if (!hdi || !ledger) return <div className="view-stack"><ViewIntro kicker="HASH DISCRIMINATION" title="Hash discrimination" action={<UnderConstruction />} /><PanelReadWarning factory={factory} endpoints={['authority', 'noisy-hashes', 'validation-observatory']} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No HDI authority loaded</strong><p>Reconnect the local API or inspect validation/hash-discrimination.toml.</p></div></section></div>;
+  if (!hdi || !ledger) return <div className="view-stack"><ViewIntro kicker="HASH DISCRIMINATION" title="Hash discrimination" action={<span className="validation-state waiting">UNAVAILABLE</span>} /><PanelReadWarning factory={factory} endpoints={['authority', 'noisy-hashes', 'validation-observatory']} /><section className="panel"><div className="empty-state"><span>◇</span><strong>No HDI authority loaded</strong><p>Reconnect the local API or inspect validation/hash-discrimination.toml.</p></div></section></div>;
   const applyDecision = async (row: NoisyHashRow) => {
     const state = draftStates[row.signature_id] ?? row.disposition;
     const reason = reasons[row.signature_id] ?? '';
@@ -390,7 +409,7 @@ export function HashDiscriminationView({ factory }: { factory: FactoryApiState }
     }
   };
   return <div className="view-stack noisy-hash-view hdi-view">
-    <section className="hdi-page-bar"><h2>Hash discrimination</h2><div className="view-intro-actions"><UnderConstruction /><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div></section>
+    <section className="hdi-page-bar"><h2>Hash discrimination</h2><div className="view-intro-actions"><span className={`validation-state ${hdi.readiness.ready_for_first_fit ? 'ready' : 'waiting'}`}>{hdi.readiness.ready_for_first_fit ? 'READY TO FIT' : hdi.corpus_index.generation ? 'EVIDENCE GROWING' : 'WAITING'}</span><button className="secondary-action" onClick={() => void factory.refresh()}>Refresh</button></div></section>
     <PanelReadWarning factory={factory} endpoints={['authority', 'noisy-hashes', 'validation-observatory']} />
 
     <ValidationObservatoryPanel factory={factory} />
