@@ -135,6 +135,7 @@ class Library:
     supported_target_os: tuple[str, ...] = ()
     supported_architectures: tuple[str, ...] = ()
     supported_compiler_families: tuple[str, ...] = ()
+    unsupported_routes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _path_component(self.name, "library name")
@@ -142,6 +143,8 @@ class Library:
         _path_component(self.source_directory, "library source_directory")
         for archive in self.static_archives:
             _path_component(archive, "library static archive")
+        for route_id in self.unsupported_routes:
+            _path_component(route_id, "library unsupported route")
         keys = [row.cache_key for row in self.build_inputs]
         if len(keys) != len(set(keys)):
             raise ValueError(f"{self.identifier} contains duplicate build inputs")
@@ -175,6 +178,7 @@ class Library:
                 not self.supported_compiler_families
                 or route.compiler_family in self.supported_compiler_families
             )
+            and route.id not in self.unsupported_routes
         )
 
 
@@ -269,6 +273,7 @@ def _load_recipe(path: Path) -> Library:
             "supported_target_os",
             "supported_architectures",
             "supported_compiler_families",
+            "unsupported_routes",
         },
         f"recipe {path.name}",
     )
@@ -349,6 +354,7 @@ def _load_recipe(path: Path) -> Library:
         supported_compiler_families=tuple(
             row.get("supported_compiler_families", [])
         ),
+        unsupported_routes=tuple(row.get("unsupported_routes", [])),
     )
     if len(library.sha256) != 64:
         raise ValueError(f"{library.identifier} has an invalid SHA-256")

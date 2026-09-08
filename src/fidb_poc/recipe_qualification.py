@@ -135,6 +135,7 @@ def _reviewed_recipes(root: Path) -> list[dict[str, object]]:
                     "compiler_families": list(
                         document.get("supported_compiler_families", [])
                     ),
+                    "excluded_routes": list(document.get("unsupported_routes", [])),
                 },
                 "authority_path": str(path.relative_to(root)),
             }

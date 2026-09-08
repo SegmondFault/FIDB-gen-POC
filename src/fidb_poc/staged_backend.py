@@ -90,6 +90,7 @@ def _tuple_fields(cls: type[object]) -> set[str]:
             "supported_target_os",
             "supported_architectures",
             "supported_compiler_families",
+            "unsupported_routes",
         }
     if cls is Route:
         return {

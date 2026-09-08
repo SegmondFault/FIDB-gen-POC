@@ -82,6 +82,7 @@ def _native_authority(
                 "target_os": list(row.supported_target_os),
                 "architectures": list(row.supported_architectures),
                 "compiler_families": list(row.supported_compiler_families),
+                "excluded_routes": list(row.unsupported_routes),
             },
             **(
                 {

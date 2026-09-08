@@ -398,6 +398,27 @@ class ConfigurationTests(unittest.TestCase):
             recipe.applies_to(replace(configuration.routes[0], target_os="windows"))
         )
 
+    def test_recipe_can_exclude_a_single_reviewed_route(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = Path(temporary)
+            shutil.copy(root / "worker.toml", checkout / "worker.toml")
+            shutil.copytree(root / "recipes", checkout / "recipes")
+            recipe_path = checkout / "recipes/zlib-1.3.2.toml"
+            recipe_path.write_text(
+                recipe_path.read_text(encoding="utf-8")
+                + '\nunsupported_routes = ["linux-x86-64-gcc"]\n',
+                encoding="utf-8",
+            )
+            configuration = load_configuration(
+                checkout / "worker.toml", request_override=("zlib@1.3.2",)
+            )
+
+        recipe = configuration.libraries[0]
+        routes = {route.id: route for route in configuration.routes}
+        self.assertFalse(recipe.applies_to(routes["linux-x86-64-gcc"]))
+        self.assertTrue(recipe.applies_to(routes["linux-x86-64-gcc-12"]))
+
     def test_boringssl_excludes_architectures_rejected_by_its_source(self):
         root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(
@@ -411,6 +432,38 @@ class ConfigurationTests(unittest.TestCase):
         self.assertFalse(recipe.applies_to(routes["linux-powerpc32-be-gcc"]))
         self.assertFalse(recipe.applies_to(routes["linux-sh32-gcc"]))
         self.assertFalse(recipe.applies_to(routes["linux-m68k-gcc"]))
+
+    def test_priority_recipe_bounds_reflect_qualified_source_constraints(self):
+        root = Path(__file__).resolve().parents[1]
+        routes = {
+            route.id: route
+            for route in load_configuration(
+                root / "worker.toml", request_override=("zlib",)
+            ).routes
+        }
+        scotch = load_configuration(
+            root / "worker.toml", request_override=("libscotch",)
+        ).libraries[0]
+        musl = load_configuration(
+            root / "worker.toml", request_override=("musl",)
+        ).libraries[0]
+        protobuf = load_configuration(
+            root / "worker.toml", request_override=("protobuf",)
+        ).libraries[0]
+
+        self.assertTrue(scotch.applies_to(routes["linux-x86-64-gcc"]))
+        self.assertFalse(scotch.applies_to(routes["linux-arm32-gcc"]))
+        self.assertFalse(scotch.applies_to(routes["android-arm64-ndk-r29-clang-api21"]))
+        self.assertFalse(musl.applies_to(routes["linux-powerpc32-be-gcc"]))
+        self.assertFalse(protobuf.applies_to(routes["linux-m68k-gcc"]))
+        old_mingw = replace(
+            routes["windows-x86-64-llvm-mingw"],
+            id="windows-x86-64-llvm-mingw-clang-15",
+        )
+        self.assertFalse(protobuf.applies_to(old_mingw))
+        self.assertTrue(
+            protobuf.applies_to(routes["windows-x86-64-llvm-mingw-clang-23"])
+        )
 
     def test_all_unknown_library_requests_are_reported(self):
         root = Path(__file__).resolve().parents[1]
