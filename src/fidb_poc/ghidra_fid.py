@@ -55,6 +55,18 @@ def _safe_project_name(value: str) -> str:
     return f"{normalized}_{suffix}"
 
 
+def _safe_project_location(value: Path) -> Path:
+    """Return a Ghidra-safe project container without changing its parent.
+
+    Ghidra validates the final directory element independently from the
+    project name.  Recipe identifiers may legitimately contain punctuation
+    such as ``+``, so bind a rewritten leaf to the original spelling in the
+    same way as project names.
+    """
+
+    return value.with_name(_safe_project_name(value.name))
+
+
 def _timed(
     timing: TimingFactory | None,
     stage: str,
@@ -227,6 +239,7 @@ def build_library_fidb(
     if not objects:
         raise ValueError(f"no objects submitted for {library}")
 
+    project_dir = _safe_project_location(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
     project_name = _safe_project_name(project_name)
     monitor = pyghidra.task_monitor()

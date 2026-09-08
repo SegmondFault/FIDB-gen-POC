@@ -10,6 +10,7 @@ from fidb_poc.ghidra_fid import (
     _configure_target_analysis,
     _deduplicated_relation_rows,
     _safe_project_name,
+    _safe_project_location,
     _set_registered_analysis_boolean_option,
 )
 from fidb_poc.validation_analysis import (
@@ -48,6 +49,15 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
             _safe_project_name("FIDB_openssl_3.5.8_linux_x86"),
             "FIDB_openssl_3.5.8_linux_x86",
         )
+
+    def test_project_locations_sanitize_only_the_recipe_leaf(self):
+        parent = Path("/tmp/attempt-with-dash/projects")
+        plus = _safe_project_location(parent / "boringssl-14.0.0+r45-3")
+        dash = _safe_project_location(parent / "boringssl-14.0.0-r45-3")
+
+        self.assertEqual(plus.parent, parent)
+        self.assertNotIn("+", plus.name)
+        self.assertNotEqual(plus, dash)
 
     def test_fid_build_recovery_layers_on_fid_safe_analysis(self):
         program = object()
