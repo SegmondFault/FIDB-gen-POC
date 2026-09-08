@@ -4,11 +4,11 @@ builder_version = "route-treatment-bundles-v1"
 id = "c-top10-nonapple-width-v2-auto-60m-85m"
 state = "generated-disarmed"
 time_model = "performance/batch-planning.toml"
-time_plan_digest = "49bd0b72f0c200ef55e6b1ae5f72d98fabe496cb951c16f8cc0b6c3a5132da8f"
-source_queue_sha256 = "58b104995b7623fc1eb00d81e6150a5b2afbf96cb8c60f87fb49dd7ce6779e5f"
+time_plan_digest = "0c4aec714c50b04d9378575d228720f42cd42116cddcadc42422e09c78bc49df"
+source_queue_sha256 = "a3ff2658f1605855b6af405a159c7cf1e3517f395122b984eacea7deaf370b96"
 performance_profile = "reference-host-94g-balanced"
 queue = "plans/auto-materialized/c-top10-nonapple-width-v2-auto-60m-85m/queue.toml"
-campaign_digest = "d34b3729af84a2a1c463f58c54344bd8b96069da218a11afcdb14a9436c282d3"
+campaign_digest = "f8286543106a8758bcc137ef023fea2275720bdb277ba5450d4d855e25757e63"
 
 [policy]
 target_minutes = 60

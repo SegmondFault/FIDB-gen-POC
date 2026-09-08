@@ -18,7 +18,7 @@ maximum_complexity_factor = 1.0
 
 [reference]
 evidence_path = "benchmarks/ghidra-concurrency-reference-host-2026-09-03.toml"
-evidence_sha256 = "ee89e7ba48848954c1e47f6e9e4fc29676d6c258a50ad7c5b2080c5241e997b2"
+evidence_sha256 = "a93630597d9e248b727b1ce826ef553ad1cebdaf91105610f65262545ee7e661"
 case_id = "heap4096-twenty-workers-fixed-twenty-nine-routes"
 worker_scaling_exponent = 0.55
 

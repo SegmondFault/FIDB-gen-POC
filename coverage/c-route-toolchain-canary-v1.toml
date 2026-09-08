@@ -102,7 +102,7 @@ description = "Measure recall-oriented alternatives without admitting them into 
 
 [freeze]
 evidence_path = "coverage/evidence/c-route-toolchain-canary-v1-reference-host-2026-09-02.toml"
-evidence_sha256 = "48a896416379ba1fb4c3057f7a94275f25fe934857bf9b92da9fa84f30a778de"
+evidence_sha256 = "7bd482cae6be6de3b2388f227ecfbd9be650eae25f84da937738c28314950cb1"
 executed_compilation_digest = "6c2bb1a798db1860310abd8492a5d3fd75b380365bd6276bea5dd17407440051"
 completed_executions = 108
 wall_time_ns = 492456917639
