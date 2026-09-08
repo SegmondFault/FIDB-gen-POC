@@ -1316,6 +1316,10 @@ def main(argv: list[str] | None = None) -> int:
         return _compile_width_batch_main(tokens[1:])
     if tokens and tokens[0] == "campaign-programme":
         return _campaign_programme_main(tokens[1:])
+    if tokens and tokens[0] == "campaigns":
+        from .campaign_registry import main as campaign_registry_main
+
+        return campaign_registry_main(tokens[1:])
     if tokens and tokens[0] == "qualify-recipes":
         from .recipe_qualification import main as qualification_main
 

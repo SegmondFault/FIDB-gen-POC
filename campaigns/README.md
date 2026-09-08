@@ -5,6 +5,25 @@ They are TOML authorities, are always disarmed, and are projected into the
 control panel alongside the separate source, recipe, qualification and queue
 authorities.
 
+Operational selection is a separate concern. `operations/campaigns.toml`
+registers named queue/ledger bindings and `var/fidb-campaigns/active.toml`
+records a local selection when the operator changes the default. This prevents
+campaign switching from rewriting a queue or silently mixing a second queue
+into the first campaign's SQLite ledger.
+
+The current family is shown as two execution slices:
+
+- `C80 + malware-priority libraries · non-Apple` runs from the x86-64 Linux
+  host and remains the default;
+- `C80 + malware-priority libraries · Apple` is visible but stays planned and
+  unselectable until an Apple queue is materialized and reviewed.
+
+Both slices retain `c80-malware-priority-v1` as their parent identity so their
+sealed output can later be combined without erasing which host and target slice
+produced it. The supplemental, operator-ordered detection subjects are frozen
+in `coverage/c-malware-priority-v1.toml`; they supplement the published C80
+ranking rather than changing its research evidence.
+
 ## C80 four-source programme
 
 `c80-four-source-n80-v1.toml` freezes the published four-source N80 frontier

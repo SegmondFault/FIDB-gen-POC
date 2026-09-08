@@ -20,6 +20,43 @@ user does not have lingering enabled, so a final logout can stop them. This
 dated record does not turn the repository files into an installer and does not
 imply that later checkout changes reached the installed copies.
 
+## Operational campaigns
+
+`operations/campaigns.toml` is the reviewed registry of operational campaign
+slices. Each configured row binds exactly one queue authority to one durable
+ledger. The default remains the current non-Apple C campaign and therefore
+continues to use the existing `plans/priority-queue.toml` and
+`var/fidb-coordinator/ledger.sqlite3` evidence.
+
+Inspect the registry from the console:
+
+```sh
+.venv/bin/fidb-poc campaigns status --project-root .
+```
+
+Select a different configured, disarmed campaign:
+
+```sh
+.venv/bin/fidb-poc campaigns select CAMPAIGN_ID --project-root .
+```
+
+The same control is available on **Operations → Automation**. Selection writes
+only `var/fidb-campaigns/active.toml`, which is local TOML state ignored by Git.
+It does not alter, arm, synchronize or execute the target queue. A switch is
+refused when the current ledger is armed or has live leases/running jobs, when
+the target is only planned, or when the target queue authority is armed.
+
+After selecting, synchronize the selected queue and start or restart worker
+services. Workers resolve the campaign when their process starts; they never
+hot-switch a running JVM between ledgers. The coordinator API resolves the
+active binding per request, so the control panel follows the selection without
+mixing event cursors or cached ledger projections.
+
+The Apple C80 slice is intentionally `planned`. Materializing its queue on the
+M1 Max is a later reviewed transition, not something campaign selection may
+invent. Both Apple and non-Apple slices share the parent campaign identity but
+retain different queue and ledger authorities.
+
 The host has 16 physical cores/32 hardware threads, and each reviewed build
 adapter may use four make jobs while every worker embeds one reusable Ghidra
 JVM. The queue binds `reference-host-94g-balanced`: twenty active leases, four build
@@ -48,9 +85,9 @@ Inspect the complete resolution while it is still disarmed:
 
 ```sh
 cd "$HOME/Projects/circl/FIDB-POC-unified"
-.venv/bin/fidb-poc queue sync --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --full
-.venv/bin/fidb-poc queue status --state var/fidb-coordinator/ledger.sqlite3 --full
-.venv/bin/fidb-poc queue resolve-preflight --state var/fidb-coordinator/ledger.sqlite3
+.venv/bin/fidb-poc queue sync --campaign-registry operations/campaigns.toml --full
+.venv/bin/fidb-poc queue status --campaign-registry operations/campaigns.toml --full
+.venv/bin/fidb-poc queue resolve-preflight --campaign-registry operations/campaigns.toml
 ```
 
 `resolve-preflight` re-resolves every exact active ledger cell through the same

@@ -379,7 +379,7 @@ function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, fact
   if (view === 'Targets & toolchains') return <ToolchainsView factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
   if (view === 'Provenance') return <ProvenanceView snapshot={factory.snapshot} />;
   if (view === 'Automation') return <AutomationView factory={factory} navigateTo={navigateTo} />;
-  return <ActivityView events={factory.events} connection={factory.connection} />;
+  return <ActivityView events={factory.events} connection={factory.connection} ledger={factory.campaigns?.active_ledger} />;
 }
 
 function BatchesView({ onNewBatch, batchOrder, setBatchOrder, rows, live, factory }: { onNewBatch: () => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; live: boolean; factory: FactoryApiState }) {
@@ -726,6 +726,9 @@ function ProvenanceView({ snapshot }: { snapshot: CoordinatorSnapshot | null }) 
 
 function AutomationView({ factory, navigateTo }: { factory: FactoryApiState; navigateTo: (view: string) => void }) {
   const snapshot = factory.snapshot;
+  const campaignRegistry = factory.campaigns;
+  const activeCampaign = campaignRegistry?.campaigns.find(campaign => campaign.active);
+  const campaignSwitchSafe = activeCampaign?.safe_to_leave ?? false;
   const pool = factory.capabilities?.worker_pools['library-local'];
   const preflight = factory.preflight;
   const schedulePolicy = preflight?.policy.schedule;
@@ -747,10 +750,21 @@ function AutomationView({ factory, navigateTo }: { factory: FactoryApiState; nav
   return <div className="view-stack">
     <ViewIntro kicker="OPERATIONS & UNATTENDED EXECUTION" title="Automation" action={<button className="secondary-action" onClick={() => void control.action()} disabled={factory.busyAction !== null}>{factory.busyAction ? 'Working…' : control.label}</button>} />
     {factory.error && <div className="toast warning" role="alert">! {factory.error}</div>}
+    {campaignRegistry && <section className="panel campaign-switcher">
+      <header><div><span>ACTIVE CAMPAIGN</span><h3>{activeCampaign?.label ?? campaignRegistry.active_campaign_id}</h3></div><code>{campaignRegistry.active_campaign_id}</code></header>
+      <div className="campaign-switch-grid">{campaignRegistry.campaigns.map(campaign => {
+        const canSelect = !campaign.active && campaign.selectable && campaignSwitchSafe;
+        return <article className={campaign.active ? 'active' : ''} key={campaign.id}>
+          <div><span>{campaign.slice_id.toUpperCase()} · {campaign.host}</span><strong>{campaign.label}</strong><small>{campaign.phase}</small></div>
+          <div><em className={`plan-state ${campaign.active ? 'ready' : ''}`}>{campaign.active ? 'ACTIVE' : campaign.state.toUpperCase()}</em><button onClick={() => void factory.selectCampaign(campaign.id)} disabled={!canSelect || factory.busyAction !== null}>{campaign.active ? 'Selected' : campaign.state === 'planned' ? 'Not materialized' : campaignSwitchSafe ? 'Select' : 'Stop current work first'}</button></div>
+        </article>;
+      })}</div>
+      <footer><code>{campaignRegistry.active_queue}</code><span>→</span><code>{campaignRegistry.active_ledger}</code><small>After a switch, synchronize the selected queue and start or restart its worker services.</small></footer>
+    </section>}
     <section className="panel operations-index"><header><h3>Operations</h3><span>LIVE CONTROL SURFACES</span></header><div>{operationSections.map(([view, state]) => <button key={view} onClick={() => navigateTo(view)}><strong>{view}</strong><small>{state}</small><span>→</span></button>)}</div></section>
     <div className="automation-layout">
       <section className="panel automation-form">
-        <div className="panel-header"><h3>plans/priority-queue.toml</h3><span className={`plan-state ${snapshot?.armed && !snapshot.paused ? 'ready' : ''}`}>{snapshot?.status.toUpperCase() ?? 'NOT SYNCED'}</span></div>
+        <div className="panel-header"><h3>{campaignRegistry?.active_queue ?? 'plans/priority-queue.toml'}</h3><span className={`plan-state ${snapshot?.armed && !snapshot.paused ? 'ready' : ''}`}>{snapshot?.status.toUpperCase() ?? 'NOT SYNCED'}</span></div>
         <div className="policy-body">
           <label className="field-label">Enforced overnight policy</label><div className="mode-grid"><button className="selected" disabled><span>Night</span><small>all configured days</small></button><button disabled><span>{preflight?.schedule.claims_allowed ? 'Claims open' : 'Claims closed'}</span><small>{preflight?.schedule.reason ?? 'not evaluated'}</small></button><button disabled><span>Block drain</span><small>{finishStarted ? `finish after ${stopClaiming}` : 'hard cutoff policy'}</small></button><button disabled><span>{preflight?.resources.passed ? 'Host ready' : 'Host gated'}</span><small>measured before claim</small></button></div>
           <div className="section-divider" />
@@ -773,9 +787,9 @@ function AutomationView({ factory, navigateTo }: { factory: FactoryApiState; nav
   </div>;
 }
 
-function ActivityView({ events, connection }: { events: CoordinatorEvent[]; connection: string }) {
+function ActivityView({ events, connection, ledger }: { events: CoordinatorEvent[]; connection: string; ledger?: string }) {
   const displayed = [...events].reverse();
   return <div className="view-stack"><ViewIntro kicker="DURABLE TELEMETRY" title="Activity" action={<span className={`validation-state ${connection === 'live' ? 'ready' : 'waiting'}`}>{connection === 'live' ? `${events.length} events` : 'Coordinator offline'}</span>} />
-    <section className="panel terminal-panel"><div className="terminal-toolbar"><div><span /><span /><span /></div><code>var/fidb-coordinator/ledger.sqlite3 / events</code><button disabled>{connection === 'live' ? 'Live poll' : 'Not live'}</button></div><div className="terminal-events">{displayed.map(event => <div key={event.event_id}><time>{eventTime(event, true)}</time><span className={`event-dot ${eventTone(event)}`} /><strong>{event.event_type}</strong><p>{eventDetail(event)}</p></div>)}{!displayed.length && <div className="empty-state"><time>—</time><span className="event-dot info"/><strong>No events</strong><p>Synchronize the queue to begin the ledger.</p></div>}</div></section>
+    <section className="panel terminal-panel"><div className="terminal-toolbar"><div><span /><span /><span /></div><code>{ledger ?? 'var/fidb-coordinator/ledger.sqlite3'} / events</code><button disabled>{connection === 'live' ? 'Live poll' : 'Not live'}</button></div><div className="terminal-events">{displayed.map(event => <div key={event.event_id}><time>{eventTime(event, true)}</time><span className={`event-dot ${eventTone(event)}`} /><strong>{event.event_type}</strong><p>{eventDetail(event)}</p></div>)}{!displayed.length && <div className="empty-state"><time>—</time><span className="event-dot info"/><strong>No events</strong><p>Synchronize the queue to begin the ledger.</p></div>}</div></section>
   </div>;
 }

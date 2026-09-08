@@ -10,6 +10,7 @@ import {
 test('proxy exposes every control-panel read route', () => {
   assert.deepEqual([...readRoutes].sort(), [
     'authority',
+    'campaigns',
     'capabilities',
     'ecological-validation',
     'events',
@@ -33,6 +34,7 @@ test('proxy exposes every control-panel read route', () => {
 
 test('proxy exposes every control-panel mutation route', () => {
   assert.deepEqual([...writeRoutes].sort(), [
+    'campaigns/select',
     'ecological-validation/import',
     'ecological-validation/run',
     'export/build',

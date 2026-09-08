@@ -24,6 +24,11 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from .authority_catalog import authority_catalog
 from .capabilities import detect_capabilities
+from .campaign_registry import (
+    campaign_registry_status,
+    resolve_campaign_paths,
+    select_campaign,
+)
 from .coordinator import (
     DEFAULT_TIMING_LIMIT,
     MAX_TIMING_LIMIT,
@@ -103,6 +108,7 @@ _GET_PATHS = {
     "/api/v1/noisy-hashes",
     "/api/v1/retention",
     "/api/v1/export",
+    "/api/v1/campaigns",
 }
 _POST_PATHS = {
     "/api/v1/sync",
@@ -123,6 +129,7 @@ _POST_PATHS = {
     "/api/v1/export/preview",
     "/api/v1/export/safeguard",
     "/api/v1/export/build",
+    "/api/v1/campaigns/select",
 }
 
 log = logging.getLogger(__name__)
@@ -174,6 +181,7 @@ class LocalApiConfig:
     project_root: Path
     state_path: Path
     queue_path: Path
+    campaign_registry_path: Path | None = None
     allowed_origins: tuple[str, ...] = ()
     max_request_body_bytes: int = MAX_REQUEST_BODY_BYTES
     max_response_body_bytes: int = MAX_RESPONSE_BODY_BYTES
@@ -188,6 +196,7 @@ class LocalApiConfig:
         queue_path: str | Path = DEFAULT_QUEUE,
         *,
         allowed_origins: Sequence[str] = (),
+        campaign_registry_path: str | Path | None = None,
     ) -> "LocalApiConfig":
         root = Path(project_root).expanduser().resolve()
         required = (
@@ -204,6 +213,14 @@ class LocalApiConfig:
         queue = _inside_project(Path(queue_path), root, "queue configuration")
         if not queue.is_file():
             raise ValueError(f"queue configuration is not a file: {queue}")
+        registry = None
+        if campaign_registry_path is not None:
+            registry = _inside_project(
+                Path(campaign_registry_path), root, "campaign registry"
+            )
+            if not registry.is_file():
+                raise ValueError(f"campaign registry is not a file: {registry}")
+            resolve_campaign_paths(root, registry)
         origins = tuple(_origin(value) for value in allowed_origins)
         if len(set(origins)) != len(origins):
             raise ValueError("allowed origins contain duplicates")
@@ -211,8 +228,17 @@ class LocalApiConfig:
             project_root=root,
             state_path=state,
             queue_path=queue,
+            campaign_registry_path=registry,
             allowed_origins=origins,
         )
+
+    def runtime_paths(self) -> tuple[Path, Path]:
+        if self.campaign_registry_path is None:
+            return self.state_path, self.queue_path
+        state, queue, _binding = resolve_campaign_paths(
+            self.project_root, self.campaign_registry_path
+        )
+        return state, queue
 
     def __post_init__(self) -> None:
         if self.max_request_body_bytes < 2:
@@ -385,18 +411,19 @@ class _ApiServer(ThreadingHTTPServer):
         super().__init__(server_address, handler)
 
     def _ledger_generation(self) -> tuple[tuple[str, int, int], ...]:
+        state_path, _queue_path = self.config.runtime_paths()
         paths = (
-            self.config.state_path,
-            Path(f"{self.config.state_path}-wal"),
+            state_path,
+            Path(f"{state_path}-wal"),
         )
         generation = []
         for path in paths:
             try:
                 stat = path.stat()
             except FileNotFoundError:
-                generation.append((path.name, -1, -1))
+                generation.append((str(path), -1, -1))
             else:
-                generation.append((path.name, stat.st_mtime_ns, stat.st_size))
+                generation.append((str(path), stat.st_mtime_ns, stat.st_size))
         return tuple(generation)
 
     def cached_ledger_projection(self, key: str, build: Callable[[], object]) -> object:
@@ -568,14 +595,15 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         return target.path, query
 
     def _coordinator(self) -> Coordinator:
-        if not self.api_server.config.state_path.is_file():
+        state_path, _queue_path = self.api_server.config.runtime_paths()
+        if not state_path.is_file():
             raise ApiError(
                 HTTPStatus.CONFLICT,
                 "coordinator-not-initialized",
                 "coordinator state does not exist; synchronize the configured queue",
             )
         return Coordinator(
-            self.api_server.config.state_path,
+            state_path,
             self.api_server.config.project_root,
         )
 
@@ -740,7 +768,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     HTTPStatus.BAD_REQUEST, "invalid-query", "health takes no query"
                 )
             coordinator = {"state": "not-initialized"}
-            if self.api_server.config.state_path.is_file():
+            state_path, _queue_path = self.api_server.config.runtime_paths()
+            if state_path.is_file():
                 with self._coordinator() as opened:
                     status = opened.status()
                 coordinator = {
@@ -769,7 +798,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "invalid-query",
                     "capabilities takes no query",
                 )
-            if self.api_server.config.state_path.is_file():
+            state_path, _queue_path = self.api_server.config.runtime_paths()
+            if state_path.is_file():
                 with self._coordinator() as coordinator:
                     result = detect_capabilities(
                         self.api_server.config.project_root,
@@ -787,6 +817,29 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             else:
                 result = detect_capabilities(self.api_server.config.project_root)
             self._json_response(HTTPStatus.OK, result, origin=origin)
+            return
+
+        if path == "/api/v1/campaigns":
+            if query:
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-query",
+                    "campaigns takes no query",
+                )
+            if self.api_server.config.campaign_registry_path is None:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "campaign-registry-not-configured",
+                    "the local API was not started with a campaign registry",
+                )
+            self._json_response(
+                HTTPStatus.OK,
+                campaign_registry_status(
+                    self.api_server.config.project_root,
+                    self.api_server.config.campaign_registry_path,
+                ),
+                origin=origin,
+            )
             return
 
         if path == "/api/v1/authority":
@@ -985,10 +1038,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 raise ApiError(
                     HTTPStatus.BAD_REQUEST, "invalid-query", "preflight takes no query"
                 )
-            queue = QueueConfig.load(
-                self.api_server.config.queue_path,
-                self.api_server.config.project_root,
-            )
+            _state_path, queue_path = self.api_server.config.runtime_paths()
+            queue = QueueConfig.load(queue_path, self.api_server.config.project_root)
             result = evaluate_operations(
                 queue.operations, self.api_server.config.project_root
             )
@@ -1280,9 +1331,10 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             return
         elif path == "/api/v1/retention/plan":
             self._only_fields(document, set())
+            state_path, _queue_path = self.api_server.config.runtime_paths()
             plan = compile_retention_plan(
                 self.api_server.config.project_root,
-                self.api_server.config.state_path,
+                state_path,
             )
             write_retention_plan(plan, self.api_server.config.project_root)
             result = retention_status(self.api_server.config.project_root)
@@ -1295,10 +1347,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "invalid-plan-digest",
                     "plan_digest must be a string",
                 )
+            state_path, _queue_path = self.api_server.config.runtime_paths()
             apply_retention_plan(
                 self.api_server.config.project_root,
                 plan_digest,
-                self.api_server.config.state_path,
+                state_path,
             )
             result = retention_status(self.api_server.config.project_root)
         elif path == "/api/v1/export/preview":
@@ -1326,15 +1379,37 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 ) from error
         elif path == "/api/v1/sync":
             self._only_fields(document, set())
+            state_path, queue_path = self.api_server.config.runtime_paths()
             with Coordinator(
-                self.api_server.config.state_path,
+                state_path,
                 self.api_server.config.project_root,
             ) as coordinator:
                 coordinator.sync_queue(
-                    self.api_server.config.queue_path,
+                    queue_path,
                     actor="local-api",
                 )
                 result = coordinator.status()
+        elif path == "/api/v1/campaigns/select":
+            self._only_fields(document, {"campaign_id"})
+            campaign_id = document.get("campaign_id")
+            if not isinstance(campaign_id, str):
+                raise ApiError(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid-campaign-id",
+                    "campaign_id must be a string",
+                )
+            if self.api_server.config.campaign_registry_path is None:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "campaign-registry-not-configured",
+                    "the local API was not started with a campaign registry",
+                )
+            result = select_campaign(
+                self.api_server.config.project_root,
+                campaign_id,
+                authority=self.api_server.config.campaign_registry_path,
+                actor="local-api",
+            )
         elif path == "/api/v1/pause":
             self._only_fields(document, {"reason"})
             reason = document.get("reason")
@@ -1435,6 +1510,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--project-root", type=Path, default=Path.cwd())
     serve.add_argument("--state", type=Path, default=DEFAULT_STATE)
     serve.add_argument("--queue", type=Path, default=DEFAULT_QUEUE)
+    serve.add_argument(
+        "--campaign-registry",
+        type=Path,
+        help="resolve the active queue and ledger from this TOML registry",
+    )
     serve.add_argument("--bind", default=DEFAULT_BIND)
     serve.add_argument("--port", type=int, default=DEFAULT_PORT)
     serve.add_argument(
@@ -1454,6 +1534,7 @@ def main(argv: list[str] | None = None) -> int:
             arguments.state,
             arguments.queue,
             allowed_origins=arguments.allow_origin,
+            campaign_registry_path=arguments.campaign_registry,
         )
         server = create_server(config, bind=arguments.bind, port=arguments.port)
     except (OSError, ValueError) as error:

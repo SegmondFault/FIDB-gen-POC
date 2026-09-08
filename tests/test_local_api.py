@@ -148,6 +148,60 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(self.state.exists())
         self.assertIsNone(headers.get("Access-Control-Allow-Origin"))
 
+    def test_campaign_endpoint_switches_the_dynamic_queue_and_ledger(self):
+        second_queue = self.root / "plans/second-queue.toml"
+        shutil.copy2(self.queue, second_queue)
+        registry = self.root / "campaigns/operations.toml"
+        registry.write_text(
+            """\
+schema_version = "fidb-campaign-registry/v1"
+default_campaign = "first"
+selection_state = "var/campaigns/active.toml"
+
+[[campaign]]
+id = "first"
+label = "First"
+family_id = "test"
+slice_id = "one"
+host = "linux-x86_64"
+state = "configured"
+phase = "first"
+queue = "plans/priority-queue.toml"
+ledger = "var/campaigns/first.sqlite3"
+
+[[campaign]]
+id = "second"
+label = "Second"
+family_id = "test"
+slice_id = "two"
+host = "linux-x86_64"
+state = "configured"
+phase = "second"
+queue = "plans/second-queue.toml"
+ledger = "var/campaigns/second.sqlite3"
+""",
+            encoding="utf-8",
+        )
+        self.config = LocalApiConfig.from_paths(
+            self.root,
+            self.state,
+            self.queue,
+            campaign_registry_path=registry,
+        )
+
+        status, before, _ = self.request("GET", "/api/v1/campaigns")
+        self.assertEqual(status, 200)
+        self.assertEqual(before["active_campaign_id"], "first")
+
+        status, after, _ = self.request(
+            "POST", "/api/v1/campaigns/select", {"campaign_id": "second"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(after["active_campaign_id"], "second")
+        state, queue = self.config.runtime_paths()
+        self.assertEqual(state, self.root / "var/campaigns/second.sqlite3")
+        self.assertEqual(queue, second_queue)
+
     def test_sync_status_and_snapshot_expose_worker_slots_but_not_lease_tokens(self):
         synced = self.sync()
         self.assertEqual(synced["max_workers"], self.max_workers)

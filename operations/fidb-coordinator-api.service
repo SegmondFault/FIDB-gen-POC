@@ -2,7 +2,7 @@
 Description=FIDB loopback coordinator API
 Documentation=file://%h/Projects/circl/FIDB-POC-unified/operations/README.md
 ConditionFileIsExecutable=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc
-ConditionFileNotEmpty=%h/Projects/circl/FIDB-POC-unified/plans/priority-queue.toml
+ConditionFileNotEmpty=%h/Projects/circl/FIDB-POC-unified/operations/campaigns.toml
 
 [Service]
 Type=simple
@@ -10,7 +10,7 @@ WorkingDirectory=%h/Projects/circl/FIDB-POC-unified
 Environment=PYTHONUNBUFFERED=1
 # Reuse the operator-reviewed environment installed for local library workers.
 EnvironmentFile=%h/.config/fidb-factory/library-local-worker.env
-ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc api serve --project-root %h/Projects/circl/FIDB-POC-unified --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --bind 127.0.0.1 --port 8765
+ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc api serve --project-root %h/Projects/circl/FIDB-POC-unified --campaign-registry operations/campaigns.toml --bind 127.0.0.1 --port 8765
 Restart=on-abnormal
 RestartSec=5
 TimeoutStopSec=15

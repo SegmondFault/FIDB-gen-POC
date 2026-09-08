@@ -293,6 +293,14 @@ def _common_parser(*, queue: bool) -> argparse.ArgumentParser:
         default=DEFAULT_STATE,
         help=f"coordinator SQLite path (default: {DEFAULT_STATE})",
     )
+    result.add_argument(
+        "--campaign-registry",
+        type=Path,
+        help=(
+            "resolve queue and ledger from the active operational campaign; "
+            "when supplied it takes precedence over --queue and --state"
+        ),
+    )
     if queue:
         result.add_argument(
             "--queue",
@@ -482,6 +490,12 @@ def _paths(
     arguments: argparse.Namespace, *, require_queue: bool
 ) -> tuple[Path, Path, Path | None]:
     root = _project_root(arguments.project_root)
+    registry_path = getattr(arguments, "campaign_registry", None)
+    if registry_path is not None:
+        from .campaign_registry import resolve_campaign_paths
+
+        state, queue, _binding = resolve_campaign_paths(root, registry_path)
+        return root, state, queue if require_queue else None
     state = _inside_project(arguments.state, root, "coordinator state")
     queue = None
     if require_queue:

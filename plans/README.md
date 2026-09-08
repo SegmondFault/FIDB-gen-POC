@@ -20,6 +20,10 @@ itself. File placement never implies that work is safe to execute.
 ## Generated projections
 
 - `materialized/` contains deterministic campaign plans and manifests.
+
+Operational campaign selection does not rename or overwrite these files.
+`operations/campaigns.toml` binds a named campaign slice to a queue and an
+isolated ledger; the local active selection lives under `var/`.
 - `auto-materialized/` contains time-sized queue chunks.
 - `validation-materialized/` contains cohort-validation plans and manifests.
 

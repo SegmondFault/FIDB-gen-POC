@@ -1094,6 +1094,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--project-root", type=Path, default=Path.cwd())
     result.add_argument("--state", type=Path, default=DEFAULT_STATE)
     result.add_argument("--queue", type=Path, default=DEFAULT_QUEUE)
+    result.add_argument(
+        "--campaign-registry",
+        type=Path,
+        help="resolve queue and ledger from the active operational campaign",
+    )
     result.add_argument("--credentials", type=Path, required=True)
     result.add_argument("--bind", default=DEFAULT_BIND)
     result.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -1103,10 +1108,18 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     try:
+        state = arguments.state
+        queue = arguments.queue
+        if arguments.campaign_registry is not None:
+            from .campaign_registry import resolve_campaign_paths
+
+            state, queue, _binding = resolve_campaign_paths(
+                arguments.project_root, arguments.campaign_registry
+            )
         config = RemoteApiConfig.from_paths(
             arguments.project_root,
-            arguments.state,
-            arguments.queue,
+            state,
+            queue,
             arguments.credentials,
         )
         parsed = urlsplit(f"//{arguments.bind}")

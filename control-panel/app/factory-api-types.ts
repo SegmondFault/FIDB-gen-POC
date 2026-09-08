@@ -38,6 +38,7 @@ export type {
 } from './factory-validation-types';
 
 export type {
+  CampaignRegistryStatus,
   ExportStatus,
   RetentionPlanSummary,
   RetentionStatus,
@@ -47,6 +48,7 @@ export type ConnectionState = 'connecting' | 'live' | 'stale' | 'offline';
 
 export type PanelReadKey =
   | 'authority'
+  | 'campaigns'
   | 'capabilities'
   | 'ecological-validation'
   | 'events'

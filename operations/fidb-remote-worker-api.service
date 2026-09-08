@@ -8,7 +8,7 @@ ConditionFileNotEmpty=%h/.config/fidb-factory/remote-workers.json
 Type=simple
 WorkingDirectory=%h/Projects/circl/FIDB-POC-unified
 Environment=PYTHONUNBUFFERED=1
-ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc worker-api serve --project-root %h/Projects/circl/FIDB-POC-unified --queue plans/priority-queue.toml --state var/fidb-coordinator/ledger.sqlite3 --credentials %h/.config/fidb-factory/remote-workers.json --bind 127.0.0.1 --port 8766
+ExecStart=%h/Projects/circl/FIDB-POC-unified/.venv/bin/fidb-poc worker-api serve --project-root %h/Projects/circl/FIDB-POC-unified --campaign-registry operations/campaigns.toml --credentials %h/.config/fidb-factory/remote-workers.json --bind 127.0.0.1 --port 8766
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes

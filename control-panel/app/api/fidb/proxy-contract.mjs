@@ -18,6 +18,7 @@ export const readRoutes = new Set([
   'retention',
   'export',
   'preflight',
+  'campaigns',
 ]);
 
 export const writeRoutes = new Set([
@@ -39,6 +40,7 @@ export const writeRoutes = new Set([
   'export/preview',
   'export/safeguard',
   'export/build',
+  'campaigns/select',
 ]);
 
 const queryKeys = new Map([

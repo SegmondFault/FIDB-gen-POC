@@ -16,6 +16,41 @@ export type RetentionPlanSummary = {
   quarantined: number;
 };
 
+export type CampaignRegistryStatus = {
+  schema_version: 'fidb-campaign-registry-status/v1';
+  authority_path: string;
+  selection_path: string;
+  selection_source: 'registry-default' | 'local-selection';
+  active_campaign_id: string;
+  active_queue: string;
+  active_ledger: string;
+  worker_restart_required_after_switch: boolean;
+  campaigns: Array<{
+    id: string;
+    label: string;
+    family_id: string;
+    slice_id: string;
+    host: string;
+    state: 'configured' | 'planned' | 'retired';
+    phase: string;
+    active: boolean;
+    selectable: boolean;
+    safe_to_leave: boolean;
+    queue: string | null;
+    ledger: string;
+    programme: string | null;
+    priority_authority: string | null;
+    campaign_digest: string;
+    authority_digests: Record<string, string>;
+    priority_subjects: number;
+    queue_armed: boolean;
+    ledger_initialized: boolean;
+    ledger_status: string;
+    counts: Record<string, number> | null;
+    blockers: string[];
+  }>;
+};
+
 export type ExportStatus = {
   schema_version: 'fidb-export-status/v1';
   authority: {
@@ -209,5 +244,3 @@ export type RetentionStatus = {
     };
   };
 };
-
-

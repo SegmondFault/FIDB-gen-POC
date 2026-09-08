@@ -6,6 +6,7 @@ import { settlePanelRead } from './panel-health.mjs';
 
 import type {
   ConnectionState,
+  CampaignRegistryStatus,
   CoordinatorEvent,
   CoordinatorSnapshot,
   EcologicalCase,
@@ -69,6 +70,7 @@ async function panelJson<T>(key: PanelReadKey, path: string): Promise<PanelReadR
 
 export function useFactoryApi(pollMilliseconds = 5000) {
   const [connection, setConnection] = useState<ConnectionState>('connecting');
+  const [campaigns, setCampaigns] = useState<CampaignRegistryStatus | null>(null);
   const [snapshot, setSnapshot] = useState<CoordinatorSnapshot | null>(null);
   const [capabilities, setCapabilities] = useState<FactoryCapabilities | null>(null);
   const [authority, setAuthority] = useState<FactoryAuthority | null>(null);
@@ -178,6 +180,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
       ) {
         const reads = await Promise.all([
           panelJson<FactoryCapabilities>('capabilities', 'capabilities'),
+          panelJson<CampaignRegistryStatus>('campaigns', 'campaigns'),
           panelJson<FactoryAuthority>('authority', 'authority'),
           panelJson<LaneInventory>('lane-inventory', 'lane-inventory'),
           panelJson<EcologicalValidation>('ecological-validation', 'ecological-validation'),
@@ -189,7 +192,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
           panelJson<ExportStatus>('export', 'export'),
         ]);
         recordPanelReads(reads as Array<PanelReadResult<unknown>>);
-        const [capabilityRead, authorityRead, laneInventoryRead, ecologicalRead, retentionRead, observatoryRead, hashBackendRead, fidBackendRead, noisyRead, exportRead] = reads;
+        const [capabilityRead, campaignRead, authorityRead, laneInventoryRead, ecologicalRead, retentionRead, observatoryRead, hashBackendRead, fidBackendRead, noisyRead, exportRead] = reads;
         if (capabilityRead.value) {
           capabilityCache.current = capabilityRead.value;
           setCapabilities(capabilityRead.value);
@@ -199,6 +202,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
           setAuthority(authorityRead.value);
           setMachineValidation(authorityRead.value.machine_validations[0] ?? null);
         }
+        if (campaignRead.value) setCampaigns(campaignRead.value);
         if (capabilityRead.value && authorityRead.value) lastCapabilityRead.current = Date.now();
         if (laneInventoryRead.value) setLaneInventory(laneInventoryRead.value);
         if (ecologicalRead.value) setEcologicalValidation(ecologicalRead.value);
@@ -563,8 +567,35 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
+  const selectCampaign = useCallback(async (campaignId: string) => {
+    setBusyAction('campaign-select');
+    try {
+      const result = await json<CampaignRegistryStatus>('campaigns/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: campaignId }),
+      });
+      setCampaigns(result);
+      setSnapshot(null);
+      setTimings(null);
+      setPreflight(null);
+      resetEvents();
+      capabilityCache.current = null;
+      await refresh(true);
+      setError(null);
+      return result;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Campaign selection failed';
+      setError(message);
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [refresh, resetEvents]);
+
   return {
     connection,
+    campaigns,
     snapshot,
     capabilities,
     authority,
@@ -590,6 +621,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     sync: () => mutate('sync'),
     pause: (reason: string) => mutate('pause', { reason }),
     resume: () => mutate('resume'),
+    selectCampaign,
     resolvePlanDraft: (toml: string) => planDraft('resolve', { toml }),
     savePlanDraft: (name: string, toml: string, expectedSha256?: string) => planDraft(
       'save',
