@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libpcap"
+version = "1.10.7"
+url = "https://www.tcpdump.org/release/libpcap-1.10.7.tar.gz"
+sha256 = "0b394ac90dbc0a9838ff97468e05c9c9a3e873dec2514cd58db65d859d296e31"
+source_directory = "libpcap-1.10.7"
+project_markers = ["configure", "pcap/pcap.h"]
+allowed_build_systems = ["libpcap-autoconf", "autoconf", "cmake"]
+preferred_build_system = "libpcap-autoconf"
+static_archives = ["libpcap.a"]
+supported_target_os = ["linux", "android"]

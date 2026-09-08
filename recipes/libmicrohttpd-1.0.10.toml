@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libmicrohttpd"
+version = "1.0.10"
+url = "https://mirrors.kernel.org/gnu/libmicrohttpd/libmicrohttpd-1.0.10.tar.gz"
+sha256 = "04bfe8ef75db7d629a33de767599765cecadc56274a39822d5d081030d577685"
+source_directory = "libmicrohttpd-1.0.10"
+project_markers = ["configure", "src/include/microhttpd.h"]
+allowed_build_systems = ["libmicrohttpd-autoconf", "autoconf"]
+preferred_build_system = "libmicrohttpd-autoconf"
+static_archives = ["libmicrohttpd.a"]
+supported_target_os = ["linux", "android"]

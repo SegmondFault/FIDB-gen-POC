@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libcurl"
+version = "8.22.0"
+url = "https://curl.se/download/curl-8.22.0.tar.bz2"
+sha256 = "5d956a6a22b3c279f50c421ee5d3c9e9d660cb6f115dcf881b579e952130549c"
+source_directory = "curl-8.22.0"
+project_markers = ["configure", "include/curl/curl.h"]
+allowed_build_systems = ["curl-autoconf", "autoconf", "cmake"]
+preferred_build_system = "curl-autoconf"
+static_archives = ["libcurl.a"]
+supported_target_os = ["linux", "android", "windows"]

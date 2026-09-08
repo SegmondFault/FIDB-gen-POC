@@ -211,6 +211,16 @@ def prepare_build_workspace(
         generated = source_root / "err_data.c"
         if not generated.is_file():
             raise AdapterError("BoringSSL source lacks its pinned err_data.c")
+        # Debian's source-only BoringSSL archive omits googletest, while the
+        # upstream CMake graph still declares (but need not build) its test
+        # target.  A source-less translation unit lets CMake generate the
+        # graph without fetching or compiling an unpinned dependency.
+        gtest = source_root / "src/third_party/googletest/src/gtest-all.cc"
+        gtest.parent.mkdir(parents=True, exist_ok=True)
+        gtest.write_text(
+            "// FIDB adapter placeholder: the boringssl_gtest target is not built.\n",
+            encoding="utf-8",
+        )
         shim = source_root / "fidb-boringssl-go"
         shim.write_text(
             "#!/bin/sh\n"

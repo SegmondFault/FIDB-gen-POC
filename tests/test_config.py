@@ -249,6 +249,62 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(recipe.sha256, source["sha256"])
             self.assertEqual(recipe.source_directory, source["source_directory"])
 
+    def test_priority_native_recipe_pins_match_the_acquisition_lock(self):
+        root = Path(__file__).resolve().parents[1]
+        lock = tomllib.loads(
+            (root / "sources/locks/c-malware-priority-v1.toml").read_text(
+                encoding="utf-8"
+            )
+        )
+        by_family = {row["candidate_key"]: row for row in lock["candidate"]}
+        recipes = {
+            "boringssl": ("boringssl",),
+            "zlib": ("zlib",),
+            "curl": ("libcurl",),
+            "libxml2": ("libxml2",),
+            "jansson": ("jansson",),
+            "ncurses": ("ncurses", "libtinfo"),
+            "scotch": ("libscotch",),
+            "libmicrohttpd": ("libmicrohttpd",),
+            "hwloc": ("libhwloc",),
+            "opencl-loader": ("libopencl",),
+            "protobuf": ("protobuf",),
+            "mbedtls": ("mbedtls",),
+            "wolfssl": ("wolfssl",),
+            "libpcap": ("libpcap",),
+        }
+
+        for family, names in recipes.items():
+            source = by_family[family]
+            for name in names:
+                configuration = load_configuration(
+                    root / "worker.toml",
+                    request_override=(f'{name}@{source["version"]}',),
+                )
+                recipe = configuration.libraries[0]
+                self.assertEqual(recipe.url, source["url"])
+                self.assertEqual(recipe.sha256, source["sha256"])
+
+    def test_priority_dependency_inputs_are_checksum_pinned(self):
+        root = Path(__file__).resolve().parents[1]
+        opencl = load_configuration(
+            root / "worker.toml", request_override=("libopencl@2026.05.29",)
+        ).libraries[0]
+        protobuf = load_configuration(
+            root / "worker.toml", request_override=("protobuf@36.1",)
+        ).libraries[0]
+
+        self.assertEqual(opencl.build_inputs[0].identifier, "opencl-headers-2026.05.29")
+        self.assertEqual(
+            opencl.build_inputs[0].sha256,
+            "d9e6c48357de5002da11ce45de600e0c3ffe6ab4f628a3b9fe2b38603161658a",
+        )
+        self.assertEqual(protobuf.build_inputs[0].identifier, "abseil-cpp-20250512.1")
+        self.assertEqual(
+            protobuf.build_inputs[0].sha256,
+            "9b7a064305e9fd94d124ffa6cc358592eb42b5da588fb4e07d09254aa40086db",
+        )
+
     def test_libpng_recipe_pins_its_route_matched_zlib_input(self):
         root = Path(__file__).resolve().parents[1]
         configuration = load_configuration(

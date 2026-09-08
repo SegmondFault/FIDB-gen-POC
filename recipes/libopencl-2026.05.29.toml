@@ -1,0 +1,21 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libopencl"
+version = "2026.05.29"
+url = "https://github.com/KhronosGroup/OpenCL-ICD-Loader/archive/refs/tags/v2026.05.29.tar.gz"
+sha256 = "48fd0c5181db7cd046f4f731d5955694892e10998d49d09ee0d997e7e04fd939"
+source_directory = "OpenCL-ICD-Loader-2026.05.29"
+project_markers = ["CMakeLists.txt", "loader/icd.c"]
+allowed_build_systems = ["opencl-loader-cmake", "cmake"]
+preferred_build_system = "opencl-loader-cmake"
+static_archives = ["libOpenCL.a"]
+supported_target_os = ["linux", "android", "windows"]
+
+[[build_inputs]]
+kind = "source-tree"
+name = "opencl-headers"
+version = "2026.05.29"
+url = "https://github.com/KhronosGroup/OpenCL-Headers/archive/refs/tags/v2026.05.29.tar.gz"
+sha256 = "d9e6c48357de5002da11ce45de600e0c3ffe6ab4f628a3b9fe2b38603161658a"
+filename = "opencl-headers-2026.05.29.tar.gz"
+source_directory = "OpenCL-Headers-2026.05.29"

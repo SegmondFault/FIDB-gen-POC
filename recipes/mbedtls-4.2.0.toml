@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "mbedtls"
+version = "4.2.0"
+url = "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-4.2.0/mbedtls-4.2.0.tar.bz2"
+sha256 = "2bed9d713b4668f76553b097e72b8aa30bc8f112a940d7ae228d524bbde6ffea"
+source_directory = "mbedtls-4.2.0"
+project_markers = ["CMakeLists.txt", "include/mbedtls/ssl.h"]
+allowed_build_systems = ["mbedtls-cmake", "cmake"]
+preferred_build_system = "mbedtls-cmake"
+static_archives = ["libmbedcrypto.a", "libmbedx509.a", "libmbedtls.a"]
+supported_target_os = ["linux", "android", "windows"]

@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libscotch"
+version = "7.0.14"
+url = "https://gitlab.inria.fr/scotch/scotch/-/archive/v7.0.14/scotch-v7.0.14.tar.bz2"
+sha256 = "9801196eac89ad95f6331c15129cd072a7cf40513135f1975a33d1051d6bb38a"
+source_directory = "scotch-v7.0.14"
+project_markers = ["CMakeLists.txt", "src/libscotch/CMakeLists.txt"]
+allowed_build_systems = ["scotch-cmake", "cmake"]
+preferred_build_system = "scotch-cmake"
+static_archives = ["libscotch.a"]
+supported_target_os = ["linux", "android"]

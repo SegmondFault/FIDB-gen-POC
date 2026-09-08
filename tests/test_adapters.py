@@ -363,11 +363,15 @@ class AdapterTests(unittest.TestCase):
                 source_root=source_root,
             )
             shim = (source_root / "fidb-boringssl-go").read_text()
+            gtest_placeholder = (
+                source_root / "src/third_party/googletest/src/gtest-all.cc"
+            ).read_text()
 
         self.assertEqual(commands[0][1:3], ("-S", "src"))
         self.assertIn(f"-DGO_EXECUTABLE={source_root}/fidb-boringssl-go", commands[0])
         self.assertEqual(commands[1][-2:], ("crypto", "ssl"))
         self.assertIn("err_data_generate.go", shim)
+        self.assertIn("target is not built", gtest_placeholder)
 
     def test_harfbuzz_cmake_adapter_pins_compilers_and_library_targets(self):
         commands = build_commands(

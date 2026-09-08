@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "ncurses"
+version = "6.6"
+url = "https://invisible-mirror.net/archives/ncurses/ncurses-6.6.tar.gz"
+sha256 = "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11"
+source_directory = "ncurses-6.6"
+project_markers = ["configure", "include/curses.h.in", "include/MKterm.h.awk.in"]
+allowed_build_systems = ["ncurses-autoconf", "autoconf"]
+preferred_build_system = "ncurses-autoconf"
+static_archives = ["libncurses.a"]
+supported_target_os = ["linux", "android"]

@@ -539,7 +539,7 @@ ledger = "var/campaigns/second.sqlite3"
         )
         self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
-        self.assertEqual(len(document["recipes"]), 31)
+        self.assertEqual(len(document["recipes"]), 44)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)

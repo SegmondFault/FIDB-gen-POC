@@ -1,0 +1,21 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "protobuf"
+version = "36.1"
+url = "https://github.com/protocolbuffers/protobuf/releases/download/v36.1/protobuf-36.1.tar.gz"
+sha256 = "dc74fa582f559cbd31614ddfefb4868f43c919d7184bde514bb47f90c6025eb8"
+source_directory = "protobuf-36.1"
+project_markers = ["CMakeLists.txt", "src/google/protobuf/descriptor.h"]
+allowed_build_systems = ["protobuf-cmake", "cmake"]
+preferred_build_system = "protobuf-cmake"
+static_archives = ["libprotobuf.a"]
+supported_target_os = ["linux", "android", "windows"]
+
+[[build_inputs]]
+kind = "source-tree"
+name = "abseil-cpp"
+version = "20250512.1"
+url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20250512.1.tar.gz"
+sha256 = "9b7a064305e9fd94d124ffa6cc358592eb42b5da588fb4e07d09254aa40086db"
+filename = "abseil-cpp-20250512.1.tar.gz"
+source_directory = "abseil-cpp-20250512.1"

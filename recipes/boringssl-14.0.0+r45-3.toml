@@ -1,0 +1,12 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "boringssl"
+version = "14.0.0+r45-3"
+url = "https://deb.debian.org/debian/pool/main/a/android-platform-external-boringssl/android-platform-external-boringssl_14.0.0%2Br45.orig.tar.xz"
+sha256 = "f9223e8c15ad5d9e3f1cd50861f4c272658864661e2332bea5d60952aa0930cd"
+source_directory = "android-platform-external-boringssl-14.0.0+r45"
+project_markers = ["src/CMakeLists.txt", "src/include/openssl/ssl.h", "err_data.c"]
+allowed_build_systems = ["boringssl-cmake"]
+preferred_build_system = "boringssl-cmake"
+static_archives = ["libcrypto.a", "libssl.a"]
+supported_target_os = ["linux", "android", "windows"]
