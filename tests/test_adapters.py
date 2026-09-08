@@ -290,6 +290,85 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("-DOPUS_STACK_PROTECTOR=OFF", opus[0])
         self.assertEqual(opus[1][-1], "opus")
 
+    def test_priority_autoconf_adapters_are_library_only_and_dependency_bounded(self):
+        curl = build_commands(
+            "curl-autoconf", route=route(), compiler_flags=("-O2",), jobs=6
+        )
+        ncurses = build_commands(
+            "ncurses-autoconf", route=route(), compiler_flags=("-Os",), jobs=4
+        )
+        pcap = build_commands(
+            "libpcap-autoconf", route=route(), compiler_flags=("-O0",), jobs=3
+        )
+
+        self.assertIn("--without-ssl", curl[0])
+        self.assertIn("--without-zlib", curl[0])
+        self.assertEqual(curl[1], ("make", "-j6", "-C", "lib", "libcurl.la"))
+        self.assertIn("--with-termlib", ncurses[0])
+        self.assertEqual(ncurses[1], ("make", "-j4", "libs"))
+        self.assertIn("--without-libnl", pcap[0])
+        self.assertEqual(pcap[1], ("make", "-j3", "libpcap.a"))
+
+    def test_priority_cmake_adapters_pin_inputs_and_static_targets(self):
+        source_root = Path("/work/priority").resolve()
+        opencl = build_commands(
+            "opencl-loader-cmake",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        protobuf = build_commands(
+            "protobuf-cmake",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+        mbedtls = build_commands(
+            "mbedtls-cmake",
+            route=route(),
+            compiler_flags=("-O2",),
+            jobs=4,
+            source_root=source_root,
+        )
+
+        self.assertIn("-DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF", opencl[0])
+        self.assertIn(
+            f"-DOPENCL_ICD_LOADER_HEADERS_DIR={source_root}/fidb-inputs/opencl-headers-2026.05.29",
+            opencl[0],
+        )
+        self.assertIn(
+            f"-DFETCHCONTENT_SOURCE_DIR_ABSL={source_root}/fidb-inputs/abseil-cpp-20250512.1",
+            protobuf[0],
+        )
+        self.assertEqual(protobuf[1][-1], "libprotobuf")
+        self.assertEqual(mbedtls[1][-3:], ("tfpsacrypto", "mbedx509", "mbedtls"))
+
+    def test_boringssl_adapter_uses_only_the_pinned_generator_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary).resolve()
+            (source_root / "err_data.c").write_text("generated", encoding="utf-8")
+            prepare_build_workspace(
+                "boringssl-cmake",
+                route=route(),
+                compiler_flags=("-O2",),
+                source_root=source_root,
+            )
+            commands = build_commands(
+                "boringssl-cmake",
+                route=route(),
+                compiler_flags=("-O2",),
+                jobs=4,
+                source_root=source_root,
+            )
+            shim = (source_root / "fidb-boringssl-go").read_text()
+
+        self.assertEqual(commands[0][1:3], ("-S", "src"))
+        self.assertIn(f"-DGO_EXECUTABLE={source_root}/fidb-boringssl-go", commands[0])
+        self.assertEqual(commands[1][-2:], ("crypto", "ssl"))
+        self.assertIn("err_data_generate.go", shim)
+
     def test_harfbuzz_cmake_adapter_pins_compilers_and_library_targets(self):
         commands = build_commands(
             "harfbuzz-cmake",

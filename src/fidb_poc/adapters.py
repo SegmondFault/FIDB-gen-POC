@@ -21,6 +21,7 @@ class Detection:
 
 BUILD_MARKERS = {
     "openssl-configure": ("Configure",),
+    "boringssl-cmake": ("src/CMakeLists.txt", "src/include/openssl/ssl.h"),
     "harfbuzz-cmake": ("CMakeLists.txt", "src/hb.h"),
     "brotli-cmake": ("CMakeLists.txt", "c/include/brotli/encode.h"),
     "libjpeg-turbo-cmake": ("CMakeLists.txt", "src/jpeglib.h"),
@@ -32,6 +33,17 @@ BUILD_MARKERS = {
     "libtiff-autoconf": ("configure", "libtiff/tiff.h"),
     "libffi-autoconf": ("configure", "include/ffi.h.in"),
     "libxml2-autoconf": ("configure", "include/libxml/parser.h"),
+    "curl-autoconf": ("configure", "include/curl/curl.h"),
+    "jansson-autoconf": ("configure", "src/jansson.h"),
+    "ncurses-autoconf": ("configure", "include/curses.h.in"),
+    "libmicrohttpd-autoconf": ("configure", "src/include/microhttpd.h"),
+    "hwloc-autoconf": ("configure", "include/hwloc.h"),
+    "libpcap-autoconf": ("configure", "pcap/pcap.h"),
+    "scotch-cmake": ("CMakeLists.txt", "src/libscotch/CMakeLists.txt"),
+    "opencl-loader-cmake": ("CMakeLists.txt", "loader/icd.c"),
+    "protobuf-cmake": ("CMakeLists.txt", "src/google/protobuf/descriptor.h"),
+    "mbedtls-cmake": ("CMakeLists.txt", "include/mbedtls/ssl.h"),
+    "wolfssl-cmake": ("CMakeLists.txt", "wolfssl/ssl.h"),
     "libuv-cmake": ("CMakeLists.txt", "include/uv.h"),
     "openjpeg-cmake": ("CMakeLists.txt", "src/lib/openjp2/openjpeg.h"),
     "opus-cmake": ("CMakeLists.txt", "include/opus.h"),
@@ -195,6 +207,23 @@ def prepare_build_workspace(
 ) -> None:
     """Write fixed adapter-owned files which cannot be supplied by recipes."""
 
+    if build_system == "boringssl-cmake":
+        generated = source_root / "err_data.c"
+        if not generated.is_file():
+            raise AdapterError("BoringSSL source lacks its pinned err_data.c")
+        shim = source_root / "fidb-boringssl-go"
+        shim.write_text(
+            "#!/bin/sh\n"
+            'if [ "$#" -eq 2 ] && [ "$1" = run ] && '
+            '[ "$2" = err_data_generate.go ]; then\n'
+            '  exec cat "$(dirname "$0")/err_data.c"\n'
+            "fi\n"
+            'echo "unsupported BoringSSL generator invocation: $*" >&2\n'
+            "exit 64\n",
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
+        return
     if build_system != "glib-meson":
         return
     machines = {
@@ -375,10 +404,104 @@ AUTOCONF_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ),
         ("libxml2.la",),
     ),
+    "curl-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-docs",
+            "--disable-manual",
+            "--disable-threaded-resolver",
+            "--without-ssl",
+            "--without-zlib",
+            "--without-brotli",
+            "--without-zstd",
+            "--without-libidn2",
+            "--without-libpsl",
+            "--without-libgsasl",
+            "--without-nghttp2",
+            "--without-nghttp3",
+            "--without-quiche",
+            "--without-libssh2",
+            "--without-librtmp",
+            "--without-ldap",
+        ),
+        ("-C", "lib", "libcurl.la"),
+    ),
+    "jansson-autoconf": (
+        ("--disable-shared", "--enable-static"),
+        ("-C", "src", "libjansson.la"),
+    ),
+    "ncurses-autoconf": (
+        (
+            "--without-shared",
+            "--with-normal",
+            "--with-termlib",
+            "--without-ada",
+            "--without-cxx",
+            "--without-cxx-binding",
+            "--without-progs",
+            "--without-tests",
+            "--without-manpages",
+            "--disable-widec",
+        ),
+        ("libs",),
+    ),
+    "libmicrohttpd-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-doc",
+            "--disable-examples",
+            "--disable-tools",
+            "--disable-curl",
+            "--enable-https=no",
+        ),
+        ("-C", "src/microhttpd", "libmicrohttpd.la"),
+    ),
+    "hwloc-autoconf": (
+        (
+            "--disable-shared",
+            "--enable-static",
+            "--disable-cairo",
+            "--disable-libxml2",
+            "--disable-io",
+            "--disable-pci",
+            "--disable-opencl",
+            "--disable-cuda",
+            "--disable-nvml",
+            "--disable-rsmi",
+            "--disable-levelzero",
+            "--disable-libudev",
+            "--enable-plugins=no",
+        ),
+        ("-C", "hwloc", "libhwloc.la"),
+    ),
+    "libpcap-autoconf": (
+        (
+            "--disable-shared",
+            "--disable-usb",
+            "--disable-bluetooth",
+            "--disable-dbus",
+            "--disable-rdma",
+            "--without-libnl",
+            "--without-dag",
+            "--without-snf",
+            "--without-turbocap",
+            "--without-dpdk",
+        ),
+        ("libpcap.a",),
+    ),
 }
 
 
 CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "boringssl-cmake": (
+        (
+            "-DBUILD_TESTING=OFF",
+            "-DOPENSSL_NO_ASM=1",
+        ),
+        ("crypto", "ssl"),
+    ),
     "harfbuzz-cmake": (
         (
             "-DHB_BUILD_UTILS=OFF",
@@ -463,6 +586,64 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "-DOPUS_STACK_PROTECTOR=OFF",
         ),
         ("opus",),
+    ),
+    "scotch-cmake": (
+        (
+            "-DBUILD_FORTRAN=OFF",
+            "-DTHREADS=OFF",
+            "-DBUILD_PTSCOTCH=OFF",
+            "-DBUILD_LIBESMUMPS=OFF",
+            "-DBUILD_LIBSCOTCHMETIS=OFF",
+            "-DUSE_ZLIB=OFF",
+            "-DUSE_LZMA=OFF",
+            "-DUSE_BZ2=OFF",
+            "-DENABLE_TESTS=OFF",
+        ),
+        ("scotch",),
+    ),
+    "opencl-loader-cmake": (
+        (
+            "-DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF",
+            "-DENABLE_OPENCL_LAYERS=OFF",
+            "-DENABLE_OPENCL_LAYERINFO=OFF",
+        ),
+        ("OpenCL",),
+    ),
+    "protobuf-cmake": (
+        (
+            "-Dprotobuf_BUILD_SHARED_LIBS=OFF",
+            "-Dprotobuf_BUILD_TESTS=OFF",
+            "-Dprotobuf_BUILD_CONFORMANCE=OFF",
+            "-Dprotobuf_BUILD_EXAMPLES=OFF",
+            "-Dprotobuf_BUILD_PROTOC_BINARIES=OFF",
+            "-Dprotobuf_BUILD_LIBPROTOBUF=ON",
+            "-Dprotobuf_BUILD_LIBPROTOC=OFF",
+            "-Dprotobuf_BUILD_LIBUPB=OFF",
+            "-Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON",
+            "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+        ),
+        ("libprotobuf",),
+    ),
+    "mbedtls-cmake": (
+        (
+            "-DENABLE_PROGRAMS=OFF",
+            "-DENABLE_TESTING=OFF",
+            "-DUSE_STATIC_MBEDTLS_LIBRARY=ON",
+            "-DUSE_SHARED_MBEDTLS_LIBRARY=OFF",
+            "-DMBEDTLS_FATAL_WARNINGS=OFF",
+            "-DGEN_FILES=OFF",
+        ),
+        ("tfpsacrypto", "mbedx509", "mbedtls"),
+    ),
+    "wolfssl-cmake": (
+        (
+            "-DWOLFSSL_REPRODUCIBLE_BUILD=yes",
+            "-DWOLFSSL_INSTALL=no",
+            "-DWOLFSSL_ASM=no",
+            "-DWOLFSSL_EXAMPLES=no",
+            "-DWOLFSSL_CRYPT_TESTS=no",
+        ),
+        ("wolfssl",),
     ),
 }
 
@@ -607,10 +788,34 @@ def build_commands(
         return tuple(commands)
     if build_system in CMAKE_ADAPTERS:
         project_options, targets = CMAKE_ADAPTERS[build_system]
+        source = "src" if build_system == "boringssl-cmake" else "."
+        if build_system == "opencl-loader-cmake":
+            if source_root is None or not source_root.is_absolute():
+                raise AdapterError("OpenCL loader adapter requires an absolute source root")
+            project_options = (
+                *project_options,
+                "-DOPENCL_ICD_LOADER_HEADERS_DIR="
+                f"{source_root}/fidb-inputs/opencl-headers-2026.05.29",
+            )
+        if build_system == "protobuf-cmake":
+            if source_root is None or not source_root.is_absolute():
+                raise AdapterError("Protobuf adapter requires an absolute source root")
+            project_options = (
+                *project_options,
+                "-DFETCHCONTENT_SOURCE_DIR_ABSL="
+                f"{source_root}/fidb-inputs/abseil-cpp-20250512.1",
+            )
+        if build_system == "boringssl-cmake":
+            if source_root is None or not source_root.is_absolute():
+                raise AdapterError("BoringSSL adapter requires an absolute source root")
+            project_options = (
+                *project_options,
+                f"-DGO_EXECUTABLE={source_root}/fidb-boringssl-go",
+            )
         configure = (
             "cmake",
             "-S",
-            ".",
+            source,
             "-B",
             "fidb-build",
             "-G",
