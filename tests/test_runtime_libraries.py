@@ -1,3 +1,6 @@
+from contextlib import redirect_stdout
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +11,7 @@ from fidb_poc.runtime_libraries import (
     load_runtime_library_catalog,
     runtime_library_status,
 )
+from fidb_poc.toolchain_cli import main as toolchain_main
 
 
 class RuntimeLibraryTests(unittest.TestCase):
@@ -25,6 +29,10 @@ class RuntimeLibraryTests(unittest.TestCase):
         )
         self.assertEqual(catalog["provider"][0]["query"], "-print-file-name=libc.a")
         self.assertEqual(catalog["provider"][1]["registry_family"], "uclibc")
+        self.assertEqual(
+            catalog["provider"][1]["plan"],
+            "plans/c-malware-priority-uclibc-v1.toml",
+        )
 
     def test_status_projects_exact_route_and_registry_cells_without_probing(self):
         document = runtime_library_status(self.root)
@@ -70,3 +78,15 @@ class RuntimeLibraryTests(unittest.TestCase):
         self.assertEqual(provider["state"], "qualified-unprobed")
         self.assertEqual(provider["route_id"], route.id)
         self.assertEqual(provider["toolchain_identity"], route.toolchain_identity)
+
+    def test_runtime_status_cli_is_read_only_by_default(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = toolchain_main(
+                ["runtime", "status", "--project-root", str(self.root)]
+            )
+
+        document = json.loads(output.getvalue())
+        self.assertEqual(code, 0)
+        self.assertFalse(document["probe"])
+        self.assertEqual(document["summary"]["cells"], 95)

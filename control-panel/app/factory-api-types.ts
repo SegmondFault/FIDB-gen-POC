@@ -1431,6 +1431,8 @@ export type PriorityScheduleSubject = {
   runtime_provider_cells: number;
   runtime_provider_ready_cells: number;
   runtime_provider_blocked_cells: number;
+  runtime_plan_path: string | null;
+  runtime_plan_bound: boolean;
   width_batch_bound: boolean;
   qualification_satisfied: boolean;
   stage: string;
@@ -1470,6 +1472,7 @@ export type RuntimeLibraryStatus = {
     target_os: string[];
     compiler_families: string[];
     registry_family: string | false;
+    plan: string;
     cells: number;
     ready_cells: number;
     blocked_cells: number;

@@ -88,6 +88,35 @@ non-executable. Do not promote a row into `recipes/*.toml` until its fixed
 adapter exists and the exact source version and SHA-256 match. A preparation
 count in the GUI therefore never means that a library is queueable.
 
+The priority overlay has three independent execution authorities:
+
+- `batches/c-malware-priority-native-v1.toml` binds 21 reviewed source recipes
+  to 3,714 applicable full-width cells. It remains blocked until the 268-cell
+  compilation authority in `qualification/c-malware-priority-native-v1.toml`
+  is deliberately run and sealed.
+- `plans/c-malware-priority-runtime-v1.toml` resolves 72 glibc/libgcc/libstdc++
+  route-owned archive extractions.
+- `plans/c-malware-priority-uclibc-v1.toml` resolves 23 checksum-pinned uClibc
+  archive extractions.
+
+Do not convert the four runtime families into native recipes merely to make the
+Matrix look uniform. Check the exact non-compute readiness boundary with:
+
+```sh
+uv run fidb-poc toolchain runtime status --project-root . --probe
+uv run fidb-poc resolve-plan plans/c-malware-priority-runtime-v1.toml \
+  --project-root .
+uv run fidb-poc resolve-plan plans/c-malware-priority-uclibc-v1.toml \
+  --project-root .
+uv run fidb-poc qualification status --project-root .
+```
+
+All three authorities are deliberately absent from `plans/priority-queue.toml`.
+After native qualification, materialise short disarmed chunks, run one
+representative full-path canary for native, route-owned runtime and uClibc
+archive cells, then admit them explicitly. Never infer permission to start from
+source/cache readiness alone.
+
 ## Route resolution lessons
 
 - A Ghidra `LanguageID` ending in `:default` does not imply that

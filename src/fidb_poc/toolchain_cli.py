@@ -140,6 +140,36 @@ def _input_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _runtime_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="fidb-poc toolchain runtime",
+        description="Inspect toolchain-owned runtime-library extraction providers.",
+    )
+    parser.add_argument("command", choices=("status",))
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="query and validate every exact archive without compilation or Ghidra",
+    )
+    return parser
+
+
+def _runtime_main(argv: list[str]) -> int:
+    arguments = _runtime_parser().parse_args(argv)
+    try:
+        from .runtime_libraries import runtime_library_status
+
+        result = runtime_library_status(
+            arguments.project_root.resolve(), probe=arguments.probe
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["summary"]["blocked_cells"] == 0 else 1
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
 def _metadata(values: list[str]) -> dict[str, str]:
     result: dict[str, str] = {}
     for value in values:
@@ -374,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
         return _input_main(tokens[1:])
     if tokens and tokens[0] == "profile":
         return _profile_main(tokens[1:])
+    if tokens and tokens[0] == "runtime":
+        return _runtime_main(tokens[1:])
     arguments = _parser().parse_args(tokens)
     project_root = arguments.project_root.resolve()
     downloads = project_root / MANAGED_DOWNLOADS

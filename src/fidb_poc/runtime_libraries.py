@@ -38,6 +38,7 @@ _PROVIDER_FIELDS = {
     "target_os",
     "compiler_families",
     "registry_family",
+    "plan",
 }
 
 
@@ -117,6 +118,9 @@ def load_runtime_library_catalog(
         )
         query = raw["query"]
         registry_family = raw["registry_family"]
+        _plan_path, plan = _project_file(
+            root, raw["plan"], f"provider {subject_id} plan"
+        )
         if kind == "qualified-route-query":
             if not isinstance(query, str) or not query.startswith("-print-"):
                 raise ValueError(f"runtime provider {subject_id} has invalid query")
@@ -132,6 +136,7 @@ def load_runtime_library_catalog(
                 "subject_id": subject_id,
                 "target_os": target_os,
                 "compiler_families": compiler_families,
+                "plan": plan,
             }
         )
     return {

@@ -84,7 +84,8 @@ class PriorityScheduleTests(unittest.TestCase):
         self.assertEqual(self.schedule["summary"]["runtime_provider_ready"], 4)
         self.assertEqual(subjects["glibc"]["runtime_provider_cells"], 24)
         self.assertEqual(subjects["uclibc"]["runtime_provider_cells"], 23)
-        self.assertEqual(subjects["libgcc"]["stage"], "runtime-batch")
+        self.assertTrue(subjects["libgcc"]["runtime_plan_bound"])
+        self.assertEqual(subjects["libgcc"]["stage"], "queue-candidate")
 
 
 if __name__ == "__main__":

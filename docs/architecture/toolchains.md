@@ -10,6 +10,34 @@ library needs it. The worker and artifact protocols are language-neutral:
 future languages get their own profiles, route definitions, probe adapters,
 and language capabilities without changing the coordinator transport.
 
+## Toolchain-owned runtime libraries
+
+glibc, libgcc and libstdc++ are properties of an exact qualified GCC route.
+They are not ordinary upstream source recipes. The reviewed provider catalogue
+at `toolchains/runtime-libraries.toml` defines the compiler query for each
+family; execution re-resolves the route, queries the managed compiler, verifies
+the returned archive remains inside the managed toolchain tree, checks its
+digest, extracts relocatable objects, validates their ABI, and only then starts
+Ghidra. A worker caches immutable route authority but probes each archive at the
+execution boundary.
+
+uClibc uses the other supported form: 23 checksum-pinned runtime archives in
+`toolchains/registry.toml`. These follow the existing `archive-library` path.
+Both forms produce normal packed FIDB and raw FIDBF outputs with provenance
+seals, without pretending that a route-owned artifact was rebuilt from source.
+
+Inspect all 95 exact providers without compilation or Java:
+
+```sh
+uv run fidb-poc toolchain runtime status --project-root .
+uv run fidb-poc toolchain runtime status --project-root . --probe
+```
+
+The first command is a read-only authority projection. `--probe` additionally
+queries the managed compilers and validates the archives; it still does not
+compile, launch Ghidra, write queue state, or arm either disarmed extraction
+plan.
+
 ## Current top-ten shape
 
 `c-top10-linux` covers ten ordered target requirements with ten route

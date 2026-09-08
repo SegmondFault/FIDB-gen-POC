@@ -16,6 +16,7 @@ query = "-print-file-name=libc.a"
 target_os = ["linux"]
 compiler_families = ["gcc"]
 registry_family = false
+plan = "plans/c-malware-priority-runtime-v1.toml"
 
 [[provider]]
 order = 2
@@ -27,6 +28,7 @@ query = false
 target_os = ["linux"]
 compiler_families = ["gcc"]
 registry_family = "uclibc"
+plan = "plans/c-malware-priority-uclibc-v1.toml"
 
 [[provider]]
 order = 3
@@ -38,6 +40,7 @@ query = "-print-libgcc-file-name"
 target_os = ["linux"]
 compiler_families = ["gcc"]
 registry_family = false
+plan = "plans/c-malware-priority-runtime-v1.toml"
 
 [[provider]]
 order = 4
@@ -49,3 +52,4 @@ query = "-print-file-name=libstdc++.a"
 target_os = ["linux"]
 compiler_families = ["gcc"]
 registry_family = false
+plan = "plans/c-malware-priority-runtime-v1.toml"

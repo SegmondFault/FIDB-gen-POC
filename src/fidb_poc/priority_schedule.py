@@ -153,9 +153,12 @@ def _stage(
     qualification_satisfied: bool,
     runtime_provider: bool = False,
     runtime_provider_ready: bool = False,
+    runtime_plan_bound: bool = False,
 ) -> str:
     if runtime_provider:
-        return "runtime-batch" if runtime_provider_ready else "runtime-acquisition"
+        if not runtime_provider_ready:
+            return "runtime-acquisition"
+        return "queue-candidate" if runtime_plan_bound else "runtime-plan"
     if not source_available:
         return "source-pin-cache"
     if not native_recipe:
@@ -278,6 +281,14 @@ def compile_priority_schedule(
             and int(runtime_provider["cells"]) > 0
             and int(runtime_provider["ready_cells"]) == int(runtime_provider["cells"])
         )
+        runtime_plan_path = (
+            str(runtime_provider["plan"])
+            if runtime_provider and runtime_provider.get("plan")
+            else None
+        )
+        runtime_plan_bound = bool(
+            runtime_plan_path and (root / runtime_plan_path).is_file()
+        )
         projected.append(
             {
                 **subject,
@@ -300,14 +311,21 @@ def compile_priority_schedule(
                 "recipe_state": (
                     "reviewed-runtime"
                     if runtime_provider
-                    else "reviewed-native" if native_recipe
                     else (
-                        "source-mismatch"
-                        if native_source_mismatch
+                        "reviewed-native"
+                        if native_recipe
                         else (
-                            "reviewed-limited"
-                            if limited_recipe
-                            else "prepared-not-executable" if prepared else "required"
+                            "source-mismatch"
+                            if native_source_mismatch
+                            else (
+                                "reviewed-limited"
+                                if limited_recipe
+                                else (
+                                    "prepared-not-executable"
+                                    if prepared
+                                    else "required"
+                                )
+                            )
                         )
                     )
                 ),
@@ -333,6 +351,8 @@ def compile_priority_schedule(
                 "runtime_provider_blocked_cells": (
                     int(runtime_provider["blocked_cells"]) if runtime_provider else 0
                 ),
+                "runtime_plan_path": runtime_plan_path,
+                "runtime_plan_bound": runtime_plan_bound,
                 "width_batch_bound": width_batch_bound,
                 "width_batch_ids": [str(batch["id"]) for batch in bound_batches],
                 "qualification_satisfied": qualification_satisfied,
@@ -343,6 +363,7 @@ def compile_priority_schedule(
                     qualification_satisfied=qualification_satisfied,
                     runtime_provider=runtime_provider is not None,
                     runtime_provider_ready=runtime_provider_ready,
+                    runtime_plan_bound=runtime_plan_bound,
                 ),
             }
         )

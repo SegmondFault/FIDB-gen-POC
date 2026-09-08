@@ -1301,13 +1301,17 @@ def _artifact_inventory(
 
 
 def resolve_plan(
-    request_path: str | Path, project_root: str | Path
+    request_path: str | Path,
+    project_root: str | Path,
+    *,
+    _runtime_status: dict[str, object] | None = None,
+    _toolchain_catalog: dict[str, object] | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).resolve()
     request = load_plan_request(request_path)
     width_batches = {}
     width_batches_by_authority = {}
-    width_catalog = None
+    width_catalog = _toolchain_catalog
     for matrix in request["matrices"]:
         if matrix["kind"] not in {"width-native", "runtime-library"}:
             continue
@@ -1370,13 +1374,14 @@ def resolve_plan(
         matrix_coverage_summaries[str(matrix["id"])] = selected_summary
     toolchains = load_toolchains(root / "toolchains/registry.toml")
     toolchains_by_identity = {_toolchain_identity(row): row for row in toolchains}
-    runtime_status = None
+    runtime_status = _runtime_status
     if any(matrix["kind"] == "runtime-library" for matrix in request["matrices"]):
-        from .runtime_libraries import runtime_library_status
+        if runtime_status is None:
+            from .runtime_libraries import runtime_library_status
 
-        runtime_status = runtime_library_status(
-            root, probe=False, _catalog=width_catalog
-        )
+            runtime_status = runtime_library_status(
+                root, probe=False, _catalog=width_catalog
+            )
     cells = []
     for matrix in request["matrices"]:
         if matrix["kind"] == "native":

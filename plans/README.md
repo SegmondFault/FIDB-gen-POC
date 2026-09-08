@@ -14,6 +14,18 @@ otherwise. Important examples include:
 - `validation-schedule.toml` — validation admission policy;
 - coverage, baseline and recovery plans — explicit requested work.
 
+The malware-priority overlay also has two disarmed extraction plans:
+
+- `c-malware-priority-runtime-v1.toml` resolves glibc, libgcc and libstdc++
+  from 24 exact qualified GCC routes (72 cells);
+- `c-malware-priority-uclibc-v1.toml` resolves 23 checksum-pinned uClibc
+  archives from the reviewed toolchain registry.
+
+Neither plan appears in `priority-queue.toml`. Resolving or probing them cannot
+arm work. Their empty factor-variant selection is deliberate: these are
+toolchain-owned runtime artifacts, not source builds to which the six native
+treatments can truthfully be applied.
+
 Review schema versions, pinned digests and disarmed/armed state in the file
 itself. File placement never implies that work is safe to execute.
 

@@ -278,7 +278,12 @@ def _sensitivity_authority(
     )
 
 
-def _plan_authority(root: Path) -> list[dict[str, object]]:
+def _plan_authority(
+    root: Path,
+    *,
+    runtime_status: dict[str, object] | None = None,
+    toolchain_catalog: dict[str, object] | None = None,
+) -> list[dict[str, object]]:
     plans = []
     for path in sorted((root / "plans").rglob("*.toml")):
         relative_parts = path.relative_to(root / "plans").parts
@@ -291,7 +296,12 @@ def _plan_authority(root: Path) -> list[dict[str, object]]:
         if raw.get("schema_version") != REQUEST_SCHEMA:
             continue
         request = load_plan_request(path)
-        resolved = resolve_plan(path, root)
+        resolved = resolve_plan(
+            path,
+            root,
+            _runtime_status=runtime_status,
+            _toolchain_catalog=toolchain_catalog,
+        )
         plans.append(
             {
                 "path": _relative(root, path),
@@ -852,7 +862,11 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
         "toolchain_pack_catalog": toolchain_pack_catalog,
         "factors": factors,
         "factor_variants": variants,
-        "plans": _plan_authority(root),
+        "plans": _plan_authority(
+            root,
+            runtime_status=runtime_libraries,
+            toolchain_catalog=toolchain_pack_catalog,
+        ),
         "sources": {
             "recipes": "recipes/",
             "routes": "worker.toml",
