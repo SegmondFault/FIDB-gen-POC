@@ -44,9 +44,7 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
                 "fidb_poc.ghidra_fid._set_registered_analysis_analyzer_enablement"
             ) as enablement,
         ):
-            _configure_fid_build_analysis(
-                program, FID_BUILD_RECOVERY_ANALYSIS_POLICY
-            )
+            _configure_fid_build_analysis(program, FID_BUILD_RECOVERY_ANALYSIS_POLICY)
 
         safe.assert_called_once_with(program)
         enablement.assert_called_once_with(
@@ -150,9 +148,7 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
         service = Mock()
         service.hashFunction.side_effect = [first_hash, duplicate_hash, second_hash]
 
-        rows = _deduplicated_relation_rows(
-            [first, duplicate, second], service, {}
-        )
+        rows = _deduplicated_relation_rows([first, duplicate, second], service, {})
 
         self.assertEqual(
             rows,

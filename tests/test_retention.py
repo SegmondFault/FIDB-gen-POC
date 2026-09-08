@@ -242,7 +242,9 @@ class RetentionTests(unittest.TestCase):
                     "state": "measured-complete",
                     "hash_evidence": {
                         "database_path": str(database.relative_to(self.root)),
-                        "database_sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
+                        "database_sha256": hashlib.sha256(
+                            database.read_bytes()
+                        ).hexdigest(),
                     },
                     "metrics": {
                         "expected_work_units": 1,
@@ -508,9 +510,7 @@ class RetentionTests(unittest.TestCase):
         )
         write_retention_plan(plan, self.root)
         apply_retention_plan(self.root, plan["plan_digest"])
-        self.assertTrue(
-            (run / "units/001-route-baseline/fold-A/query.elf").is_file()
-        )
+        self.assertTrue((run / "units/001-route-baseline/fold-A/query.elf").is_file())
 
     def test_sealed_relationship_backfill_releases_legacy_composites(self) -> None:
         run = self.add_complete_validation_run(
@@ -559,9 +559,7 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(plan["summary"]["validation_composite_files"], 4)
         write_retention_plan(plan, self.root)
         apply_retention_plan(self.root, plan["plan_digest"])
-        self.assertFalse(
-            (run / "units/001-route-baseline/fold-A/query.elf").exists()
-        )
+        self.assertFalse((run / "units/001-route-baseline/fold-A/query.elf").exists())
         self.assertTrue(
             (run / "units/001-route-baseline/fold-A/query-fid-evidence.jsonl").is_file()
         )

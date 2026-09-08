@@ -122,8 +122,13 @@ def load_ecological_validation(
     root = Path(project_root).expanduser().resolve()
     path = _inside(root, str(authority), "ecological-validation authority")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if set(document) != _TOP_LEVEL or document.get("schema_version") != ECOLOGICAL_SCHEMA:
-        raise ValueError("ecological-validation authority has unsupported fields or schema")
+    if (
+        set(document) != _TOP_LEVEL
+        or document.get("schema_version") != ECOLOGICAL_SCHEMA
+    ):
+        raise ValueError(
+            "ecological-validation authority has unsupported fields or schema"
+        )
     for section, fields in _SECTIONS.items():
         value = document.get(section)
         if not isinstance(value, dict) or set(value) != fields:
@@ -141,7 +146,9 @@ def load_ecological_validation(
         or imports["preserve_original"] is not True
         or analysis["execute_target_binaries"] is not False
     ):
-        raise ValueError("ecological-validation must preserve and never execute imports")
+        raise ValueError(
+            "ecological-validation must preserve and never execute imports"
+        )
     if (
         not isinstance(imports["max_file_bytes"], int)
         or isinstance(imports["max_file_bytes"], bool)
@@ -174,7 +181,11 @@ def load_ecological_validation(
         or truth["allow_observational_without_truth"] is not True
     ):
         raise ValueError("ecological-validation truth policy is unsupported")
-    for field in (imports["case_root"], corpus["database_root"], analysis["project_root"]):
+    for field in (
+        imports["case_root"],
+        corpus["database_root"],
+        analysis["project_root"],
+    ):
         if not isinstance(field, str) or not field:
             raise ValueError("ecological-validation managed paths must be non-empty")
         _inside(root, field, "ecological-validation managed path")
@@ -207,7 +218,11 @@ def _target_id(
                 else "linux"
             )
         if platform not in {"linux", "android"}:
-            return None, platform, "ELF imports require a Linux or Android platform hint"
+            return (
+                None,
+                platform,
+                "ELF imports require a Linux or Android platform hint",
+            )
         if platform == "android":
             mapping = {
                 ("x86", 32, "little"): "android-x86-32-elf",
@@ -233,7 +248,11 @@ def _target_id(
                 ("LoongArch", 64, "little"): "linux-loongarch64-elf",
             }
         target = mapping.get((machine, bits, endianness))
-        return target, platform, None if target else "ELF target is not in the lane registry"
+        return (
+            target,
+            platform,
+            None if target else "ELF target is not in the lane registry",
+        )
     if binary_format == "PE/COFF":
         target = {
             ("x86", 32): "windows-x86-32-pecoff",
@@ -287,7 +306,12 @@ def _probe_binary(path: Path, platform_hint: str) -> dict[str, object]:
             b"\xfe\xed\xfa\xcf": (">", 64),
             b"\xcf\xfa\xed\xfe": ("<", 64),
         }
-        if sample[:4] in {b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca"}:
+        if sample[:4] in {
+            b"\xca\xfe\xba\xbe",
+            b"\xbe\xba\xfe\xca",
+            b"\xca\xfe\xba\xbf",
+            b"\xbf\xba\xfe\xca",
+        }:
             return {
                 "state": "blocked-multi-slice",
                 "binary_format": "Mach-O",
@@ -340,11 +364,19 @@ def _resolve_lane(root: Path, probe: dict[str, object]) -> dict[str, object]:
         if sublane["target_id"] == probe["target_id"]
     ]
     if len(matches) != 1:
-        return {**probe, "state": "blocked-lane-routing", "blocker": "target does not resolve to exactly one sublane"}
+        return {
+            **probe,
+            "state": "blocked-lane-routing",
+            "blocker": "target does not resolve to exactly one sublane",
+        }
     lane, sublane = matches[0]
     languages = list(sublane["ghidra_language_ids"])
     compiler_specs = list(sublane["compiler_spec_ids"])
-    if sublane["definition_state"] != "mapped" or len(languages) != 1 or len(compiler_specs) != 1:
+    if (
+        sublane["definition_state"] != "mapped"
+        or len(languages) != 1
+        or len(compiler_specs) != 1
+    ):
         return {
             **probe,
             "state": "blocked-lane-routing",
@@ -365,7 +397,14 @@ def _resolve_lane(root: Path, probe: dict[str, object]) -> dict[str, object]:
 
 
 def _validate_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
-    allowed = {"filename", "label", "platform_hint", "expected_present", "expected_absent", "truth_complete"}
+    allowed = {
+        "filename",
+        "label",
+        "platform_hint",
+        "expected_present",
+        "expected_absent",
+        "truth_complete",
+    }
     if set(metadata) != allowed:
         raise ValueError("ecological import metadata has unsupported fields")
     filename = metadata["filename"]
@@ -395,8 +434,12 @@ def _validate_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
     lists: dict[str, list[str]] = {}
     for field in ("expected_present", "expected_absent"):
         value = metadata[field]
-        if not isinstance(value, list) or not all(isinstance(item, str) and _OWNER.fullmatch(item) for item in value):
-            raise ValueError(f"{field} must contain canonical family@version identifiers")
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and _OWNER.fullmatch(item) for item in value
+        ):
+            raise ValueError(
+                f"{field} must contain canonical family@version identifiers"
+            )
         if len(value) != len(set(value)):
             raise ValueError(f"{field} contains duplicates")
         lists[field] = sorted(value)
@@ -423,11 +466,18 @@ def import_ecological_binary(
     config = load_ecological_validation(root, authority)
     normalized = _validate_metadata(metadata)
     maximum = int(config["imports"]["max_file_bytes"])
-    if not isinstance(length, int) or isinstance(length, bool) or length < 1 or length > maximum:
+    if (
+        not isinstance(length, int)
+        or isinstance(length, bool)
+        or length < 1
+        or length > maximum
+    ):
         raise ValueError(f"import size must be 1-{maximum} bytes")
     case_root = _inside(root, str(config["imports"]["case_root"]), "case root")
     case_root.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".ecological-import-", dir=case_root)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".ecological-import-", dir=case_root
+    )
     temporary = Path(temporary_name)
     digest = hashlib.sha256()
     received = 0
@@ -453,14 +503,18 @@ def import_ecological_binary(
         if case_dir.exists():
             manifest = json.loads((case_dir / "case.json").read_text(encoding="utf-8"))
             if manifest.get("binary", {}).get("sha256") != binary_sha256:
-                raise ValueError("existing ecological case identity conflicts with import")
+                raise ValueError(
+                    "existing ecological case identity conflicts with import"
+                )
             return _compile_case(root, config, manifest)
         case_dir.mkdir(mode=0o700)
         binary_path = case_dir / "input.bin"
         temporary.replace(binary_path)
         os.chmod(binary_path, 0o600)
         try:
-            probe = _resolve_lane(root, _probe_binary(binary_path, str(normalized["platform_hint"])))
+            probe = _resolve_lane(
+                root, _probe_binary(binary_path, str(normalized["platform_hint"]))
+            )
         except (ElfInspectionError, OSError, ValueError) as error:
             probe = {
                 "state": "blocked-invalid-binary",
@@ -492,7 +546,12 @@ def import_ecological_binary(
                 "complete": normalized["truth_complete"],
             },
             "probe": probe,
-            "run": {"started_at": None, "finished_at": None, "error": None, "pid": None},
+            "run": {
+                "started_at": None,
+                "finished_at": None,
+                "error": None,
+                "pid": None,
+            },
         }
         _atomic_json(case_dir / "case.json", manifest)
         return _compile_case(root, config, manifest)
@@ -500,7 +559,9 @@ def import_ecological_binary(
         temporary.unlink(missing_ok=True)
 
 
-def _read_case(root: Path, config: Mapping[str, object], case_id: str) -> dict[str, object]:
+def _read_case(
+    root: Path, config: Mapping[str, object], case_id: str
+) -> dict[str, object]:
     if not _CASE_ID.fullmatch(case_id):
         raise ValueError("invalid ecological case id")
     case_root = _inside(root, str(config["imports"]["case_root"]), "case root")
@@ -508,7 +569,10 @@ def _read_case(root: Path, config: Mapping[str, object], case_id: str) -> dict[s
     if not path.is_file() or path.is_symlink():
         raise ValueError(f"ecological case does not exist: {case_id}")
     document = json.loads(path.read_text(encoding="utf-8"))
-    if document.get("schema_version") != ECOLOGICAL_CASE_SCHEMA or document.get("case_id") != case_id:
+    if (
+        document.get("schema_version") != ECOLOGICAL_CASE_SCHEMA
+        or document.get("case_id") != case_id
+    ):
         raise ValueError("ecological case manifest is invalid")
     return document
 
@@ -571,11 +635,16 @@ def _compile_case(
     if report_path.is_file() and not report_path.is_symlink():
         try:
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            if report.get("schema_version") == ECOLOGICAL_REPORT_SCHEMA and report.get("case_id") == case_id:
+            if (
+                report.get("schema_version") == ECOLOGICAL_REPORT_SCHEMA
+                and report.get("case_id") == case_id
+            ):
                 failures = list(report["failures"])
                 owners = []
                 for owner in report["owner_matches"][:250]:
-                    owners.append({**owner, "evidence": list(owner.get("evidence", []))[:10]})
+                    owners.append(
+                        {**owner, "evidence": list(owner.get("evidence", []))[:10]}
+                    )
                 results = {
                     "state": report["state"],
                     "confusion_matrix": report["confusion_matrix"],
@@ -592,7 +661,9 @@ def _compile_case(
     blockers: list[str] = []
     probe = manifest["probe"]
     if probe.get("state") != "routed":
-        blockers.append(str(probe.get("blocker") or "binary is not routed to a query sublane"))
+        blockers.append(
+            str(probe.get("blocker") or "binary is not routed to a query sublane")
+        )
     if not corpus:
         blockers.append("no compatible materialized lane database is available")
     state = str(manifest["state"])
@@ -638,7 +709,12 @@ def compile_ecological_validation(
                 continue
     cases.sort(key=lambda row: str(row["created_at"]), reverse=True)
     inventory = detect_lane_inventory(root)
-    matrix = {"true_positives": 0, "false_positives": 0, "true_negatives": 0, "false_negatives": 0}
+    matrix = {
+        "true_positives": 0,
+        "false_positives": 0,
+        "true_negatives": 0,
+        "false_negatives": 0,
+    }
     measured = 0
     failures: list[dict[str, object]] = []
     for case in cases:
@@ -652,7 +728,10 @@ def compile_ecological_validation(
     aggregate = (
         {"unit": "imported-binary-corpus-library-presence", **matrix}
         if measured
-        else {"unit": "imported-binary-corpus-library-presence", **{key: None for key in matrix}}
+        else {
+            "unit": "imported-binary-corpus-library-presence",
+            **{key: None for key in matrix},
+        }
     )
     body = {
         "schema_version": ECOLOGICAL_STATUS_SCHEMA,
@@ -670,25 +749,44 @@ def compile_ecological_validation(
             "max_file_bytes": config["imports"]["max_file_bytes"],
         },
         "corpus": {
-            "materialized_generations": inventory["summary"]["materialized_generations"],
+            "materialized_generations": inventory["summary"][
+                "materialized_generations"
+            ],
             "active_packs": inventory["summary"]["active_packs"],
             "bytes": inventory["summary"]["lane_database_bytes"],
             "raw_observations": inventory["summary"]["raw_observations"],
-            "compact_unique_signatures": inventory["summary"]["compact_unique_signatures"],
+            "compact_unique_signatures": inventory["summary"][
+                "compact_unique_signatures"
+            ],
             "issues": inventory["summary"]["issues"],
         },
         "summary": {
             "imported_cases": len(cases),
-            "ready_cases": sum(bool(case["readiness"]["ready_to_run"]) for case in cases),
-            "running_cases": sum(case["state"] in {"queued", "running"} for case in cases),
-            "completed_cases": sum(case["results"]["state"] == "measured-complete" for case in cases),
-            "labelled_cases": sum(bool(case["truth"]["complete"] or case["truth"]["expected_present"] or case["truth"]["expected_absent"]) for case in cases),
+            "ready_cases": sum(
+                bool(case["readiness"]["ready_to_run"]) for case in cases
+            ),
+            "running_cases": sum(
+                case["state"] in {"queued", "running"} for case in cases
+            ),
+            "completed_cases": sum(
+                case["results"]["state"] == "measured-complete" for case in cases
+            ),
+            "labelled_cases": sum(
+                bool(
+                    case["truth"]["complete"]
+                    or case["truth"]["expected_present"]
+                    or case["truth"]["expected_absent"]
+                )
+                for case in cases
+            ),
         },
         "aggregate": {
             "measured_cases": measured,
             "confusion_matrix": aggregate,
             "failure_summary": {
-                "collisions": sum(row.get("failure_type") == "collision" for row in failures),
+                "collisions": sum(
+                    row.get("failure_type") == "collision" for row in failures
+                ),
                 "misses": sum(row.get("failure_type") == "miss" for row in failures),
             },
             "failures": failures[: int(config["analysis"]["max_failure_rows"])],
@@ -733,7 +831,9 @@ def _corpus_matches(
     for database in corpus:
         path = _inside(root, str(database["path"]), "lane database")
         with _open_database(path) as connection:
-            application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
+            application_id = int(
+                connection.execute("PRAGMA application_id").fetchone()[0]
+            )
             all_owners.update(_owner_rows(connection))
             if application_id == LANE_DATABASE_APPLICATION_ID:
                 query = """
@@ -771,7 +871,9 @@ def _corpus_matches(
                       AND signature.full_hash IN ({placeholders})
                 """
             else:
-                raise ValueError(f"unsupported lane database application id: {application_id}")
+                raise ValueError(
+                    f"unsupported lane database application id: {application_id}"
+                )
             for offset in range(0, len(full_hashes), 400):
                 chunk = full_hashes[offset : offset + 400]
                 if not chunk:
@@ -808,7 +910,9 @@ def _corpus_matches(
                                 "address": target_row["address"],
                                 "target_function": target_row["function_name"],
                                 "corpus_function": corpus_row["corpus_function"],
-                                "signature": ":".join((key[0], key[1], str(key[2]), str(key[3]))),
+                                "signature": ":".join(
+                                    (key[0], key[1], str(key[2]), str(key[3]))
+                                ),
                                 "route_id": corpus_row["route_id"],
                                 "compiler_id": f'{corpus_row["compiler_family"]}-{corpus_row["compiler_version"]}',
                                 "treatment_id": corpus_row["treatment_id"],
@@ -817,7 +921,12 @@ def _corpus_matches(
                         )
     unique = {
         (
-            row["owner"], row["address"], row["signature"], row["route_id"], row["treatment_id"], row["evidence_path"]
+            row["owner"],
+            row["address"],
+            row["signature"],
+            row["route_id"],
+            row["treatment_id"],
+            row["evidence_path"],
         ): row
         for row in matches
     }
@@ -847,7 +956,9 @@ def run_ecological_case(
     if compiled["readiness"]["blockers"]:
         raise ValueError("; ".join(compiled["readiness"]["blockers"]))
     case_root = _inside(root, f'{config["imports"]["case_root"]}/{case_id}', "case")
-    global_lock = _inside(root, f'{config["imports"]["case_root"]}/.runner.lock', "ecological lock")
+    global_lock = _inside(
+        root, f'{config["imports"]["case_root"]}/.runner.lock', "ecological lock"
+    )
     descriptor = None
     try:
         descriptor = os.open(global_lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -862,7 +973,12 @@ def run_ecological_case(
         **manifest,
         "state": "running",
         "updated_at": started,
-        "run": {"started_at": started, "finished_at": None, "error": None, "pid": os.getpid()},
+        "run": {
+            "started_at": started,
+            "finished_at": None,
+            "error": None,
+            "pid": os.getpid(),
+        },
     }
     _atomic_json(case_root / "case.json", manifest)
     try:
@@ -870,13 +986,20 @@ def run_ecological_case(
         from .pipeline import find_ghidra, ghidra_environment
 
         probe = manifest["probe"]
-        binary = _inside(root, str(manifest["binary"]["stored_path"]), "imported binary")
+        binary = _inside(
+            root, str(manifest["binary"]["stored_path"]), "imported binary"
+        )
         if _sha256(binary) != manifest["binary"]["sha256"]:
             raise ValueError("imported binary digest changed")
         _headless, ghidra_home = find_ghidra()
         environment = ghidra_environment(case_root / "ghidra-user")
         ghidra_fid.ensure_started(ghidra_home, environment)
-        project_parent = _inside(root, str(config["analysis"]["project_root"]), "Ghidra project root") / case_id
+        project_parent = (
+            _inside(
+                root, str(config["analysis"]["project_root"]), "Ghidra project root"
+            )
+            / case_id
+        )
         signatures_path = case_root / "target-signatures.jsonl"
         _project_dir, _program_path, signature_summary, _journal_retries = (
             ghidra_fid.analyze_and_export_program_signatures(
@@ -934,9 +1057,15 @@ def run_ecological_case(
             owner_matches.append(
                 {
                     "owner": owner,
-                    "matched_functions": len({str(row["address"]) for row in owner_rows}),
+                    "matched_functions": len(
+                        {str(row["address"]) for row in owner_rows}
+                    ),
                     "matched_occurrences": len(owner_rows),
-                    "truth": "present" if owner in present else "absent" if owner in absent else "unlabelled",
+                    "truth": (
+                        "present"
+                        if owner in present
+                        else "absent" if owner in absent else "unlabelled"
+                    ),
                     "evidence": owner_rows[:25],
                 }
             )
@@ -952,12 +1081,17 @@ def run_ecological_case(
             "probe": probe,
             "truth": truth,
             "corpus": [
-                {**row, "sha256": _sha256(_inside(root, str(row["path"]), "lane database"))}
+                {
+                    **row,
+                    "sha256": _sha256(_inside(root, str(row["path"]), "lane database")),
+                }
                 for row in compiled["corpus"]
             ],
             "confusion_matrix": confusion,
             "failure_summary": {
-                "collisions": sum(row["failure_type"] == "collision" for row in failures),
+                "collisions": sum(
+                    row["failure_type"] == "collision" for row in failures
+                ),
                 "misses": sum(row["failure_type"] == "miss" for row in failures),
             },
             "failures": failures[:max_failures],
@@ -977,7 +1111,12 @@ def run_ecological_case(
                 **manifest,
                 "state": "complete",
                 "updated_at": finished,
-                "run": {"started_at": started, "finished_at": finished, "error": None, "pid": os.getpid()},
+                "run": {
+                    "started_at": started,
+                    "finished_at": finished,
+                    "error": None,
+                    "pid": os.getpid(),
+                },
             },
         )
         return report
@@ -989,7 +1128,12 @@ def run_ecological_case(
                 **manifest,
                 "state": "failed",
                 "updated_at": finished,
-                "run": {"started_at": started, "finished_at": finished, "error": f"{type(error).__name__}: {error}", "pid": os.getpid()},
+                "run": {
+                    "started_at": started,
+                    "finished_at": finished,
+                    "error": f"{type(error).__name__}: {error}",
+                    "pid": os.getpid(),
+                },
             },
         )
         raise
@@ -1049,7 +1193,11 @@ def start_ecological_case(
     except Exception as error:
         _atomic_json(
             case_root / "case.json",
-            {**queued, "state": "failed", "run": {**queued["run"], "error": str(error)}},
+            {
+                **queued,
+                "state": "failed",
+                "run": {**queued["run"], "error": str(error)},
+            },
         )
         raise
     return _compile_case(root, config, _read_case(root, config, case_id))

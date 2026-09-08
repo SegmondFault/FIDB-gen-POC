@@ -84,15 +84,13 @@ class ValidationObservatoryTests(unittest.TestCase):
 
     def _population_evidence(self, root: Path):
         connection = sqlite3.connect(root / "evidence.sqlite3")
-        connection.execute(
-            """
+        connection.execute("""
             CREATE TABLE hash_population(
                 hash_type TEXT NOT NULL,
                 value TEXT NOT NULL,
                 false_positives INTEGER NOT NULL
             )
-            """
-        )
+            """)
         connection.executemany(
             "INSERT INTO hash_population VALUES (?,?,?)",
             (("full", "common", 6), ("full", "less-common", 4)),
@@ -102,15 +100,13 @@ class ValidationObservatoryTests(unittest.TestCase):
 
     def _component_evidence(self, root: Path):
         connection = sqlite3.connect(root / "evidence.sqlite3")
-        connection.execute(
-            """
+        connection.execute("""
             CREATE TABLE hash_component_noise(
                 hash_type TEXT NOT NULL,
                 component_value TEXT NOT NULL,
                 exact_false_positive_observations INTEGER NOT NULL
             )
-            """
-        )
+            """)
         connection.executemany(
             "INSERT INTO hash_component_noise VALUES (?,?,?)",
             (("full", "common", 6), ("full", "less-common", 4)),
@@ -180,19 +176,13 @@ class ValidationObservatoryTests(unittest.TestCase):
             self.assertEqual(population["noisy_fraction"], 0.2)
             self.assertEqual(population["false_positive_observations"], 10)
             self.assertEqual(population["false_positive_fraction"], 1.0)
+            self.assertEqual(full["false_positive_concentration"][0]["rank"], 0)
             self.assertEqual(
-                full["false_positive_concentration"][0]["rank"], 0
-            )
-            self.assertEqual(
-                full["false_positive_concentration"][1][
-                    "false_positive_fraction"
-                ],
+                full["false_positive_concentration"][1]["false_positive_fraction"],
                 0.6,
             )
             self.assertEqual(
-                full["false_positive_concentration"][-1][
-                    "false_positive_fraction"
-                ],
+                full["false_positive_concentration"][-1]["false_positive_fraction"],
                 1.0,
             )
 
@@ -207,9 +197,7 @@ class ValidationObservatoryTests(unittest.TestCase):
             full = result["selected"]["hash_type_analysis"][0]
             self.assertEqual(full["noise_population"]["noisy_values"], 2)
             self.assertEqual(
-                full["false_positive_concentration"][-1][
-                    "false_positive_observations"
-                ],
+                full["false_positive_concentration"][-1]["false_positive_observations"],
                 10,
             )
 

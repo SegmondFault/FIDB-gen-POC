@@ -45,9 +45,7 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(document["readiness"]["recipe_ready_libraries"], 9)
         self.assertEqual(document["readiness"]["materializable_executions"], 1_998)
         self.assertEqual(document["readiness"]["blocked_executions"], 0)
-        self.assertEqual(
-            document["readiness"]["queue_state"], "historical-sealed"
-        )
+        self.assertEqual(document["readiness"]["queue_state"], "historical-sealed")
 
     def test_build_requires_an_explicit_route(self):
         errors = io.StringIO()

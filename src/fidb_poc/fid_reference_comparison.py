@@ -9,7 +9,6 @@ import tomllib
 from pathlib import Path
 from typing import Mapping
 
-
 AUTHORITY_SCHEMA = "fidb-reference-comparison/v1"
 REPORT_SCHEMA = "fidb-reference-comparison-report/v1"
 SEAL_SCHEMA = "fidb-reference-comparison-seal/v1"
@@ -58,15 +57,19 @@ def load_comparison_authority(
     path = _inside(root, authority, "FID reference comparison authority")
     raw = path.read_bytes()
     document = tomllib.loads(raw.decode("utf-8"))
-    if set(document) != {
-        "schema_version",
-        "id",
-        "source_run_id",
-        "baseline_arm",
-        "output_report",
-        "output_seal",
-        "arm",
-    } or document.get("schema_version") != AUTHORITY_SCHEMA:
+    if (
+        set(document)
+        != {
+            "schema_version",
+            "id",
+            "source_run_id",
+            "baseline_arm",
+            "output_report",
+            "output_seal",
+            "arm",
+        }
+        or document.get("schema_version") != AUTHORITY_SCHEMA
+    ):
         raise ValueError("FID reference comparison authority is invalid")
     arms = document.get("arm")
     if not isinstance(arms, list) or len(arms) != 3:
@@ -100,8 +103,7 @@ def load_comparison_authority(
         if (
             not arm_id
             or arm_id in seen
-            or population
-            not in {"archive-only", "linked-only", "archive-plus-linked"}
+            or population not in {"archive-only", "linked-only", "archive-plus-linked"}
             or not isinstance(indexes, list)
             or not indexes
             or len(set(map(str, indexes))) != len(indexes)
@@ -145,7 +147,9 @@ def _rates(matrix: Mapping[str, object]) -> dict[str, float]:
     }
 
 
-def _comparison(source: Mapping[str, object], target: Mapping[str, object]) -> dict[str, object]:
+def _comparison(
+    source: Mapping[str, object], target: Mapping[str, object]
+) -> dict[str, object]:
     source_matrix = source["confusion_matrix"]
     target_matrix = target["confusion_matrix"]
     return {
@@ -216,7 +220,10 @@ def freeze_reference_comparison(
         if arm["population"] == "archive-only":
             if reference not in (None, {}, {"population": "archive-only"}):
                 raise ValueError("legacy archive reference population is inconsistent")
-        elif not isinstance(reference, dict) or reference.get("population") != arm["population"]:
+        elif (
+            not isinstance(reference, dict)
+            or reference.get("population") != arm["population"]
+        ):
             raise ValueError(f"comparison reference population differs: {arm['id']}")
         matrix = report.get("confusion_matrix", {})
         if set(matrix) != {
@@ -239,8 +246,7 @@ def freeze_reference_comparison(
         ]
         if isinstance(reference, dict) and reference.get("indexes"):
             reported = {
-                (str(row["path"]), str(row["sha256"]))
-                for row in reference["indexes"]
+                (str(row["path"]), str(row["sha256"])) for row in reference["indexes"]
             }
             observed = {(row["path"], row["sha256"]) for row in index_receipts}
             if reported != observed:
@@ -254,13 +260,17 @@ def freeze_reference_comparison(
             if linked_seal_sha256 not in (None, generation_receipt["sha256"]):
                 raise ValueError("comparison arms use different linked generations")
             linked_seal_sha256 = str(generation_receipt["sha256"])
-            components = reference.get("components", []) if isinstance(reference, dict) else []
+            components = (
+                reference.get("components", []) if isinstance(reference, dict) else []
+            )
             linked_components = [
                 row for row in components if row.get("kind") == "linked-generation"
             ]
-            if len(linked_components) != 1 or linked_components[0].get(
-                "generation_seal_sha256"
-            ) != generation_receipt["sha256"]:
+            if (
+                len(linked_components) != 1
+                or linked_components[0].get("generation_seal_sha256")
+                != generation_receipt["sha256"]
+            ):
                 raise ValueError(f"linked generation receipt differs: {arm['id']}")
 
         hash_evidence = report.get("hash_evidence", {})
@@ -338,9 +348,7 @@ def freeze_reference_comparison(
         "authority_sha256": policy["authority_sha256"],
         "report_path": str(report_path.relative_to(root)),
         "report_sha256": _sha256(report_path),
-        "input_report_sha256": {
-            row["id"]: row["report"]["sha256"] for row in resolved
-        },
+        "input_report_sha256": {row["id"]: row["report"]["sha256"] for row in resolved},
     }
     _atomic_json(seal_path, seal)
     return {**report, "report_path": str(report_path.relative_to(root)), "seal": seal}

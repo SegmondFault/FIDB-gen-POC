@@ -194,9 +194,7 @@ class AdapterTests(unittest.TestCase):
                 "--disable-failmalloc",
             ),
         )
-        self.assertEqual(
-            commands[1], ("make", "-j7", "-C", "lib", "libnghttp2.la")
-        )
+        self.assertEqual(commands[1], ("make", "-j7", "-C", "lib", "libnghttp2.la"))
 
     def test_gettext_uses_adjacent_cxx_driver_for_configure_probes(self):
         environment = build_environment(
@@ -257,9 +255,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("--disable-zlib", commands[0])
         self.assertIn("--disable-jpeg", commands[0])
         self.assertIn("--disable-zstd", commands[0])
-        self.assertEqual(
-            commands[1], ("make", "-j5", "-C", "libtiff", "libtiff.la")
-        )
+        self.assertEqual(commands[1], ("make", "-j5", "-C", "libtiff", "libtiff.la"))
 
     def test_new_autoconf_adapters_are_static_and_dependency_bounded(self):
         libffi = build_commands(
@@ -312,9 +308,18 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_PNG=ON", commands[0])
         self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON", commands[0])
         self.assertIn("-DHB_BUILD_GPU_DEMO=OFF", commands[0])
-        self.assertEqual(commands[1][0:7], (
-            "cmake", "--build", "fidb-build", "--parallel", "8", "--target", "harfbuzz"
-        ))
+        self.assertEqual(
+            commands[1][0:7],
+            (
+                "cmake",
+                "--build",
+                "fidb-build",
+                "--parallel",
+                "8",
+                "--target",
+                "harfbuzz",
+            ),
+        )
         self.assertIn("harfbuzz-gpu", commands[1])
         self.assertEqual(environment["CXX"], "/usr/bin/g++")
 
@@ -375,9 +380,7 @@ class AdapterTests(unittest.TestCase):
             ("cmake", "--build", f"{source_root}/fidb-deps/zlib-build"),
         )
         self.assertEqual(commands[2][0:2], ("cmake", "--install"))
-        self.assertIn(
-            f"-DZLIB_ROOT={source_root}/fidb-deps/zlib-install", commands[3]
-        )
+        self.assertIn(f"-DZLIB_ROOT={source_root}/fidb-deps/zlib-install", commands[3])
         self.assertEqual(commands[4][-2:], ("--target", "png_static"))
 
     def test_libpng_adapter_rejects_an_unbound_dependency_workspace(self):
@@ -465,9 +468,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(commands[1][0:3], ("make", "terminal.o", "rltty.o"))
         self.assertIn("-include windows.h", commands[1][3])
         self.assertIn("-Dwinsize=_CONSOLE_SCREEN_BUFFER_INFO", commands[1][3])
-        self.assertEqual(
-            commands[2], ("make", "-j4", "libreadline.a", "libhistory.a")
-        )
+        self.assertEqual(commands[2], ("make", "-j4", "libreadline.a", "libhistory.a"))
 
     def test_link_adapter_materialises_archive_without_raw_recipe_commands(self):
         treatment = Treatment(

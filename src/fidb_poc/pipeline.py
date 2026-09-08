@@ -1312,8 +1312,7 @@ def _validate_population_report(
             output_directory / f"{library.identifier}-{group_id}.fidb"
         ).resolve()
         expected_signatures = (
-            output_directory
-            / f"{library.identifier}-{group_id}.fid-signatures.jsonl"
+            output_directory / f"{library.identifier}-{group_id}.fid-signatures.jsonl"
         ).resolve()
         observed_fidb = Path(row.get("fidb_path", "")).resolve()
         observed_signatures = Path(row.get("fid_signatures_path", "")).resolve()
@@ -1378,8 +1377,7 @@ def _validate_population_report(
             for field in ("records", "unique_full_hashes", "unique_signatures")
         }
         if any(
-            type(value) is not int or value <= 0
-            for value in signature_counts.values()
+            type(value) is not int or value <= 0 for value in signature_counts.values()
         ):
             raise PipelineError(
                 f"Ghidra signature export has invalid counts for "
@@ -1394,10 +1392,7 @@ def _validate_population_report(
                 f"Ghidra signature counts do not reconcile for "
                 f"{library.identifier}: {signature_counts}, added={counts['added']}"
             )
-        if (
-            not expected_signatures.is_file()
-            or expected_signatures.stat().st_size == 0
-        ):
+        if not expected_signatures.is_file() or expected_signatures.stat().st_size == 0:
             raise PipelineError(
                 f"Ghidra did not produce non-empty signatures: {expected_signatures}"
             )

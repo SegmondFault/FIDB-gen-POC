@@ -160,11 +160,20 @@ class EcologicalValidationTests(unittest.TestCase):
             }
 
         with (
-            mock.patch("fidb_poc.pipeline.find_ghidra", return_value=(Path("/fake/headless"), Path("/fake/ghidra"))),
+            mock.patch(
+                "fidb_poc.pipeline.find_ghidra",
+                return_value=(Path("/fake/headless"), Path("/fake/ghidra")),
+            ),
             mock.patch("fidb_poc.pipeline.ghidra_environment", return_value={}),
             mock.patch("fidb_poc.ghidra_fid.ensure_started"),
-            mock.patch("fidb_poc.ghidra_fid.analyze_target", return_value=(Path("/fake/project"), "/input.bin")),
-            mock.patch("fidb_poc.ghidra_fid.export_program_signatures", side_effect=export_signatures),
+            mock.patch(
+                "fidb_poc.ghidra_fid.analyze_target",
+                return_value=(Path("/fake/project"), "/input.bin"),
+            ),
+            mock.patch(
+                "fidb_poc.ghidra_fid.export_program_signatures",
+                side_effect=export_signatures,
+            ),
         ):
             report = run_ecological_case(self.root, case["case_id"])
 
@@ -180,4 +189,3 @@ class EcologicalValidationTests(unittest.TestCase):
         )
         self.assertEqual(case["truth"]["expected_present"], [])
         self.assertFalse(case["truth"]["complete"])
-

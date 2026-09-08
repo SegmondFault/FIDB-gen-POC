@@ -290,7 +290,10 @@ def import_pinned(
                 prefix=f".{expected_sha256}.", suffix=".part", dir=downloads
             )
             temporary = Path(name)
-            with source.open("rb") as input_stream, os.fdopen(descriptor, "wb") as output:
+            with (
+                source.open("rb") as input_stream,
+                os.fdopen(descriptor, "wb") as output,
+            ):
                 observed, byte_count = _copy_response(
                     input_stream, output, max_bytes=max_bytes
                 )

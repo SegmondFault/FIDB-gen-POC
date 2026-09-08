@@ -45,7 +45,9 @@ def resolve_linked_generation(
     try:
         generation = json.loads(seal_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError("linked generation seal is unavailable or unreadable") from error
+        raise ValueError(
+            "linked generation seal is unavailable or unreadable"
+        ) from error
     if not (
         generation.get("schema_version") == GENERATION_SEAL_SCHEMA
         and generation.get("state") == "sealed"

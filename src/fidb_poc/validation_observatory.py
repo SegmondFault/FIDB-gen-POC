@@ -84,9 +84,7 @@ def _noise_concentration(
     if database is None:
         return {}
     stat = database.stat()
-    return _noise_concentration_database(
-        str(database), stat.st_size, stat.st_mtime_ns
-    )
+    return _noise_concentration_database(str(database), stat.st_size, stat.st_mtime_ns)
 
 
 @lru_cache(maxsize=32)

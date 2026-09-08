@@ -43,9 +43,7 @@ class SourceAcquisitionTests(unittest.TestCase):
         by_id = {row["candidate_key"]: row for row in lock["candidate"]}
         self.assertEqual(by_id["maven"]["resolver_id"], "debian-sid")
         self.assertNotIn("-bin.", by_id["maven"]["url"])
-        self.assertEqual(
-            by_id["automake"]["url_rewrite_id"], "gnu-kernel-mirror"
-        )
+        self.assertEqual(by_id["automake"]["url_rewrite_id"], "gnu-kernel-mirror")
         self.assertEqual(
             by_id["automake"]["registry_url"],
             "https://ftpmirror.gnu.org/gnu/automake/automake-1.18.1.tar.xz",

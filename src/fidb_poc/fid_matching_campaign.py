@@ -281,8 +281,7 @@ def load_campaign(
         }
         or not 1 <= int(execution["workers"]) <= 16
         or execution["scheduling"] != "largest-query-first-greedy-v1"
-        or execution["engine"]
-        not in {LEGACY_ENGINE_ID, ALPHA_ENGINE_1, ALPHA_ENGINE_2}
+        or execution["engine"] not in {LEGACY_ENGINE_ID, ALPHA_ENGINE_1, ALPHA_ENGINE_2}
     ):
         raise ValueError("FID matching execution policy is invalid")
     if (
@@ -443,9 +442,7 @@ def _compact_index_entries(
     root: Path, evidence: Mapping[str, object]
 ) -> list[dict[str, object]]:
     entries = []
-    for (owner, route_id, treatment_id), item in sorted(
-        evidence["signatures"].items()
-    ):
+    for (owner, route_id, treatment_id), item in sorted(evidence["signatures"].items()):
         fidb = _fidb_from_signatures(root, Path(item["path"]))
         entries.append(
             {
@@ -571,8 +568,10 @@ def _ensure_compact_candidate_indexes(
                 )
                 index_mode = "immutable-reuse"
             else:
-                suffix = "" if campaign["reference"]["legacy_default"] else (
-                    f'-{component["id"]}'
+                suffix = (
+                    ""
+                    if campaign["reference"]["legacy_default"]
+                    else (f'-{component["id"]}')
                 )
                 destination = campaign_root / f"compact-candidate-index{suffix}.sqlite3"
                 status = build_compact_candidate_index(
@@ -655,8 +654,7 @@ def _reusable_case(
         == campaign["methodology"]["required_link_harness"]
         and (
             campaign["reference"]["legacy_default"]
-            or case.get("campaign_authority_sha256")
-            == campaign["authority_sha256"]
+            or case.get("campaign_authority_sha256") == campaign["authority_sha256"]
         )
     )
 
@@ -953,8 +951,7 @@ def _aggregate(
                     "id": "compact-candidate-index",
                     "state": stage_state,
                     "components": [
-                        str(row["id"])
-                        for row in campaign["reference"]["component"]
+                        str(row["id"]) for row in campaign["reference"]["component"]
                     ],
                 },
                 {"id": "query-relationship-evidence", "state": stage_state},
@@ -1438,9 +1435,7 @@ def worker_cases(
     )
 
     runtime = load_runtime(root, str(campaign["runtime"]))
-    evidence = resolve_hash_analysis_evidence(
-        root, str(campaign["runtime"])
-    )
+    evidence = resolve_hash_analysis_evidence(root, str(campaign["runtime"]))
     execution = runtime["execution"]
     os.environ["_JAVA_OPTIONS"] = (
         f'-Xms{execution["jvm_initial_heap_mib"]}m '

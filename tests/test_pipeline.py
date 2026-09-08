@@ -35,7 +35,12 @@ from fidb_poc.pipeline import (
     write_manifest,
 )
 from fidb_poc.adapters import Detection
-from fidb_poc.config import BuildInput, Library, load_configuration, select_configuration
+from fidb_poc.config import (
+    BuildInput,
+    Library,
+    load_configuration,
+    select_configuration,
+)
 
 
 class PipelineTests(unittest.TestCase):
@@ -133,9 +138,7 @@ class PipelineTests(unittest.TestCase):
             request_override=("zlib@1.3.1",),
         )
         base_route = next(
-            item
-            for item in configuration.routes
-            if item.id == "linux-x86_64-gnu-gcc"
+            item for item in configuration.routes if item.id == "linux-x86_64-gnu-gcc"
         )
         windows_route = SimpleNamespace(
             **{
@@ -175,9 +178,7 @@ class PipelineTests(unittest.TestCase):
             cached.write_bytes(payload)
 
             with patch("fidb_poc.pipeline.acquire_pinned") as acquire:
-                selected = download_library(
-                    library, downloads, content_addressed=True
-                )
+                selected = download_library(library, downloads, content_addressed=True)
 
         self.assertEqual(selected, cached)
         acquire.assert_not_called()
@@ -513,9 +514,7 @@ class PipelineTests(unittest.TestCase):
                 0o755,
             )
             self.assertTrue((second / "configure-link").is_symlink())
-            self.assertEqual(
-                (second / "configure-link").read_bytes(), helper_bytes
-            )
+            self.assertEqual((second / "configure-link").read_bytes(), helper_bytes)
 
     def test_source_archive_symlink_cannot_escape_staging(self):
         with tempfile.TemporaryDirectory() as temporary:

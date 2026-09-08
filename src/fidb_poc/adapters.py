@@ -689,9 +689,7 @@ def build_commands(
             ),
         )
     if build_system == "zstd-make":
-        platform = (
-            ("TARGET_SYSTEM=Windows_NT",) if route.target_os == "windows" else ()
-        )
+        platform = ("TARGET_SYSTEM=Windows_NT",) if route.target_os == "windows" else ()
         return (
             (
                 "make",
@@ -799,9 +797,7 @@ def build_environment(
     elif route.target_os == "windows":
         toolchain_bin = Path(route.compiler[0]).parent
         environment["PATH"] = f"{toolchain_bin}:/usr/bin:/bin"
-        environment["WINDRES"] = str(
-            toolchain_bin / "x86_64-w64-mingw32-windres"
-        )
+        environment["WINDRES"] = str(toolchain_bin / "x86_64-w64-mingw32-windres")
     return environment
 
 

@@ -70,7 +70,9 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(len(configuration.profiles["c-route-toolchain-canary-v1"]), 6)
 
         android_x86 = [
-            route for route in configuration.routes if route.id.startswith("android-x86")
+            route
+            for route in configuration.routes
+            if route.id.startswith("android-x86")
         ]
         self.assertEqual(len(android_x86), 4)
         self.assertTrue(
@@ -108,7 +110,10 @@ class ConfigurationTests(unittest.TestCase):
             configuration = load_configuration(root / "worker.toml")
 
         self.assertGreater(
-            sum(route.managed_toolchain_route is not None for route in configuration.routes),
+            sum(
+                route.managed_toolchain_route is not None
+                for route in configuration.routes
+            ),
             1,
         )
         load_catalog.assert_called_once_with(root)
@@ -116,9 +121,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_work_request_contains_library_names_not_source_details(self):
         root = Path(__file__).resolve().parents[1]
         document = tomllib.loads((root / "worker.toml").read_text())
-        self.assertEqual(
-            document["requested_libraries"], ["zlib@1.3.1", "bzip2@1.0.7"]
-        )
+        self.assertEqual(document["requested_libraries"], ["zlib@1.3.1", "bzip2@1.0.7"])
         self.assertNotIn("url", document)
         self.assertNotIn("sources", document)
 
@@ -151,8 +154,14 @@ class ConfigurationTests(unittest.TestCase):
             new.write_text(
                 old.read_text(encoding="utf-8")
                 .replace('version = "1.0.7"', 'version = "1.0.8"')
-                .replace('source_directory = "bzip2-1.0.7"', 'source_directory = "bzip2-1.0.8"')
-                .replace("e768a87c5b1a79511499beb41500bcc4caf203726fff46a6f5f9ad27fe08ab2b", "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"),
+                .replace(
+                    'source_directory = "bzip2-1.0.7"',
+                    'source_directory = "bzip2-1.0.8"',
+                )
+                .replace(
+                    "e768a87c5b1a79511499beb41500bcc4caf203726fff46a6f5f9ad27fe08ab2b",
+                    "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+                ),
                 encoding="utf-8",
             )
 

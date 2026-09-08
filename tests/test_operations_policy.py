@@ -108,9 +108,7 @@ class OperationsPolicyTests(unittest.TestCase):
         self.assertEqual(extended.stop_claiming_at, "2026-09-04T18:00:00+02:00")
         self.assertFalse(expired.claims_allowed)
         self.assertEqual(expired.next_window_at, "2026-09-06T00:00:00+02:00")
-        self.assertEqual(
-            policy.document()["date_overrides"][0]["date"], "2026-09-04"
-        )
+        self.assertEqual(policy.document()["date_overrides"][0]["date"], "2026-09-04")
 
     def test_schedule_and_policy_validation_fail_closed(self):
         cases = (

@@ -10,14 +10,34 @@ class CandidateSelectionTests(unittest.TestCase):
     def test_uses_investigation_family_and_target_architecture(self) -> None:
         investigation = SimpleNamespace(
             target=SimpleNamespace(machine="PowerPC", endianness="big", elf_class=32),
-            hypotheses=(SimpleNamespace(
-                disposition="build", candidate_packages=("uclibc", "glibc")
-            ),),
+            hypotheses=(
+                SimpleNamespace(
+                    disposition="build", candidate_packages=("uclibc", "glibc")
+                ),
+            ),
         )
         recipes = [
-            {"family": "musl", "version": "1", "machine": "PowerPC", "endianness": "big", "elf_class": 32},
-            {"family": "uclibc", "version": "1", "machine": "PowerPC", "endianness": "big", "elf_class": 32},
-            {"family": "uclibc", "version": "1", "machine": "MIPS", "endianness": "big", "elf_class": 32},
+            {
+                "family": "musl",
+                "version": "1",
+                "machine": "PowerPC",
+                "endianness": "big",
+                "elf_class": 32,
+            },
+            {
+                "family": "uclibc",
+                "version": "1",
+                "machine": "PowerPC",
+                "endianness": "big",
+                "elf_class": 32,
+            },
+            {
+                "family": "uclibc",
+                "version": "1",
+                "machine": "MIPS",
+                "endianness": "big",
+                "elf_class": 32,
+            },
         ]
 
         selected = select_recipes(investigation, recipes)
@@ -30,17 +50,21 @@ class CandidateSelectionTests(unittest.TestCase):
         # (a real compile, not a third-party prebuilt archive) since it has a
         # lower priority number, before falling back to the archive.
         root = Path(__file__).resolve().parents[1]
-        recipes = load_cells(root / "toolchains" / "registry.toml", root / "recipes" / "libs")
+        recipes = load_cells(
+            root / "toolchains" / "registry.toml", root / "recipes" / "libs"
+        )
         investigation = SimpleNamespace(
             target=SimpleNamespace(machine="PowerPC", endianness="big", elf_class=32),
-            hypotheses=(SimpleNamespace(
-                disposition="build", candidate_packages=("uclibc",)
-            ),),
+            hypotheses=(
+                SimpleNamespace(disposition="build", candidate_packages=("uclibc",)),
+            ),
         )
 
         selected = select_recipes(investigation, recipes)
 
-        self.assertEqual([recipe["mode"] for recipe in selected], ["source", "archive", "archive"])
+        self.assertEqual(
+            [recipe["mode"] for recipe in selected], ["source", "archive", "archive"]
+        )
         source_recipe = selected[0]
         self.assertTrue(Path(source_recipe["patches"][0]).exists())
 
@@ -49,7 +73,9 @@ class CandidateSelectionTests(unittest.TestCase):
         # combos make up the bulk of a real mirai-family sample set. Each
         # should resolve to at least one Bootlin-sysroot archive recipe.
         root = Path(__file__).resolve().parents[1]
-        recipes = load_cells(root / "toolchains" / "registry.toml", root / "recipes" / "libs")
+        recipes = load_cells(
+            root / "toolchains" / "registry.toml", root / "recipes" / "libs"
+        )
         combos = [
             ("ARM", "little", 32),
             ("MIPS", "big", 32),
@@ -62,8 +88,16 @@ class CandidateSelectionTests(unittest.TestCase):
         ]
         for machine, endianness, elf_class in combos:
             investigation = SimpleNamespace(
-                target=SimpleNamespace(machine=machine, endianness=endianness, elf_class=elf_class),
-                hypotheses=(SimpleNamespace(disposition="build", candidate_packages=("uclibc",)),),
+                target=SimpleNamespace(
+                    machine=machine, endianness=endianness, elf_class=elf_class
+                ),
+                hypotheses=(
+                    SimpleNamespace(
+                        disposition="build", candidate_packages=("uclibc",)
+                    ),
+                ),
             )
-            with self.subTest(machine=machine, endianness=endianness, elf_class=elf_class):
+            with self.subTest(
+                machine=machine, endianness=endianness, elf_class=elf_class
+            ):
                 self.assertTrue(select_recipes(investigation, recipes))

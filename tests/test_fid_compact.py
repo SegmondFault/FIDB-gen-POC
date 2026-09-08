@@ -222,7 +222,9 @@ class CompactFidTests(unittest.TestCase):
                 [1],
             )
 
-    def test_population_shares_one_scoring_stream_and_interns_exact_inputs(self) -> None:
+    def test_population_shares_one_scoring_stream_and_interns_exact_inputs(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             entries, inspect = self.fixture(root)
@@ -309,18 +311,23 @@ class CompactFidTests(unittest.TestCase):
             self.assertEqual(new["engine"], ALPHA_ENGINE_2)
             self.assertEqual(default["engine"], ALPHA_ENGINE_2)
             self.assertEqual(default["functions"], new["functions"])
-            self.assertEqual(old["functions"], [
-                {
-                    **new["functions"][0],
-                    "matches": [
-                        {
-                            key: value
-                            for key, value in new["functions"][0]["matches"][0].items()
-                            if key != "reference_components"
-                        }
-                    ],
-                }
-            ])
+            self.assertEqual(
+                old["functions"],
+                [
+                    {
+                        **new["functions"][0],
+                        "matches": [
+                            {
+                                key: value
+                                for key, value in new["functions"][0]["matches"][
+                                    0
+                                ].items()
+                                if key != "reference_components"
+                            }
+                        ],
+                    }
+                ],
+            )
 
     def test_gpu_startup_failure_uses_explicit_cpu_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

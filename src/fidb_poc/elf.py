@@ -11,7 +11,6 @@ import hashlib
 from pathlib import Path
 import struct
 
-
 ELF_MAGIC = b"\x7fELF"
 PT_DYNAMIC = 2
 PT_INTERP = 3
@@ -179,7 +178,16 @@ def inspect_elf(path: str | Path) -> ElfFacts:
     lower_data = data.lower()
     indicators = tuple(
         indicator
-        for indicator in ("glibc", "uclibc", "musl", "gcc", "clang", "zlib", "openwrt", "upx")
+        for indicator in (
+            "glibc",
+            "uclibc",
+            "musl",
+            "gcc",
+            "clang",
+            "zlib",
+            "openwrt",
+            "upx",
+        )
         if indicator.encode("ascii") in lower_data
     )
 

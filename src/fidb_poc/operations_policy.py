@@ -136,7 +136,11 @@ class SchedulePolicy:
 
     def _override_for(self, start_date: date) -> DateScheduleOverride | None:
         return next(
-            (override for override in self.date_overrides if override.date == start_date),
+            (
+                override
+                for override in self.date_overrides
+                if override.date == start_date
+            ),
             None,
         )
 

@@ -81,16 +81,14 @@ class FidMatchingCampaignTests(unittest.TestCase):
 
             self.assertEqual(encoding, "gzip-json-canonical-v1")
             self.assertEqual(first.suffixes[-2:], [".json", ".gz"])
-            self.assertEqual(hashlib.sha256(second.read_bytes()).hexdigest(), first_digest)
+            self.assertEqual(
+                hashlib.sha256(second.read_bytes()).hexdigest(), first_digest
+            )
             self.assertEqual(_read_json(second), document)
 
     def test_linked_and_union_campaigns_name_sealed_reference_components(self):
-        linked = load_campaign(
-            self.root, "validation/fid-matching-linked-run.toml"
-        )
-        union = load_campaign(
-            self.root, "validation/fid-matching-union-run.toml"
-        )
+        linked = load_campaign(self.root, "validation/fid-matching-linked-run.toml")
+        union = load_campaign(self.root, "validation/fid-matching-union-run.toml")
 
         self.assertEqual(linked["reference"]["population"], "linked-only")
         self.assertEqual(
@@ -112,9 +110,7 @@ class FidMatchingCampaignTests(unittest.TestCase):
             self.root, "validation/fid-matching-alpha-engine-2-run.toml"
         )
         self.assertEqual(alpha_two["execution"]["engine"], "alpha_engine_2")
-        self.assertEqual(
-            alpha_two["reference"]["population"], "archive-plus-linked"
-        )
+        self.assertEqual(alpha_two["reference"]["population"], "archive-plus-linked")
         self.assertFalse(alpha_two["canary"]["auto_chain_full"])
 
     def test_largest_first_scheduler_balances_periodic_expensive_cases(self):
@@ -428,9 +424,7 @@ class FidMatchingCampaignTests(unittest.TestCase):
             )
 
     def test_query_relationships_are_attached_only_on_exact_identity(self):
-        functions = [
-            {"address": "1000", "full_hash": "aa", "specific_hash": "bb"}
-        ]
+        functions = [{"address": "1000", "full_hash": "aa", "specific_hash": "bb"}]
         relationships = [
             {
                 "address": "1000",
@@ -452,9 +446,12 @@ class FidMatchingCampaignTests(unittest.TestCase):
             )
 
     def test_pending_campaign_exposes_validation_pipeline_stages(self):
-        with tempfile.TemporaryDirectory() as temporary, patch(
-            "fidb_poc.fid_matching_campaign._campaign_root",
-            return_value=Path(temporary),
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "fidb_poc.fid_matching_campaign._campaign_root",
+                return_value=Path(temporary),
+            ),
         ):
             status = campaign_status(self.root)
         self.assertEqual(status["canary"]["state"], "pending")
@@ -668,9 +665,12 @@ class FidMatchingCampaignTests(unittest.TestCase):
             self.assertEqual(ready["state"], "ready")
 
     def test_status_exposes_qualification_and_pending_cases(self):
-        with tempfile.TemporaryDirectory() as temporary, patch(
-            "fidb_poc.fid_matching_campaign._campaign_root",
-            return_value=Path(temporary),
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "fidb_poc.fid_matching_campaign._campaign_root",
+                return_value=Path(temporary),
+            ),
         ):
             status = campaign_status(self.root)
         self.assertEqual(status["qualification"]["state"], "stale")

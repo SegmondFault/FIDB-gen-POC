@@ -136,7 +136,9 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
         root = authority_path.expanduser().resolve().parent.parent
         evidence_path = (root / str(freeze["evidence_path"])).resolve()
         if root not in evidence_path.parents or not evidence_path.is_file():
-            raise ValueError("C width freeze evidence path is unavailable or escapes the project")
+            raise ValueError(
+                "C width freeze evidence path is unavailable or escapes the project"
+            )
         evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
         if evidence_digest != freeze["evidence_sha256"]:
             raise ValueError("C width freeze evidence digest does not match")
@@ -148,7 +150,9 @@ def load_c_width_authority(path: str | Path) -> dict[str, object]:
             or evidence.get("executed_compilation_digest")
             != freeze["executed_compilation_digest"]
         ):
-            raise ValueError("C width freeze evidence identity does not match authority")
+            raise ValueError(
+                "C width freeze evidence identity does not match authority"
+            )
         measurements = evidence.get("measurements")
         reproducibility = evidence.get("reproducibility")
         if not isinstance(measurements, dict) or not isinstance(reproducibility, dict):
@@ -262,9 +266,7 @@ def materialize_width_configuration(
         root / "worker.toml", (fixed_recipe,), toolchain_catalog=catalog
     )
     catalog_routes = {str(row["id"]): row for row in catalog["routes"]}
-    qualifications = {
-        str(row["route_id"]): row for row in catalog["qualifications"]
-    }
+    qualifications = {str(row["route_id"]): row for row in catalog["qualifications"]}
     compilers = {str(row["id"]): row for row in catalog["compilers"]}
     worker_routes = {route.id: route for route in configuration.routes}
 

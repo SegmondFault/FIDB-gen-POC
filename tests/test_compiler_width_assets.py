@@ -11,9 +11,7 @@ class CompilerWidthAssetsTests(unittest.TestCase):
         cls.root = Path(__file__).resolve().parents[1]
 
     def test_compact_authority_expands_selected_downloadable_width(self):
-        width = load_compiler_width_assets(
-            self.root / "toolchains/compiler-width.toml"
-        )
+        width = load_compiler_width_assets(self.root / "toolchains/compiler-width.toml")
 
         self.assertEqual(len(width["gcc_targets"]), 8)
         self.assertEqual(len(width["gcc_generations"]), 2)
@@ -38,12 +36,8 @@ class CompilerWidthAssetsTests(unittest.TestCase):
         self.assertEqual(plan["summary"]["routes"], 29)
         self.assertEqual(plan["summary"]["coverage_requirements"], 9)
         self.assertEqual(plan["summary"]["packs"], 29)
-        self.assertEqual(
-            len({row["target_id"] for row in plan["routes"]}), 9
-        )
-        self.assertEqual(
-            len({row["compiler_id"] for row in plan["routes"]}), 8
-        )
+        self.assertEqual(len({row["target_id"] for row in plan["routes"]}), 9)
+        self.assertEqual(len({row["compiler_id"] for row in plan["routes"]}), 8)
 
 
 if __name__ == "__main__":

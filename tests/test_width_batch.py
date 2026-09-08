@@ -82,9 +82,7 @@ class WidthBatchTests(unittest.TestCase):
         )
         self.assertEqual(len(plan["cells"]), 174)
         self.assertEqual(len(plan["queue_preview"]), 174)
-        self.assertEqual(
-            {row["state"] for row in plan["queue_preview"]}, {"planned"}
-        )
+        self.assertEqual({row["state"] for row in plan["queue_preview"]}, {"planned"})
         self.assertEqual(
             {cell["recipe"]["name"] for cell in plan["cells"]}, {"openssl"}
         )

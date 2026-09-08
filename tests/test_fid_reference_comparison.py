@@ -152,8 +152,7 @@ report = "artifacts/union-report.json"
 producer_revision = "2222222222222222222222222222222222222222"
 candidate_index = ["artifacts/archive.sqlite3", "artifacts/linked.sqlite3"]
 generation_seal = "artifacts/generation-seal.json"
-""".strip()
-                + "\n",
+""".strip() + "\n",
                 encoding="utf-8",
             )
 

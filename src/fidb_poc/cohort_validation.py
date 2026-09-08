@@ -9,7 +9,6 @@ import re
 import tomllib
 from typing import Mapping, Sequence
 
-
 LIFECYCLE_SCHEMA = "fidb-cohort-validation-lifecycle/v1"
 LIFECYCLE_STATUS_SCHEMA = "fidb-cohort-validation-lifecycle-status/v1"
 DEFAULT_AUTHORITY = Path("validation/cohort-lifecycle.toml")
@@ -138,12 +137,17 @@ def load_cohort_validation_lifecycle(
     root = Path(project_root).expanduser().resolve()
     path = _inside(root, authority_path, "cohort lifecycle authority")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if set(document) != _TOP_LEVEL_FIELDS or document.get("schema_version") != LIFECYCLE_SCHEMA:
+    if (
+        set(document) != _TOP_LEVEL_FIELDS
+        or document.get("schema_version") != LIFECYCLE_SCHEMA
+    ):
         raise ValueError("cohort validation lifecycle has unsupported fields or schema")
     for section, fields in _SECTION_FIELDS.items():
         value = document.get(section)
         if not isinstance(value, dict) or set(value) != fields:
-            raise ValueError(f"cohort validation lifecycle {section} fields are invalid")
+            raise ValueError(
+                f"cohort validation lifecycle {section} fields are invalid"
+            )
     if tuple(document["stages"]) != _STAGES:
         raise ValueError("cohort validation lifecycle stages are invalid or reordered")
     if (
@@ -200,7 +204,11 @@ def load_cohort_validation_lifecycle(
         root, document["validation_method_authority"], "validation method authority"
     )
     expected = str(document["validation_method_authority_sha256"])
-    if not method.is_file() or _DIGEST.fullmatch(expected) is None or _sha256(method) != expected:
+    if (
+        not method.is_file()
+        or _DIGEST.fullmatch(expected) is None
+        or _sha256(method) != expected
+    ):
         raise ValueError("cohort validation method authority is unavailable or stale")
     registry = _inside(root, document["cohort_registry"], "validation cohort registry")
     registry_digest = str(document["cohort_registry_sha256"])
@@ -230,9 +238,7 @@ def _load_bound_cohorts(
         or document["language_id"] != lifecycle["language_id"]
     ):
         raise ValueError("validation cohort registry has unsupported fields or schema")
-    batches = {
-        str(batch["authority_path"]): batch for batch in width_batches
-    }
+    batches = {str(batch["authority_path"]): batch for batch in width_batches}
     rows = []
     ids: set[str] = set()
     orders: set[int] = set()
@@ -269,15 +275,21 @@ def _load_bound_cohorts(
             f'{item["id"]}@{item["version"]}' for item in source.get("source", [])
         }
         if not set(source_ids).issubset(available):
-            raise ValueError(f"validation cohort {identifier} is absent from its source pack")
+            raise ValueError(
+                f"validation cohort {identifier} is absent from its source pack"
+            )
         batch_path = str(raw["width_batch"])
         batch = batches.get(batch_path)
         if batch is None:
-            raise ValueError(f"validation cohort {identifier} width batch is unavailable")
+            raise ValueError(
+                f"validation cohort {identifier} width batch is unavailable"
+            )
         requested_names = {identity.rsplit("@", 1)[0] for identity in source_ids}
         batch_names = {str(item["id"]) for item in batch["libraries"]}
         if requested_names != batch_names:
-            raise ValueError(f"validation cohort {identifier} does not match its width batch")
+            raise ValueError(
+                f"validation cohort {identifier} does not match its width batch"
+            )
         ranked = _sha256_ranked(str(raw["seed"]), source_ids)
         split = len(ranked) // 2
         readiness = batch["readiness"]
@@ -295,9 +307,7 @@ def _load_bound_cohorts(
                 "automatic_materialization": lifecycle["execution"][
                     "automatic_materialization"
                 ],
-                "automatic_scheduling": lifecycle["execution"][
-                    "automatic_scheduling"
-                ],
+                "automatic_scheduling": lifecycle["execution"]["automatic_scheduling"],
             }
         )
     return sorted(rows, key=lambda row: int(row["order"]))
@@ -318,9 +328,7 @@ def _sha256_ranked(seed: str, identities: Sequence[str]) -> list[str]:
     )
 
 
-def _stage(
-    identifier: str, state: str, detail: str
-) -> dict[str, str]:
+def _stage(identifier: str, state: str, detail: str) -> dict[str, str]:
     return {
         "id": identifier,
         "label": identifier.replace("-", " ").title(),
@@ -457,9 +465,7 @@ def compile_cohort_validation_lifecycle(
         "authority_path": lifecycle["authority_path"],
         "authority_sha256": lifecycle["authority_sha256"],
         "method_authority": lifecycle["validation_method_authority"],
-        "method_authority_sha256": lifecycle[
-            "validation_method_authority_sha256"
-        ],
+        "method_authority_sha256": lifecycle["validation_method_authority_sha256"],
         "query_evidence_contract": lifecycle["query_evidence_contract"],
         "execution": lifecycle["execution"],
         "fusion": lifecycle["fusion"],
@@ -484,12 +490,8 @@ def compile_cohort_validation_lifecycle(
                 "fused_ghidra_analyses_per_cohort"
             ],
             "legacy_analyses_per_full_cohort": (
-                lifecycle["performance"][
-                    "legacy_composite_ghidra_analyses_per_cohort"
-                ]
-                + lifecycle["performance"][
-                    "legacy_backfill_ghidra_analyses_per_cohort"
-                ]
+                lifecycle["performance"]["legacy_composite_ghidra_analyses_per_cohort"]
+                + lifecycle["performance"]["legacy_backfill_ghidra_analyses_per_cohort"]
             ),
         },
     }

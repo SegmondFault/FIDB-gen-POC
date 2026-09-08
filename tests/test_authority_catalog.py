@@ -49,9 +49,7 @@ class AuthorityCatalogTests(unittest.TestCase):
             "fidb-cohort-validation-lifecycle-status/v1",
         )
         self.assertEqual(lifecycle["summary"]["programme_cohorts"], 28)
-        self.assertEqual(
-            lifecycle["summary"]["planned_validation_composites"], 12_432
-        )
+        self.assertEqual(lifecycle["summary"]["planned_validation_composites"], 12_432)
         self.assertEqual(
             lifecycle["summary"]["legacy_duplicate_analyses_avoided"], 12_432
         )
@@ -237,9 +235,7 @@ class AuthorityCatalogTests(unittest.TestCase):
             if row["id"] == "batch-020-android-gap"
         )
         self.assertEqual(android_gap["summary"]["total_executions"], 48)
-        self.assertEqual(
-            android_gap["readiness"]["queue_state"], "historical-sealed"
-        )
+        self.assertEqual(android_gap["readiness"]["queue_state"], "historical-sealed")
         next_cohort = next(
             row for row in document["width_batches"] if row["id"] == "batch-c11-20"
         )

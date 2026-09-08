@@ -38,7 +38,9 @@ def load_targets(path: str | Path) -> list[dict[str, object]]:
     if set(document) != {"schema_version", "target"}:
         raise ValueError("target registry must contain only schema_version and target")
     if document["schema_version"] != TARGET_SCHEMA:
-        raise ValueError(f"unsupported target registry schema: {document['schema_version']}")
+        raise ValueError(
+            f"unsupported target registry schema: {document['schema_version']}"
+        )
     rows = document["target"]
     if not isinstance(rows, list) or not rows:
         raise ValueError("target registry must contain at least one target")
@@ -69,8 +71,10 @@ def load_targets(path: str | Path) -> list[dict[str, object]]:
         if row["bits"] not in {32, 64}:
             raise ValueError(f"invalid word size for target {target_id}")
         evidence = row["evidence"]
-        if not isinstance(evidence, list) or not evidence or not all(
-            isinstance(value, str) and value for value in evidence
+        if (
+            not isinstance(evidence, list)
+            or not evidence
+            or not all(isinstance(value, str) and value for value in evidence)
         ):
             raise ValueError(f"target {target_id} requires evidence paths")
         result.append(row)

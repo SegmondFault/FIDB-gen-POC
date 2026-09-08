@@ -8,7 +8,6 @@ from pathlib import Path
 import tomllib
 import unittest
 
-
 ROOT = Path(__file__).resolve().parents[1]
 RECEIPT = ROOT / "validation/evidence/c10-reference-form-comparison-v1.json"
 
@@ -96,8 +95,7 @@ class ReferenceFormEvidenceTests(unittest.TestCase):
             for name in count_names:
                 self.assertEqual(
                     delta[name],
-                    after["confusion_matrix"][name]
-                    - before["confusion_matrix"][name],
+                    after["confusion_matrix"][name] - before["confusion_matrix"][name],
                 )
             for name in rate_names:
                 self.assertTrue(
@@ -106,7 +104,9 @@ class ReferenceFormEvidenceTests(unittest.TestCase):
                     )
                 )
 
-    def test_linked_generation_separates_task_span_from_resumed_supervisor(self) -> None:
+    def test_linked_generation_separates_task_span_from_resumed_supervisor(
+        self,
+    ) -> None:
         generation = self.receipt["linked_generation"]
         task_start = datetime.fromisoformat(generation["earliest_task_started_at"])
         task_finish = datetime.fromisoformat(generation["latest_task_finished_at"])

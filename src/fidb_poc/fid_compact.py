@@ -43,14 +43,18 @@ def load_fid_matching_performance(
     if path != root and root not in path.parents:
         raise ValueError("FID matching performance authority escapes project root")
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if set(document) != {
-        "schema_version",
-        "mode",
-        "allow_gpu",
-        "fallback_to_cpu",
-        "candidate_chunk_rows",
-        "workgroup_size",
-    } or document.get("schema_version") != PERFORMANCE_SCHEMA:
+    if (
+        set(document)
+        != {
+            "schema_version",
+            "mode",
+            "allow_gpu",
+            "fallback_to_cpu",
+            "candidate_chunk_rows",
+            "workgroup_size",
+        }
+        or document.get("schema_version") != PERFORMANCE_SCHEMA
+    ):
         raise ValueError("FID matching performance authority is unsupported")
     if document["mode"] not in {"auto", "cpu", "gpu"}:
         raise ValueError("FID matching performance mode is invalid")
@@ -87,9 +91,7 @@ def _detected_gpu_devices() -> list[dict[str, str]]:
             device_id = (card / "device" / "device").read_text(encoding="utf-8").strip()
         except OSError:
             continue
-        devices.append(
-            {"name": card.name, "vendor_id": vendor, "device_id": device_id}
-        )
+        devices.append({"name": card.name, "vendor_id": vendor, "device_id": device_id})
     return devices
 
 
@@ -326,8 +328,7 @@ def build_compact_candidate_index(
         ):
             source_entries = list(grouped_entries)
             source_paths = {
-                str(Path(str(entry["fidb_path"])).resolve())
-                for entry in source_entries
+                str(Path(str(entry["fidb_path"])).resolve()) for entry in source_entries
             }
             if len(source_paths) != 1:
                 raise ValueError("one compact FID source digest maps to multiple paths")
@@ -337,8 +338,7 @@ def build_compact_candidate_index(
             source_id = expected_sha256
             source = inspector(fidb)
             if (
-                source.get("schema_version")
-                != "fidb-compact-candidate-source/v1"
+                source.get("schema_version") != "fidb-compact-candidate-source/v1"
                 or source.get("fidb_sha256") != expected_sha256
                 or not isinstance(source.get("candidates"), list)
                 or not isinstance(source.get("relations"), dict)
@@ -391,7 +391,9 @@ def build_compact_candidate_index(
             connection.commit()
 
         counts = {
-            "sources": int(connection.execute("SELECT COUNT(*) FROM source").fetchone()[0]),
+            "sources": int(
+                connection.execute("SELECT COUNT(*) FROM source").fetchone()[0]
+            ),
             "candidates": int(
                 connection.execute("SELECT COUNT(*) FROM candidate").fetchone()[0]
             ),
@@ -677,28 +679,23 @@ def _match_compact_population_alpha_engine_1(
             row = component.get(address)
             if row is None:
                 raise ValueError("compact FID population component addresses differ")
-            if (
-                str(row["full_hash"]) != str(function["full_hash"])
-                or str(row["specific_hash"]) != str(function["specific_hash"])
-            ):
-                raise ValueError("compact FID population component query identity differs")
+            if str(row["full_hash"]) != str(function["full_hash"]) or str(
+                row["specific_hash"]
+            ) != str(function["specific_hash"]):
+                raise ValueError(
+                    "compact FID population component query identity differs"
+                )
             for match in row["matches"]:
                 candidate_id = str(match["candidate_id"])
                 previous = candidates.get(candidate_id)
-                if previous is None or float(match["score"]) > float(
-                    previous["score"]
-                ):
+                if previous is None or float(match["score"]) > float(previous["score"]):
                     candidates[candidate_id] = dict(match)
         maximum = max(
             (float(row["score"]) for row in candidates.values()), default=None
         )
         winners = (
             sorted(
-                (
-                    row
-                    for row in candidates.values()
-                    if float(row["score"]) == maximum
-                ),
+                (row for row in candidates.values() if float(row["score"]) == maximum),
                 key=lambda row: str(row["candidate_id"]),
             )
             if maximum is not None
@@ -781,9 +778,7 @@ def _match_compact_population_alpha_engine_2(
         raise ValueError("compact FID backend is not declared")
 
     started_ns = time.monotonic_ns()
-    connections = [
-        sqlite3.connect(f"file:{path}?mode=ro", uri=True) for path in paths
-    ]
+    connections = [sqlite3.connect(f"file:{path}?mode=ro", uri=True) for path in paths]
     relation_cache: dict[tuple[int, str], tuple[set[str], set[str]]] = {}
     packed: list[tuple[int, int, int, int, int]] = []
     metadata: list[tuple[int, dict[str, object]]] = []
@@ -797,9 +792,7 @@ def _match_compact_population_alpha_engine_2(
     device = None
     gpu_batches = 0
 
-    def relations(
-        component_index: int, source_id: str
-    ) -> tuple[set[str], set[str]]:
+    def relations(component_index: int, source_id: str) -> tuple[set[str], set[str]]:
         key = (component_index, source_id)
         cached = relation_cache.get(key)
         if cached is not None:
@@ -1004,9 +997,7 @@ def match_compact_population(
         raise ValueError("compact FID population requires at least one index")
     if len(set(paths)) != len(paths):
         raise ValueError("compact FID population contains a duplicate index")
-    normalized = (
-        ALPHA_ENGINE_1 if engine_id == LEGACY_ENGINE_ID else str(engine_id)
-    )
+    normalized = ALPHA_ENGINE_1 if engine_id == LEGACY_ENGINE_ID else str(engine_id)
     engines = {
         ALPHA_ENGINE_1: _match_compact_population_alpha_engine_1,
         ALPHA_ENGINE_2: _match_compact_population_alpha_engine_2,

@@ -17,9 +17,13 @@ class WidthStudyTests(unittest.TestCase):
         self.assertEqual(document["schema_version"], "fidb-width-study/v1")
         self.assertEqual(document["id"], "batch-010")
         self.assertEqual(document["family_count"], 10)
-        self.assertEqual(document["scaling"]["comparison_family_counts"], [10, 20, 40, 80])
+        self.assertEqual(
+            document["scaling"]["comparison_family_counts"], [10, 20, 40, 80]
+        )
         self.assertEqual(document["calibration"]["sample_count"], 2)
-        self.assertEqual(document["calibration"]["retained_bundle_bytes_p50"], 31_265_942)
+        self.assertEqual(
+            document["calibration"]["retained_bundle_bytes_p50"], 31_265_942
+        )
         self.assertEqual(len(document["toolchain_requirements"]), 22)
         self.assertEqual(
             [
@@ -62,9 +66,7 @@ class WidthStudyTests(unittest.TestCase):
         self.assertEqual(wild["metrics"]["policy_evaluations"], 864_000)
 
     def test_top_twenty_study_preserves_ranked_continuation(self):
-        document = load_width_study(
-            self.root / "coverage/c-top20-width-study.toml"
-        )
+        document = load_width_study(self.root / "coverage/c-top20-width-study.toml")
 
         self.assertEqual(document["id"], "study-c20")
         self.assertEqual(document["family_count"], 20)

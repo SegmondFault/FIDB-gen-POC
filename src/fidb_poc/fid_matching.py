@@ -358,8 +358,7 @@ def score_rows_gpu(
     raw_scores = np.frombuffer(buffers[1], dtype=np.float32)
     accepted = np.frombuffer(buffers[2], dtype=np.uint32)
     scores = [
-        float(score) if int(keep) else None
-        for score, keep in zip(raw_scores, accepted)
+        float(score) if int(keep) else None for score, keep in zip(raw_scores, accepted)
     ]
     return scores, device_info
 
@@ -383,9 +382,7 @@ def match_gpu(
         for candidate in function.get("candidates", [])
     ]
     started_ns = time.monotonic_ns()
-    scores, device_info = score_rows_gpu(
-        rows, authority, workgroup_size=workgroup_size
-    )
+    scores, device_info = score_rows_gpu(rows, authority, workgroup_size=workgroup_size)
     decisions = _cull(functions, scores)
     return {
         "backend": "gpu-portable-fid-v1",
@@ -616,9 +613,7 @@ def classify_matches(
         matrix["false_positives"] += len(incorrect)
         matrix["true_negatives"] += len(owner_universe) - 1 - len(incorrect)
 
-        owner_outcomes = [
-            (str(truth_owner), "tp" if recovered else "fn", None)
-        ] + [
+        owner_outcomes = [(str(truth_owner), "tp" if recovered else "fn", None)] + [
             (owner, "fp", by_owner[owner][0]) for owner in sorted(incorrect)
         ]
         for candidate_owner, outcome, match in owner_outcomes:

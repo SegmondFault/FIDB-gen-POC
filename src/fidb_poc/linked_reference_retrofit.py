@@ -216,9 +216,10 @@ def load_supervisor_authority(
         expected = set()
     if set(document) != expected:
         raise ValueError("linked-reference supervisor has unsupported fields or schema")
-    if schema == SUPERVISOR_SCHEMA_V2 and document[
-        "remove_worker_runtime_after_seal"
-    ] is not True:
+    if (
+        schema == SUPERVISOR_SCHEMA_V2
+        and document["remove_worker_runtime_after_seal"] is not True
+    ):
         raise ValueError("linked-reference production supervisor must recycle workers")
     for name in common - {"schema_version"}:
         value = document[name]
@@ -1118,9 +1119,7 @@ def _read_worker_status(path: Path) -> dict[str, object] | None:
     return document
 
 
-def _stop_timed_out_process(
-    process: subprocess.Popen, grace_seconds: int
-) -> str:
+def _stop_timed_out_process(process: subprocess.Popen, grace_seconds: int) -> str:
     process.terminate()
     try:
         process.wait(timeout=grace_seconds)
@@ -1175,7 +1174,9 @@ def _supervise_workers(
             task_key = str(status["active_task"])
             task = by_key.get(task_key)
             if task is None:
-                raise RuntimeError(f"timed-out worker reported unknown task: {task_key}")
+                raise RuntimeError(
+                    f"timed-out worker reported unknown task: {task_key}"
+                )
             if _valid_task_seal(root, authority, task) is not None:
                 # The seal is published immediately before the worker clears
                 # its active marker.  Do not misclassify that narrow handoff
@@ -1233,8 +1234,8 @@ def run(
     plan = compile_plan(root, authority_path)
     authority = plan["_authority"]
     supervisor = load_supervisor_authority(root, supervisor_path)
-    selected_profile = (
-        (supervisor.get("performance_resolution") or {}).get("selected_profile")
+    selected_profile = (supervisor.get("performance_resolution") or {}).get(
+        "selected_profile"
     )
     if selected_profile is not None:
         expected_execution = {
@@ -1278,9 +1279,7 @@ def run(
             if mode == "full" and result["state"] == "complete":
                 result["generation"] = _generation_seal(root, plan)
             return result
-        chunks, loads = _balanced_chunks(
-            pending, int(supervisor["workers"])
-        )
+        chunks, loads = _balanced_chunks(pending, int(supervisor["workers"]))
         _atomic_json(
             run_root / "status.json",
             {
@@ -1315,12 +1314,9 @@ def run(
                     "estimated_archive_byte_loads": loads,
                     "supervisor_authority_path": supervisor["authority_path"],
                     "supervisor_authority_sha256": supervisor["authority_sha256"],
-                    "performance_resolution": supervisor.get(
-                        "performance_resolution"
-                    ),
+                    "performance_resolution": supervisor.get("performance_resolution"),
                     "worker_ids": [
-                        f"worker-{index:02d}"
-                        for index in range(1, len(chunks) + 1)
+                        f"worker-{index:02d}" for index in range(1, len(chunks) + 1)
                     ],
                 },
             )
@@ -1363,9 +1359,7 @@ def main(argv: list[str] | None = None) -> int:
         child.add_argument("--authority", type=Path, default=DEFAULT_AUTHORITY)
         if command == "run":
             child.add_argument("--mode", choices=("canary", "full"), required=True)
-            child.add_argument(
-                "--supervisor", type=Path, default=DEFAULT_SUPERVISOR
-            )
+            child.add_argument("--supervisor", type=Path, default=DEFAULT_SUPERVISOR)
         if command == "performance":
             child.add_argument(
                 "--performance",

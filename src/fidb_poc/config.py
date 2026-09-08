@@ -494,9 +494,11 @@ def load_configuration(
         project_root / "coverage/universe.toml",
         project_root / "toolchains/profiles",
     )
-    if any("managed_toolchain_route" in row for row in route_rows) and all(
-        authority.exists() for authority in authority_files
-    ) and toolchain_catalog is None:
+    if (
+        any("managed_toolchain_route" in row for row in route_rows)
+        and all(authority.exists() for authority in authority_files)
+        and toolchain_catalog is None
+    ):
         from .toolchain_packs import load_toolchain_pack_catalog
 
         # This catalog hashes cached archives. Resolve it once per configuration,

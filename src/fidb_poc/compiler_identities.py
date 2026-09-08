@@ -6,7 +6,6 @@ from pathlib import Path
 import re
 import tomllib
 
-
 SCHEMA = "fidb-compiler-identities/v1"
 FIELDS = {
     "id",

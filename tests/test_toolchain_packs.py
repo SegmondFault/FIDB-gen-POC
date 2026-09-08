@@ -244,9 +244,8 @@ class ToolchainPackAuthorityTests(unittest.TestCase):
                 "android-ndk-r29-linux-x86-64",
             },
         )
-        self.assertEqual(
-            {row["target_triple"][-2:] for row in routes.values()}, {"21"}
-        )
+        self.assertEqual({row["target_triple"][-2:] for row in routes.values()}, {"21"})
+
     def test_ready_material_advances_through_qualification_then_external_worker(self):
         def cached(downloads: Path, digest: str) -> CacheInspection:
             return CacheInspection(

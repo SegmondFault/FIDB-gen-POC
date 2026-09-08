@@ -1036,8 +1036,7 @@ def _validation_evidence_record(
                         == "fidb-query-relationship-evidence/v1"
                         and receipt.get("query_sha256") == fold.get("query_sha256")
                         and receipt.get("route_id") == result.get("route_id")
-                        and receipt.get("treatment_id")
-                        == result.get("treatment_id")
+                        and receipt.get("treatment_id") == result.get("treatment_id")
                         and relation.get("schema_version")
                         == policy.validation_required_signature_evidence_schema
                         and relation_path is not None

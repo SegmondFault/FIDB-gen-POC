@@ -215,9 +215,7 @@ class QueueCommandTests(unittest.TestCase):
             _recycle_worker_process("batch-drained-42", "worker-1")
 
         environment = execute.call_args.args[2]
-        self.assertEqual(
-            environment[_RETENTION_RECYCLED_SESSION], "batch-drained-42"
-        )
+        self.assertEqual(environment[_RETENTION_RECYCLED_SESSION], "batch-drained-42")
         self.assertEqual(environment[_RETENTION_RECYCLED_WORKER], "worker-1")
         self.assertEqual(environment[_RETENTION_PRE_RECYCLE_RSS], "734003200")
         self.assertEqual(environment[_RETENTION_PRE_RECYCLE_JVM], "true")

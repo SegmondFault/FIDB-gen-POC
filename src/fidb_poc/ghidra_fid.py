@@ -415,6 +415,7 @@ def analyze_target(
             )
             with loader.load() as loaded:
                 for item in loaded:
+
                     def _analyze(program) -> None:
                         _configure_target_analysis(program, analysis_policy)
                         pyghidra.analyze(program, monitor)

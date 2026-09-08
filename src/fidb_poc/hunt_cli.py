@@ -66,12 +66,16 @@ def build_parser() -> argparse.ArgumentParser:
     # top-level parser and every subparser via this shared parent.
     verbose = argparse.ArgumentParser(add_help=False)
     verbose.add_argument(
-        "-v", "--verbose", action="store_true",
+        "-v",
+        "--verbose",
+        action="store_true",
         help="log each file compiled/downloaded, URLs used, pass/fail, and storage paths",
     )
     parser = argparse.ArgumentParser(prog="fidb-hunt", parents=[verbose])
     subcommands = parser.add_subparsers(dest="command", required=True)
-    subcommands.add_parser("doctor", help="report host capabilities for hunting", parents=[verbose])
+    subcommands.add_parser(
+        "doctor", help="report host capabilities for hunting", parents=[verbose]
+    )
     inspect_parser = subcommands.add_parser(
         "inspect", help="safely inspect an ELF target", parents=[verbose]
     )
@@ -92,9 +96,13 @@ def build_parser() -> argparse.ArgumentParser:
     hunt_parser.add_argument("--guess", action="append", default=[])
     hunt_parser.add_argument("--fidb-dir", default="artifacts/fidbs")
     hunt_parser.add_argument(
-        "--executor", choices=EXECUTORS, default="qemu",
-        help=("source-cell executor (default: qemu); local runs the pinned "
-              "cross-build directly without the QEMU isolation boundary"),
+        "--executor",
+        choices=EXECUTORS,
+        default="qemu",
+        help=(
+            "source-cell executor (default: qemu); local runs the pinned "
+            "cross-build directly without the QEMU isolation boundary"
+        ),
     )
     malware_parser = subcommands.add_parser(
         "build-malware",
@@ -107,9 +115,13 @@ def build_parser() -> argparse.ArgumentParser:
     malware_parser.add_argument("--out", default="artifacts/malware")
     malware_parser.add_argument("--download-cache", default="work/downloads")
     malware_parser.add_argument(
-        "--executor", choices=EXECUTORS, default="qemu",
-        help=("source-cell executor (default: qemu); local runs the pinned "
-              "cross-build directly without the QEMU isolation boundary"),
+        "--executor",
+        choices=EXECUTORS,
+        default="qemu",
+        help=(
+            "source-cell executor (default: qemu); local runs the pinned "
+            "cross-build directly without the QEMU isolation boundary"
+        ),
     )
     return parser
 
@@ -128,7 +140,9 @@ def _build_malware(args: argparse.Namespace) -> int:
     out_root.mkdir(parents=True, exist_ok=True)
     for cell in cells:
         result = build_malware_binary(cell, Path(args.work), Path(args.download_cache))
-        tag = f'origin:{result["family"]}/fork:{result["variant"]}/arch:{result["arch"]}'
+        tag = (
+            f'origin:{result["family"]}/fork:{result["variant"]}/arch:{result["arch"]}'
+        )
         destination_dir = out_root / result["family"] / result["variant"]
         destination_dir.mkdir(parents=True, exist_ok=True)
         binary_destination = destination_dir / Path(result["binary_path"]).name
@@ -158,8 +172,14 @@ def main(argv: list[str] | None = None) -> int:
             _json(investigate(args.target).to_dict())
         elif args.command == "hunt":
             report = hunt(
-                args.target, args.toolchains, args.recipes, args.work, args.report,
-                args.max_candidates, tuple(args.guess), args.fidb_dir,
+                args.target,
+                args.toolchains,
+                args.recipes,
+                args.work,
+                args.report,
+                args.max_candidates,
+                tuple(args.guess),
+                args.fidb_dir,
                 executor=args.executor,
             )
             last = report["attempts"][-1]["assessment"] if report["attempts"] else None
@@ -168,7 +188,9 @@ def main(argv: list[str] | None = None) -> int:
                     "matched": report["matched"],
                     "attempts": len(report["attempts"]),
                     "matched_functions": last["matched_functions"] if last else 0,
-                    "unambiguous_matches": last["unambiguous_match_count"] if last else 0,
+                    "unambiguous_matches": (
+                        last["unambiguous_match_count"] if last else 0
+                    ),
                     "report": report["report"],
                     "fidbs": report["fidbs"],
                 }

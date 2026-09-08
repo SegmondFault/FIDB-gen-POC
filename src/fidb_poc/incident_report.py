@@ -265,16 +265,12 @@ def compile_incident_report(
         if state is None:
             raise ValueError("coordinator state is missing")
 
-        global_counts = _counts(
-            connection.execute(
-                """
+        global_counts = _counts(connection.execute("""
                 SELECT jobs.state, COUNT(*) AS count
                 FROM jobs JOIN batches ON batches.batch_id = jobs.batch_id
                 WHERE jobs.active = 1 AND batches.active = 1
                 GROUP BY jobs.state
-                """
-            ).fetchall()
-        )
+                """).fetchall())
         if selected:
             placeholders = ",".join("?" for _value in selected)
             known = {
@@ -286,7 +282,9 @@ def compile_incident_report(
             }
             unknown = set(selected) - known
             if unknown:
-                raise ValueError(f"incident report selected unknown batches: {sorted(unknown)}")
+                raise ValueError(
+                    f"incident report selected unknown batches: {sorted(unknown)}"
+                )
 
         scope = ["jobs.active = 1", "batches.active = 1"]
         parameters: list[object] = []
@@ -418,9 +416,7 @@ def compile_incident_report(
     recovery_candidates = []
     active_failures_by_batch = {
         batch_id: [
-            row
-            for row in rows
-            if bool(row["job_active"]) and bool(row["batch_active"])
+            row for row in rows if bool(row["job_active"]) and bool(row["batch_active"])
         ]
         for batch_id, rows in failures_by_batch.items()
     }

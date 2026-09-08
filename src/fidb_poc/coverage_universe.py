@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-
 COVERAGE_UNIVERSE_SCHEMA = "fidb-coverage-universe/v2"
 MATRIX_ROLES = {
     "multiplier",
@@ -25,14 +24,18 @@ EVIDENCE_CLASSES = {"measured", "proposed", "provisional", "assumption"}
 
 
 def _non_empty_strings(value: object, field: str) -> list[str]:
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item for item in value
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(item, str) and item for item in value)
     ):
         raise ValueError(f"{field} must be a non-empty string list")
     return list(value)
 
 
-def _unique_rows(rows: object, kind: str, required: set[str]) -> list[dict[str, object]]:
+def _unique_rows(
+    rows: object, kind: str, required: set[str]
+) -> list[dict[str, object]]:
     if not isinstance(rows, list) or not rows:
         raise ValueError(f"coverage universe must contain at least one {kind}")
     result: list[dict[str, object]] = []
@@ -96,13 +99,17 @@ def load_coverage_universe(path: str | Path) -> dict[str, object]:
         population["published_four_source_n80_families"]
         + population["tier_zero_families"]
     ):
-        raise ValueError("published priority head must include four-source N80 plus Tier 0")
+        raise ValueError(
+            "published priority head must include four-source N80 plus Tier 0"
+        )
     if not (
         population["nine_source_n80_candidate_rank"]
         <= population["nine_source_shared_frontier_keys"]
         <= population["nine_source_candidate_spine_keys"]
     ):
-        raise ValueError("nine-source N80, frontier and spine must be monotonically nested")
+        raise ValueError(
+            "nine-source N80, frontier and spine must be monotonically nested"
+        )
     if not (
         population["global_family_lower_estimate"]
         <= population["global_family_central_estimate"]
@@ -118,7 +125,9 @@ def load_coverage_universe(path: str | Path) -> dict[str, object]:
     for row in dimensions:
         if row["matrix_role"] not in MATRIX_ROLES:
             raise ValueError(f"invalid matrix role for dimension {row['id']}")
-        row["facets"] = _non_empty_strings(row["facets"], f"dimension {row['id']} facets")
+        row["facets"] = _non_empty_strings(
+            row["facets"], f"dimension {row['id']} facets"
+        )
         if "factor_ids" in row:
             row["factor_ids"] = _non_empty_strings(
                 row["factor_ids"], f"dimension {row['id']} factor_ids"
@@ -214,7 +223,9 @@ def load_coverage_universe(path: str | Path) -> dict[str, object]:
             if compiler["id"] == row["compiler_family"]
         )
         if row["language_id"] not in compiler_languages:
-            raise ValueError(f"profile {row['id']} uses a compiler outside its language scope")
+            raise ValueError(
+                f"profile {row['id']} uses a compiler outside its language scope"
+            )
         if row["evidence_class"] not in EVIDENCE_CLASSES:
             raise ValueError(f"invalid evidence class for profile {row['id']}")
         row["controls"] = _non_empty_strings(
@@ -245,9 +256,19 @@ def load_coverage_universe(path: str | Path) -> dict[str, object]:
             raise ValueError(f"unknown language for scenario {row['id']}")
         if row["evidence_class"] not in EVIDENCE_CLASSES:
             raise ValueError(f"invalid evidence class for scenario {row['id']}")
-        fields = ("library_families", "releases", "routes", "profiles", "replay_multiplier")
-        if any(not isinstance(row[field], int) or int(row[field]) <= 0 for field in fields):
-            raise ValueError(f"scenario {row['id']} multipliers must be positive integers")
+        fields = (
+            "library_families",
+            "releases",
+            "routes",
+            "profiles",
+            "replay_multiplier",
+        )
+        if any(
+            not isinstance(row[field], int) or int(row[field]) <= 0 for field in fields
+        ):
+            raise ValueError(
+                f"scenario {row['id']} multipliers must be positive integers"
+            )
         expected = (
             int(row["library_families"])
             * int(row["releases"])

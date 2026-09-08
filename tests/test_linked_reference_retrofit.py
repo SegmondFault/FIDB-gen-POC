@@ -73,9 +73,7 @@ class LinkedReferenceRetrofitTests(unittest.TestCase):
                 "fidb_poc.linked_reference_retrofit._stop_timed_out_process",
                 return_value="terminated",
             ) as stop,
-            patch(
-                "fidb_poc.linked_reference_retrofit._archive_failure"
-            ) as archive,
+            patch("fidb_poc.linked_reference_retrofit._archive_failure") as archive,
             patch("fidb_poc.linked_reference_retrofit.time.sleep"),
         ):
             return_codes, events = _supervise_workers(
@@ -143,9 +141,7 @@ class LinkedReferenceRetrofitTests(unittest.TestCase):
 
     def test_task_timeout_requires_an_active_aware_timestamp(self) -> None:
         now = datetime.now(timezone.utc)
-        self.assertFalse(
-            _active_task_timed_out({}, now=now, timeout_seconds=60)
-        )
+        self.assertFalse(_active_task_timed_out({}, now=now, timeout_seconds=60))
         self.assertFalse(
             _active_task_timed_out(
                 {

@@ -160,13 +160,11 @@ def _terminal_queue_has_pending_work(state: Path) -> bool:
 
     uri = f"{state.resolve().as_uri()}?mode=ro"
     with sqlite3.connect(uri, uri=True, timeout=5) as connection:
-        row = connection.execute(
-            """
+        row = connection.execute("""
             SELECT 1 FROM jobs
             WHERE active = 1 AND state IN ('queued', 'leased', 'running')
             LIMIT 1
-            """
-        ).fetchone()
+            """).fetchone()
     return row is not None
 
 
@@ -178,7 +176,10 @@ def _park_recycled_terminal_worker(root: Path, state: Path) -> None:
 
         policy = load_retention_policy(root)
     except (OSError, ValueError) as error:
-        print(f"warning: terminal worker park policy unavailable: {error}", file=sys.stderr)
+        print(
+            f"warning: terminal worker park policy unavailable: {error}",
+            file=sys.stderr,
+        )
         return
     if not policy.memory_cleanup_enabled or not policy.park_terminal_workers:
         return
@@ -187,7 +188,9 @@ def _park_recycled_terminal_worker(root: Path, state: Path) -> None:
             if _terminal_queue_has_pending_work(state):
                 return
         except (OSError, sqlite3.Error) as error:
-            print(f"warning: terminal worker park check failed: {error}", file=sys.stderr)
+            print(
+                f"warning: terminal worker park check failed: {error}", file=sys.stderr
+            )
             return
         time.sleep(policy.park_poll_seconds)
 

@@ -96,16 +96,25 @@ def hunt(
     ghidra_fid.ensure_started(ghidra_home, environment)
 
     target_id = facts.sha256[:12]
-    report_path = Path(report) if report else Path("artifacts") / f"hunt-{target_id}.json"
+    report_path = (
+        Path(report) if report else Path("artifacts") / f"hunt-{target_id}.json"
+    )
     target_project, target_program = ghidra_fid.analyze_target(
-        target_path, work_path / "targets", f"target-{target_id}", facts.ghidra_language_hint,
+        target_path,
+        work_path / "targets",
+        f"target-{target_id}",
+        facts.ghidra_language_hint,
     )
 
-    log.info("investigated %s -> %d compatible candidate(s)", target_path, len(candidates))
+    log.info(
+        "investigated %s -> %d compatible candidate(s)", target_path, len(candidates)
+    )
     attempts = []
     for index, recipe in enumerate(candidates[:maximum], start=1):
         label = f'{recipe["family"]} {recipe["version"]} {recipe.get("variant")}'
-        log.info("[%d/%d] trying candidate: %s", index, min(maximum, len(candidates)), label)
+        log.info(
+            "[%d/%d] trying candidate: %s", index, min(maximum, len(candidates)), label
+        )
         guess = prepare_recipe(recipe, work_path, work_path / "downloads")
         objects = _select_objects(guess)
         digest = str(guess["recipe_digest"])[:12]
@@ -123,15 +132,29 @@ def hunt(
                 version=str(guess["version"]),
                 variant=str(guess["variant"]),
                 language=str(guess["language"]),
-                compiler_spec=ghidra_fid.compiler_spec_for_language(str(guess["language"])),
+                compiler_spec=ghidra_fid.compiler_spec_for_language(
+                    str(guess["language"])
+                ),
             )
         assessment = ghidra_fid.assess_fidb(
-            target_project, f"target-{target_id}", target_program,
-            fidb, candidate_dir / "matches.json",
+            target_project,
+            f"target-{target_id}",
+            target_program,
+            fidb,
+            candidate_dir / "matches.json",
         )
-        attempts.append({"guess": guess, "fidb": str(fidb.resolve()), "build": build, "assessment": assessment})
+        attempts.append(
+            {
+                "guess": guess,
+                "fidb": str(fidb.resolve()),
+                "build": build,
+                "assessment": assessment,
+            }
+        )
         matched = bool(assessment["unambiguous_match_count"])
-        log.info("%s: %s (matched=%s)", label, "MATCH" if matched else "no match", matched)
+        log.info(
+            "%s: %s (matched=%s)", label, "MATCH" if matched else "no match", matched
+        )
         if matched:
             break
 
@@ -160,7 +183,9 @@ def hunt(
                 "fidb_path": str(destination.resolve()),
                 "fidb_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
                 "fidbf_path": str(raw_destination.resolve()),
-                "fidbf_sha256": hashlib.sha256(raw_destination.read_bytes()).hexdigest(),
+                "fidbf_sha256": hashlib.sha256(
+                    raw_destination.read_bytes()
+                ).hexdigest(),
                 "matched_functions": attempt["assessment"]["matched_functions"],
                 "unambiguous_matches": attempt["assessment"]["unambiguous_match_count"],
                 **({"executor": guess["executor"]} if "executor" in guess else {}),
@@ -170,7 +195,9 @@ def hunt(
     result = {
         "investigation": evidence.to_dict(),
         "attempts": attempts,
-        "matched": any(item["assessment"]["unambiguous_match_count"] for item in attempts),
+        "matched": any(
+            item["assessment"]["unambiguous_match_count"] for item in attempts
+        ),
         "toolchains": str(Path(toolchains)),
         "recipes": str(Path(recipe_dir)),
         "executor": executor,

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-
 WIDTH_STUDY_SCHEMA = "fidb-width-study/v1"
 WIDTH_AXIS_IDS = (
     "releases",
@@ -36,7 +35,9 @@ def _rows(value: object, kind: str, required: set[str]) -> list[dict[str, object
             raise ValueError(f"width study {kind} row {index} must be a table")
         missing = required - set(raw)
         if missing:
-            raise ValueError(f"width study {kind} row {index} missing {sorted(missing)}")
+            raise ValueError(
+                f"width study {kind} row {index} missing {sorted(missing)}"
+            )
         row = dict(raw)
         row_id = _non_empty(row["id"], f"{kind} id")
         if row_id in seen:
@@ -133,16 +134,23 @@ def load_width_study(path: str | Path) -> dict[str, object]:
         )
         or sorted(set(comparison_counts)) != comparison_counts
     ):
-        raise ValueError("width study comparison counts must be sorted positive integers")
+        raise ValueError(
+            "width study comparison counts must be sorted positive integers"
+        )
     if family_count not in comparison_counts:
-        raise ValueError("width study comparison counts must include the study family count")
+        raise ValueError(
+            "width study comparison counts must include the study family count"
+        )
     if scaling["default_target_families"] not in comparison_counts:
         raise ValueError("width study default target must be a comparison count")
     workers = (scaling["default_workers"], scaling["maximum_workers"])
-    if any(
-        not isinstance(value, int) or isinstance(value, bool) or value <= 0
-        for value in workers
-    ) or workers[0] > workers[1]:
+    if (
+        any(
+            not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for value in workers
+        )
+        or workers[0] > workers[1]
+    ):
         raise ValueError("width study worker bounds must be positive and monotonic")
     _non_empty(scaling["model"], "scaling model")
 
@@ -176,7 +184,9 @@ def load_width_study(path: str | Path) -> dict[str, object]:
         or int(calibration[field]) <= 0
         for field in numeric_calibration
     ):
-        raise ValueError("width study calibration measurements must be positive integers")
+        raise ValueError(
+            "width study calibration measurements must be positive integers"
+        )
     if not (
         calibration["successful_wall_ns_min"]
         <= calibration["successful_wall_ns_p50"]
@@ -206,7 +216,9 @@ def load_width_study(path: str | Path) -> dict[str, object]:
         not isinstance(order, int) or isinstance(order, bool) or order <= 0
         for order in orders
     ):
-        raise ValueError("width study toolchain requirement orders must be positive integers")
+        raise ValueError(
+            "width study toolchain requirement orders must be positive integers"
+        )
     if sorted(orders) != list(range(1, len(toolchain_requirements) + 1)):
         raise ValueError(
             "width study toolchain requirement orders must be contiguous from one"
@@ -223,9 +235,7 @@ def load_width_study(path: str | Path) -> dict[str, object]:
             "version_policy",
             "rationale",
         ):
-            _non_empty(
-                row[field], f"toolchain requirement {row['id']} {field}"
-            )
+            _non_empty(row[field], f"toolchain requirement {row['id']} {field}")
         target_id = str(row["target_id"])
         if target_id in target_ids:
             raise ValueError(

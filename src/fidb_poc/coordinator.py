@@ -3216,9 +3216,7 @@ class Coordinator:
             attempt_parameters += (attempt_limit,)
         attempts = list(
             reversed(
-                self._connection.execute(
-                    attempt_sql, attempt_parameters
-                ).fetchall()
+                self._connection.execute(attempt_sql, attempt_parameters).fetchall()
             )
         )
         workers = self._connection.execute(

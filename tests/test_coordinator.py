@@ -747,9 +747,7 @@ matrices = ["tier0-uclibc-powerpc"]
         )
 
     def test_operator_requeue_can_claim_after_automatic_attempt_ceiling(self):
-        armed_path = self.write_queue(
-            filename="armed.toml", armed=True, max_attempts=1
-        )
+        armed_path = self.write_queue(filename="armed.toml", armed=True, max_attempts=1)
         disarmed_path = self.write_queue(
             filename="disarmed.toml", armed=False, max_attempts=1
         )
@@ -796,9 +794,7 @@ matrices = ["tier0-uclibc-powerpc"]
             block = coordinator.start_next_block(
                 "manual:recovery-test", scheduled=False, now=11
             )
-            lease = coordinator.claim(
-                "worker-one", batch_id=block["batch_id"], now=20
-            )
+            lease = coordinator.claim("worker-one", batch_id=block["batch_id"], now=20)
             coordinator.fail(
                 lease["job_id"],
                 lease["lease_token"],

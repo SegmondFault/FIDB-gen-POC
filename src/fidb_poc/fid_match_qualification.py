@@ -44,7 +44,9 @@ def _retained_query_analysis_policy(
         raise ValueError(f"retained query analysis policy is unsupported: {policy}")
     language = str(getattr(route, "ghidra_language", ""))
     if policy == QUERY_ANALYSIS_RECOVERY_POLICY and not language.startswith("SuperH4:"):
-        raise ValueError("SuperH query recovery policy cannot be applied to another ISA")
+        raise ValueError(
+            "SuperH query recovery policy cannot be applied to another ISA"
+        )
     return policy
 
 
@@ -165,7 +167,9 @@ def _load_retained_oracle_replay(
         and oracle_receipt.get("input_path") == str(oracle_path.relative_to(root))
         and oracle_receipt.get("input_sha256") == _sha256(oracle_path)
     ):
-        raise ValueError("retained native oracle does not match current source evidence")
+        raise ValueError(
+            "retained native oracle does not match current source evidence"
+        )
     if not (
         oracle.get("schema_version") == "fidb-portable-fid-input/v1"
         and oracle.get("oracle") == authority["oracle"]["implementation"]
@@ -341,11 +345,9 @@ def _attach_query_relationships(
         raise ValueError("query relationship evidence addresses differ from oracle")
     for function in functions:
         relationship = by_address[str(function["address"])]
-        if (
-            str(relationship["full_hash"]) != str(function["full_hash"])
-            or str(relationship["specific_hash"])
-            != str(function["specific_hash"])
-        ):
+        if str(relationship["full_hash"]) != str(function["full_hash"]) or str(
+            relationship["specific_hash"]
+        ) != str(function["specific_hash"]):
             raise ValueError("query relationship evidence hashes differ from oracle")
         children = relationship.get("children")
         parents = relationship.get("parents")
@@ -391,8 +393,7 @@ def ensure_query_relationship_evidence(
             sealed == direct.resolve()
             and isinstance(summary, dict)
             and sealed.is_file()
-            and receipt.get("schema_version")
-            == "fidb-program-signature-evidence/v1"
+            and receipt.get("schema_version") == "fidb-program-signature-evidence/v1"
             and receipt.get("source") == "integrated-composite-analysis"
             and set(receipt.get("roles", [])) == expected_roles
             and receipt.get("query_analysis_policy")
@@ -433,8 +434,7 @@ def ensure_query_relationship_evidence(
             and receipt.get("route_id") == getattr(route, "id")
             and receipt.get("treatment_id") == treatment_id
             and receipt.get("query_analysis_policy") == query_policy
-            and evidence.get("schema_version")
-            == "fidb-program-signature-evidence/v1"
+            and evidence.get("schema_version") == "fidb-program-signature-evidence/v1"
             and evidence.get("path") == str(output.relative_to(root))
             and output.is_file()
             and evidence.get("sha256") == _sha256(output)
@@ -723,9 +723,7 @@ def qualify_retained_validation(
             authority,
             compare_backends=compare_backends,
         )
-    classification = classify_matches(
-        oracle, evidence["cohort"], executions[-1]
-    )
+    classification = classify_matches(oracle, evidence["cohort"], executions[-1])
     execution_paths = []
     for execution in executions:
         device = str(authority["backends"][execution["backend"]]["device"])

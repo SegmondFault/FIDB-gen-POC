@@ -32,13 +32,17 @@ def load_linked_reference_performance(
     root = Path(project_root).expanduser().resolve()
     path = _inside(root, authority)
     document = tomllib.loads(path.read_text(encoding="utf-8"))
-    if set(document) != {
-        "schema_version",
-        "mode",
-        "fixed_profile",
-        "automatic",
-        "profiles",
-    } or document.get("schema_version") != SCHEMA:
+    if (
+        set(document)
+        != {
+            "schema_version",
+            "mode",
+            "fixed_profile",
+            "automatic",
+            "profiles",
+        }
+        or document.get("schema_version") != SCHEMA
+    ):
         raise ValueError("linked-reference performance authority is unsupported")
     if document["mode"] not in {"auto", "fixed"}:
         raise ValueError("linked-reference performance mode is invalid")
@@ -95,7 +99,9 @@ def load_linked_reference_performance(
             "minimum_total_memory_mib",
         ):
             if type(raw[name]) is not int or int(raw[name]) < 1:
-                raise ValueError(f"linked-reference profile {profile_id}.{name} is invalid")
+                raise ValueError(
+                    f"linked-reference profile {profile_id}.{name} is invalid"
+                )
         if int(raw["workers"]) > 16:
             raise ValueError("linked-reference worker count exceeds the reviewed bound")
         if int(raw["jvm_initial_heap_mib"]) > int(raw["jvm_max_heap_mib"]):
@@ -184,9 +190,17 @@ def resolve_linked_reference_performance(
             for row in candidates
             if row["eligible"] and row["qualification"] in allowed
         ]
-        selected = max(eligible, key=lambda row: int(row["workers"])) if eligible else None
-    blockers = [] if selected is not None and selected["eligible"] else (
-        list(selected["blockers"]) if selected is not None else ["no automatic profile fits this host"]
+        selected = (
+            max(eligible, key=lambda row: int(row["workers"])) if eligible else None
+        )
+    blockers = (
+        []
+        if selected is not None and selected["eligible"]
+        else (
+            list(selected["blockers"])
+            if selected is not None
+            else ["no automatic profile fits this host"]
+        )
     )
     return {
         "schema_version": "fidb-linked-reference-performance-resolution/v1",

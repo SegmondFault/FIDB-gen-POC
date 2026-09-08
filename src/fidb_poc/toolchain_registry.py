@@ -21,7 +21,9 @@ SOURCE_FIELDS = {"toolchain_url", "toolchain_sha256", "cross_bin_prefix", "cross
 
 def _hex64(value: object, context: str) -> None:
     text = str(value)
-    if len(text) != 64 or any(character not in "0123456789abcdef" for character in text):
+    if len(text) != 64 or any(
+        character not in "0123456789abcdef" for character in text
+    ):
         raise ValueError(f"invalid sha256 for {context}")
 
 
@@ -54,7 +56,9 @@ def load_toolchains(path: str | Path) -> list[dict[str, object]]:
         if has_source:
             missing_source = SOURCE_FIELDS - row.keys()
             if missing_source:
-                raise ValueError(f"{label} is missing: {', '.join(sorted(missing_source))}")
+                raise ValueError(
+                    f"{label} is missing: {', '.join(sorted(missing_source))}"
+                )
             _hex64(row["toolchain_sha256"], label)
         if "members_file" in row:
             members = (registry_path.parent / str(row["members_file"])).resolve()

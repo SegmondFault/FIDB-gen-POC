@@ -43,7 +43,9 @@ class RecipeGeneratorTests(unittest.TestCase):
             "2eca639c6194147da52d3e3cbd9d3f0fafe23fe152200d4e720cb28ed963d980",
         )
         self.assertEqual(cell["arch"], "powerpc")
-        self.assertEqual(cell["cross_bin_prefix"], "bin/powerpc-buildroot-linux-uclibc-")
+        self.assertEqual(
+            cell["cross_bin_prefix"], "bin/powerpc-buildroot-linux-uclibc-"
+        )
         self.assertEqual(
             cell["kernel_headers_relpath"],
             "powerpc-buildroot-linux-uclibc/sysroot/usr/include",
@@ -52,20 +54,33 @@ class RecipeGeneratorTests(unittest.TestCase):
         self.assertEqual(cell["build_adapter"], "uclibc_defconfig")
         self.assertEqual(len(cell["patches"]), 1)
         self.assertTrue(Path(cell["patches"][0]).is_file())
-        self.assertTrue(cell["patches"][0].endswith("uclibc-0.9.30.1-powerpc-crtn-size.patch"))
+        self.assertTrue(
+            cell["patches"][0].endswith("uclibc-0.9.30.1-powerpc-crtn-size.patch")
+        )
 
     def test_duplicate_generated_cells_are_rejected(self):
         recipe = {
-            "schema_version": "fidb-recipe/v3", "mode": "source",
-            "name": "dup", "version": "1", "url": "https://example.invalid/a.tar.gz",
-            "sha256": "a" * 64, "library_path": "lib/libc.a",
-            "build_adapter": "uclibc_defconfig", "toolchain_family": "dupfamily",
+            "schema_version": "fidb-recipe/v3",
+            "mode": "source",
+            "name": "dup",
+            "version": "1",
+            "url": "https://example.invalid/a.tar.gz",
+            "sha256": "a" * 64,
+            "library_path": "lib/libc.a",
+            "build_adapter": "uclibc_defconfig",
+            "toolchain_family": "dupfamily",
         }
         toolchain = {
-            "family": "dupfamily", "version": "1", "variant": "only",
-            "machine": "ARM", "endianness": "little", "elf_class": 32,
-            "toolchain_url": "https://example.invalid/tc.tar.bz2", "toolchain_sha256": "b" * 64,
-            "cross_bin_prefix": "bin/arm-", "cross_arch": "arm",
+            "family": "dupfamily",
+            "version": "1",
+            "variant": "only",
+            "machine": "ARM",
+            "endianness": "little",
+            "elf_class": 32,
+            "toolchain_url": "https://example.invalid/tc.tar.bz2",
+            "toolchain_sha256": "b" * 64,
+            "cross_bin_prefix": "bin/arm-",
+            "cross_arch": "arm",
         }
         cells = generate_cells([recipe], [toolchain])
         self.assertEqual(len(cells), 1)
@@ -74,10 +89,15 @@ class RecipeGeneratorTests(unittest.TestCase):
 
     def test_recipe_with_no_matching_toolchain_family_fails_closed(self):
         recipe = {
-            "schema_version": "fidb-recipe/v3", "mode": "source",
-            "name": "orphan", "version": "1", "url": "https://example.invalid/a.tar.gz",
-            "sha256": "a" * 64, "library_path": "lib/libc.a",
-            "build_adapter": "uclibc_defconfig", "toolchain_family": "nonexistent",
+            "schema_version": "fidb-recipe/v3",
+            "mode": "source",
+            "name": "orphan",
+            "version": "1",
+            "url": "https://example.invalid/a.tar.gz",
+            "sha256": "a" * 64,
+            "library_path": "lib/libc.a",
+            "build_adapter": "uclibc_defconfig",
+            "toolchain_family": "nonexistent",
         }
         with self.assertRaisesRegex(ValueError, "no source-capable"):
             generate_cells([recipe], [])

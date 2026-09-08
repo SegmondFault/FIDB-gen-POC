@@ -5,14 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-
 SCHEMA = "fidb-compiler-width-assets/v1"
 
 
 def _rows(document: dict[str, object], key: str) -> list[dict[str, object]]:
     value = document.get(key)
-    if not isinstance(value, list) or not value or not all(
-        isinstance(row, dict) for row in value
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(row, dict) for row in value)
     ):
         raise ValueError(f"compiler-width authority requires {key} rows")
     return [dict(row) for row in value]
@@ -59,7 +60,9 @@ def load_compiler_width_assets(path: str | Path) -> dict[str, object]:
         (str(row.get("target")), str(row.get("generation"))) for row in assets
     }
     if observed_pairs != expected_pairs:
-        raise ValueError("compiler-width GCC assets do not form the selected cross product")
+        raise ValueError(
+            "compiler-width GCC assets do not form the selected cross product"
+        )
 
     packs: list[dict[str, object]] = []
     routes: list[dict[str, object]] = []
@@ -78,8 +81,7 @@ def load_compiler_width_assets(path: str | Path) -> dict[str, object]:
         driver_prefix = str(target["driver_prefix"])
         route_id = f"{target['route_prefix']}-{major}"
         url_root = (
-            "https://toolchains.bootlin.com/downloads/releases/toolchains/"
-            f"{slug}"
+            "https://toolchains.bootlin.com/downloads/releases/toolchains/" f"{slug}"
         )
         packs.append(
             {
@@ -149,9 +151,7 @@ def load_compiler_width_assets(path: str | Path) -> dict[str, object]:
         compiler_id = str(asset["compiler_id"])
         compiler_version = compiler_id.removeprefix("llvm-clang-")
         major = compiler_version.split(".", 1)[0]
-        archive_root = (
-            f"llvm-mingw-{release}-ucrt-ubuntu-{asset['ubuntu']}-x86_64"
-        )
+        archive_root = f"llvm-mingw-{release}-ucrt-ubuntu-{asset['ubuntu']}-x86_64"
         pack_id = f"llvm-mingw-ucrt-x86-64-linux-{release}"
         route_id = f"windows-x86-64-llvm-mingw-clang-{major}"
         packs.append(
@@ -182,8 +182,7 @@ def load_compiler_width_assets(path: str | Path) -> dict[str, object]:
                 ],
                 "upstream_release": f"llvm-mingw-{release}-llvm-{compiler_version}",
                 "upstream_authority": (
-                    "https://github.com/mstorsjo/llvm-mingw/releases/tag/"
-                    f"{release}"
+                    "https://github.com/mstorsjo/llvm-mingw/releases/tag/" f"{release}"
                 ),
                 "archive_root": archive_root,
             }

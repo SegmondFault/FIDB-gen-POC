@@ -39,22 +39,16 @@ class LinkedReferencePerformanceTests(unittest.TestCase):
         self.assertEqual(config["mode"], "auto")
 
     def test_94_gib_host_selects_eight_workers(self) -> None:
-        result = resolve_linked_reference_performance(
-            self.root, host=host(94, 78)
-        )
+        result = resolve_linked_reference_performance(self.root, host=host(94, 78))
         self.assertEqual(result["state"], "ready")
         self.assertEqual(result["selected_profile"]["workers"], 8)
 
     def test_112_gib_host_selects_ten_workers(self) -> None:
-        result = resolve_linked_reference_performance(
-            self.root, host=host(112, 104)
-        )
+        result = resolve_linked_reference_performance(self.root, host=host(112, 104))
         self.assertEqual(result["selected_profile"]["workers"], 10)
 
     def test_experimental_twelve_is_never_selected_automatically(self) -> None:
-        result = resolve_linked_reference_performance(
-            self.root, host=host(128, 120)
-        )
+        result = resolve_linked_reference_performance(self.root, host=host(128, 120))
         self.assertEqual(result["selected_profile"]["workers"], 10)
         twelve = next(row for row in result["profiles"] if row["workers"] == 12)
         self.assertTrue(twelve["eligible"])

@@ -22,8 +22,15 @@ from .source_build import EXECUTORS
 SCHEMA_VERSION = "fidb-recipe/v3"
 
 REQUIRED_FIELDS = {
-    "schema_version", "mode", "name", "version", "url", "sha256",
-    "library_path", "build_adapter", "toolchain_family",
+    "schema_version",
+    "mode",
+    "name",
+    "version",
+    "url",
+    "sha256",
+    "library_path",
+    "build_adapter",
+    "toolchain_family",
 }
 
 # Shared across every source-mode cell unless a recipe overrides it -- same
@@ -35,7 +42,9 @@ VM_ISO_SHA256 = "366317d854d77fc5db3b2fd774f5e1e5db0a7ac210614fd39ddb555b09dbb34
 
 def _hex64(value: object, context: str) -> None:
     text = str(value)
-    if len(text) != 64 or any(character not in "0123456789abcdef" for character in text):
+    if len(text) != 64 or any(
+        character not in "0123456789abcdef" for character in text
+    ):
         raise ValueError(f"invalid sha256 for {context}")
 
 
@@ -47,16 +56,22 @@ def load_recipes(directory: str | Path) -> list[dict[str, object]]:
         if recipe.get("schema_version") != SCHEMA_VERSION:
             raise ValueError(f"unsupported or missing schema_version in {path}")
         if recipe.get("mode") != "source":
-            raise ValueError(f'{path}: recipe_generator only handles mode="source" recipes')
+            raise ValueError(
+                f'{path}: recipe_generator only handles mode="source" recipes'
+            )
         missing = REQUIRED_FIELDS - recipe.keys()
         if missing:
             raise ValueError(f"{path} is missing: {', '.join(sorted(missing))}")
         _hex64(recipe["sha256"], path.name)
         if recipe.get("source_kind", "tar") not in ("tar", "zip"):
-            raise ValueError(f'{path}: unsupported source_kind {recipe["source_kind"]!r}')
+            raise ValueError(
+                f'{path}: unsupported source_kind {recipe["source_kind"]!r}'
+            )
         if "patches" in recipe:
             if not isinstance(recipe["patches"], dict):
-                raise ValueError(f"{path}: patches must be a table keyed by toolchain variant")
+                raise ValueError(
+                    f"{path}: patches must be a table keyed by toolchain variant"
+                )
             recipe["patches"] = {
                 variant: [str((path.parent / patch).resolve()) for patch in patch_list]
                 for variant, patch_list in recipe["patches"].items()
@@ -66,7 +81,8 @@ def load_recipes(directory: str | Path) -> list[dict[str, object]]:
 
 
 def generate_cells(
-    recipes: list[dict[str, object]], toolchains: list[dict[str, object]],
+    recipes: list[dict[str, object]],
+    toolchains: list[dict[str, object]],
     executor: str = "qemu",
 ) -> list[dict[str, object]]:
     if executor not in EXECUTORS:
@@ -76,7 +92,8 @@ def generate_cells(
         family = recipe["toolchain_family"]
         wanted_variants = set(recipe.get("toolchain_variants", []))
         matches = [
-            row for row in toolchains
+            row
+            for row in toolchains
             if row["family"] == family
             and "toolchain_url" in row
             and (not wanted_variants or row["variant"] in wanted_variants)
@@ -84,7 +101,7 @@ def generate_cells(
         if not matches:
             raise ValueError(
                 f'recipe {recipe["name"]} {recipe["version"]}: no source-capable '
-                f'toolchain rows found for toolchain_family={family!r}'
+                f"toolchain rows found for toolchain_family={family!r}"
             )
         patches_by_variant = recipe.get("patches", {})
         for row in matches:
