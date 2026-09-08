@@ -67,9 +67,7 @@ class AutoBatchBuilderTests(unittest.TestCase):
             ]
         }
         raw_batch = {
-            "libraries": [
-                {"id": "demo", "version": "1.0", "recipe_id": "demo@1.0"}
-            ]
+            "libraries": [{"id": "demo", "version": "1.0", "recipe_id": "demo@1.0"}]
         }
         projected = {
             "libraries": [
@@ -82,7 +80,9 @@ class AutoBatchBuilderTests(unittest.TestCase):
             ]
         }
         with (
-            patch("fidb_poc.auto_batch_builder.load_width_batch", return_value=raw_batch),
+            patch(
+                "fidb_poc.auto_batch_builder.load_width_batch", return_value=raw_batch
+            ),
             patch(
                 "fidb_poc.auto_batch_builder.project_width_batch_readiness",
                 return_value=projected,
@@ -169,6 +169,13 @@ class AutoBatchBuilderTests(unittest.TestCase):
         self.assertTrue(policy.schedule.finish_started_batch)
         self.assertTrue(policy.schedule.chain_batches)
         self.assertNotIn("hard_cutoff", queue["schedule"])
+
+        canary = tomllib.loads(_render_queue(document, source, canary_only=True))
+        self.assertFalse(canary["queue"]["armed"])
+        self.assertFalse(canary["schedule"]["enabled"])
+        self.assertFalse(canary["schedule"]["chain_batches"])
+        self.assertEqual(canary["queue"]["batch_order"], ["chunk-001"])
+        self.assertEqual(len(canary["batch"]), 1)
 
     def test_generated_plan_carries_the_current_qualification_seal(self):
         chunk = {
