@@ -1,0 +1,11 @@
+schema_version = "fidb-recipe/v3"
+mode = "native"
+name = "libxml2"
+version = "2.15.4"
+url = "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz"
+sha256 = "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821"
+source_directory = "libxml2-2.15.4"
+project_markers = ["configure", "include/libxml/parser.h"]
+allowed_build_systems = ["libxml2-autoconf", "autoconf", "cmake", "meson"]
+preferred_build_system = "libxml2-autoconf"
+static_archives = ["libxml2.a"]

@@ -966,6 +966,8 @@ def acquisition_receipt_projection(
                 "status": row["status"],
                 "resolver_id": row.get("resolver_id"),
                 "version": row.get("version"),
+                "url": row.get("url"),
+                "sha256": row.get("sha256"),
                 "receipt_cached": receipt_cached,
                 "last_verified_utc": (
                     receipt_row.get("last_verified_utc") if receipt_row else None

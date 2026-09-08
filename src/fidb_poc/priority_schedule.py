@@ -169,6 +169,8 @@ def compile_priority_schedule(
     *,
     programme: Mapping[str, object],
     recipes: Sequence[Mapping[str, object]],
+    source_acquisition: Mapping[str, object] | None = None,
+    recipe_preparation: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Join priority order to C80 membership and current build readiness."""
 
@@ -182,26 +184,65 @@ def compile_priority_schedule(
     recipe_rows: dict[str, list[Mapping[str, object]]] = {}
     for recipe in recipes:
         recipe_rows.setdefault(str(recipe["name"]), []).append(recipe)
+    priority_sources = {
+        str(row["candidate_key"]): row
+        for row in (source_acquisition or {}).get("candidates", [])  # type: ignore[union-attr]
+    }
+    prepared_families = {
+        str(row["source_family"]): row
+        for row in (recipe_preparation or {}).get("families", [])  # type: ignore[union-attr]
+    }
 
     projected = []
     for raw in overlay["subjects"]:  # type: ignore[assignment]
         subject = dict(raw)
         research_key = subject["research_key"]
         research = candidates.get(str(research_key)) if research_key else None
+        priority_source = priority_sources.get(str(subject["source_family"]))
+        prepared = prepared_families.get(str(subject["source_family"]))
         matching_recipes = []
         for key in (subject["id"], subject["source_family"]):
             matching_recipes.extend(recipe_rows.get(str(key), []))
         matching_recipes = list(
             {str(row["id"]): row for row in matching_recipes}.values()
         )
-        native_recipe = any(row.get("kind") == "native" for row in matching_recipes)
-        limited_recipe = bool(matching_recipes) and not native_recipe
-        source_available = bool(
-            (
-                research
-                and (research["source_pinned"] or research["research_source_pinned"])
+        source_sha256 = priority_source.get("sha256") if priority_source else None
+        source_version = priority_source.get("version") if priority_source else None
+        native_recipe = any(
+            row.get("kind") == "native"
+            and (
+                source_sha256 is None
+                or (
+                    row.get("sha256") == source_sha256
+                    and row.get("version") == source_version
+                )
             )
-            or matching_recipes
+            for row in matching_recipes
+        )
+        native_source_mismatch = (
+            not native_recipe
+            and any(row.get("kind") == "native" for row in matching_recipes)
+            and source_sha256 is not None
+        )
+        limited_recipe = bool(matching_recipes) and not native_recipe
+        priority_source_pinned = bool(
+            priority_source and priority_source["status"] == "pinned"
+        )
+        priority_source_cached = bool(
+            priority_source and priority_source["receipt_cached"]
+        )
+        source_available = (
+            priority_source_cached
+            if priority_source
+            else bool(
+                (
+                    research
+                    and (
+                        research["source_pinned"] or research["research_source_pinned"]
+                    )
+                )
+                or matching_recipes
+            )
         )
         width_batch_bound = bool(research and research["width_batch_bound"])
         qualification_satisfied = bool(research and research["qualification_satisfied"])
@@ -214,13 +255,39 @@ def compile_priority_schedule(
                 "research_source_cached": bool(
                     research and research["research_source_cached"]
                 ),
-                "build_source_cached": bool(research and research["source_cached"]),
+                "priority_source_pinned": priority_source_pinned,
+                "priority_source_cached": priority_source_cached,
+                "priority_source_version": source_version,
+                "priority_source_last_verified_utc": (
+                    priority_source.get("last_verified_utc")
+                    if priority_source
+                    else None
+                ),
+                "build_source_cached": priority_source_cached
+                or bool(research and research["source_cached"]),
                 "recipe_state": (
                     "reviewed-native"
                     if native_recipe
-                    else "reviewed-limited" if limited_recipe else "required"
+                    else (
+                        "source-mismatch"
+                        if native_source_mismatch
+                        else (
+                            "reviewed-limited"
+                            if limited_recipe
+                            else "prepared-not-executable" if prepared else "required"
+                        )
+                    )
                 ),
                 "recipe_ids": sorted(str(row["id"]) for row in matching_recipes),
+                "recipe_preparation_state": (
+                    prepared.get("state") if prepared else None
+                ),
+                "recipe_preparation_blockers": (
+                    list(prepared["blockers"]) if prepared else []
+                ),
+                "planned_adapter": (
+                    prepared.get("planned_adapter") if prepared else None
+                ),
                 "width_batch_bound": width_batch_bound,
                 "qualification_satisfied": qualification_satisfied,
                 "stage": _stage(
@@ -269,6 +336,27 @@ def compile_priority_schedule(
         ),
         "research_overlap_candidates": len(research_keys),
         "priority_additions": sum(not row["research_overlap"] for row in projected),
+        "source_families_pinned": len(
+            {
+                str(row["source_family"])
+                for row in projected
+                if row["priority_source_pinned"]
+            }
+        ),
+        "source_families_cached": len(
+            {
+                str(row["source_family"])
+                for row in projected
+                if row["priority_source_cached"]
+            }
+        ),
+        "recipe_families_prepared": len(
+            {
+                str(row["source_family"])
+                for row in projected
+                if row["recipe_preparation_state"]
+            }
+        ),
         "native_recipe_ready": sum(
             row["recipe_state"] == "reviewed-native" for row in projected
         ),
@@ -300,6 +388,28 @@ def compile_priority_schedule(
         "scheduling_policy": overlay["scheduling_policy"],
         "authority_path": overlay["authority_path"],
         "authority_sha256": overlay["authority_sha256"],
+        "source_acquisition": (
+            {
+                "config_path": source_acquisition["config_path"],
+                "config_sha256": source_acquisition["config_sha256"],
+                "lock_path": source_acquisition["lock_path"],
+                "lock_sha256": source_acquisition["lock_sha256"],
+                "receipt_path": source_acquisition["receipt_path"],
+                "receipt_updated_utc": source_acquisition["receipt_updated_utc"],
+                "summary": source_acquisition["summary"],
+            }
+            if source_acquisition
+            else None
+        ),
+        "recipe_preparation": (
+            {
+                "authority_path": recipe_preparation["authority_path"],
+                "authority_sha256": recipe_preparation["authority_sha256"],
+                "summary": recipe_preparation["summary"],
+            }
+            if recipe_preparation
+            else None
+        ),
         "programme_id": programme["id"],
         "schedule_digest": hashlib.sha256(
             json.dumps(status_core, sort_keys=True, separators=(",", ":")).encode()

@@ -533,13 +533,13 @@ ledger = "var/campaigns/second.sqlite3"
         status, document, _ = self.request("GET", "/api/v1/authority")
 
         self.assertEqual(status, 200)
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v20")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v21")
         self.assertEqual(
             document["campaign_programmes"][0]["summary"]["candidate_population"], 276
         )
         self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
-        self.assertEqual(len(document["recipes"]), 30)
+        self.assertEqual(len(document["recipes"]), 31)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(len(document["coverage_universe"]["dimensions"]), 7)

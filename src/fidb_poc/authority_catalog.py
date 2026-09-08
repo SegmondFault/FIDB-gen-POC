@@ -34,6 +34,8 @@ from .plan_request import (
 )
 from .performance_profiles import load_performance_profiles
 from .priority_schedule import compile_priority_schedule
+from .recipe_preparation import load_recipe_preparation
+from .source_acquisition import acquisition_receipt_projection
 from .linked_reference_performance import resolve_linked_reference_performance
 from .qualification_pipeline import compile_qualification_pipeline
 from .recipe_generator import load_recipes as load_source_recipes
@@ -43,7 +45,7 @@ from .toolchain_packs import load_toolchain_pack_catalog
 from .width_batch import load_width_batch, project_width_batch_readiness
 from .width_study import load_width_study
 
-AUTHORITY_SCHEMA = "fidb-authority-catalog/v20"
+AUTHORITY_SCHEMA = "fidb-authority-catalog/v21"
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -743,6 +745,12 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             priority_path,
             programme=programme_by_path[programme_path],
             recipes=recipes,
+            source_acquisition=acquisition_receipt_projection(
+                root, Path(priority_path).stem
+            ),
+            recipe_preparation=load_recipe_preparation(
+                root, f"recipes/preparation/{Path(priority_path).stem}.toml"
+            ),
         )
         for priority_path, programme_path in priority_bindings
     ]
@@ -847,7 +855,7 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "width_studies": "coverage/*-width-study.toml",
             "width_batches": "batches/*.toml",
             "campaign_programmes": "campaigns/*.toml + coverage/evidence/four-source-n80-v1.csv",
-            "priority_schedules": "operations/campaigns.toml + coverage/*-priority-*.toml",
+            "priority_schedules": "operations/campaigns.toml + coverage/*-priority-*.toml + sources/acquisition/ + recipes/preparation/",
             "qualification_pipeline": "qualification/pipeline.toml + qualification/*.toml",
             "time_block_plan": "performance/batch-planning.toml",
             "materialized_campaigns": "plans/materialized/*/manifest.toml",
@@ -888,6 +896,13 @@ def authority_catalog(project_root: str | Path) -> dict[str, object]:
             "priority_schedules_sha256": hashlib.sha256(
                 b"".join(
                     (root / str(row["authority_path"])).read_bytes()
+                    + (
+                        root / str(row["source_acquisition"]["config_path"])
+                    ).read_bytes()
+                    + (root / str(row["source_acquisition"]["lock_path"])).read_bytes()
+                    + (
+                        root / str(row["recipe_preparation"]["authority_path"])
+                    ).read_bytes()
                     for row in priority_schedules
                 )
             ).hexdigest(),

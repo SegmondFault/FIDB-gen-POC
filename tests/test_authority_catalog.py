@@ -12,10 +12,18 @@ class AuthorityCatalogTests(unittest.TestCase):
     def test_catalog_projects_every_reviewed_authority(self):
         document = authority_catalog(self.root)
 
-        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v20")
+        self.assertEqual(document["schema_version"], "fidb-authority-catalog/v21")
         self.assertEqual(len(document["campaign_programmes"]), 1)
         self.assertEqual(len(document["priority_schedules"]), 1)
         self.assertEqual(document["priority_schedules"][0]["summary"]["subjects"], 25)
+        self.assertEqual(
+            document["priority_schedules"][0]["summary"]["source_families_pinned"],
+            23,
+        )
+        self.assertEqual(
+            document["priority_schedules"][0]["summary"]["recipe_families_prepared"],
+            23,
+        )
         programme = document["campaign_programmes"][0]
         self.assertEqual(programme["summary"]["candidate_population"], 276)
         self.assertEqual(programme["summary"]["cohorts"], 28)
@@ -98,7 +106,7 @@ class AuthorityCatalogTests(unittest.TestCase):
             document["performance_profiles"]["linked_reference"]["state"],
             {"ready", "blocked"},
         )
-        self.assertEqual(len(document["recipes"]), 30)
+        self.assertEqual(len(document["recipes"]), 31)
         self.assertEqual(len(document["targets"]), 24)
         self.assertEqual(len(document["lane_registry"]["lanes"]), 15)
         self.assertEqual(

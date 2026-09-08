@@ -68,6 +68,26 @@ Project-specific accommodations belong in the fixed adapter and its tests. The
 current gettext, GMP, and Readline exceptions are documented in
 `recipes/README.md`.
 
+The malware-priority overlay has a separate acquisition and recipe-preparation
+boundary. Inspect it without starting compute:
+
+```sh
+.venv/bin/fidb-poc source acquisition status \
+  c-malware-priority-v1 --project-root .
+```
+
+The source acquisition derives 23 unique source families from the 25 ordered
+subjects, so GCC and ncurses are each downloaded once. A successful pull writes
+an ignored TOML receipt under `var/fidb-sources/acquisition/`; the Matrix uses
+that receipt plus path/size checks for its frequent status projection. Use the
+CLI status command when a fresh full SHA-256 integrity pass is required.
+
+`recipes/preparation/c-malware-priority-v1.toml` records inspected roots,
+markers, planned adapters, outputs and blockers. It is deliberately
+non-executable. Do not promote a row into `recipes/*.toml` until its fixed
+adapter exists and the exact source version and SHA-256 match. A preparation
+count in the GUI therefore never means that a library is queueable.
+
 ## Route resolution lessons
 
 - A Ghidra `LanguageID` ending in `:default` does not imply that

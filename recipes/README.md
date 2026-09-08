@@ -81,6 +81,30 @@ workspaces use a stable short digest name because long attempt identities can
 change Wine-backed configure probes. These are pipeline-wide invariants rather
 than recipe-controlled exceptions.
 
+## Priority recipe preparation
+
+`recipes/preparation/c-malware-priority-v1.toml` is the command-free design
+ledger for the 23 source families behind the 25 malware-priority detection
+subjects. Every row is joined to the exact checksum-pinned acquisition lock and
+records the inspected source root, identity markers, planned fixed adapter,
+expected archives, detection-subject ownership and unresolved blockers.
+
+A preparation row is not loaded by a worker and cannot make a source
+queueable. The Matrix deliberately reports four separate facts:
+
+1. the source pin exists;
+2. this host has a verified archive and receipt;
+3. recipe design has been prepared;
+4. an executable recipe, fixed adapter and qualification seal exist.
+
+Only zlib 1.3.2 and libxml2 2.15.4 currently cross the third-to-fourth
+boundary. The remaining families stay visibly at recipe authoring. In
+particular, GCC and ncurses need one-build/multiple-component attribution;
+glibc, uClibc, musl and Perl need specialist cross-build contracts; and
+BoringSSL, OpenCL Loader and protobuf need explicit dependency or generated
+source handling. Those constraints must not be hidden behind a nominally
+"generic" configure or CMake recipe.
+
 ## Qualification boundary
 
 On 2026-09-03 the nine newly added recipes completed 144 compilation-only

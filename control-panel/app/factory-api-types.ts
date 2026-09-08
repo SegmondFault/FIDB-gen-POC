@@ -1416,9 +1416,16 @@ export type PriorityScheduleSubject = {
   research_rank: number | null;
   research_display_name: string | null;
   research_source_cached: boolean;
+  priority_source_pinned: boolean;
+  priority_source_cached: boolean;
+  priority_source_version: string | null;
+  priority_source_last_verified_utc: string | null;
   build_source_cached: boolean;
-  recipe_state: 'reviewed-native' | 'reviewed-limited' | 'required';
+  recipe_state: 'reviewed-native' | 'reviewed-limited' | 'source-mismatch' | 'prepared-not-executable' | 'required';
   recipe_ids: string[];
+  recipe_preparation_state: string | null;
+  recipe_preparation_blockers: string[];
+  planned_adapter: string | null;
   width_batch_bound: boolean;
   qualification_satisfied: boolean;
   stage: string;
@@ -1436,6 +1443,20 @@ export type PrioritySchedule = {
   scheduling_policy: string;
   authority_path: string;
   authority_sha256: string;
+  source_acquisition: {
+    config_path: string;
+    config_sha256: string;
+    lock_path: string;
+    lock_sha256: string;
+    receipt_path: string;
+    receipt_updated_utc: string | null;
+    summary: { candidates: number; pinned: number; receipt_cached: number; unresolved: number };
+  } | null;
+  recipe_preparation: {
+    authority_path: string;
+    authority_sha256: string;
+    summary: { source_families: number; detection_subjects: number; recipe_ready: number; prepared_not_executable: number };
+  } | null;
   programme_id: string;
   schedule_digest: string;
   summary: {
@@ -1446,6 +1467,9 @@ export type PrioritySchedule = {
     research_overlap_subjects: number;
     research_overlap_candidates: number;
     priority_additions: number;
+    source_families_pinned: number;
+    source_families_cached: number;
+    recipe_families_prepared: number;
     native_recipe_ready: number;
     limited_recipe_only: number;
     qualification_satisfied: number;
@@ -1597,7 +1621,7 @@ export type CohortValidationLifecycle = {
 };
 
 export type FactoryAuthority = {
-  schema_version: 'fidb-authority-catalog/v20';
+  schema_version: 'fidb-authority-catalog/v21';
   authority_digest: string;
   coverage_universe: CoverageUniverse;
   width_studies: WidthStudy[];
