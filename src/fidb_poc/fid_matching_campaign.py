@@ -606,21 +606,32 @@ def _reusable_case(
     )
 
 
-def _archive_prior_case_failure(summary_path: Path) -> str | None:
+def _archive_prior_case_evidence(summary_path: Path) -> list[str]:
+    """Move every prior terminal case record into one ordered attempt."""
+
     failure = summary_path.with_name("failure.json")
-    if not failure.is_file():
-        return None
+    existing = [
+        (path, kind)
+        for path, kind in ((summary_path, "summary"), (failure, "failure"))
+        if path.is_file()
+    ]
+    if not existing:
+        return []
     attempts = summary_path.parent / "attempts"
     attempts.mkdir(parents=True, exist_ok=True)
     ordinals = []
-    for path in attempts.glob("attempt-*-failure.json"):
+    for path in attempts.glob("attempt-*-*.json"):
         try:
             ordinals.append(int(path.name.split("-", 2)[1]))
         except (IndexError, ValueError):
             continue
-    destination = attempts / f"attempt-{max(ordinals, default=0) + 1:03d}-failure.json"
-    failure.replace(destination)
-    return str(destination)
+    ordinal = max(ordinals, default=0) + 1
+    destinations = []
+    for path, kind in existing:
+        destination = attempts / f"attempt-{ordinal:03d}-{kind}.json"
+        path.replace(destination)
+        destinations.append(str(destination))
+    return destinations
 
 
 def _scheduled_case_chunks(
@@ -1421,7 +1432,7 @@ def worker_cases(
             str(method["selected"]),
         ):
             continue
-        _archive_prior_case_failure(summary_path)
+        _archive_prior_case_evidence(summary_path)
         try:
             replay_root = (
                 root

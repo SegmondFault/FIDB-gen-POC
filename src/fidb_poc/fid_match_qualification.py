@@ -282,6 +282,33 @@ def _annotate_truth(
     }
 
 
+def _attach_query_relationships(
+    functions: Sequence[dict[str, object]],
+    relationship_rows: Sequence[Mapping[str, object]],
+) -> None:
+    """Attach sealed query relationships to native-oracle function rows."""
+
+    by_address = {str(row["address"]): row for row in relationship_rows}
+    if len(by_address) != len(relationship_rows):
+        raise ValueError("query relationship evidence contains duplicate addresses")
+    if set(by_address) != {str(row["address"]) for row in functions}:
+        raise ValueError("query relationship evidence addresses differ from oracle")
+    for function in functions:
+        relationship = by_address[str(function["address"])]
+        if (
+            str(relationship["full_hash"]) != str(function["full_hash"])
+            or str(relationship["specific_hash"])
+            != str(function["specific_hash"])
+        ):
+            raise ValueError("query relationship evidence hashes differ from oracle")
+        children = relationship.get("children")
+        parents = relationship.get("parents")
+        if not isinstance(children, list) or not isinstance(parents, list):
+            raise ValueError("query relationship evidence lacks relationship arrays")
+        function["children"] = children
+        function["parents"] = parents
+
+
 def ensure_query_relationship_evidence(
     root: Path,
     fold_root: Path,
@@ -585,14 +612,37 @@ def qualify_retained_validation(
     if oracle_evidence_path == oracle_path:
         _atomic_json(oracle_path, oracle)
     performance_receipt = None
+    query_evidence_path = None
+    query_evidence_summary = None
+    query_evidence_source = None
     requested_backend = str(authority["selected"])
     if candidate_indexes is not None:
         from .fid_compact import (
             load_fid_matching_performance,
+            load_query_evidence,
             match_compact_population,
             selected_backend_id,
         )
 
+        (
+            query_evidence_path,
+            query_evidence_summary,
+            query_evidence_source,
+        ) = ensure_query_relationship_evidence(
+            root,
+            fold_root,
+            fold_result,
+            query_binary,
+            route,
+            treatment_id,
+            runtime,
+            destination / "work",
+            ghidra_user_home=destination / "work" / "ghidra-user",
+            source_evidence_contract=result.get("evidence_contract"),
+        )
+        _attach_query_relationships(
+            oracle["functions"], load_query_evidence(query_evidence_path)
+        )
         performance = load_fid_matching_performance(root, performance_path)
         requested_backend = selected_backend_id(performance, authority)
         indexes = [Path(path).resolve() for path in candidate_indexes]
@@ -669,6 +719,17 @@ def qualify_retained_validation(
             "query_analysis_policy": query_analysis_policy,
             "query_path": str(query_binary.relative_to(root)),
             "query_sha256": _sha256(query_binary),
+            "query_evidence_path": (
+                str(query_evidence_path.relative_to(root))
+                if query_evidence_path is not None
+                else None
+            ),
+            "query_evidence_sha256": (
+                _sha256(query_evidence_path)
+                if query_evidence_path is not None
+                else None
+            ),
+            "query_evidence_source": query_evidence_source,
             "link_harness_policy": LINK_HARNESS_POLICY,
             "fidb_count": len(fidbs),
             "fidb_sha256": [_sha256(path) for path in fidbs],
@@ -722,6 +783,7 @@ def qualify_retained_validation(
         },
         "classification_path": str(classification_path.relative_to(root)),
         "classification_sha256": _sha256(classification_path),
+        "query_signature_summary": query_evidence_summary,
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }
     summary_path = destination / "summary.json"

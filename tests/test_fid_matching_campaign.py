@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fidb_poc.fid_matching_campaign import (
     _acquire_campaign_lock,
-    _archive_prior_case_failure,
+    _archive_prior_case_evidence,
     _balanced_case_chunks,
     _cleanup_campaign_scratch,
     _expected_cases,
@@ -27,6 +27,7 @@ from fidb_poc.fid_matching_campaign import (
 )
 from fidb_poc.fid_match_qualification import (
     QUERY_EVIDENCE_CONTRACT,
+    _attach_query_relationships,
     ensure_query_relationship_evidence,
     _linker_truth_intervals,
     _load_retained_oracle_replay,
@@ -357,27 +358,57 @@ class FidMatchingCampaignTests(unittest.TestCase):
         release.assert_called_once_with(42)
         write.assert_not_called()
 
-    def test_retry_archives_prior_case_failure_as_ordered_evidence(self):
+    def test_retry_archives_prior_case_evidence_as_ordered_attempts(self):
         with tempfile.TemporaryDirectory() as temporary:
             summary = Path(temporary) / "case" / "summary.json"
             summary.parent.mkdir()
             failure = summary.with_name("failure.json")
+            summary.write_text(json.dumps({"state": "mismatch"}), encoding="utf-8")
             failure.write_text(json.dumps({"error": "first"}), encoding="utf-8")
 
-            first = _archive_prior_case_failure(summary)
+            first = _archive_prior_case_evidence(summary)
+            self.assertFalse(summary.exists())
             self.assertFalse(failure.exists())
             self.assertEqual(
-                json.loads(Path(first).read_text(encoding="utf-8"))["error"], "first"
+                json.loads(Path(first[1]).read_text(encoding="utf-8"))["error"],
+                "first",
             )
             failure.write_text(json.dumps({"error": "second"}), encoding="utf-8")
-            second = _archive_prior_case_failure(summary)
+            second = _archive_prior_case_evidence(summary)
 
-            self.assertTrue(first.endswith("attempt-001-failure.json"))
-            self.assertTrue(second.endswith("attempt-002-failure.json"))
+            self.assertTrue(first[0].endswith("attempt-001-summary.json"))
+            self.assertTrue(first[1].endswith("attempt-001-failure.json"))
+            self.assertTrue(second[0].endswith("attempt-002-failure.json"))
             self.assertEqual(
-                json.loads(Path(second).read_text(encoding="utf-8"))["error"], "second"
+                json.loads(Path(second[0]).read_text(encoding="utf-8"))["error"],
+                "second",
             )
 
+    def test_query_relationships_are_attached_only_on_exact_identity(self):
+        functions = [
+            {"address": "1000", "full_hash": "aa", "specific_hash": "bb"}
+        ]
+        relationships = [
+            {
+                "address": "1000",
+                "full_hash": "aa",
+                "specific_hash": "bb",
+                "children": [{"full_hash": "cc", "code_unit_size": 7}],
+                "parents": [{"full_hash": "dd", "code_unit_size": 11}],
+            }
+        ]
+
+        _attach_query_relationships(functions, relationships)
+
+        self.assertEqual(functions[0]["children"], relationships[0]["children"])
+        self.assertEqual(functions[0]["parents"], relationships[0]["parents"])
+        with self.assertRaisesRegex(ValueError, "hashes differ"):
+            _attach_query_relationships(
+                functions,
+                [{**relationships[0], "specific_hash": "wrong"}],
+            )
+
+    def test_pending_campaign_exposes_validation_pipeline_stages(self):
         with tempfile.TemporaryDirectory() as temporary, patch(
             "fidb_poc.fid_matching_campaign._campaign_root",
             return_value=Path(temporary),
