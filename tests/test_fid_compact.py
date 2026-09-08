@@ -13,7 +13,9 @@ from fidb_poc.fid_compact import (
     compact_index_status,
     load_fid_matching_performance,
     match_compact,
+    match_compact_population,
     selected_backend_id,
+    validate_compact_candidate_index,
 )
 from fidb_poc.fid_matching import load_matching_authority
 
@@ -108,6 +110,13 @@ class CompactFidTests(unittest.TestCase):
             self.assertEqual(report["candidates"], 2)
             self.assertEqual(report["relations"], 1)
             self.assertEqual(reused, compact_index_status(destination))
+            self.assertEqual(
+                validate_compact_candidate_index(entries, destination), report
+            )
+
+            changed = [{**entries[0], "owner": "another@1"}]
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                validate_compact_candidate_index(changed, destination)
 
     def test_shared_source_is_inspected_once_without_a_global_row_cache(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -159,6 +168,51 @@ class CompactFidTests(unittest.TestCase):
                 ["relation"],
             )
             self.assertEqual(result["functions"][0]["matches"][0]["score"], 16.0)
+
+    def test_population_selects_global_winners_without_rebuilding_union(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entries, inspect = self.fixture(root)
+            first = root / "archive.sqlite3"
+            build_compact_candidate_index(entries, first, inspect)
+
+            linked_fidb = root / "linked.fidb"
+            linked_fidb.write_bytes(b"linked-fidb")
+            linked_digest = hashlib.sha256(linked_fidb.read_bytes()).hexdigest()
+            linked_entries = [
+                {
+                    **entries[0],
+                    "fidb_path": str(linked_fidb),
+                    "fidb_sha256": linked_digest,
+                }
+            ]
+
+            def inspect_linked(_path: Path):
+                source = inspect(_path)
+                source["fidb_sha256"] = linked_digest
+                source["candidates"][0]["code_unit_size"] = 30
+                return source
+
+            second = root / "linked.sqlite3"
+            build_compact_candidate_index(linked_entries, second, inspect_linked)
+
+            result = match_compact_population(
+                [first, second],
+                self.query(),
+                "linux-x86",
+                "o2",
+                self.authority,
+                backend_id="cpu-portable-fid-v1",
+                chunk_rows=1,
+            )
+
+            self.assertEqual(result["candidate_count"], 4)
+            self.assertEqual(len(result["component_indexes"]), 2)
+            self.assertEqual(
+                [row["candidate_id"] for row in result["functions"][0]["matches"]],
+                ["relation"],
+            )
+            self.assertEqual(result["functions"][0]["matches"][0]["score"], 32.0)
 
     def test_gpu_startup_failure_uses_explicit_cpu_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

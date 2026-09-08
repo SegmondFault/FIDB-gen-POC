@@ -212,6 +212,23 @@ def _input_digest(entries: Sequence[Mapping[str, object]]) -> str:
     ).hexdigest()
 
 
+def validate_compact_candidate_index(
+    entries: Sequence[Mapping[str, object]], path: Path
+) -> dict[str, object]:
+    """Verify that an existing index is the exact projection of ``entries``.
+
+    A validation campaign may reuse an immutable archive index as one arm of a
+    larger reference population.  Reuse must never silently rebuild or mutate
+    that control artifact, so this check is deliberately read-only and fails
+    closed when the input identity differs.
+    """
+
+    digest = _input_digest(entries)
+    if not _current_index(path, digest):
+        raise ValueError("compact FID candidate index does not match its sources")
+    return compact_index_status(path)
+
+
 def _current_index(path: Path, input_digest: str) -> bool:
     if not path.is_file() or path.is_symlink():
         return False
@@ -604,5 +621,135 @@ def match_compact(
         "candidate_count": candidate_count,
         "matched_functions": sum(bool(row["matches"]) for row in decisions),
         "candidate_chunk_rows": chunk_rows,
+        "wall_time_ns": time.monotonic_ns() - started_ns,
+    }
+
+
+def match_compact_population(
+    index_paths: Sequence[Path],
+    functions: Sequence[Mapping[str, object]],
+    route_id: str,
+    treatment_id: str,
+    authority: Mapping[str, object],
+    *,
+    backend_id: str,
+    chunk_rows: int = 262_144,
+    workgroup_size: int = 256,
+    fallback_to_cpu: bool = True,
+) -> dict[str, object]:
+    """Match one logical population assembled from one or more sealed indexes.
+
+    Candidate scores are independent of the other candidates in the
+    population.  Therefore the global winner is exactly the highest-scoring
+    member of the per-index winner sets.  This lets an archive-plus-linked arm
+    reuse both immutable indexes without constructing a third multi-gigabyte
+    database or losing source-specific relationship tables.
+    """
+
+    paths = [Path(path).resolve() for path in index_paths]
+    if not paths:
+        raise ValueError("compact FID population requires at least one index")
+    if len(set(paths)) != len(paths):
+        raise ValueError("compact FID population contains a duplicate index")
+    started_ns = time.monotonic_ns()
+    components = [
+        match_compact(
+            path,
+            functions,
+            route_id,
+            treatment_id,
+            authority,
+            backend_id=backend_id,
+            chunk_rows=chunk_rows,
+            workgroup_size=workgroup_size,
+            fallback_to_cpu=fallback_to_cpu,
+        )
+        for path in paths
+    ]
+    effective = {str(row["backend"]) for row in components}
+    requested = {str(row["requested_backend"]) for row in components}
+    if len(effective) != 1 or requested != {backend_id}:
+        raise ValueError("compact FID population components used different backends")
+
+    by_component = []
+    for path, execution in zip(paths, components, strict=True):
+        rows = {
+            str(row["address"]): row for row in execution["functions"]
+        }
+        if len(rows) != len(functions):
+            raise ValueError("compact FID population component lost query functions")
+        by_component.append(rows)
+
+    decisions = []
+    for function in functions:
+        address = str(function["address"])
+        candidates: dict[str, dict[str, object]] = {}
+        for component in by_component:
+            row = component.get(address)
+            if row is None:
+                raise ValueError("compact FID population component addresses differ")
+            if (
+                str(row["full_hash"]) != str(function["full_hash"])
+                or str(row["specific_hash"]) != str(function["specific_hash"])
+            ):
+                raise ValueError("compact FID population component query identity differs")
+            for match in row["matches"]:
+                candidate_id = str(match["candidate_id"])
+                previous = candidates.get(candidate_id)
+                if previous is None or float(match["score"]) > float(
+                    previous["score"]
+                ):
+                    candidates[candidate_id] = dict(match)
+        maximum = max(
+            (float(row["score"]) for row in candidates.values()), default=None
+        )
+        winners = (
+            sorted(
+                (
+                    row
+                    for row in candidates.values()
+                    if float(row["score"]) == maximum
+                ),
+                key=lambda row: str(row["candidate_id"]),
+            )
+            if maximum is not None
+            else []
+        )
+        decisions.append(
+            {
+                "address": address,
+                "full_hash": str(function["full_hash"]),
+                "specific_hash": str(function["specific_hash"]),
+                "matches": winners,
+            }
+        )
+
+    fallback_reasons = sorted(
+        {
+            str(row["fallback_reason"])
+            for row in components
+            if row.get("fallback_reason")
+        }
+    )
+    return {
+        "backend": next(iter(effective)),
+        "requested_backend": backend_id,
+        "fallback_reason": "; ".join(fallback_reasons) or None,
+        "device": next(
+            (row.get("device") for row in components if row.get("device")), None
+        ),
+        "functions": decisions,
+        "candidate_count": sum(int(row["candidate_count"]) for row in components),
+        "matched_functions": sum(bool(row["matches"]) for row in decisions),
+        "candidate_chunk_rows": chunk_rows,
+        "component_indexes": [
+            {
+                "path": str(path),
+                "sha256": _sha256(path),
+                "candidate_count": int(execution["candidate_count"]),
+                "wall_time_ns": int(execution["wall_time_ns"]),
+            }
+            for path, execution in zip(paths, components, strict=True)
+        ],
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }
