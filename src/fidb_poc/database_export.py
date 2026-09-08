@@ -763,13 +763,7 @@ Start with `manifest.md` for the complete human-readable inventory: covered
 libraries and versions, execution variants, database schemas and file counts.
 
 `index/hash-quality.sqlite3` is a separate, versioned evidence sidecar. It
-records cross-library signature ownership and validation observations; it does
-not silently remove or rewrite signatures in the raw FID databases.
-
-Use `checksums.sha256` to verify every payload before loading it. The package
-contains raw archive/object-derived FID populations. The linked-reference
-validation report is included as evidence about matching quality, not as an
-additional `.fidbf` population.
+records cross-library signature ownership and validation observations.
 """
 
 

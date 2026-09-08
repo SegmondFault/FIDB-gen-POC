@@ -211,6 +211,34 @@ class DatabaseExportTests(unittest.TestCase):
         self.assertIn("checksums.sha256", members)
         self.assertEqual(len(members), len(set(members)))
 
+        readme = subprocess.run(
+            [
+                "tar",
+                "--use-compress-program=zstd",
+                "-xOf",
+                str(package),
+                "README.md",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        self.assertEqual(
+            readme,
+            """# test-release
+
+This portable research release contains one raw Ghidra `.fidbf` database for
+each C10 library, route and treatment identity. `index/catalogue.sqlite3` maps
+every file back to its library, build identity, provenance seal and digest.
+
+Start with `manifest.md` for the complete human-readable inventory: covered
+libraries and versions, execution variants, database schemas and file counts.
+
+`index/hash-quality.sqlite3` is a separate, versioned evidence sidecar. It
+records cross-library signature ownership and validation observations.
+""",
+        )
+
         manifest = subprocess.run(
             [
                 "tar",
