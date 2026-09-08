@@ -1,0 +1,172 @@
+{
+  "schema_version": "fidb-reference-form-finding-receipt/v1",
+  "id": "c10-reference-form-comparison-v1",
+  "state": "measured-complete",
+  "scope": "complete-c10-pre-link-versus-post-link-reference-populations",
+  "source_run_id": "c10-shared-image-symbolic-v2-full",
+  "decision_unit": "query-function-library-owner",
+  "decision_population": {
+    "positive_owner_decisions": 4502211,
+    "negative_owner_decisions": 40519899
+  },
+  "truth": {
+    "labelled_functions": 4502211,
+    "unlabelled_functions": 167240,
+    "coverage": 0.9641842263683675
+  },
+  "comparison_authority": {
+    "path": "validation/fid-reference-comparison.toml",
+    "sha256": "b3a5bf65fc8d930a2143355dcb966160b1acc1e1996a915ed656ed96dca9284a"
+  },
+  "comparison_report": {
+    "path": "artifacts/fid-matching-runs/c10-reference-form-comparison-v1/comparison.json",
+    "sha256": "0e72ae9943c0a2796e409a40d4e6bc2e28d83cea38bed05d1ae76ff3550e3ad0"
+  },
+  "comparison_seal": {
+    "path": "artifacts/fid-matching-runs/c10-reference-form-comparison-v1/comparison-seal.json",
+    "sha256": "8f49483b4d3570a2edfaa6b92a1521112a35714dbc31d077aea80ac80197c7f5"
+  },
+  "linked_generation": {
+    "id": "c10-linked-reference-v1",
+    "reference_form": "linked-shared-image",
+    "link_harness": "whole-archive-shared-image-symbolic-v2",
+    "task_count": 2220,
+    "started_at": "2026-09-07T22:55:04.548220+00:00",
+    "finished_at": "2026-09-08T00:35:33.700537+00:00",
+    "aggregate_task_wall_time_ns": 57389137607248,
+    "generation_sha256": "00c11516714457b5b31a7489df67d67c40457c42f21fbdd9f874372a98108219",
+    "seal_path": "artifacts/linked-reference-runs/c10-linked-reference-v1/generation-seal.json",
+    "seal_sha256": "e9de399f6e67bda70be898bbac842add66ab8d21cbc523492e760c0af8c87e1f",
+    "authority_sha256": "f40d0754872594fa02728a08756efd61b14898cca3eca9b92c2508c2a104e52f",
+    "plan_sha256": "7fb0333e54725cffbfe59407be030a7d00718cd567a8d2e92543a7bd16813d5c",
+    "producer_revisions": [
+      "dc41e6159b477b09a086c2a8ef8edbd34ab96bc8",
+      "4a71b3d87fb335c506bd3057aefea6856dbeac80",
+      "4d90d3ad8974422477645ed8327e89b8106e8aef"
+    ]
+  },
+  "arms": [
+    {
+      "id": "archive-only",
+      "population": "pre-link-archive-members",
+      "campaign_id": "c10-compact-fid-methodology-v2",
+      "producer_revision": "4c84cde8fcf90878b3ee6f905fdded5c519fc0c4",
+      "report_path": "artifacts/fid-matching-runs/c10-compact-fid-methodology-v2/full-report.json",
+      "report_sha256": "dd2061d1e2907e4597a7c2e79e3d53150c27946dcff44aa13c0b91f9729ca7a2",
+      "candidate_index_sha256": [
+        "c46b742165f38111f15a9881719f83507104297b95a41f43c22cf586111989b6"
+      ],
+      "hash_evidence_sha256": "d309491a0ea14ec63784a17bb9cf3e3d21ea193baa643087b5ae7e621e5cebaa",
+      "wall_time_seconds": 500.5301821231842,
+      "confusion_matrix": {
+        "true_positives": 3009968,
+        "false_positives": 100128,
+        "true_negatives": 40419771,
+        "false_negatives": 1492243
+      },
+      "rates": {
+        "precision": 0.9678054953930683,
+        "recall": 0.6685532952587073,
+        "false_positive_rate": 0.0024710821712561524,
+        "f1": 0.7908162400701916
+      },
+      "distinct_signatures": 2163458,
+      "noisy_signatures": 20796,
+      "query_function_owner_observations": 13807017
+    },
+    {
+      "id": "linked-only",
+      "population": "post-link-whole-archive-image",
+      "campaign_id": "c10-linked-fid-methodology-v1",
+      "producer_revision": "ba113eca3d8e4ae40eae9ae4e115119283ff564b",
+      "report_path": "artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/full-report.json",
+      "report_sha256": "2dc236a3052c04702f2b9e8cebc6c1c19b6c01db22f4e553332d52944a9af054",
+      "candidate_index_sha256": [
+        "219d907155f1f7a31272db1daa9983e9f3ab9452518d7e9a1dede968ae1b66df"
+      ],
+      "hash_evidence_sha256": "72fa1aa7b49a74203db7e40e91e3aec0c3e0071be223e58e05e7e3662ee968fe",
+      "wall_time_seconds": 2636.257529735565,
+      "confusion_matrix": {
+        "true_positives": 4117874,
+        "false_positives": 39949,
+        "true_negatives": 40479950,
+        "false_negatives": 384337
+      },
+      "rates": {
+        "precision": 0.9903918468871811,
+        "recall": 0.9146337210761557,
+        "false_positive_rate": 0.0009859106509618892,
+        "f1": 0.9510064279193361
+      },
+      "distinct_signatures": 2163458,
+      "noisy_signatures": 8621,
+      "query_function_owner_observations": 13626480
+    },
+    {
+      "id": "archive-plus-linked",
+      "population": "pre-link-plus-post-link-union",
+      "campaign_id": "c10-archive-linked-fid-methodology-v1",
+      "producer_revision": "12c725204331e0c2815088ce15ec0d1471a36377",
+      "report_path": "artifacts/fid-matching-runs/c10-archive-linked-fid-methodology-v1/full-report.json",
+      "report_sha256": "ed880b3f248b7618d2d42c61df95ba4dd2501a4ca8f6378eb2713869ea6b1cce",
+      "candidate_index_sha256": [
+        "c46b742165f38111f15a9881719f83507104297b95a41f43c22cf586111989b6",
+        "219d907155f1f7a31272db1daa9983e9f3ab9452518d7e9a1dede968ae1b66df"
+      ],
+      "hash_evidence_sha256": "f5dd146dbcbb62db99a3e3477bfeaa0f0eadcb5d59aeab8e87e0d03fa6fdac25",
+      "wall_time_seconds": 3847.9481587409973,
+      "confusion_matrix": {
+        "true_positives": 4122868,
+        "false_positives": 40041,
+        "true_negatives": 40479858,
+        "false_negatives": 379343
+      },
+      "rates": {
+        "precision": 0.9903814856390086,
+        "recall": 0.9157429538508968,
+        "false_positive_rate": 0.0009881811403330497,
+        "f1": 0.9516009010838856
+      },
+      "distinct_signatures": 2163458,
+      "noisy_signatures": 8630,
+      "query_function_owner_observations": 13626756
+    }
+  ],
+  "measured_deltas": {
+    "archive_to_linked": {
+      "true_positives": 1107906,
+      "false_positives": -60179,
+      "true_negatives": 60179,
+      "false_negatives": -1107906,
+      "precision": 0.02258635149411281,
+      "recall": 0.24608042581744838,
+      "false_positive_rate": -0.0014851715202942632,
+      "f1": 0.16019018784914452
+    },
+    "linked_to_union": {
+      "true_positives": 4994,
+      "false_positives": 92,
+      "true_negatives": -92,
+      "false_negatives": -4994,
+      "precision": -0.000010361248172441329,
+      "recall": 0.0011092327747410646,
+      "false_positive_rate": 0.000002270489371160528,
+      "f1": 0.0005944731645495249
+    }
+  },
+  "qualification": {
+    "canary_cases_per_new_arm": 4,
+    "native_decision_mismatches": 0,
+    "backend_requested": "gpu-portable-fid-v1",
+    "backend_effective": "gpu-portable-fid-v1",
+    "backend_fallback_cases": 0,
+    "full_cases_per_new_arm": 444,
+    "terminal_failures": 0
+  },
+  "finding": {
+    "reference_form_effect": "post-link references materially outperform pre-link archive-member references against post-link queries",
+    "default_candidate": "linked-only",
+    "archive_status": "preserved-control-and-optional-ablation",
+    "ecological_validation_required": true
+  }
+}
