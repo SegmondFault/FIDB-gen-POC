@@ -693,6 +693,26 @@ Use `scripts/trace_fid_misses.py --rebuild-composite --native-oracle` for
 bounded investigations rather than launching the 444-case campaign while a
 construction defect is unresolved.
 
+The completed three-arm C10 reference-form experiment supersedes the earlier
+archive-only recall interpretation. Read
+[`validation/C10_REFERENCE_FORM_FINDING.md`](validation/C10_REFERENCE_FORM_FINDING.md)
+and verify the tracked receipt at
+`validation/evidence/c10-reference-form-comparison-v1.json` before changing
+reference generation. With the same 444 queries and decision population,
+post-link whole-archive references measured 91.46% recall and 99.04% precision,
+versus 66.86% and 96.78% for pre-link archive members. The union added only
+0.11 recall points, 92 false positives and 46% matcher wall time over
+linked-only.
+
+Do not infer that linked FID signatures contain every archive signature. The
+finding is that archive candidates add little marginal accepted evidence for
+post-link queries. Preserve the archive generation as an immutable control,
+but make future archive-member Ghidra analysis opt-in. The intended next
+pipeline revision is linked-first; it is not implemented by documentation
+alone. Archive-delta or lazy-escalation work must bind its own TOML authority,
+remain label-independent during candidate construction, and demonstrate its
+marginal result on held-out validation evidence before admission.
+
 The first full repaired-source attempt exposed three runner faults after 62/222
 cells: an objdump `.byte 0` directive was incorrectly classified as a direct
 branch to zero, one transient coordinator-ledger read made a worker declare the

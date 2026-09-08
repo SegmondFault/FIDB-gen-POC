@@ -445,6 +445,22 @@ correct-owner full-hash candidate and 96 have a correct candidate but are not
 accepted as the correct owner. Preserve those populations separately when
 tuning candidate coverage, relationship scoring or size thresholds.
 
+### C10 pre-link versus post-link reference result
+
+The complete C10 reference-form comparison is frozen and documented in
+[`C10_REFERENCE_FORM_FINDING.md`](C10_REFERENCE_FORM_FINDING.md). Against the
+same 444 post-link query composites, replacing pre-link archive-member
+references with post-link whole-archive images increased recall from 66.86% to
+91.46%, increased precision from 96.78% to 99.04%, removed 1,107,906
+false-negative decisions and removed 60,179 false-positive decisions.
+
+Searching both populations raised recall by only another 0.11 percentage
+points, added 92 false-positive decisions and increased measured matcher wall
+time by 46% over linked-only. The next pipeline revision must therefore treat
+linked references as canonical and archive analysis as an explicit optional
+control. That future pipeline change is not implied merely by this document;
+it requires its own reviewed TOML authority, tests and canary.
+
 ## Legacy exact-tuple analysis
 
 `machine-validation-hash-schedule.toml` admits the exact-tuple diagnostic during a
