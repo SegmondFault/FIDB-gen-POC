@@ -646,6 +646,29 @@ class PipelineTests(unittest.TestCase):
                 {path.read_bytes() for path in objects}, {b"musl", b"uclibc"}
             )
 
+    def test_coff_archive_object_extraction_accepts_windres_suffix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "version.res").write_bytes(b"coff-resource")
+            archive = root / "libdemo.a"
+            subprocess.run(
+                ["ar", "qc", str(archive), "version.res"], cwd=root, check=True
+            )
+            route = SimpleNamespace(
+                archiver=("ar",),
+                binary_format="PE/COFF",
+            )
+
+            objects = _extract_archive_objects(
+                archive,
+                root / "objects",
+                route,
+                pipeline_environment(),
+                root / "extract.log",
+            )
+
+            self.assertEqual([path.name for path in objects], ["version.res"])
+
     def test_java_identity_prefers_java_home(self):
         with tempfile.TemporaryDirectory() as temporary:
             java = Path(temporary) / "jdk/bin/java"

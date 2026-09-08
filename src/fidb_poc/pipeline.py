@@ -772,6 +772,11 @@ def _extract_archive_objects(
     # relocatable object. musl uses .lo and uClibc commonly uses .os; validate
     # the binary content later, but admit these established archive forms here.
     object_suffixes = {".o", ".obj", ".lo", ".os"}
+    # llvm-windres emits genuine relocatable COFF objects with a conventional
+    # .res suffix. Keep that route-specific form; binary-header validation
+    # below remains the authority and rejects non-COFF resource payloads.
+    if route.binary_format == "PE/COFF":
+        object_suffixes.add(".res")
     listing = run_command(
         [*route.archiver, "t", str(archive)],
         cwd=archive.parent,
