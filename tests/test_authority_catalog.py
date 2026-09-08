@@ -213,7 +213,16 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(c20_study["readiness"]["source_evidence_families"], 20)
         self.assertEqual(c20_study["readiness"]["missing_recipe_families"], 0)
 
-        self.assertEqual(len(document["width_batches"]), 4)
+        self.assertEqual(
+            {row["id"] for row in document["width_batches"]},
+            {
+                "batch-020",
+                "batch-020-android-gap",
+                "batch-c11-20",
+                "batch-c21-30",
+                "batch-openssl-fidbf-recovery",
+            },
+        )
         width_batch = next(
             row for row in document["width_batches"] if row["id"] == "batch-020"
         )
