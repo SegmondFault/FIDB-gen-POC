@@ -1,7 +1,8 @@
 [project]
 name = "fidb-poc"
 version = "0.1.0"
-description = "Small, inspectable Linux x86-64 GNU GCC Ghidra FIDB construction proof of concept"
+description = "Inspectable Ghidra Function ID database build, validation, and export system"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
     "pyghidra>=3.1.0,<4",
