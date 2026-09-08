@@ -5,7 +5,7 @@ schema_version = "fidb-queue/v1"
 name = "c-malware-priority-native-v1-auto-30m-45m-canary-queue"
 
 [queue]
-armed = true
+armed = false
 performance_profile = "reference-host-94g-balanced"
 max_workers = 20
 batch_order = ["c-malware-priority-native-v1-auto-30m-45m-chunk-001"]
