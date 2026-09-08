@@ -11,8 +11,9 @@ to a dedicated Unix account therefore requires moving that tree, rebuilding
 its environment and reinstalling the reviewed user units; no username is
 embedded in the shared definitions.
 
-On `reference-host`, the first native commissioning run installed these templates
-for `fidb-operator`, completed zlib and bzip2, then paused and disarmed the queue.
+On the reference host, the first native commissioning run installed these
+templates for its operator account, completed zlib and bzip2, then paused and
+disarmed the queue.
 The commissioning record says the two worker instances were disabled after
 the drain and the loopback API and production panel were left enabled for
 inspection. Verify their current state with `systemctl --user status`: the
@@ -136,7 +137,7 @@ hard limit, and a four-CPU quota.
 
 The units deliberately do not name `network.target` or
 `network-online.target`: those are system-manager targets and do not exist in
-the `fidb-operator` user manager.  Before starting workers that may acquire an
+a user's service manager. Before starting workers that may acquire an
 input, check connectivity explicitly (for example with
 `/usr/bin/nm-online -q --timeout=60`).  This first native-only commissioning
 run uses already reviewed public source URLs. Managed acquisition has bounded
@@ -322,7 +323,7 @@ successful; other nonzero exits still leave the unit failed for inspection.
 
 Enabled user units survive the controlling browser or SSH connection while
 the KDE login remains active.  They do not survive the final logout or start
-at boot until lingering is deliberately enabled for `fidb-operator`.  Enabling
+at boot until lingering is deliberately enabled for the service account. Enabling
 linger is a host-level policy decision and also affects the user's other
 enabled units; it is not performed merely by installing these templates.
 

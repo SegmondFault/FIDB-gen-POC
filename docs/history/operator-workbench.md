@@ -586,7 +586,7 @@ the download-required PowerPC source cell is not active in this run.
 
 Repository systemd templates exist for the loopback API and up to four
 declared `library-local` worker processes. During the first commissioning run,
-the API and two explicit worker instances were installed in the `fidb-operator`
+the API and two explicit worker instances were installed in the operator's
 user manager; the workers were stopped and disabled after the queue drained,
 while the healthy loopback API remained enabled for inspection. The reviewed
 queue cap remains two active leases; move to four only after real per-stage
@@ -732,7 +732,7 @@ two operator-stop statuses successful; build, configuration and other nonzero
 exits still fail visibly. The stale unit markers were reset after the reviewed
 template was reinstalled.
 
-The installed user services still depend on the active `fidb-operator` login.
+The installed user services still depend on the active operator login.
 User lingering was not enabled because it would also make unrelated enabled
 user services boot-persistent; that host policy requires a separate explicit
 approval. The first smoke therefore validates persistent service execution and
