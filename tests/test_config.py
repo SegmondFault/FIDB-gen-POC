@@ -417,7 +417,8 @@ class ConfigurationTests(unittest.TestCase):
         recipe = configuration.libraries[0]
         routes = {route.id: route for route in configuration.routes}
         self.assertFalse(recipe.applies_to(routes["linux-x86-64-gcc"]))
-        self.assertTrue(recipe.applies_to(routes["linux-x86-64-gcc-12"]))
+        adjacent_gcc = replace(routes["linux-x86-64-gcc"], id="linux-x86-64-gcc-12")
+        self.assertTrue(recipe.applies_to(adjacent_gcc))
 
     def test_boringssl_excludes_architectures_rejected_by_its_source(self):
         root = Path(__file__).resolve().parents[1]
@@ -438,7 +439,7 @@ class ConfigurationTests(unittest.TestCase):
         routes = {
             route.id: route
             for route in load_configuration(
-                root / "worker.toml", request_override=("zlib",)
+                root / "worker.toml", request_override=("zlib@1.3.2",)
             ).routes
         }
         scotch = load_configuration(
@@ -461,9 +462,11 @@ class ConfigurationTests(unittest.TestCase):
             id="windows-x86-64-llvm-mingw-clang-15",
         )
         self.assertFalse(protobuf.applies_to(old_mingw))
-        self.assertTrue(
-            protobuf.applies_to(routes["windows-x86-64-llvm-mingw-clang-23"])
+        current_mingw = replace(
+            routes["windows-x86-64-llvm-mingw"],
+            id="windows-x86-64-llvm-mingw-clang-23",
         )
+        self.assertTrue(protobuf.applies_to(current_mingw))
 
     def test_all_unknown_library_requests_are_reported(self):
         root = Path(__file__).resolve().parents[1]

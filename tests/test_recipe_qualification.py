@@ -34,7 +34,7 @@ class RecipeQualificationTests(unittest.TestCase):
 
         self.assertEqual(plan["summary"]["libraries"], 21)
         self.assertEqual(plan["summary"]["routes"], 16)
-        self.assertEqual(plan["summary"]["cells"], 264)
+        self.assertEqual(plan["summary"]["cells"], 250)
         boringssl_routes = {
             row["route_id"]
             for row in plan["cells"]

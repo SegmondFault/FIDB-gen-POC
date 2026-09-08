@@ -10,6 +10,10 @@ allowed_build_systems = ["protobuf-cmake", "cmake"]
 preferred_build_system = "protobuf-cmake"
 static_archives = ["libprotobuf.a"]
 supported_target_os = ["linux", "android", "windows"]
+# Protobuf requires at least two low pointer tag bits; this M68K ABI cannot
+# provide them. The oldest llvm-mingw compiler crashes compiling this snapshot.
+supported_architectures = ["x86_64", "i686", "arm", "aarch64", "mips", "mipsel", "powerpc", "sh4"]
+unsupported_routes = ["windows-x86-64-llvm-mingw-clang-15"]
 
 [[build_inputs]]
 kind = "source-tree"

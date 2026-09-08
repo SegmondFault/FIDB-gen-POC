@@ -10,3 +10,5 @@ allowed_build_systems = ["musl-cross", "autoconf", "make"]
 preferred_build_system = "musl-cross"
 static_archives = ["libc.a"]
 supported_target_os = ["linux"]
+# The managed PowerPC route's long-double ABI is rejected by this musl source.
+supported_architectures = ["x86_64", "i686", "arm", "aarch64", "mips", "mipsel", "sh4", "m68k"]

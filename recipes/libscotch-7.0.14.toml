@@ -9,4 +9,8 @@ project_markers = ["CMakeLists.txt", "src/libscotch/CMakeLists.txt"]
 allowed_build_systems = ["scotch-cmake", "cmake"]
 preferred_build_system = "scotch-cmake"
 static_archives = ["libscotch.a"]
-supported_target_os = ["linux", "android"]
+# SCOTCH executes its target-built dummysizes generator during configuration.
+# Keep the no-emulator baseline to the native Linux host route; recover other
+# Linux architectures only through a separately qualified emulator authority.
+supported_target_os = ["linux"]
+supported_architectures = ["x86_64"]

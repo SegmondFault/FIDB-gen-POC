@@ -91,7 +91,7 @@ count in the GUI therefore never means that a library is queueable.
 The priority overlay has three independent execution authorities:
 
 - `batches/c-malware-priority-native-v1.toml` binds 21 reviewed source recipes
-  to 3,642 applicable full-width cells. It remains blocked until the 264-cell
+  to 3,432 applicable full-width cells. It remains blocked until the 250-cell
   compilation authority in `qualification/c-malware-priority-native-v1.toml`
   is deliberately run and sealed.
 - `plans/c-malware-priority-runtime-v1.toml` resolves 72 glibc/libgcc/libstdc++
