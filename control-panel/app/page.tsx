@@ -2229,18 +2229,21 @@ function ExportView({ factory }: { factory: FactoryApiState }) {
   const releaseReady = status?.ready ?? false;
   const buildBusy = factory.busyAction === 'export-build';
   const previewBusy = factory.busyAction === 'export-preview';
+  const safeguardBusy = factory.busyAction === 'export-safeguard';
+  const safeguardReady = status?.safeguard.state === 'current';
   const generation = status?.hash_quality.generation;
   const completeness = population && population.expected > 0
     ? Math.round((population.present / population.expected) * 100)
     : 0;
   const runPreview = () => void factory.previewExport().catch(() => undefined);
+  const runSafeguard = () => void factory.safeguardExport().catch(() => undefined);
   const runBuild = () => void factory.buildExport().catch(() => undefined);
 
   return <div className="view-stack export-view">
     <ViewIntro
       kicker="PORTABLE DATABASE RELEASES"
       title="Export"
-      action={<div className="view-intro-actions"><button className="secondary-action" onClick={runPreview} disabled={previewBusy || buildBusy}>{previewBusy ? 'Checking…' : 'Preview manifest'}</button><button className="primary-action" onClick={runBuild} disabled={!releaseReady || previewBusy || buildBusy}>{buildBusy ? 'Building…' : 'Build export'}</button></div>}
+      action={<div className="view-intro-actions"><button className="secondary-action" onClick={runPreview} disabled={previewBusy || safeguardBusy || buildBusy}>{previewBusy ? 'Checking…' : 'Preview manifest'}</button><button className="secondary-action" onClick={runSafeguard} disabled={!status?.actions.safeguard || previewBusy || safeguardBusy || buildBusy}>{safeguardBusy ? 'Safeguarding…' : safeguardReady ? 'Refresh safeguard' : 'Safeguard inputs'}</button><button className="primary-action" onClick={runBuild} disabled={!releaseReady || previewBusy || safeguardBusy || buildBusy}>{buildBusy ? 'Building…' : 'Build export'}</button></div>}
     />
     <PanelReadWarning factory={factory} endpoints={['export']} />
 
@@ -2257,11 +2260,11 @@ function ExportView({ factory }: { factory: FactoryApiState }) {
       <header><div><h3>Release assembly</h3><code>{status?.authority.path ?? 'export/c10-fidbf-v1.toml'}</code></div><span className={`validation-state ${releaseReady ? 'ready' : 'waiting'}`}>{releaseReady ? 'PACKAGE INPUT READY' : `${population?.missing ?? '—'} FIDBF MISSING`}</span></header>
       <div className="export-assembly-flow">
         <article className={population?.missing === 0 ? 'ready' : 'waiting'}><b>01</b><p><strong>FIDBF POPULATION</strong><small>{population ? `${population.present.toLocaleString()} exact sealed identities` : 'loading'}</small></p></article>
-        <article className={status?.compatibility.state === 'ready' ? 'ready' : 'blocked'}><b>02</b><p><strong>CATALOGUE + LANES</strong><small>identity lookup and compatibility registry</small></p></article>
-        <article className={status?.hash_quality.state === 'ready' ? 'ready' : 'blocked'}><b>03</b><p><strong>HASH QUALITY</strong><small>{generation ? `${generation.signatures.toLocaleString()} signatures` : 'sidecar unavailable'}</small></p></article>
-        <article className={status?.validation.state === 'ready' ? 'ready' : 'blocked'}><b>04</b><p><strong>VALIDATION</strong><small>archive + linked C10 report</small></p></article>
-        <article className={status ? 'ready' : 'waiting'}><b>05</b><p><strong>MANIFEST + SHA-256</strong><small>every package member bound</small></p></article>
-        <article className={status?.release.exists ? 'ready' : releaseReady ? 'waiting' : 'blocked'}><b>06</b><p><strong>REOPEN PACKAGE</strong><small>{status?.release.exists ? `${formatBytes(status.release.bytes)} verified` : 'runs during build'}</small></p></article>
+        <article className={safeguardReady ? 'ready' : status?.actions.safeguard ? 'waiting' : 'blocked'}><b>02</b><p><strong>SAFEGUARD SOURCE</strong><small>{safeguardReady ? 'ledger snapshot + 2,220-file digest receipt' : status?.safeguard.live_jobs ? `${status.safeguard.live_jobs} active jobs must finish` : 'run before packaging'}</small></p></article>
+        <article className={status?.compatibility.state === 'ready' ? 'ready' : 'blocked'}><b>03</b><p><strong>CATALOGUE + COMPATIBILITY</strong><small>identity lookup and lane-selection registry</small></p></article>
+        <article className={status?.hash_quality.state === 'ready' && status?.validation.state === 'ready' ? 'ready' : 'blocked'}><b>04</b><p><strong>QUALITY EVIDENCE</strong><small>{generation ? `${generation.signatures.toLocaleString()} signatures + C10 validation` : 'sidecars unavailable'}</small></p></article>
+        <article className={status ? 'ready' : 'waiting'}><b>05</b><p><strong>MANIFEST + SHA-256</strong><small>human + TOML manifests bind every member</small></p></article>
+        <article className={status?.release.exists ? 'ready' : releaseReady ? 'waiting' : 'blocked'}><b>06</b><p><strong>BUILD + REOPEN</strong><small>{status?.release.exists ? `${formatBytes(status.release.bytes)} verified` : 'package only after safeguard'}</small></p></article>
       </div>
     </section>
 
@@ -2270,11 +2273,12 @@ function ExportView({ factory }: { factory: FactoryApiState }) {
         <div className="panel-header"><h3>Package contents</h3><span className="plan-state">{status?.release.package_format.toUpperCase() ?? '—'}</span></div>
         <div className="export-contract-list">
           <article><span className={`operational-state ${population?.missing === 0 ? 'complete' : 'blocked'}`}>{population?.missing === 0 ? 'COMPLETE' : 'INCOMPLETE'}</span><p><strong>Raw Ghidra FID databases</strong><small>one `.fidbf` for each library × route × treatment identity</small></p><code>fidbf/*.fidbf</code></article>
+          <article><span className={`operational-state ${safeguardReady ? 'complete' : 'blocked'}`}>{safeguardReady ? 'FROZEN' : 'REQUIRED'}</span><p><strong>Source safeguard</strong><small>consistent ledger snapshot plus verified identity, artifact, seal and retention receipt</small></p><code>evidence/source-safeguard.json</code></article>
           <article><span className="operational-state complete">GENERATED</span><p><strong>Artifact catalogue</strong><small>library, route, treatment, source, toolchain, seal and digest joins</small></p><code>index/catalogue.sqlite3</code></article>
           <article><span className={`operational-state ${status?.hash_quality.state === 'ready' ? 'complete' : 'blocked'}`}>{status?.hash_quality.state === 'ready' ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Hash-quality evidence</strong><small>cross-library ownership and validation observations remain separate from raw FID</small></p><code>index/hash-quality.sqlite3</code></article>
           <article><span className={`operational-state ${status?.validation.state === 'ready' ? 'complete' : 'blocked'}`}>{status?.validation.state === 'ready' ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Matching report</strong><small>archive + linked C10 precision, recall and error evidence</small></p><code>validation/*.json</code></article>
           <article><span className={`operational-state ${status?.compatibility.state === 'ready' ? 'complete' : 'blocked'}`}>{status?.compatibility.state === 'ready' ? 'AVAILABLE' : 'BLOCKED'}</span><p><strong>Compatibility registry</strong><small>{status?.compatibility.path ?? 'lanes/registry.toml'}</small></p><code>authority/lanes.toml</code></article>
-          <article><span className="operational-state complete">GENERATED</span><p><strong>Release manifest and checksums</strong><small>member paths, bytes, SHA-256, schema and generation identity</small></p><code>release.toml + checksums</code></article>
+          <article><span className="operational-state complete">GENERATED</span><p><strong>Release manifests and checksums</strong><small>human inventory plus member paths, bytes, SHA-256, schema and generation identity</small></p><code>manifest.md + release.toml + checksums</code></article>
         </div>
       </section>
 
@@ -2283,7 +2287,7 @@ function ExportView({ factory }: { factory: FactoryApiState }) {
         <dl><div><dt>Release ID</dt><dd>{status?.release.id ?? '—'}</dd></div><div><dt>Output path</dt><dd>{status?.release.output_path ?? '—'}</dd></div><div><dt>Package format</dt><dd>{status?.release.package_format ?? '—'}</dd></div><div><dt>Authority</dt><dd>{status?.authority.path ?? '—'}</dd></div><div><dt>Authority SHA-256</dt><dd><code>{status?.authority.sha256 ? `${status.authority.sha256.slice(0, 16)}…` : '—'}</code></dd></div><div><dt>Historical retries</dt><dd>{population?.duplicate_completed_identities.toLocaleString() ?? '—'} recorded; newest seal selected</dd></div></dl>
         <div className="export-noise-key"><span>HASH-QUALITY GENERATION</span><code>{generation?.digest ?? 'not available'}</code><small>{status?.hash_quality.path ?? 'sidecar unavailable'} · signatures may associate with multiple libraries</small></div>
         {!!status?.blockers.length && <div className="export-blockers">{status.blockers.map(blocker => <p key={blocker}>{blocker}</p>)}</div>}
-        <div className="export-control-actions"><button className="secondary-action" onClick={runPreview} disabled={previewBusy || buildBusy}>{previewBusy ? 'Checking…' : 'Preview manifest'}</button><button className="primary-action" onClick={runBuild} disabled={!releaseReady || previewBusy || buildBusy}>{buildBusy ? 'Building package…' : 'Build package'}</button></div>
+        <div className="export-control-actions"><button className="secondary-action" onClick={runPreview} disabled={previewBusy || safeguardBusy || buildBusy}>{previewBusy ? 'Checking…' : 'Preview manifest'}</button><button className="secondary-action" onClick={runSafeguard} disabled={!status?.actions.safeguard || previewBusy || safeguardBusy || buildBusy}>{safeguardBusy ? 'Safeguarding…' : safeguardReady ? 'Refresh safeguard' : 'Safeguard inputs'}</button><button className="primary-action" onClick={runBuild} disabled={!releaseReady || previewBusy || safeguardBusy || buildBusy}>{buildBusy ? 'Building package…' : 'Build package'}</button></div>
       </section>
     </div>
 

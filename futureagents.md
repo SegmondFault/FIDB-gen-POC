@@ -1034,6 +1034,13 @@ completeness check. It groups retries by exact
 requires 2,220 unique identities. Do not bypass the 2,220 gate or package the
 current 2,046 files as a complete C10 release.
 
+After the queue drains, run `fidb-poc export safeguard`. It requires an idle
+ledger, verifies every raw FIDBF against its sealed digest, snapshots the
+coordinator ledger, and records the exact artifact and seal set in a source
+receipt. The retention authority preserves those attempt directories until a
+future lane import. Never prune them as part of packaging. A missing or stale
+safeguard must keep the export build disabled in both the CLI and GUI.
+
 `fidb-poc export build` verifies all FIDBF ledger hashes, generates the compact
 catalogue, snapshots the hash-quality SQLite sidecar, includes the named C10
 validation report and lane registry, writes member checksums, tests the zstd

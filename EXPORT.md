@@ -7,10 +7,17 @@ from the console:
 
 ```bash
 uv run fidb-poc export preview --project-root .
+uv run fidb-poc export safeguard --project-root .
 uv run fidb-poc export build --project-root .
 ```
 
-Preview is read-only. Build remains disabled unless all 2,220 exact C10
+Preview is read-only. Safeguard becomes available only after all 2,220 exact
+C10 identities are sealed and the active ledger is idle. It verifies every raw
+FIDBF digest, takes a consistent coordinator-ledger snapshot, and writes an
+exact identity/artifact/seal receipt under `artifacts/exports/safeguards/`.
+The retention authority already preserves source attempts until lane import.
+Build remains disabled unless that safeguard receipt matches the current
+population and retention authority, all 2,220 exact C10
 library/route/treatment identities have a readable sealed `.fidbf`, the
 ten-owner hash-quality generation passes SQLite integrity checks, and the
 compatibility authority and validation report exist. Historical retries are
@@ -28,6 +35,8 @@ The direct-use C10 package contains:
 - the C10 archive-plus-linked validation report and lane registry;
 - `manifest.md`, a human-readable inventory of libraries, versions, execution
   variants, database files and their table/column structure;
+- `evidence/source-safeguard.json`, binding the package to the verified source
+  population and the separately retained coordinator-ledger snapshot;
 - `release.toml`, `README.md` and member-level `checksums.sha256`.
 
 The output is `artifacts/exports/fidb-c10-fidbf-v1.tar.zst`, with an adjacent
@@ -40,6 +49,9 @@ and reopens the tar member list before atomically replacing the final package.
 This is a usable raw-FIDBF research bundle for the downstream maintainer's integration work. It is
 not the later admitted lane-pack publication boundary: sealed per-cell FIDBFs,
 immutable lane generations and analyst-admitted lane packs remain distinct.
+Accordingly, the direct-use export does not run the future queue-to-lane
+importer and does not activate or publish a database for consumers. Those are
+separate, explicit later operations.
 
 ## Required release contract
 

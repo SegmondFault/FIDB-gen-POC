@@ -37,6 +37,7 @@ test('proxy exposes every control-panel mutation route', () => {
     'ecological-validation/run',
     'export/build',
     'export/preview',
+    'export/safeguard',
     'fid-matching-backend/mode',
     'hash-analysis-backend/mode',
     'machine-validation/pause',

@@ -2497,9 +2497,23 @@ export type ExportStatus = {
   };
   validation: { state: string; path: string; bytes: number };
   compatibility: { state: string; path: string };
+  safeguard: {
+    state: 'missing' | 'stale' | 'invalid' | 'current';
+    required: boolean;
+    receipt_path: string;
+    ledger_snapshot_path: string;
+    retention_authority_path: string;
+    population_sha256: string;
+    artifact_count: number;
+    raw_artifact_bytes: number;
+    live_jobs: number;
+    receipt_sha256: string | null;
+    created_at: string | null;
+    error: string | null;
+  };
   blockers: string[];
   ready: boolean;
-  actions: { preview: boolean; build: boolean };
+  actions: { preview: boolean; safeguard: boolean; build: boolean };
   build?: {
     state: string;
     built_at: string;
@@ -3280,7 +3294,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     }
   }, []);
 
-  const runExport = useCallback(async (action: 'preview' | 'build') => {
+  const runExport = useCallback(async (action: 'preview' | 'safeguard' | 'build') => {
     setBusyAction(`export-${action}`);
     try {
       const result = await json<ExportStatus>(`export/${action}`, {
@@ -3388,6 +3402,7 @@ export function useFactoryApi(pollMilliseconds = 5000) {
     planRetention: () => runRetention('plan'),
     applyRetention: (planDigest: string) => runRetention('apply', planDigest),
     previewExport: () => runExport('preview'),
+    safeguardExport: () => runExport('safeguard'),
     buildExport: () => runExport('build'),
   };
 }

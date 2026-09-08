@@ -37,6 +37,7 @@ export const writeRoutes = new Set([
   'retention/plan',
   'retention/apply',
   'export/preview',
+  'export/safeguard',
   'export/build',
 ]);
 
