@@ -296,6 +296,30 @@ class ConfigurationTests(unittest.TestCase):
                 root / "worker.toml", request_override=("imaginary-lib",)
             )
 
+    def test_recipe_applicability_is_explicit_and_route_aware(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = Path(temporary)
+            shutil.copy(root / "worker.toml", checkout / "worker.toml")
+            shutil.copytree(root / "recipes", checkout / "recipes")
+            recipe_path = checkout / "recipes/zlib-1.3.2.toml"
+            recipe_path.write_text(
+                recipe_path.read_text(encoding="utf-8")
+                + '\nsupported_target_os = ["linux"]\n'
+                + 'supported_architectures = ["x86_64"]\n'
+                + 'supported_compiler_families = ["gcc"]\n',
+                encoding="utf-8",
+            )
+            configuration = load_configuration(
+                checkout / "worker.toml", request_override=("zlib@1.3.2",)
+            )
+
+        recipe = configuration.libraries[0]
+        self.assertTrue(recipe.applies_to(configuration.routes[0]))
+        self.assertFalse(
+            recipe.applies_to(replace(configuration.routes[0], target_os="windows"))
+        )
+
     def test_all_unknown_library_requests_are_reported(self):
         root = Path(__file__).resolve().parents[1]
         with self.assertRaises(RecipesNotFoundError) as raised:

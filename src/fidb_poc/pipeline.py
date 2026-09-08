@@ -924,6 +924,16 @@ def build_library(
             {"library": library.identifier, "route": route.id},
         )
         return record, []
+    if not library.applies_to(route):
+        record.status = "unsupported"
+        record.error = "library recipe is not reviewed for this route"
+        _skip(
+            skipped,
+            "compile",
+            "native library recipe does not apply to route",
+            {"library": library.identifier, "route": route.id},
+        )
+        return record, []
     if not treatment.applies_to(route):
         record.status = "unsupported"
         record.error = "treatment is not valid for this route"
@@ -1692,8 +1702,10 @@ def plan(configuration: Configuration) -> list[str]:
         for treatment in configuration.treatments
     ]
     runnable = sum(
-        treatment.applies_to(route) and route.toolchain_state != "unavailable"
-        for _, route, treatment in cells
+        library.applies_to(route)
+        and treatment.applies_to(route)
+        and route.toolchain_state != "unavailable"
+        for library, route, treatment in cells
     )
     lines = [
         f"Plan: {len(configuration.libraries)} libraries; "
@@ -1704,7 +1716,9 @@ def plan(configuration: Configuration) -> list[str]:
     for library, route, treatment in cells:
         status = (
             "runnable"
-            if treatment.applies_to(route) and route.toolchain_state != "unavailable"
+            if library.applies_to(route)
+            and treatment.applies_to(route)
+            and route.toolchain_state != "unavailable"
             else "unsupported"
         )
         lines.append(f"- {library.identifier} | {route.id} | {treatment.id} | {status}")

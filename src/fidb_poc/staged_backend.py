@@ -87,6 +87,9 @@ def _tuple_fields(cls: type[object]) -> set[str]:
             "project_markers",
             "allowed_build_systems",
             "static_archives",
+            "supported_target_os",
+            "supported_architectures",
+            "supported_compiler_families",
         }
     if cls is Route:
         return {

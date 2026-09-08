@@ -132,6 +132,9 @@ class Library:
     preferred_build_system: str
     static_archives: tuple[str, ...]
     build_inputs: tuple[BuildInput, ...] = ()
+    supported_target_os: tuple[str, ...] = ()
+    supported_architectures: tuple[str, ...] = ()
+    supported_compiler_families: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _path_component(self.name, "library name")
@@ -153,6 +156,26 @@ class Library:
     @property
     def identifier(self) -> str:
         return f"{self.name}-{self.version}"
+
+    def applies_to(self, route: Route) -> bool:
+        """Return whether this reviewed recipe supports the resolved route.
+
+        Empty axes are deliberately unbounded so existing recipes retain their
+        historical behaviour. New specialist recipes can fail closed on any
+        target axis that has not been reviewed yet.
+        """
+
+        return (
+            (not self.supported_target_os or route.target_os in self.supported_target_os)
+            and (
+                not self.supported_architectures
+                or route.architecture in self.supported_architectures
+            )
+            and (
+                not self.supported_compiler_families
+                or route.compiler_family in self.supported_compiler_families
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -243,6 +266,9 @@ def _load_recipe(path: Path) -> Library:
             "preferred_build_system",
             "static_archives",
             "build_inputs",
+            "supported_target_os",
+            "supported_architectures",
+            "supported_compiler_families",
         },
         f"recipe {path.name}",
     )
@@ -318,6 +344,11 @@ def _load_recipe(path: Path) -> Library:
             for value in _required(row, "static_archives", f"recipe {path.name}")
         ),
         build_inputs=tuple(build_inputs),
+        supported_target_os=tuple(row.get("supported_target_os", [])),
+        supported_architectures=tuple(row.get("supported_architectures", [])),
+        supported_compiler_families=tuple(
+            row.get("supported_compiler_families", [])
+        ),
     )
     if len(library.sha256) != 64:
         raise ValueError(f"{library.identifier} has an invalid SHA-256")

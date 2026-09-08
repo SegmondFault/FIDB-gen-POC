@@ -77,6 +77,11 @@ def _native_authority(
             "build_adapter": row.preferred_build_system,
             "allowed_build_adapters": list(row.allowed_build_systems),
             "static_archives": list(row.static_archives),
+            "applicability": {
+                "target_os": list(row.supported_target_os),
+                "architectures": list(row.supported_architectures),
+                "compiler_families": list(row.supported_compiler_families),
+            },
             **(
                 {
                     "build_inputs": [
