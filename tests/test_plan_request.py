@@ -71,7 +71,7 @@ class PlanRequestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "unsupported-recipe-route.toml"
             path.write_text(
-                '''schema_version = "fidb-plan/v1"
+                """schema_version = "fidb-plan/v1"
 name = "unsupported-recipe-route"
 [policy]
 max_cells = 1
@@ -81,7 +81,7 @@ kind = "native"
 recipes = ["libperl@5.44.0"]
 routes = ["linux-arm32-gcc"]
 treatments = ["baseline_o2"]
-''',
+""",
                 encoding="utf-8",
             )
 
@@ -173,6 +173,38 @@ executor = "qemu"
         self.assertEqual(cell["toolchain"]["capability"], "archive")
         self.assertEqual(cell["build"]["adapter"], "archive-extract")
         self.assertEqual(plan["queue_preview"][0]["state"], "planned")
+
+    def test_runtime_library_resolves_exact_toolchain_owned_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "runtime.toml"
+            path.write_text(
+                """schema_version = "fidb-plan/v1"
+name = "runtime"
+[policy]
+max_cells = 1
+[[matrix]]
+id = "glibc-runtime"
+kind = "runtime-library"
+recipes = ["glibc@toolchain-owned"]
+routes = ["linux-x86-64-gcc-12"]
+""",
+                encoding="utf-8",
+            )
+
+            plan = resolve_plan(path, self.root)
+
+        self.assertEqual(plan["summary"]["planned_cells"], 1)
+        cell = plan["cells"][0]
+        self.assertEqual(cell["kind"], "runtime-library")
+        self.assertEqual(
+            cell["recipe"], {"name": "glibc", "version": "toolchain-owned"}
+        )
+        self.assertEqual(cell["toolchain"]["route"], "linux-x86-64-gcc-12")
+        self.assertEqual(cell["build"]["adapter"], "qualified-runtime-archive")
+        self.assertEqual(
+            cell["routing"],
+            {"executor": "runtime-archive-local", "worker_pool": "library-local"},
+        )
 
     def test_archive_library_rejects_source_executor_selection(self):
         with tempfile.TemporaryDirectory() as temporary:

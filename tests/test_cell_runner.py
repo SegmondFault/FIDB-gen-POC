@@ -345,6 +345,56 @@ class CellRunnerTests(unittest.TestCase):
                 authority_resolver=resolver,
             )
 
+    def test_runtime_archive_preflight_preserves_exact_route_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            request = Path(temporary) / "runtime.toml"
+            request.write_text(
+                """schema_version = "fidb-plan/v1"
+name = "runtime"
+[policy]
+max_cells = 1
+[[matrix]]
+id = "glibc-runtime"
+kind = "runtime-library"
+recipes = ["glibc@toolchain-owned"]
+routes = ["linux-x86-64-gcc-12"]
+""",
+                encoding="utf-8",
+            )
+            cell = resolve_plan(request, self.project_root)["cells"][0]
+        provider = {
+            "state": "qualified",
+            "target_os": cell["target"]["os"],
+            "architecture": cell["target"]["architecture"],
+            "binary_format": cell["target"]["binary_format"],
+            "compiler_id": cell["toolchain"]["compiler_id"],
+            "toolchain_identity": cell["toolchain"]["identity"],
+            "query": cell["build"]["query"],
+            "runtime_version": cell["build"]["runtime_version"],
+            "authority_path": cell["build"]["authority_path"],
+            "authority_sha256": cell["build"]["authority_sha256"],
+            "ghidra_language": cell["analysis"]["ghidra_language"],
+            "ghidra_compiler_spec": cell["analysis"]["ghidra_compiler_spec"],
+            "path": "unused.a",
+            "sha256": "a" * 64,
+            "bytes": 1,
+            "members": 1,
+        }
+        route = SimpleNamespace(
+            id="linux-x86-64-gcc-12",
+            toolchain_identity=cell["toolchain"]["identity"],
+        )
+        with patch(
+            "fidb_poc.cell_runner.resolve_route_runtime_provider",
+            return_value=(provider, route),
+        ):
+            result = preflight_cell_authority(cell, [], self.project_root)
+
+        self.assertEqual(result["kind"], "runtime-library")
+        self.assertEqual(result["executor"], "runtime-archive-local")
+        self.assertEqual(result["route_id"], "linux-x86-64-gcc-12")
+        self.assertEqual(result["toolchain_identity"], cell["toolchain"]["identity"])
+
     def test_raw_commands_and_unsupported_kinds_fail_before_dispatch(self):
         raw = copy.deepcopy(self.native_cell)
         raw["build"]["command"] = "cc injected.c"

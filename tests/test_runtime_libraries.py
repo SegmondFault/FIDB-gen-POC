@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fidb_poc.runtime_libraries import (
+    RuntimeLibraryResolver,
     load_runtime_library_catalog,
     runtime_library_status,
 )
@@ -60,3 +61,12 @@ class RuntimeLibraryTests(unittest.TestCase):
                 )
 
         self.assertEqual(result["state"], "compiler-outside-managed-toolchains")
+
+    def test_cached_resolver_reuses_compiled_route_authority(self):
+        resolver = RuntimeLibraryResolver(self.root)
+
+        provider, route = resolver.resolve("glibc", "linux-x86-64-gcc-12", probe=False)
+
+        self.assertEqual(provider["state"], "qualified-unprobed")
+        self.assertEqual(provider["route_id"], route.id)
+        self.assertEqual(provider["toolchain_identity"], route.toolchain_identity)

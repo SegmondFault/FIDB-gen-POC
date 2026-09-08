@@ -328,7 +328,18 @@ def _job_readiness(
             reasons.append(
                 f"archive-library cell is routed to {executor}, not archive-local"
             )
-        elif kind not in {"native", "source-library", "archive-library", "malware"}:
+        elif kind == "runtime-library" and executor != "runtime-archive-local":
+            reasons.append(
+                "runtime-library cell is routed to "
+                f"{executor}, not runtime-archive-local"
+            )
+        elif kind not in {
+            "native",
+            "source-library",
+            "archive-library",
+            "runtime-library",
+            "malware",
+        }:
             reasons.append(f"unsupported cell kind: {kind}")
 
         readiness = "not-applicable"
@@ -344,7 +355,7 @@ def _job_readiness(
                 reasons.append(
                     "Ghidra, Java, or PyGhidra analysis dependency is unavailable"
                 )
-            if kind == "native":
+            if kind in {"native", "runtime-library"}:
                 toolchain = cell.get("toolchain")
                 route = (
                     str(toolchain.get("route")) if isinstance(toolchain, dict) else ""
@@ -521,6 +532,10 @@ def detect_capabilities(
                 "isolation_boundary": "invoking-linux-environment",
                 "opt_in": True,
             },
+            "runtime-archive-local": {
+                "ready": any(bool(row["ready"]) for row in native_routes),
+                "isolation_boundary": "managed-qualified-toolchain-archive",
+            },
             "qemu": {
                 "ready": qemu_ready,
                 "isolation_boundary": "qemu-vm",
@@ -534,7 +549,12 @@ def detect_capabilities(
         },
         "worker_pools": {
             "library-local": {
-                "cell_kinds": ["native", "source-library", "archive-library"],
+                "cell_kinds": [
+                    "native",
+                    "source-library",
+                    "archive-library",
+                    "runtime-library",
+                ],
                 "source_executor": "local",
                 "excluded_cell_kinds": ["malware"],
                 "qemu_required": False,
@@ -549,6 +569,7 @@ def detect_capabilities(
                 "excluded_cell_kinds": [
                     "source-library",
                     "archive-library",
+                    "runtime-library",
                     "malware",
                 ],
                 "qemu_required": False,

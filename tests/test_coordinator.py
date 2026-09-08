@@ -462,6 +462,17 @@ matrices = ["tier0-uclibc-powerpc"]
             )
         )
 
+    def test_library_local_pool_accepts_qualified_runtime_archives(self):
+        self.assertTrue(
+            worker_pool_accepts_cell(
+                "library-local",
+                {
+                    "kind": "runtime-library",
+                    "routing": {"executor": "runtime-archive-local"},
+                },
+            )
+        )
+
     def test_native_pools_are_separated_by_reviewed_routing(self):
         linux = {
             "kind": "native",

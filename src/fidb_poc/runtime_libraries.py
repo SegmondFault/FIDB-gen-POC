@@ -256,6 +256,8 @@ def runtime_library_status(
                         "architecture": route["architecture"],
                         "binary_format": route["binary_format"],
                         "toolchain_identity": route["toolchain_identity"],
+                        "ghidra_language": runtime_route.ghidra_language,
+                        "ghidra_compiler_spec": runtime_route.ghidra_compiler_spec,
                         "query": provider["query"],
                         **status,
                     }
@@ -356,3 +358,90 @@ def runtime_library_status(
         "providers": providers,
         "cells": cells,
     }
+
+
+class RuntimeLibraryResolver:
+    """Cache immutable route authorities while probing exact runtime archives."""
+
+    def __init__(self, project_root: str | Path):
+        self.root = Path(project_root).expanduser().resolve()
+        self.authority = load_runtime_library_catalog(self.root)
+        self.providers = {
+            str(row["subject_id"]): row for row in self.authority["provider"]
+        }
+        self.catalog = load_toolchain_pack_catalog(self.root)
+        self.width = compile_c_width(
+            self.root,
+            str(self.authority["width_authority"]),
+            _catalog=self.catalog,
+        )
+        self.route_metadata = {str(row["id"]): row for row in self.width["routes"]}
+        route_plan = resolve_toolchain_profile(
+            self.root,
+            str(self.width["toolchain_profile"]),
+            _catalog=self.catalog,
+        )
+        configuration = materialize_width_configuration(
+            self.root, "zlib@1.3.2", route_plan, _catalog=self.catalog
+        )
+        self.routes = {route.id: route for route in configuration.routes}
+
+    def resolve(
+        self, subject_id: str, route_id: str, *, probe: bool = False
+    ) -> tuple[dict[str, object], object]:
+        provider = self.providers.get(subject_id)
+        if provider is None or provider["kind"] != "qualified-route-query":
+            raise ValueError(f"runtime subject is not route-owned: {subject_id}")
+        metadata = self.route_metadata.get(route_id)
+        if metadata is None:
+            raise ValueError(f"unknown runtime route: {route_id}")
+        if (
+            metadata["target_os"] not in provider["target_os"]
+            or metadata["compiler_family"] not in provider["compiler_families"]
+        ):
+            raise ValueError(
+                f"runtime provider {subject_id} does not apply to {route_id}"
+            )
+        route = self.routes[route_id]
+        status = (
+            _probe_route_archive(self.root, route, str(provider["query"]))
+            if probe
+            else {"state": "qualified-unprobed"}
+        )
+        return (
+            {
+                "id": f"{subject_id}:{route_id}",
+                "subject_id": subject_id,
+                "label": provider["label"],
+                "library_name": provider["library_name"],
+                "kind": provider["kind"],
+                "route_id": route_id,
+                "compiler_id": metadata["compiler_id"],
+                "runtime_version": _route_version(metadata, self.catalog),
+                "target_os": metadata["target_os"],
+                "architecture": metadata["architecture"],
+                "binary_format": metadata["binary_format"],
+                "toolchain_identity": metadata["toolchain_identity"],
+                "ghidra_language": route.ghidra_language,
+                "ghidra_compiler_spec": route.ghidra_compiler_spec,
+                "query": provider["query"],
+                "authority_path": self.authority["authority_path"],
+                "authority_sha256": self.authority["authority_sha256"],
+                **status,
+            },
+            route,
+        )
+
+
+def resolve_route_runtime_provider(
+    project_root: str | Path,
+    subject_id: str,
+    route_id: str,
+    *,
+    probe: bool = False,
+) -> tuple[dict[str, object], object]:
+    """Resolve one route-owned archive and its exact executable route."""
+
+    return RuntimeLibraryResolver(project_root).resolve(
+        subject_id, route_id, probe=probe
+    )

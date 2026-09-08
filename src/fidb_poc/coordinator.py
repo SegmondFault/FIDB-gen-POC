@@ -199,6 +199,7 @@ def worker_pool_accepts_cell(pool: str, cell: object) -> bool:
             )
             or (kind == "source-library" and executor == "local")
             or (kind == "archive-library" and executor == "archive-local")
+            or (kind == "runtime-library" and executor == "runtime-archive-local")
         )
     if pool == "macos-native":
         return (

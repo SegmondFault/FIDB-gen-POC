@@ -34,6 +34,7 @@ MATRIX_KINDS = {
     "width-native",
     "source-library",
     "archive-library",
+    "runtime-library",
     "malware",
 }
 PRIORITIES = {"background", "normal", "high"}
@@ -237,6 +238,15 @@ def load_plan_request(path: str | Path) -> dict[str, object]:
                 )
             elif "width_batch" in matrix:
                 raise ValueError(f"native matrix {matrix_id} cannot set width_batch")
+        elif kind == "runtime-library":
+            row["routes"] = _tokens(matrix.get("routes"), f"matrix {matrix_id} routes")
+            forbidden = {"treatments", "toolchains", "executor", "width_batch"} & set(
+                matrix
+            )
+            if forbidden:
+                raise ValueError(
+                    f"runtime-library matrix {matrix_id} cannot set: {sorted(forbidden)}"
+                )
         elif kind == "archive-library":
             row["toolchains"] = _tokens(
                 matrix.get("toolchains"), f"matrix {matrix_id} toolchains"
@@ -675,6 +685,88 @@ def _archive_cell(
             "ghidra-compiler-spec": {
                 "state": "controlled",
                 "value": analysis["ghidra_compiler_spec"],
+            },
+            "analysis-configuration": {
+                "state": "controlled",
+                "value": "fid-safe-default",
+            },
+        },
+    }
+
+
+def _runtime_cell(
+    matrix: dict[str, object], provider: dict[str, object]
+) -> dict[str, object]:
+    subject_id = str(provider["subject_id"])
+    route_id = str(provider["route_id"])
+    planned = provider["state"] in {"qualified", "qualified-unprobed"}
+    target = {
+        "os": provider["target_os"],
+        "architecture": provider["architecture"],
+        "binary_format": provider["binary_format"],
+    }
+    analysis = {
+        "ghidra_language": provider["ghidra_language"],
+        "ghidra_compiler_spec": provider["ghidra_compiler_spec"],
+        "ghidra_version": "execution-probed",
+        "analysis_profile": "fid-safe-default",
+    }
+    return {
+        "id": f'{matrix["id"]}:{subject_id}:{route_id}',
+        "matrix": matrix["id"],
+        "kind": "runtime-library",
+        "status": "planned" if planned else "blocked",
+        "blockers": [] if planned else [f'runtime provider is {provider["state"]}'],
+        "readiness": "unprobed" if planned else "unmet",
+        "recipe": {"name": subject_id, "version": "toolchain-owned"},
+        "target": target,
+        "toolchain": {
+            "route": route_id,
+            "compiler_id": provider["compiler_id"],
+            "identity": provider["toolchain_identity"],
+        },
+        "build": {
+            "adapter": "qualified-runtime-archive",
+            "query": provider["query"],
+            "runtime_version": provider["runtime_version"],
+            "authority_path": provider["authority_path"],
+            "authority_sha256": provider["authority_sha256"],
+        },
+        "analysis": analysis,
+        "routing": {
+            "executor": "runtime-archive-local",
+            "worker_pool": "library-local",
+        },
+        "sensitivity": {
+            "source-identity": {
+                "state": "controlled",
+                "value": f'{subject_id}:{provider["runtime_version"]}:{route_id}',
+            },
+            "target-platform-format": {
+                "state": "controlled",
+                "value": f'{provider["target_os"]}:{provider["binary_format"]}',
+            },
+            "target-abi": {
+                "state": "controlled",
+                "value": provider["architecture"],
+            },
+            "compiler-family": {"state": "controlled", "value": "gcc"},
+            "compiler-version": {
+                "state": "controlled",
+                "value": provider["compiler_id"],
+            },
+            "build-shape": {
+                "state": "controlled",
+                "value": "toolchain-runtime-archive",
+            },
+            "link-shape": {"state": "controlled", "value": "static-archive"},
+            "ghidra-language": {
+                "state": "controlled",
+                "value": provider["ghidra_language"],
+            },
+            "ghidra-compiler-spec": {
+                "state": "controlled",
+                "value": provider["ghidra_compiler_spec"],
             },
             "analysis-configuration": {
                 "state": "controlled",
@@ -1217,7 +1309,13 @@ def resolve_plan(
     width_batches_by_authority = {}
     width_catalog = None
     for matrix in request["matrices"]:
-        if matrix["kind"] != "width-native":
+        if matrix["kind"] not in {"width-native", "runtime-library"}:
+            continue
+        from .toolchain_packs import load_toolchain_pack_catalog
+
+        if width_catalog is None:
+            width_catalog = load_toolchain_pack_catalog(root)
+        if matrix["kind"] == "runtime-library":
             continue
         relative = Path(str(matrix["width_batch"]))
         if relative.is_absolute() or ".." in relative.parts:
@@ -1232,11 +1330,8 @@ def resolve_plan(
                 "width-native matrix width_batch must stay inside project root"
             ) from error
         from .qualification_pipeline import validate_embedded_gates
-        from .toolchain_packs import load_toolchain_pack_catalog
         from .width_batch import load_width_batch
 
-        if width_catalog is None:
-            width_catalog = load_toolchain_pack_catalog(root)
         batch = load_width_batch(root, path, _toolchain_catalog=width_catalog)
         width_batches[str(batch["id"])] = batch
         width_batches_by_authority[str(matrix["width_batch"])] = batch
@@ -1275,6 +1370,13 @@ def resolve_plan(
         matrix_coverage_summaries[str(matrix["id"])] = selected_summary
     toolchains = load_toolchains(root / "toolchains/registry.toml")
     toolchains_by_identity = {_toolchain_identity(row): row for row in toolchains}
+    runtime_status = None
+    if any(matrix["kind"] == "runtime-library" for matrix in request["matrices"]):
+        from .runtime_libraries import runtime_library_status
+
+        runtime_status = runtime_library_status(
+            root, probe=False, _catalog=width_catalog
+        )
     cells = []
     for matrix in request["matrices"]:
         if matrix["kind"] == "native":
@@ -1289,6 +1391,39 @@ def resolve_plan(
                     _catalog=width_catalog,
                 )
             )
+            continue
+        if matrix["kind"] == "runtime-library":
+            assert runtime_status is not None
+            requested = {}
+            for identity in matrix["recipes"]:
+                name, separator, version = str(identity).partition("@")
+                if separator != "@" or version != "toolchain-owned":
+                    raise ValueError(
+                        "runtime-library recipes must use <subject>@toolchain-owned"
+                    )
+                requested[name] = str(identity)
+            cells_by_key = {
+                (str(row["subject_id"]), str(row.get("route_id"))): row
+                for row in runtime_status["cells"]
+                if row["kind"] == "qualified-route-query"
+            }
+            for subject_id in requested:
+                for route_id in matrix["routes"]:
+                    provider = cells_by_key.get((subject_id, str(route_id)))
+                    if provider is None:
+                        raise ValueError(
+                            f"runtime provider {subject_id} does not define route {route_id}"
+                        )
+                    cells.append(
+                        _runtime_cell(
+                            matrix,
+                            {
+                                **provider,
+                                "authority_path": runtime_status["authority_path"],
+                                "authority_sha256": runtime_status["authority_sha256"],
+                            },
+                        )
+                    )
             continue
         if matrix["kind"] == "archive-library":
             missing = set(matrix["toolchains"]) - set(toolchains_by_identity)

@@ -31,6 +31,7 @@ from .recipe_generator import generate_cells, load_recipes
 from .toolchain_registry import load_toolchains
 from .toolchain_cache import MANAGED_DOWNLOADS
 from .source_packs import MANAGED_SOURCE_DOWNLOADS
+from .runtime_libraries import RuntimeLibraryResolver, resolve_route_runtime_provider
 from .timing import (
     CellStage,
     ProgressCallback,
@@ -42,7 +43,9 @@ from .timing import (
 SEAL_SCHEMA = "fidb-cell-seal/v1"
 VARIANTS_SCHEMA = "fidb-factor-variants/v1"
 MANIFEST_FIELD_LIMIT = 16 * 1024 * 1024
-SUPPORTED_KINDS = frozenset({"native", "source-library", "archive-library", "malware"})
+SUPPORTED_KINDS = frozenset(
+    {"native", "source-library", "archive-library", "runtime-library", "malware"}
+)
 RAW_COMMAND_FIELDS = frozenset(
     {
         "argv",
@@ -114,6 +117,7 @@ class CellAuthorityResolver:
         self._catalog: dict[str, object] | None = None
         self._width_contexts: dict[str, _WidthContext] = {}
         self._recipe_configurations: dict[str, Configuration] = {}
+        self._runtime_resolver: RuntimeLibraryResolver | None = None
 
     def _toolchain_catalog(self) -> dict[str, object]:
         if self._catalog is None:
@@ -121,6 +125,13 @@ class CellAuthorityResolver:
 
             self._catalog = load_toolchain_pack_catalog(self.project_root)
         return self._catalog
+
+    def runtime_provider(
+        self, subject_id: str, route_id: str
+    ) -> tuple[dict[str, object], object]:
+        if self._runtime_resolver is None:
+            self._runtime_resolver = RuntimeLibraryResolver(self.project_root)
+        return self._runtime_resolver.resolve(subject_id, route_id, probe=True)
 
     def _recipe_configuration(self, identity: str) -> Configuration:
         configuration = self._recipe_configurations.get(identity)
@@ -633,6 +644,15 @@ def preflight_cell_authority(
         route_id = None
         treatment_id = None
         toolchain_identity = None
+    elif kind == "runtime-library":
+        generated, pins = _resolve_runtime(
+            plain, project, authority_resolver=authority_resolver
+        )
+        executor = "runtime-archive-local"
+        route = generated["route"]
+        route_id = route.id
+        treatment_id = None
+        toolchain_identity = route.toolchain_identity
     else:
         generated, pins = _resolve_source(plain, project, kind)
         executor = str(generated["executor"])
@@ -885,6 +905,89 @@ def _resolve_archive(
         "target": reviewed_target,
         "analysis": reviewed_analysis,
     }
+
+
+def _resolve_runtime(
+    cell: dict[str, object],
+    project_root: Path,
+    *,
+    authority_resolver: CellAuthorityResolver | None = None,
+) -> tuple[dict[str, object], dict[str, object]]:
+    recipe = _mapping(_required(cell, "recipe", "runtime cell"), "cell.recipe")
+    target = _mapping(_required(cell, "target", "runtime cell"), "cell.target")
+    toolchain = _mapping(_required(cell, "toolchain", "runtime cell"), "cell.toolchain")
+    build = _mapping(_required(cell, "build", "runtime cell"), "cell.build")
+    analysis = _mapping(_required(cell, "analysis", "runtime cell"), "cell.analysis")
+    routing = _mapping(_required(cell, "routing", "runtime cell"), "cell.routing")
+    subject_id = str(recipe.get("name"))
+    route_id = str(toolchain.get("route"))
+    try:
+        if authority_resolver is None:
+            provider, route = resolve_route_runtime_provider(
+                project_root, subject_id, route_id, probe=True
+            )
+        else:
+            provider, route = authority_resolver.runtime_provider(subject_id, route_id)
+    except (OSError, ValueError) as error:
+        raise CellResolutionError(str(error)) from error
+    if provider["state"] != "qualified":
+        raise CellResolutionError(
+            f'runtime archive {subject_id}/{route_id} is {provider["state"]}'
+        )
+    reviewed_recipe = {"name": subject_id, "version": "toolchain-owned"}
+    reviewed_target = {
+        "os": provider["target_os"],
+        "architecture": provider["architecture"],
+        "binary_format": provider["binary_format"],
+    }
+    reviewed_toolchain = {
+        "route": route_id,
+        "compiler_id": provider["compiler_id"],
+        "identity": provider["toolchain_identity"],
+    }
+    reviewed_build = {
+        "adapter": "qualified-runtime-archive",
+        "query": provider["query"],
+        "runtime_version": provider["runtime_version"],
+        "authority_path": provider["authority_path"],
+        "authority_sha256": provider["authority_sha256"],
+    }
+    reviewed_analysis = {
+        "ghidra_language": provider["ghidra_language"],
+        "ghidra_compiler_spec": provider["ghidra_compiler_spec"],
+        "ghidra_version": "execution-probed",
+        "analysis_profile": "fid-safe-default",
+    }
+    reviewed_routing = {
+        "executor": "runtime-archive-local",
+        "worker_pool": "library-local",
+    }
+    _expect(recipe, reviewed_recipe, "runtime subject identity")
+    _expect(target, reviewed_target, "runtime target")
+    _expect(toolchain, reviewed_toolchain, "runtime toolchain route")
+    _expect(build, reviewed_build, "runtime archive query")
+    _expect(analysis, reviewed_analysis, "runtime analysis route")
+    _expect(routing, reviewed_routing, "runtime executor")
+    archive = project_root / str(provider["path"])
+    return (
+        {
+            "family": subject_id,
+            "version": provider["runtime_version"],
+            "variant": route_id,
+            "archive": archive,
+            "archive_sha256": provider["sha256"],
+            "archive_bytes": provider["bytes"],
+            "archive_members": provider["members"],
+            "route": route,
+        },
+        {
+            "recipe": reviewed_recipe,
+            "target": reviewed_target,
+            "toolchain": reviewed_toolchain,
+            "build": reviewed_build,
+            "analysis": reviewed_analysis,
+        },
+    )
 
 
 def _initialize_ghidra(attempt_root: Path) -> GhidraRuntime:
@@ -1174,6 +1277,90 @@ def _source_outputs(
     return fidb, counts, runtime.identity, evidence
 
 
+def _runtime_outputs(
+    cell: dict[str, object],
+    pins: dict[str, object],
+    project_root: Path,
+    attempt_root: Path,
+    timing: TimingRecorder,
+) -> tuple[Path, dict[str, int], dict[str, object], dict[str, object]]:
+    archive = Path(str(cell["archive"]))
+    try:
+        archive.relative_to((project_root / "var/fidb-toolchains").resolve())
+    except ValueError as error:
+        raise CellRunnerError("runtime archive escaped managed toolchains") from error
+    if archive.is_symlink() or not archive.is_file():
+        raise CellRunnerError(f"runtime archive is not a regular file: {archive}")
+    _expect(_sha256(archive), cell["archive_sha256"], "runtime archive digest")
+    work = attempt_root / "work/runtime-archive"
+    logs = attempt_root / "artifacts/logs"
+    temporary = work / "tmp"
+    temporary.mkdir(parents=True, exist_ok=True)
+    logs.mkdir(parents=True, exist_ok=True)
+    environment = dict(os.environ)
+    environment["TMPDIR"] = str(temporary)
+    with timing.span(
+        CellStage.ARCHIVE_OBJECT_SELECTION,
+        "extracting qualified route-owned runtime archive",
+        {
+            "archive_bytes": int(cell["archive_bytes"]),
+            "archive_members": int(cell["archive_members"]),
+        },
+    ) as selection_metrics:
+        objects = pipeline._extract_archive_objects(
+            archive,
+            work / "objects",
+            cell["route"],
+            environment,
+            logs / "runtime-archive.log",
+        )
+        selection_metrics.update(
+            {
+                "object_count": len(objects),
+                "object_bytes": sum(path.stat().st_size for path in objects),
+            }
+        )
+    with timing.span(
+        CellStage.ARTIFACT_VALIDATION,
+        "validating runtime objects against the reviewed Ghidra language",
+        {"object_count": len(objects)},
+    ) as validation_metrics:
+        expected_language = str(
+            _mapping(pins["analysis"], "pins.analysis")["ghidra_language"]
+        )
+        for object_path in objects:
+            facts = inspect_elf(object_path)
+            observed_language = ghidra_language(
+                facts.machine, facts.endianness, facts.elf_class
+            )
+            _expect(observed_language, expected_language, "runtime object language")
+        evidence = {
+            "runtime_archive_path": str(archive.relative_to(project_root)),
+            "runtime_archive_sha256": cell["archive_sha256"],
+            "runtime_archive_bytes": cell["archive_bytes"],
+            "runtime_archive_members": cell["archive_members"],
+            **_object_evidence(objects, attempt_root),
+        }
+        validation_metrics.update(evidence)
+    with timing.span(
+        CellStage.GHIDRA_STARTUP,
+        "initializing isolated Ghidra JVM",
+    ) as startup_metrics:
+        runtime = _initialize_ghidra(attempt_root)
+        startup_metrics.update(runtime.identity)
+    fidb, counts = _build_direct_fidb(
+        objects=objects,
+        cell=cell,
+        language=str(_mapping(pins["analysis"], "pins.analysis")["ghidra_language"]),
+        compiler_spec=str(
+            _mapping(pins["analysis"], "pins.analysis")["ghidra_compiler_spec"]
+        ),
+        attempt_root=attempt_root,
+        timing=timing,
+    )
+    return fidb, counts, runtime.identity, evidence
+
+
 def _validate_malware_result(
     result: dict[str, object], cell: dict[str, object], attempt_root: Path
 ) -> tuple[Path, ElfFacts, dict[str, object]]:
@@ -1346,6 +1533,12 @@ def run_cell(
             generated, pins = _resolve_archive(plain, project)
             configuration = None
             executor = "archive-local"
+        elif kind == "runtime-library":
+            generated, pins = _resolve_runtime(
+                plain, project, authority_resolver=authority_resolver
+            )
+            configuration = None
+            executor = "runtime-archive-local"
         else:
             generated, pins = _resolve_source(plain, project, kind)
             configuration = None
@@ -1366,6 +1559,10 @@ def run_cell(
         assert generated is not None
         if kind in {"source-library", "archive-library"}:
             fidb, counts, runtime, evidence = _source_outputs(
+                generated, pins, project, attempt, timing
+            )
+        elif kind == "runtime-library":
+            fidb, counts, runtime, evidence = _runtime_outputs(
                 generated, pins, project, attempt, timing
             )
         else:
