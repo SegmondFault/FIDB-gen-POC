@@ -355,7 +355,7 @@ export default function Home() {
         <div className="host-status">
           <span className={factory.connection === 'live' ? 'pulse-dot' : 'pulse-dot offline'} />
           <div>
-            <strong>reference-host</strong>
+            <strong>{factory.capabilities ? `${factory.capabilities.host.system} · ${factory.capabilities.host.machine}` : 'Execution host'}</strong>
             <span>{factory.connection === 'live' ? 'local API online' : 'control panel online'}</span>
           </div>
         </div>
@@ -415,10 +415,10 @@ export default function Home() {
 
         <div className="sidebar-footer">
           <div className="environment-card">
-            <span className="environment-key">ENV</span>
+            <span className="environment-key">STATE</span>
             <div>
-              <strong>Production</strong>
-              <span>post-unification</span>
+              <strong>{factory.snapshot?.status ?? 'Unbound'}</strong>
+              <span>{factory.snapshot?.config_name ?? 'coordinator not loaded'}</span>
             </div>
           </div>
           <button className="operator-button" aria-label="Operator menu">
@@ -561,7 +561,7 @@ export default function Home() {
               </div>
               <div className="worker-list">
                 {factory.capabilities ? [{
-                  name: 'reference-host / library-local',
+                  name: `${factory.capabilities.host.system}/${factory.capabilities.host.machine} · library-local`,
                   detail: `${factory.capabilities.host.logical_cpus ?? '—'} threads · ${Math.round((factory.capabilities.host.memory_bytes ?? 0) / 1024 ** 3)} GiB visible · no QEMU`,
                   state: factory.capabilities.analysis.ready ? `${pool?.ready_now ?? 0} ready now` : 'Analysis setup required',
                   tone: factory.capabilities.analysis.ready ? 'ready' : 'offline',
