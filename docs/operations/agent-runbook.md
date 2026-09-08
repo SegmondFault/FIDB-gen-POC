@@ -48,6 +48,55 @@ Never repair a runtime mismatch by weakening identity comparison. Correct the
 authority that is wrong, regenerate the affected plans, and preserve the old
 generation in the ledger.
 
+## Pre-publication history and identity repair
+
+Treat an authorship or host-identity cleanup as a bounded history migration,
+not a search-and-replace on the working tree. Before rewriting anything:
+
+1. fetch the upstream remote and identify the exact merge base;
+2. use `git cherry` or `git log --cherry-mark` to distinguish upstream work
+   from fork-only commits, including upstream commits added after the fork;
+3. create a private local backup ref and record the old HEAD and tree hashes;
+4. obtain explicit approval for the history rewrite; and
+5. restrict the rewrite to the positive fork branch range after the verified
+   upstream boundary.
+
+Never relabel commits reachable from the upstream boundary. A later upstream
+commit that is absent from the fork remains upstream work even when the two
+branches touch similar files. Do not push the private backup ref or
+`refs/original/*` created by history-rewrite tooling.
+
+Removing an account or hostname from the current tree is insufficient: older
+blobs, commit messages and path names are still publishable. Scrub all three
+from every fork-only snapshot, then verify the public branch with current-tree
+`git grep`, history path/message inspection and `git log -S`. The final tree
+should differ from the private backup only by the reviewed redaction set.
+
+Evidence TOML is content-addressed. Redacting a label inside a benchmark or
+canary record therefore changes its SHA-256 even when no measurement changes.
+After a scrub, calculate the new evidence digests, update only their explicit
+authority pins, and regenerate dependent projections through the supported
+commands:
+
+```sh
+uv run fidb-poc materialize-batches --project-root . --write
+uv run fidb-poc materialize-batches --project-root . --check
+uv run fidb-poc auto-batches --project-root . --write
+uv run fidb-poc auto-batches --project-root . --check
+```
+
+Keep those queues disarmed throughout the repair. Run the complete regression
+suite afterward; a successful text scan does not prove authority consistency.
+
+Recipe-qualification evidence has a stronger boundary. Its input digest covers
+the reviewed adapters, configuration, worker authority and selected recipes.
+Never edit an ignored report's `input_digest` to make old work appear current.
+If any covered executable input changed, preserve the report and resume through
+`qualify-recipes --restart-stale`; that supported transition archives the old
+generation before starting a new one. Check unattended timer commands after
+any authority change so a scheduled run cannot wake up only to reject stale
+evidence.
+
 ## Sources and recipes
 
 Prepared campaigns use the content-addressed cache at
