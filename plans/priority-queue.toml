@@ -1,10 +1,11 @@
-# Active exact C10 export recovery. Synchronization preserves all historical
-# completed rows; this queue adds only the missing 174 OpenSSL FIDBF identities.
+# Completed exact C10 export recovery. Synchronization preserves all historical
+# completed rows; keep this queue disarmed after sealing the 174 missing OpenSSL
+# FIDBF identities.
 schema_version = "fidb-queue/v1"
 name = "c-openssl-fidbf-recovery"
 
 [queue]
-armed = true
+armed = false
 performance_profile = "reference-host-94g-balanced"
 max_workers = 20
 batch_order = ["c-openssl-fidbf-recovery"]
