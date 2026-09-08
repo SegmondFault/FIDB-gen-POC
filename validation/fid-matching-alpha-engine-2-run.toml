@@ -43,6 +43,12 @@ compare_cpu_and_gpu = false
 finish_started = true
 resume_completed_cases = true
 
+[retention]
+classification_encoding = "gzip-json-canonical-v1"
+remove_worker_runtime = true
+retain_case_summaries = true
+retain_hash_database = true
+
 [canary]
 cases = ["1:B", "67:B", "145:B", "175:B"]
 workers = 1

@@ -462,11 +462,20 @@ references with post-link whole-archive images increased recall from 66.86% to
 false-negative decisions and removed 60,179 false-positive decisions.
 
 Searching both populations raised recall by only another 0.11 percentage
-points, added 92 false-positive decisions and increased measured matcher wall
-time by 46% over linked-only. The next pipeline revision must therefore treat
-linked references as canonical and archive analysis as an explicit optional
-control. That future pipeline change is not implied merely by this document;
-it requires its own reviewed TOML authority, tests and canary.
+points, added 92 false-positive decisions and increased measured
+`alpha_engine_1` matcher wall time by 46% over linked-only. The operator has
+nevertheless selected archive-plus-linked as the future routine corpus because
+it retains pre-link evidence without a material precision loss. The reviewed
+cohort lifecycle now derives linked images from the same sealed archives
+without recompilation and uses `alpha_engine_2` to stream both component
+indexes once. Archive-only and linked-only remain explicit ablation arms. That
+engine must pass its disarmed zero-mismatch cross-check before promotion.
+
+Engine 2 writes each large classification directly as deterministic gzip JSON;
+there is no uncompressed multi-gigabyte staging copy. Once all cases have been
+published into the compact hash-evidence SQLite database, matcher JVM homes and
+other declared scratch are recycled. Summaries, authority and source digests,
+per-hash observations and the compact database remain.
 
 ## Legacy exact-tuple analysis
 

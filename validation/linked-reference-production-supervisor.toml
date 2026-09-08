@@ -1,5 +1,6 @@
 schema_version = "fidb-linked-reference-supervisor/v2"
 performance = "performance/linked-reference.toml"
+remove_worker_runtime_after_seal = true
 task_timeout_seconds = 900
 task_timeout_retries = 1
 termination_grace_seconds = 30

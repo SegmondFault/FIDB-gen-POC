@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
+import gzip
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -72,6 +74,50 @@ def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _atomic_gzip_json(path: Path, document: Mapping[str, object]) -> None:
+    """Write deterministic compressed evidence without a plain-JSON staging file."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{path.name}-", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "wb") as raw:
+            with gzip.GzipFile(
+                filename="",
+                mode="wb",
+                compresslevel=6,
+                fileobj=raw,
+                mtime=0,
+            ) as stream:
+                with io.TextIOWrapper(stream, encoding="utf-8", newline="\n") as text:
+                    json.dump(document, text, sort_keys=True, separators=(",", ":"))
+                    text.write("\n")
+            raw.flush()
+            os.fsync(raw.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_classification_evidence(
+    destination: Path,
+    classification: Mapping[str, object],
+    *,
+    encoding: str,
+) -> tuple[Path, str]:
+    if encoding == "gzip-json-canonical-v1":
+        path = destination / "classification.json.gz"
+        _atomic_gzip_json(path, classification)
+        return path, encoding
+    if encoding != "json-pretty-v1":
+        raise ValueError("classification evidence encoding is unsupported")
+    path = destination / "classification.json"
+    _atomic_json(path, classification)
+    return path, "json-pretty-v1"
 
 
 def _load_retained_oracle_replay(
@@ -487,6 +533,7 @@ def qualify_retained_validation(
     reference_population: Mapping[str, object] | None = None,
     campaign_authority_sha256: str | None = None,
     engine_id: str = "alpha_engine_1",
+    classification_encoding: str = "json-pretty-v1",
 ) -> dict[str, object]:
     """Run native FID and either qualify all or verify the selected backend."""
 
@@ -685,8 +732,11 @@ def qualify_retained_validation(
         path = destination / f"{device}-output.json"
         _atomic_json(path, execution)
         execution_paths.append(path)
-    classification_path = destination / "classification.json"
-    _atomic_json(classification_path, classification)
+    classification_path, classification_encoding = _write_classification_evidence(
+        destination,
+        classification,
+        encoding=classification_encoding,
+    )
     comparisons = [
         compare_with_oracle(oracle, execution, authority) for execution in executions
     ]
@@ -788,6 +838,7 @@ def qualify_retained_validation(
         },
         "classification_path": str(classification_path.relative_to(root)),
         "classification_sha256": _sha256(classification_path),
+        "classification_encoding": classification_encoding,
         "query_signature_summary": query_evidence_summary,
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }
@@ -814,6 +865,7 @@ def run_compact_retained_validation(
     reference_population: Mapping[str, object] | None = None,
     campaign_authority_sha256: str | None = None,
     engine_id: str = "alpha_engine_1",
+    classification_encoding: str = "json-pretty-v1",
 ) -> dict[str, object]:
     """Run the selected compact backend without constructing a native oracle."""
 
@@ -976,13 +1028,14 @@ def run_compact_retained_validation(
         }
     equivalent = all(row["state"] == "equivalent" for row in comparisons)
     execution_path = destination / "selected-output.json"
-    classification_path = destination / "classification.json"
+    classification_path, classification_encoding = _write_classification_evidence(
+        destination, classification, encoding=classification_encoding
+    )
     retain_backend_output = oracle_replay_source is not None
     if retain_backend_output:
         _atomic_json(execution_path, execution)
     else:
         execution_path.unlink(missing_ok=True)
-    _atomic_json(classification_path, classification)
     summary = {
         "schema_version": QUALIFICATION_SCHEMA,
         "state": "qualified" if equivalent else "mismatch",
@@ -1062,6 +1115,7 @@ def run_compact_retained_validation(
         },
         "classification_path": str(classification_path.relative_to(root)),
         "classification_sha256": _sha256(classification_path),
+        "classification_encoding": classification_encoding,
         "query_signature_summary": query_summary,
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }

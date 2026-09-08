@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import fcntl
+import gzip
 import hashlib
 import json
 import os
@@ -69,6 +70,15 @@ def _atomic_json(path: Path, document: Mapping[str, object]) -> None:
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as stream:
+        document = json.load(stream)
+    if not isinstance(document, dict):
+        raise ValueError(f"JSON evidence is not an object: {path}")
+    return document
 
 
 def _acquire_campaign_lock(path: Path) -> int:
@@ -188,6 +198,27 @@ def _reference_policy(document: Mapping[str, object]) -> dict[str, object]:
     }
 
 
+def _retention_policy(document: Mapping[str, object]) -> dict[str, object]:
+    raw = document.get("retention")
+    if raw is None:
+        return {
+            "classification_encoding": "json-pretty-v1",
+            "remove_worker_runtime": True,
+            "retain_case_summaries": True,
+            "retain_hash_database": True,
+            "legacy_default": True,
+        }
+    expected = {
+        "classification_encoding": "gzip-json-canonical-v1",
+        "remove_worker_runtime": True,
+        "retain_case_summaries": True,
+        "retain_hash_database": True,
+    }
+    if raw != expected:
+        raise ValueError("FID matching retention policy is unsupported")
+    return {**raw, "legacy_default": False}
+
+
 def load_campaign(
     project_root: str | Path, authority: str | Path = DEFAULT_CAMPAIGN
 ) -> dict[str, object]:
@@ -212,7 +243,11 @@ def load_campaign(
     }
     if (
         frozenset(document)
-        not in {frozenset(expected), frozenset(expected | {"reference"})}
+        not in {
+            frozenset(expected),
+            frozenset(expected | {"reference"}),
+            frozenset(expected | {"reference", "retention"}),
+        }
         or document.get("schema_version") != CAMPAIGN_SCHEMA
     ):
         raise ValueError("FID matching campaign has unsupported fields or schema")
@@ -310,6 +345,7 @@ def load_campaign(
     return {
         **document,
         "reference": _reference_policy(document),
+        "retention": _retention_policy(document),
         "authority_path": str(path.relative_to(root)),
         "authority_sha256": _sha256(path),
     }
@@ -1007,7 +1043,7 @@ def _publish_hash_evidence(
                 str(summary["classification_path"]),
                 "FID classification evidence",
             )
-            classification = json.loads(classification_path.read_text(encoding="utf-8"))
+            classification = _read_json(classification_path)
             case = summary["case"]
             scope = "|".join(
                 (
@@ -1502,6 +1538,9 @@ def worker_cases(
                     reference_population=reference_receipt,
                     campaign_authority_sha256=str(campaign["authority_sha256"]),
                     engine_id=str(campaign["execution"]["engine"]),
+                    classification_encoding=str(
+                        campaign["retention"]["classification_encoding"]
+                    ),
                 )
             else:
                 run_compact_retained_validation(
@@ -1519,6 +1558,9 @@ def worker_cases(
                     reference_population=reference_receipt,
                     campaign_authority_sha256=str(campaign["authority_sha256"]),
                     engine_id=str(campaign["execution"]["engine"]),
+                    classification_encoding=str(
+                        campaign["retention"]["classification_encoding"]
+                    ),
                 )
         except Exception as error:
             failed += 1

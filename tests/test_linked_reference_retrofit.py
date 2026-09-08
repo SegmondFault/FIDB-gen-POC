@@ -10,6 +10,7 @@ from fidb_poc.linked_reference_retrofit import (
     _balanced_chunks,
     _active_task_timed_out,
     _failure_fingerprint,
+    _cleanup_worker_runtime,
     _parse_task_key,
     _reference_analysis_policy,
     _supervise_workers,
@@ -116,6 +117,29 @@ class LinkedReferenceRetrofitTests(unittest.TestCase):
 
         self.assertEqual(supervisor["workers"], 8)
         self.assertEqual(supervisor["performance_resolution"], resolution)
+
+    def test_sealed_generation_cleanup_preserves_status_and_task_evidence(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root) as temporary:
+            run = Path(temporary)
+            relative = run.relative_to(root)
+            runtime = run / "workers/worker-01/ghidra-user/.cache/cache.bin"
+            runtime.parent.mkdir(parents=True)
+            runtime.write_bytes(b"runtime")
+            status = run / "workers/worker-01/status.json"
+            status.write_text("{}", encoding="utf-8")
+            seal = run / "tasks/task/seal.json"
+            seal.parent.mkdir(parents=True)
+            seal.write_text("{}", encoding="utf-8")
+
+            report = _cleanup_worker_runtime(
+                root, {"output_root": str(relative.parent), "id": relative.name}
+            )
+
+            self.assertEqual(report["recoverable_bytes"], 7)
+            self.assertFalse(runtime.exists())
+            self.assertTrue(status.is_file())
+            self.assertTrue(seal.is_file())
 
     def test_task_timeout_requires_an_active_aware_timestamp(self) -> None:
         now = datetime.now(timezone.utc)

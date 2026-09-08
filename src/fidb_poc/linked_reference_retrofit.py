@@ -211,11 +211,15 @@ def load_supervisor_authority(
     if schema == SUPERVISOR_SCHEMA:
         expected = common | {"workers"}
     elif schema == SUPERVISOR_SCHEMA_V2:
-        expected = common | {"performance"}
+        expected = common | {"performance", "remove_worker_runtime_after_seal"}
     else:
         expected = set()
     if set(document) != expected:
         raise ValueError("linked-reference supervisor has unsupported fields or schema")
+    if schema == SUPERVISOR_SCHEMA_V2 and document[
+        "remove_worker_runtime_after_seal"
+    ] is not True:
+        raise ValueError("linked-reference production supervisor must recycle workers")
     for name in common - {"schema_version"}:
         value = document[name]
         minimum = 0 if name == "task_timeout_retries" else 1
@@ -1023,6 +1027,41 @@ def _generation_seal(root: Path, plan: Mapping[str, object]) -> dict[str, object
     return document
 
 
+def _cleanup_worker_runtime(
+    root: Path, authority: Mapping[str, object]
+) -> dict[str, object]:
+    """Recycle only per-worker JVM homes after the generation is sealed."""
+
+    run_root = _inside(
+        root,
+        Path(str(authority["output_root"])) / str(authority["id"]),
+        "linked-reference run root",
+    )
+    workers = run_root / "workers"
+    removed = []
+    recovered = 0
+    if workers.is_dir():
+        for worker in sorted(workers.iterdir()):
+            candidate = worker / "ghidra-user"
+            if not candidate.exists():
+                continue
+            resolved = candidate.resolve()
+            if candidate.is_symlink() or workers.resolve() not in resolved.parents:
+                raise ValueError(f"linked worker cleanup target is unsafe: {candidate}")
+            recovered += sum(
+                path.stat().st_size
+                for path in candidate.rglob("*")
+                if path.is_file() and not path.is_symlink()
+            )
+            shutil.rmtree(candidate)
+            removed.append(str(candidate.relative_to(root)))
+    return {
+        "state": "complete",
+        "removed_paths": removed,
+        "recoverable_bytes": recovered,
+    }
+
+
 def _spawn_worker_process(
     *,
     root: Path,
@@ -1306,6 +1345,8 @@ def run(
         result["supervisor_timeouts"] = timeout_events
         if mode == "full" and result["state"] == "complete":
             result["generation"] = _generation_seal(root, refreshed)
+            if supervisor.get("remove_worker_runtime_after_seal") is True:
+                result["retention"] = _cleanup_worker_runtime(root, authority)
         _atomic_json(run_root / "status.json", result)
         return result
     finally:

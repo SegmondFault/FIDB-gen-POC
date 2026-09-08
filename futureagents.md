@@ -705,13 +705,13 @@ versus 66.86% and 96.78% for pre-link archive members. The union added only
 linked-only.
 
 Do not infer that linked FID signatures contain every archive signature. The
-finding is that archive candidates add little marginal accepted evidence for
-post-link queries. Preserve the archive generation as an immutable control,
-but make future archive-member Ghidra analysis opt-in. The intended next
-pipeline revision is linked-first; it is not implemented by documentation
-alone. Archive-delta or lazy-escalation work must bind its own TOML authority,
-remain label-independent during candidate construction, and demonstrate its
-marginal result on held-out validation evidence before admission.
+finding is that archive candidates added little marginal accepted evidence for
+the C10 post-link queries. The subsequent operator decision is nevertheless to
+make archive-plus-linked the routine future population. The reviewed lifecycle
+now records that choice, derives linked images from already sealed archives
+without recompilation, and keeps archive-only/linked-only as ablations.
+`alpha_engine_2` must pass its zero-mismatch cross-check before it supersedes
+the measured engine-1 path.
 
 The first full repaired-source attempt exposed three runner faults after 62/222
 cells: an objdump `.byte 0` directive was incorrectly classified as a direct

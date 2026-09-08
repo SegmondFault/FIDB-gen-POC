@@ -15,6 +15,7 @@ from fidb_poc.fid_matching_campaign import (
     _cleanup_campaign_scratch,
     _expected_cases,
     _publish_hash_evidence,
+    _read_json,
     _reusable_case,
     _resource_preflight,
     _release_campaign_lock,
@@ -34,6 +35,7 @@ from fidb_poc.fid_match_qualification import (
     _portable_executions,
     _retained_query_analysis_policy,
     _symbol_address_bias,
+    _write_classification_evidence,
 )
 from fidb_poc.validation_analysis import (
     QUERY_ANALYSIS_POLICY,
@@ -63,6 +65,24 @@ class FidMatchingCampaignTests(unittest.TestCase):
         self.assertFalse(self.campaign["safety"]["execute_target_binaries"])
         self.assertEqual(self.campaign["reference"]["population"], "archive-only")
         self.assertTrue(self.campaign["reference"]["legacy_default"])
+
+    def test_alpha_two_classification_is_reproducibly_compressed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            document = {"observations": [{"value": "aa", "outcome": "fp"}]}
+
+            first, encoding = _write_classification_evidence(
+                destination, document, encoding="gzip-json-canonical-v1"
+            )
+            first_digest = hashlib.sha256(first.read_bytes()).hexdigest()
+            second, _ = _write_classification_evidence(
+                destination, document, encoding="gzip-json-canonical-v1"
+            )
+
+            self.assertEqual(encoding, "gzip-json-canonical-v1")
+            self.assertEqual(first.suffixes[-2:], [".json", ".gz"])
+            self.assertEqual(hashlib.sha256(second.read_bytes()).hexdigest(), first_digest)
+            self.assertEqual(_read_json(second), document)
 
     def test_linked_and_union_campaigns_name_sealed_reference_components(self):
         linked = load_campaign(
