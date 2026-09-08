@@ -23,9 +23,9 @@ import {
   TimingView,
 } from './operations-views';
 import {
-  BatchValidationView,
   EcologicalValidationView,
   HashDiscriminationView,
+  MachineValidationView,
 } from './validation-views';
 import { eventDetail, eventTime, eventTone } from './coordinator-presenters';
 import { OverviewView } from './overview-view';
@@ -46,7 +46,7 @@ const navItems = [
 ];
 
 const validationNavItems = [
-  ['06', 'Batch validation'],
+  ['06', 'Machine validation'],
   ['07', 'Ecological validation'],
   ['08', 'Hash discrimination'],
 ];
@@ -368,7 +368,7 @@ export default function Home() {
 
 function SecondaryView({ view, navigateTo, batchOrder, setBatchOrder, rows, factory, selectedLanguageId, setSelectedLanguageId }: { view: string; navigateTo: (view: string) => void; batchOrder: string[]; setBatchOrder: React.Dispatch<React.SetStateAction<string[]>>; rows: BatchRow[]; factory: FactoryApiState; selectedLanguageId: string; setSelectedLanguageId: React.Dispatch<React.SetStateAction<string>> }) {
   if (view === 'Matrix') return <MatrixView batchOrder={batchOrder} rows={rows} factory={factory} selectedLanguageId={selectedLanguageId} setSelectedLanguageId={setSelectedLanguageId} />;
-  if (view === 'Batch validation') return <BatchValidationView factory={factory} navigateTo={navigateTo} />;
+  if (view === 'Machine validation') return <MachineValidationView factory={factory} navigateTo={navigateTo} />;
   if (view === 'Ecological validation') return <EcologicalValidationView factory={factory} />;
   if (view === 'Hash discrimination') return <HashDiscriminationView factory={factory} />;
   if (view === 'Performance') return <PerformanceView factory={factory} />;
