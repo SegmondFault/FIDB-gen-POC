@@ -212,5 +212,5 @@ The generated queue is the disarmed candidate. A reviewed copy may replace
 pause and disarm the ledger, synchronize the new identities, verify exact
 resolution, then arm separately. Batch IDs intentionally change; superseded
 jobs become inactive while completed attempts, failures, events, and artifacts
-remain historical evidence. See `futureagents.md` for the recovery and rollback
+remain historical evidence. See `docs/operations/agent-runbook.md` for the recovery and rollback
 sequence.

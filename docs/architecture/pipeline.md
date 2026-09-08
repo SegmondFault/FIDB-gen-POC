@@ -63,9 +63,9 @@ uv run fidb-poc
 
 Code:
 
-- [`pyproject.toml`: CLI registration](pyproject.toml)
-- [`parser()`](src/fidb_poc/cli.py)
-- [`main()`](src/fidb_poc/cli.py)
+- [`pyproject.toml`: CLI registration](../../pyproject.toml)
+- [`parser()`](../../src/fidb_poc/cli.py)
+- [`main()`](../../src/fidb_poc/cli.py)
 
 The main CLI branches are:
 
@@ -83,7 +83,7 @@ normal build
 > call pipeline.execute()
 ```
 
-Code: [`cli.main()` dispatch](src/fidb_poc/cli.py)
+Code: [`cli.main()` dispatch](../../src/fidb_poc/cli.py)
 
 ### Declarative planning path
 
@@ -232,10 +232,10 @@ cli.main()
 
 Code:
 
-- [`load_configuration()`](src/fidb_poc/config.py)
-- [`_resolve_requests()`](src/fidb_poc/config.py)
-- [`_load_recipe()`](src/fidb_poc/config.py)
-- [`select_configuration()`](src/fidb_poc/config.py)
+- [`load_configuration()`](../../src/fidb_poc/config.py)
+- [`_resolve_requests()`](../../src/fidb_poc/config.py)
+- [`_load_recipe()`](../../src/fidb_poc/config.py)
+- [`select_configuration()`](../../src/fidb_poc/config.py)
 
 The trusted worker configuration currently selects:
 
@@ -250,7 +250,7 @@ worker.toml
 > treatment: baseline_o2
 ```
 
-Configuration: [`worker.toml`](worker.toml)
+Configuration: [`worker.toml`](../../worker.toml)
 
 Library resolution is name-based:
 
@@ -274,8 +274,8 @@ bzip2
 
 Recipes:
 
-- [`recipes/zlib.toml`](recipes/zlib.toml)
-- [`recipes/bzip2.toml`](recipes/bzip2.toml)
+- [`recipes/zlib.toml`](../../recipes/zlib.toml)
+- [`recipes/bzip2.toml`](../../recipes/bzip2.toml)
 
 An unknown name takes a fail-closed side path:
 
@@ -289,8 +289,8 @@ unknown --library value
 
 Code:
 
-- [`RecipesNotFoundError` handling](src/fidb_poc/cli.py)
-- [`record_missing_requests()`](src/fidb_poc/request_queue.py)
+- [`RecipesNotFoundError` handling](../../src/fidb_poc/cli.py)
+- [`record_missing_requests()`](../../src/fidb_poc/request_queue.py)
 
 ## 3. Pipeline setup
 
@@ -303,9 +303,9 @@ cli.main()
 
 Code:
 
-- [`_validate_project_checkout()`](src/fidb_poc/cli.py)
-- [`execute()` invocation](src/fidb_poc/cli.py)
-- [`pipeline.execute()`](src/fidb_poc/pipeline.py)
+- [`_validate_project_checkout()`](../../src/fidb_poc/cli.py)
+- [`execute()` invocation](../../src/fidb_poc/cli.py)
+- [`pipeline.execute()`](../../src/fidb_poc/pipeline.py)
 
 `execute()` validates and prepares these generated paths:
 
@@ -322,7 +322,7 @@ PROJECT/
   > fidb_manifest.csv
 ```
 
-Code: [`execute()` directory setup](src/fidb_poc/pipeline.py)
+Code: [`execute()` directory setup](../../src/fidb_poc/pipeline.py)
 
 `work/downloads/` is a verified download cache. The other generated working
 directories and the output FIDB directory are recreated for the invocation.
@@ -340,7 +340,7 @@ execute()
 > atomically rename the verified download into the cache
 ```
 
-Code: [`download_library()`](src/fidb_poc/pipeline.py)
+Code: [`download_library()`](../../src/fidb_poc/pipeline.py)
 
 Generated cache entries:
 
@@ -372,7 +372,7 @@ verified archive
 > move the staged tree into work/sources/
 ```
 
-Code: [`extract_source()`](src/fidb_poc/pipeline.py)
+Code: [`extract_source()`](../../src/fidb_poc/pipeline.py)
 
 Generated source roots:
 
@@ -392,7 +392,7 @@ extracted source
 > detect supported source languages
 ```
 
-Code: [`detect_project()`](src/fidb_poc/adapters.py)
+Code: [`detect_project()`](../../src/fidb_poc/adapters.py)
 
 Current detection:
 
@@ -415,7 +415,7 @@ every selected library
 > one build_library() call per combination
 ```
 
-Code: [`execute()` build loops](src/fidb_poc/pipeline.py)
+Code: [`execute()` build loops](../../src/fidb_poc/pipeline.py)
 
 The key for each record is:
 
@@ -438,11 +438,11 @@ build_library()
 
 Code:
 
-- [`build_library()`](src/fidb_poc/pipeline.py)
-- [`compiler_identity()`](src/fidb_poc/pipeline.py)
-- [`build_commands()`](src/fidb_poc/adapters.py)
-- [`find_static_archives()`](src/fidb_poc/adapters.py)
-- [`run_command()` and log capture](src/fidb_poc/pipeline.py)
+- [`build_library()`](../../src/fidb_poc/pipeline.py)
+- [`compiler_identity()`](../../src/fidb_poc/pipeline.py)
+- [`build_commands()`](../../src/fidb_poc/adapters.py)
+- [`find_static_archives()`](../../src/fidb_poc/adapters.py)
+- [`run_command()` and log capture](../../src/fidb_poc/pipeline.py)
 
 The fixed adapters produce commands shaped like:
 
@@ -482,8 +482,8 @@ libz.a or libbz2.a
 
 Code:
 
-- [`_extract_archive_objects()`](src/fidb_poc/pipeline.py)
-- [`_validate_objects()`](src/fidb_poc/pipeline.py)
+- [`_extract_archive_objects()`](../../src/fidb_poc/pipeline.py)
+- [`_validate_objects()`](../../src/fidb_poc/pipeline.py)
 
 Generated objects:
 
@@ -512,10 +512,10 @@ execute()
 
 Code:
 
-- [`populate_fidbs()`](src/fidb_poc/pipeline.py)
-- [`_populate_group()`](src/fidb_poc/pipeline.py)
-- [`find_ghidra()`](src/fidb_poc/pipeline.py)
-- [`ghidra_environment()`](src/fidb_poc/pipeline.py)
+- [`populate_fidbs()`](../../src/fidb_poc/pipeline.py)
+- [`_populate_group()`](../../src/fidb_poc/pipeline.py)
+- [`find_ghidra()`](../../src/fidb_poc/pipeline.py)
+- [`ghidra_environment()`](../../src/fidb_poc/pipeline.py)
 
 The first Ghidra invocation is constructed as:
 
@@ -528,7 +528,7 @@ analyzeHeadless
 > store analyzed programs in a temporary Ghidra project
 ```
 
-Code: [`analyzeHeadless` argument construction](src/fidb_poc/pipeline.py)
+Code: [`analyzeHeadless` argument construction](../../src/fidb_poc/pipeline.py)
 
 Generated Ghidra working data:
 
@@ -544,9 +544,8 @@ work/logs/ghidra/<route>-<treatment>-import.log
 ```text
 _populate_group()
 > write <route>-<treatment>-libraries.tsv
-> invoke pyghidraRun --headless
-> run populate_library_fid_databases.py as a post-script
-> find imported Ghidra programs
+> start one in-process PyGhidra JVM per worker process
+> import and analyse each library's objects in an isolated Ghidra project
 > create one candidate FIDB per library
 > generate Function ID signatures
 > write a JSONL population report
@@ -554,8 +553,8 @@ _populate_group()
 
 Code:
 
-- [`pyghidraRun` argument construction](src/fidb_poc/pipeline.py)
-- [`populate_library_fid_databases.py`](ghidra_scripts/populate_library_fid_databases.py)
+- [`_populate_group()`](../../src/fidb_poc/pipeline.py)
+- [`build_library_fidb()`](../../src/fidb_poc/ghidra_fid.py)
 
 Inside the Ghidra script:
 
@@ -596,9 +595,9 @@ population JSONL
 
 Code:
 
-- [`_read_population_report()`](src/fidb_poc/pipeline.py)
-- [`_validate_population_report()`](src/fidb_poc/pipeline.py)
-- [Candidate admission and record update](src/fidb_poc/pipeline.py)
+- [`_read_population_report()`](../../src/fidb_poc/pipeline.py)
+- [`_validate_population_report()`](../../src/fidb_poc/pipeline.py)
+- [Candidate admission and record update](../../src/fidb_poc/pipeline.py)
 
 Final database paths:
 
@@ -624,9 +623,9 @@ all BuildRecord objects
 
 Code:
 
-- [`BuildRecord`](src/fidb_poc/pipeline.py)
-- [`write_manifest()`](src/fidb_poc/pipeline.py)
-- [`execute()` finalization](src/fidb_poc/pipeline.py)
+- [`BuildRecord`](../../src/fidb_poc/pipeline.py)
+- [`write_manifest()`](../../src/fidb_poc/pipeline.py)
+- [`execute()` finalization](../../src/fidb_poc/pipeline.py)
 
 The manifest records:
 
@@ -704,7 +703,7 @@ uv run fidb-poc
 > Ghidra analyzeHeadless
 > Ghidra FunctionIDHeadlessPrescript.java
 > PyGhidra pyghidraRun
-> ghidra_scripts/populate_library_fid_databases.py
+> ghidra_fid.build_library_fidb()
 > FidService.createNewLibraryFromPrograms()
 > pipeline._validate_population_report()
 > artifacts/libs/fidb/*.fidb

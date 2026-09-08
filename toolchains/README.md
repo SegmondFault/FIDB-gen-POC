@@ -111,7 +111,7 @@ route requires a reviewed probe implementation and language-scoped experiment
 profile. Editing TOML alone cannot enable an unimplemented probe or execute a
 command.
 
-See `external/README.md` and the repository-root `TOOLCHAINS.md` for Mac
+See `external/README.md` and `../docs/architecture/toolchains.md` for Mac
 preflight, authentication, queue routing, result integration, legal boundary,
 and future run procedure.
 

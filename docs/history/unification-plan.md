@@ -58,7 +58,7 @@ Three pieces, replacing both `config.py`'s recipe loader and
    For each arch a recipe wants, look up a matching toolchain, emit
    one **cell** -- a fully resolved, self-contained build unit,
    structurally identical to today's catalog TOML row, just computed
-   instead of copy-pasted. ("Cell" reuses `flow.md`'s existing term
+   instead of copy-pasted. ("Cell" reuses `docs/architecture/pipeline.md`'s existing term
    for a resolved library x route x treatment triple -- same concept,
    one vocabulary, not a new word for the same thing.)
 
@@ -376,7 +376,7 @@ VM isolation guarantees -- this only touches what calls
   and `artifacts/libs/` only, never `artifacts/malware/` or
   `artifacts/fidbs/` (evidence from the separate hunt/malware subsystem, a
   different trust posture, must survive a native-build `--fresh`).
-  `.gitignore`, `README.md` and `flow.md` updated to match; the stale
+  `.gitignore`, `README.md` and `docs/architecture/pipeline.md` updated to match; the stale
   pre-unification `output/` directory (build output, gitignored, always
   regenerable) was deleted from this checkout.
 

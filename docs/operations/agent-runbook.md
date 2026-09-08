@@ -7,7 +7,7 @@ A green unit test or resolution
 preflight is necessary, but a real end-to-end canary is the execution boundary.
 
 The operational recovery procedure is
-[`operations/RECOVERY_RUNBOOK.md`](operations/RECOVERY_RUNBOOK.md). Start every
+[`operations/RECOVERY_RUNBOOK.md`](../../operations/RECOVERY_RUNBOOK.md). Start every
 incident with the read-only queue doctor; do not reconstruct recovery SQL from
 memory:
 
@@ -347,7 +347,7 @@ Do not describe a queue as ready merely because its TOML parses.
 
 ## Post-drain retention
 
-Read `RETENTION.md` before changing attempt cleanup. The authority is
+Read `docs/operations/retention.md` before changing attempt cleanup. The authority is
 `retention/policy.toml`; holds are reviewed in `retention/holds.toml`. Never add
 an ad-hoc `rm` to a worker or nightly script.
 
@@ -695,7 +695,7 @@ construction defect is unresolved.
 
 The completed three-arm C10 reference-form experiment supersedes the earlier
 archive-only recall interpretation. Read
-[`validation/C10_REFERENCE_FORM_FINDING.md`](validation/C10_REFERENCE_FORM_FINDING.md)
+[`validation/C10_REFERENCE_FORM_FINDING.md`](../../validation/C10_REFERENCE_FORM_FINDING.md)
 and verify the tracked receipt at
 `validation/evidence/c10-reference-form-comparison-v1.json` before changing
 reference generation. With the same 444 queries and decision population,

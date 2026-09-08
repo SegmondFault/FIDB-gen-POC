@@ -56,7 +56,8 @@ separate, explicit later operations.
 ## Required release contract
 
 1. Import relationship-complete sealed attempts into immutable lane
-   generations, following [`LANE_DATABASES.md`](LANE_DATABASES.md).
+   generations, following
+   [`lane-databases.md`](../architecture/lane-databases.md).
 2. Select exact generation IDs without mutating their contents.
 3. Include `lanes/registry.toml` and the Ghidra/FID compatibility policy needed
    to resolve broad lanes to exact sublanes.

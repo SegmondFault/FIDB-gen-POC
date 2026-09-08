@@ -356,5 +356,5 @@ own schedule and resource gates, re-resolves every leased cell locally, renews
 the fence, streams timings, and uploads only the FIDB, FIDBF, and cell seal. The
 coordinator repeats lease, identity, path, size, digest, seal, and timing checks
 before atomic publication. Xcode, SDKs, credentials, build trees, and scratch
-never return to Linux. See `TOOLCHAINS.md` and
+never return to Linux. See `docs/architecture/toolchains.md` and
 `toolchains/external/README.md` for the complete boundary.

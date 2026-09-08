@@ -651,7 +651,7 @@ Until the first complete C10 corpus and validation evidence exist, the
 authority and GUI are readiness projections only. They must not invent scores
 or enable filtering. The full measurement, generation, treatment-ablation and
 rollback contract is documented in
-[`../HASH_DISCRIMINATION.md`](../HASH_DISCRIMINATION.md).
+[`../docs/validation/hash-discrimination.md`](../docs/validation/hash-discrimination.md).
 
 Inspect the current formula, component weights, source readiness and immutable
 generation plan without changing any evidence:

@@ -6,7 +6,7 @@ mode="source" row so libc_catalog.py's prepare_recipe/select_recipes/_guess
 hand-written ones, with zero changes to that code.
 
 This is the generator half of the recipe -> registry -> cell split
-described in UNIFICATION_PLAN.md: a recipe is authored once regardless of
+described in docs/history/unification-plan.md: a recipe is authored once regardless of
 how many arches/toolchains it targets; the fan-out is computed instead of
 copy-pasted, and gets one shared duplicate-cell check instead of one per
 subsystem.

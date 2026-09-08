@@ -1,7 +1,7 @@
 # fidb-recipe/v3, mode="source": authoring format for recipe_generator.py.
 # Identity + source pin + build shape, expanded against
 # toolchains/registry.toml into one cell per matching toolchain_variants
-# entry -- see UNIFICATION_PLAN.md. This recipe's fields are ported
+# entry -- see docs/history/unification-plan.md. This recipe's fields are ported
 # unchanged from the old hand-written catalogs/default.toml
 # "uclibc 0.9.30.1 powerpc-source-build" entry, now the only source of
 # truth for that build (catalogs/default.toml no longer exists).

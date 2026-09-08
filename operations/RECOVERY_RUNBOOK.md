@@ -197,7 +197,7 @@ through provenance seal and atomic publication before leaving the run alone.
 
 Rollback uses new `git revert` commits and resynchronization of the previous
 reviewed queue. It never rewrites Git history or deletes ledger rows. Preserve
-all attempt directories until `RETENTION.md` and `retention/policy.toml` classify
+all attempt directories until `docs/operations/retention.md` and `retention/policy.toml` classify
 them. Successful scratch is not disposable until the future lane importer has
 written a relationship-complete receipt. Failed retries are collapsible only
 when the retention collector proves identical failure fingerprints and retains
