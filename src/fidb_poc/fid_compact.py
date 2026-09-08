@@ -637,13 +637,13 @@ def match_compact_population(
     workgroup_size: int = 256,
     fallback_to_cpu: bool = True,
 ) -> dict[str, object]:
-    """Match one logical population assembled from one or more sealed indexes.
+    """Stream one logical population across immutable component indexes.
 
-    Candidate scores are independent of the other candidates in the
-    population.  Therefore the global winner is exactly the highest-scoring
-    member of the per-index winner sets.  This lets an archive-plus-linked arm
-    reuse both immutable indexes without constructing a third multi-gigabyte
-    database or losing source-specific relationship tables.
+    The component indexes remain independently sealed and auditable, but their
+    candidate rows share one bounded scoring stream.  This avoids running the
+    GPU/CPU scorer once per reference form.  Exact duplicate score inputs are
+    interned inside each chunk while the winning match retains the component
+    indexes which supplied it.
     """
 
     paths = [Path(path).resolve() for path in index_paths]
@@ -651,105 +651,206 @@ def match_compact_population(
         raise ValueError("compact FID population requires at least one index")
     if len(set(paths)) != len(paths):
         raise ValueError("compact FID population contains a duplicate index")
-    started_ns = time.monotonic_ns()
-    components = [
-        match_compact(
-            path,
-            functions,
-            route_id,
-            treatment_id,
-            authority,
-            backend_id=backend_id,
-            chunk_rows=chunk_rows,
-            workgroup_size=workgroup_size,
-            fallback_to_cpu=fallback_to_cpu,
-        )
-        for path in paths
-    ]
-    effective = {str(row["backend"]) for row in components}
-    requested = {str(row["requested_backend"]) for row in components}
-    if len(effective) != 1 or requested != {backend_id}:
-        raise ValueError("compact FID population components used different backends")
+    if chunk_rows < 1:
+        raise ValueError("compact FID candidate chunk must be positive")
+    backend = authority["backends"].get(backend_id)
+    if backend is None:
+        raise ValueError("compact FID backend is not declared")
 
-    by_component = []
-    for path, execution in zip(paths, components, strict=True):
-        rows = {
-            str(row["address"]): row for row in execution["functions"]
-        }
-        if len(rows) != len(functions):
-            raise ValueError("compact FID population component lost query functions")
-        by_component.append(rows)
+    started_ns = time.monotonic_ns()
+    connections = [
+        sqlite3.connect(f"file:{path}?mode=ro", uri=True) for path in paths
+    ]
+    relation_cache: dict[tuple[int, str], tuple[set[str], set[str]]] = {}
+    packed: list[tuple[int, int, int, int, int]] = []
+    metadata: list[tuple[int, dict[str, object]]] = []
+    packed_keys: dict[tuple[object, ...], int] = {}
+    winners: dict[int, tuple[float, dict[str, dict[str, object]]]] = {}
+    component_counts = [0 for _ in paths]
+    raw_candidate_count = 0
+    scored_candidate_count = 0
+    effective_backend = backend_id
+    fallback_reason = None
+    device = None
+    gpu_batches = 0
+
+    def relations(
+        component_index: int, source_id: str
+    ) -> tuple[set[str], set[str]]:
+        key = (component_index, source_id)
+        cached = relation_cache.get(key)
+        if cached is not None:
+            return cached
+        superior = set()
+        inferior = set()
+        for kind, smash in connections[component_index].execute(
+            "SELECT kind, smash FROM relation WHERE source_id=?", (source_id,)
+        ):
+            (superior if kind == "superior" else inferior).add(str(smash))
+        relation_cache[key] = (superior, inferior)
+        return superior, inferior
+
+    def flush() -> None:
+        nonlocal packed, metadata, packed_keys, device
+        nonlocal effective_backend, fallback_reason, gpu_batches
+        if not packed:
+            return
+        if authority["backends"][effective_backend]["device"] == "gpu":
+            try:
+                scores, observed_device = score_rows_gpu(
+                    packed, authority, workgroup_size=workgroup_size
+                )
+                device = observed_device or device
+                gpu_batches += 1
+            except Exception as error:
+                if not fallback_to_cpu or gpu_batches:
+                    raise
+                effective_backend = next(
+                    str(row["id"])
+                    for row in authority["backend"]
+                    if row["device"] == "cpu"
+                )
+                fallback_reason = f"{type(error).__name__}: {error}"
+                scores = score_rows_cpu(packed, authority["semantics"])
+        else:
+            scores = score_rows_cpu(packed, authority["semantics"])
+        for (function_index, candidate), score in zip(metadata, scores, strict=True):
+            if score is None:
+                continue
+            candidate_id = str(candidate["candidate_id"])
+            match = {
+                "candidate_id": candidate_id,
+                "owner": str(candidate["owner"]),
+                "name": str(candidate["name"]),
+                "score": float(score),
+                "reference_components": sorted(candidate["reference_components"]),
+            }
+            current = winners.get(function_index)
+            if current is None or float(score) > current[0]:
+                winners[function_index] = (float(score), {candidate_id: match})
+            elif float(score) == current[0]:
+                previous = current[1].get(candidate_id)
+                if previous is None:
+                    current[1][candidate_id] = match
+                else:
+                    previous["reference_components"] = sorted(
+                        set(previous["reference_components"])
+                        | set(match["reference_components"])
+                    )
+        packed = []
+        metadata = []
+        packed_keys = {}
+
+    try:
+        for function_index, function in enumerate(functions):
+            children = list(function.get("children", []))
+            parents = list(function.get("parents", []))
+            for component_index, connection in enumerate(connections):
+                cursor = connection.execute(
+                    """
+                    SELECT candidate_id, source_id, record_key, owner, name,
+                           full_hash, specific_hash, additional_size, code_unit_size,
+                           auto_pass, auto_fail, force_specific, force_relation
+                    FROM candidate
+                    WHERE route_id=? AND treatment_id=? AND full_hash=?
+                    ORDER BY candidate_id
+                    """,
+                    (route_id, treatment_id, str(function["full_hash"])),
+                )
+                for row in cursor:
+                    candidate = {
+                        "candidate_id": str(row[0]),
+                        "owner": str(row[3]),
+                        "name": str(row[4]),
+                        "full_hash": str(row[5]),
+                        "specific_hash": str(row[6]),
+                        "specific_hash_additional_size": int(row[7]),
+                        "code_unit_size": int(row[8]),
+                        "auto_pass": bool(row[9]),
+                        "auto_fail": bool(row[10]),
+                        "force_specific": bool(row[11]),
+                        "force_relation": bool(row[12]),
+                        "reference_components": {component_index},
+                    }
+                    superior, inferior = relations(component_index, str(row[1]))
+                    record_key = str(row[2])
+                    candidate["child_code_units"] = sum(
+                        int(relation["code_unit_size"])
+                        for relation in children
+                        if _relation_smash(record_key, str(relation["full_hash"]))
+                        in superior
+                    )
+                    candidate["parent_code_units"] = (
+                        sum(
+                            int(relation["code_unit_size"])
+                            for relation in parents
+                            if _relation_smash(record_key, str(relation["full_hash"]))
+                            in inferior
+                        )
+                        if len(parents)
+                        < int(authority["semantics"]["maximum_parents_for_score"])
+                        else 0
+                    )
+                    score_input = _score_inputs(
+                        function, candidate, authority["semantics"]
+                    )
+                    raw_candidate_count += 1
+                    component_counts[component_index] += 1
+                    identity = (
+                        function_index,
+                        candidate["candidate_id"],
+                        candidate["owner"],
+                        candidate["name"],
+                        score_input,
+                    )
+                    duplicate = packed_keys.get(identity)
+                    if duplicate is not None:
+                        metadata[duplicate][1]["reference_components"].add(
+                            component_index
+                        )
+                        continue
+                    packed_keys[identity] = len(packed)
+                    packed.append(score_input)
+                    metadata.append((function_index, candidate))
+                    scored_candidate_count += 1
+                    if len(packed) >= chunk_rows:
+                        flush()
+        flush()
+    finally:
+        for connection in connections:
+            connection.close()
 
     decisions = []
-    for function in functions:
-        address = str(function["address"])
-        candidates: dict[str, dict[str, object]] = {}
-        for component in by_component:
-            row = component.get(address)
-            if row is None:
-                raise ValueError("compact FID population component addresses differ")
-            if (
-                str(row["full_hash"]) != str(function["full_hash"])
-                or str(row["specific_hash"]) != str(function["specific_hash"])
-            ):
-                raise ValueError("compact FID population component query identity differs")
-            for match in row["matches"]:
-                candidate_id = str(match["candidate_id"])
-                previous = candidates.get(candidate_id)
-                if previous is None or float(match["score"]) > float(
-                    previous["score"]
-                ):
-                    candidates[candidate_id] = dict(match)
-        maximum = max(
-            (float(row["score"]) for row in candidates.values()), default=None
-        )
-        winners = (
-            sorted(
-                (
-                    row
-                    for row in candidates.values()
-                    if float(row["score"]) == maximum
-                ),
-                key=lambda row: str(row["candidate_id"]),
-            )
-            if maximum is not None
-            else []
-        )
+    for index, function in enumerate(functions):
+        matches = list(winners.get(index, (0.0, {}))[1].values())
+        matches.sort(key=lambda row: str(row["candidate_id"]))
         decisions.append(
             {
-                "address": address,
+                "address": str(function["address"]),
                 "full_hash": str(function["full_hash"]),
                 "specific_hash": str(function["specific_hash"]),
-                "matches": winners,
+                "matches": matches,
             }
         )
 
-    fallback_reasons = sorted(
-        {
-            str(row["fallback_reason"])
-            for row in components
-            if row.get("fallback_reason")
-        }
-    )
     return {
-        "backend": next(iter(effective)),
+        "backend": effective_backend,
         "requested_backend": backend_id,
-        "fallback_reason": "; ".join(fallback_reasons) or None,
-        "device": next(
-            (row.get("device") for row in components if row.get("device")), None
-        ),
+        "fallback_reason": fallback_reason,
+        "device": device,
         "functions": decisions,
-        "candidate_count": sum(int(row["candidate_count"]) for row in components),
+        "candidate_count": raw_candidate_count,
+        "scored_candidate_count": scored_candidate_count,
+        "deduplicated_candidate_count": raw_candidate_count - scored_candidate_count,
         "matched_functions": sum(bool(row["matches"]) for row in decisions),
         "candidate_chunk_rows": chunk_rows,
         "component_indexes": [
             {
                 "path": str(path),
                 "sha256": _sha256(path),
-                "candidate_count": int(execution["candidate_count"]),
-                "wall_time_ns": int(execution["wall_time_ns"]),
+                "candidate_count": component_counts[index],
             }
-            for path, execution in zip(paths, components, strict=True)
+            for index, path in enumerate(paths)
         ],
         "wall_time_ns": time.monotonic_ns() - started_ns,
     }

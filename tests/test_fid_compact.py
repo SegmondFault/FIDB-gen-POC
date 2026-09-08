@@ -17,7 +17,7 @@ from fidb_poc.fid_compact import (
     selected_backend_id,
     validate_compact_candidate_index,
 )
-from fidb_poc.fid_matching import load_matching_authority
+from fidb_poc.fid_matching import load_matching_authority, score_rows_cpu
 
 
 class CompactFidTests(unittest.TestCase):
@@ -207,12 +207,65 @@ class CompactFidTests(unittest.TestCase):
             )
 
             self.assertEqual(result["candidate_count"], 4)
+            self.assertEqual(result["scored_candidate_count"], 4)
             self.assertEqual(len(result["component_indexes"]), 2)
             self.assertEqual(
                 [row["candidate_id"] for row in result["functions"][0]["matches"]],
                 ["relation"],
             )
             self.assertEqual(result["functions"][0]["matches"][0]["score"], 32.0)
+            self.assertEqual(
+                result["functions"][0]["matches"][0]["reference_components"],
+                [1],
+            )
+
+    def test_population_shares_one_scoring_stream_and_interns_exact_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entries, inspect = self.fixture(root)
+            first = root / "archive.sqlite3"
+            build_compact_candidate_index(entries, first, inspect)
+
+            duplicate_fidb = root / "duplicate.fidb"
+            duplicate_fidb.write_bytes(b"duplicate-fidb")
+            duplicate_digest = hashlib.sha256(duplicate_fidb.read_bytes()).hexdigest()
+            duplicate_entries = [
+                {
+                    **entries[0],
+                    "fidb_path": str(duplicate_fidb),
+                    "fidb_sha256": duplicate_digest,
+                }
+            ]
+
+            def inspect_duplicate(_path: Path):
+                source = inspect(_path)
+                source["fidb_sha256"] = duplicate_digest
+                return source
+
+            second = root / "linked.sqlite3"
+            build_compact_candidate_index(duplicate_entries, second, inspect_duplicate)
+
+            with patch(
+                "fidb_poc.fid_compact.score_rows_cpu", wraps=score_rows_cpu
+            ) as scorer:
+                result = match_compact_population(
+                    [first, second],
+                    self.query(),
+                    "linux-x86",
+                    "o2",
+                    self.authority,
+                    backend_id="cpu-portable-fid-v1",
+                    chunk_rows=16,
+                )
+
+            scorer.assert_called_once()
+            self.assertEqual(result["candidate_count"], 4)
+            self.assertEqual(result["scored_candidate_count"], 2)
+            self.assertEqual(result["deduplicated_candidate_count"], 2)
+            self.assertEqual(
+                result["functions"][0]["matches"][0]["reference_components"],
+                [0, 1],
+            )
 
     def test_gpu_startup_failure_uses_explicit_cpu_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
