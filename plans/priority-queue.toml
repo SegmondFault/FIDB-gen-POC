@@ -1,14 +1,14 @@
-# Completed exact C10 export recovery. Synchronization preserves all historical
-# completed rows; keep this queue disarmed after sealing the 174 missing OpenSSL
-# FIDBF identities.
+# Reviewed activation of the first sealed priority chunk only.
+# A passing full-path canary permits a separate transition to the complete
+# 00:00-05:30 chaining queue; this authority cannot chain by itself.
 schema_version = "fidb-queue/v1"
-name = "c-openssl-fidbf-recovery"
+name = "c-malware-priority-native-v1-auto-30m-45m-canary-queue"
 
 [queue]
-armed = false
+armed = true
 performance_profile = "reference-host-94g-balanced"
 max_workers = 20
-batch_order = ["c-openssl-fidbf-recovery"]
+batch_order = ["c-malware-priority-native-v1-auto-30m-45m-chunk-001"]
 poll_seconds = 5
 lease_seconds = 3600
 max_attempts = 3
@@ -23,6 +23,7 @@ days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 start = "00:00"
 stop_claiming = "05:30"
 finish_started_batch = true
+chain_batches = false
 
 [resources]
 min_available_memory_gib = 12
@@ -31,14 +32,14 @@ max_load_per_cpu = 1.0
 max_temperature_c = 90
 
 [notifications]
-events = ["job-failed", "job-requeued", "queue-drained", "resource-blocked"]
-outbox = "var/fidb-notifications/openssl-fidbf-recovery.jsonl"
+events = ["job-failed", "job-requeued", "queue-drained", "resource-blocked", "schedule-cutoff"]
+outbox = "var/fidb-notifications/c-malware-priority-native-v1.jsonl"
 timeout_seconds = 10
 
 [[batch]]
-id = "c-openssl-fidbf-recovery"
-name = "OpenSSL 174-cell non-Android FIDBF recovery"
-plan = "plans/materialized/c-openssl-fidbf-recovery.toml"
-plan_sha256 = "a5e0544cde963e9a9eed64067e5da040d6dcc0c71a8328c09bd837d4e1ef6a6e"
-queue_digest = "f253ed40f090f81ec84538911fcc7c90e6d7bf94f93b58abd4e804fb0d0411b0"
-executions = 174
+id = "c-malware-priority-native-v1-auto-30m-45m-chunk-001"
+name = "boringssl · width chunk 001"
+plan = "plans/auto-materialized/c-malware-priority-native-v1-auto-30m-45m/chunk-001.toml"
+plan_sha256 = "4857eccf1812361d6f4a0529cfed5b8005b7bde38f90ac6e20e51c85a327b973"
+queue_digest = "2873e8d0f4073d984184e0cba58330b34183575bb964db50e209d77c7ec1bed2"
+executions = 36
