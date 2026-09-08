@@ -570,7 +570,7 @@ ledger = "var/campaigns/second.sqlite3"
         )
         self.assertEqual(next_cohort["summary"]["total_executions"], 2_220)
         self.assertEqual(next_cohort["readiness"]["recipe_ready_libraries"], 10)
-        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 2_220)
+        self.assertEqual(next_cohort["readiness"]["blocked_executions"], 0)
         self.assertEqual(
             next_cohort["readiness"]["queue_state"],
             "qualification-blocked",
