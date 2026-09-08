@@ -354,6 +354,7 @@ class AdapterTests(unittest.TestCase):
             f"-DFETCHCONTENT_SOURCE_DIR_ABSL={source_root}/fidb-inputs/abseil-cpp-20250512.1",
             protobuf[0],
         )
+        self.assertIn("-Dprotobuf_WITH_ZLIB=OFF", protobuf[0])
         self.assertEqual(protobuf[1][-1], "libprotobuf")
         self.assertEqual(mbedtls[1][-3:], ("tfpsacrypto", "mbedx509", "mbedtls"))
         self.assertIn("-DHAVE_GMTIME_R=OFF", wolfssl[0])

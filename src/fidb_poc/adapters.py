@@ -657,6 +657,8 @@ CMAKE_ADAPTERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "-Dprotobuf_BUILD_LIBPROTOBUF=ON",
             "-Dprotobuf_BUILD_LIBPROTOC=OFF",
             "-Dprotobuf_BUILD_LIBUPB=OFF",
+            # Do not let CMake discover an unpinned host zlib while crossing.
+            "-Dprotobuf_WITH_ZLIB=OFF",
             "-Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON",
             "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
         ),
