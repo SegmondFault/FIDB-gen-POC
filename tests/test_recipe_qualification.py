@@ -61,6 +61,16 @@ class RecipeQualificationTests(unittest.TestCase):
             "windows-x86-64-llvm-mingw-clang-15", protobuf_routes
         )
 
+    def test_input_digest_covers_qualification_and_artifact_validation_code(
+        self,
+    ) -> None:
+        plan = compile_recipe_qualification(self.root, self.authority)
+        paths = {row["path"] for row in plan["input_authorities"]}
+
+        self.assertIn("src/fidb_poc/recipe_qualification.py", paths)
+        self.assertIn("src/fidb_poc/pipeline.py", paths)
+        self.assertIn("src/fidb_poc/width_batch.py", paths)
+
     def test_execution_checkpoints_concise_results_and_resumes(self) -> None:
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
             authority = Path(temporary) / "qualification.toml"

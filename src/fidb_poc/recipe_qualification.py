@@ -27,9 +27,15 @@ SEAL_SCHEMA = "fidb-recipe-qualification-seal/v1"
 QUALIFICATION_IMPLEMENTATION_PATHS = (
     Path("worker.toml"),
     Path("src/fidb_poc/adapters.py"),
+    Path("src/fidb_poc/c_width.py"),
     Path("src/fidb_poc/config.py"),
+    Path("src/fidb_poc/pipeline.py"),
+    Path("src/fidb_poc/recipe_qualification.py"),
     Path("src/fidb_poc/source_build.py"),
+    Path("src/fidb_poc/source_packs.py"),
     Path("src/fidb_poc/staged_backend.py"),
+    Path("src/fidb_poc/toolchain_packs.py"),
+    Path("src/fidb_poc/width_batch.py"),
 )
 _FIELDS = {
     "schema_version",
