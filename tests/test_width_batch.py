@@ -128,8 +128,8 @@ class WidthBatchTests(unittest.TestCase):
         self.assertEqual(len(batch["libraries"]), 21)
         self.assertEqual(batch["authorities"]["study"], "coverage/c-malware-priority-v1.toml")
         self.assertEqual(projected["readiness"]["recipe_ready_libraries"], 21)
-        self.assertEqual(projected["readiness"]["materializable_executions"], 3_432)
-        self.assertEqual(projected["readiness"]["blocked_executions"], 1_230)
+        self.assertEqual(projected["readiness"]["materializable_executions"], 3_426)
+        self.assertEqual(projected["readiness"]["blocked_executions"], 1_236)
         perl = next(row for row in projected["libraries"] if row["id"] == "libperl")
         self.assertEqual(perl["applicable_executions"], 18)
         self.assertEqual(
@@ -140,6 +140,14 @@ class WidthBatchTests(unittest.TestCase):
                 "linux-x86-64-gcc",
             ],
         )
+        protobuf = next(
+            row for row in projected["libraries"] if row["id"] == "protobuf"
+        )
+        self.assertNotIn(
+            "windows-x86-64-llvm-mingw-clang-15",
+            protobuf["applicable_route_ids"],
+        )
+        self.assertEqual(protobuf["applicable_executions"], 198)
 
     def test_c21_to_c30_batch_exposes_partial_recipe_readiness(self):
         path = self.root / "batches/c-21-30-mega-width.toml"

@@ -34,7 +34,7 @@ class RecipeQualificationTests(unittest.TestCase):
 
         self.assertEqual(plan["summary"]["libraries"], 21)
         self.assertEqual(plan["summary"]["routes"], 16)
-        self.assertEqual(plan["summary"]["cells"], 250)
+        self.assertEqual(plan["summary"]["cells"], 249)
         boringssl_routes = {
             row["route_id"]
             for row in plan["cells"]
@@ -51,6 +51,14 @@ class RecipeQualificationTests(unittest.TestCase):
         }
         self.assertEqual(
             perl_routes, {"linux-x86-64-gcc", "linux-x86-64-gcc-12"}
+        )
+        protobuf_routes = {
+            row["route_id"]
+            for row in plan["cells"]
+            if row["recipe_id"] == "protobuf@36.1"
+        }
+        self.assertNotIn(
+            "windows-x86-64-llvm-mingw-clang-15", protobuf_routes
         )
 
     def test_execution_checkpoints_concise_results_and_resumes(self) -> None:

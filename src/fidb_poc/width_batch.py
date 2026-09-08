@@ -369,6 +369,7 @@ def project_width_batch_readiness(
                 not applicability.get("compiler_families")
                 or pair["compiler_family"] in applicability["compiler_families"]
             )
+            and pair["route_id"] not in applicability.get("excluded_routes", [])
         ]
         if recipe_state == "recipe-ready":
             materializable += len(applicable_pairs)
