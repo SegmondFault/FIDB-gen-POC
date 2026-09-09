@@ -1422,7 +1422,9 @@ def _start_block(arguments: argparse.Namespace) -> int:
             coordinator.sync_queue(config, actor="operator")
         else:
             if expected_generation < 1 or expected_jobs < 1:
-                raise QueueCliError("synchronized admission expectations must be positive")
+                raise QueueCliError(
+                    "synchronized admission expectations must be positive"
+                )
             status = coordinator.status()
             actual_jobs = sum(int(value) for value in status["counts"].values())
             mismatches = []
@@ -1490,9 +1492,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     raise QueueCliError(
                         "synced worker startup requires executions on every batch"
                     )
-                expected_jobs = sum(
-                    int(batch.executions) for batch in config.batches
-                )
+                expected_jobs = sum(int(batch.executions) for batch in config.batches)
                 status = coordinator.status()
                 actual_jobs = sum(int(value) for value in status["counts"].values())
                 mismatches = []
@@ -1503,9 +1503,7 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                 if Path(str(status["config_path"])).resolve() != config.source_path:
                     mismatches.append("config path differs from synchronized authority")
                 if actual_jobs != expected_jobs:
-                    mismatches.append(
-                        f"active jobs {actual_jobs} != {expected_jobs}"
-                    )
+                    mismatches.append(f"active jobs {actual_jobs} != {expected_jobs}")
                 if not bool(status["armed"]):
                     mismatches.append("synchronized queue is disarmed")
                 if mismatches:

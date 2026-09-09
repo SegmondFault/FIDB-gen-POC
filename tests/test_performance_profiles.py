@@ -35,7 +35,9 @@ class PerformanceProfilesTests(unittest.TestCase):
         self.assertEqual(profiles["laptop-4c-8g"].settings.workers, 1)
         self.assertEqual(profiles["laptop-8c-32g"].settings.workers, 6)
         self.assertEqual(profiles["reference-host-94g-balanced"].settings.workers, 20)
-        self.assertEqual(profiles["reference-host-112g-throughput"].settings.workers, 29)
+        self.assertEqual(
+            profiles["reference-host-112g-throughput"].settings.workers, 29
+        )
         self.assertEqual(
             profiles["m1-max-64g-balanced"].host["memory_model"], "unified"
         )

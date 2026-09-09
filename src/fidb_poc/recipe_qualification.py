@@ -135,9 +135,7 @@ def _reviewed_recipes(root: Path) -> list[dict[str, object]]:
                 "sha256": document["sha256"],
                 "applicability": {
                     "target_os": list(document.get("supported_target_os", [])),
-                    "architectures": list(
-                        document.get("supported_architectures", [])
-                    ),
+                    "architectures": list(document.get("supported_architectures", [])),
                     "compiler_families": list(
                         document.get("supported_compiler_families", [])
                     ),

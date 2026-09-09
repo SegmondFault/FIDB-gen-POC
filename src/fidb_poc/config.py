@@ -169,7 +169,10 @@ class Library:
         """
 
         return (
-            (not self.supported_target_os or route.target_os in self.supported_target_os)
+            (
+                not self.supported_target_os
+                or route.target_os in self.supported_target_os
+            )
             and (
                 not self.supported_architectures
                 or route.architecture in self.supported_architectures
@@ -351,9 +354,7 @@ def _load_recipe(path: Path) -> Library:
         build_inputs=tuple(build_inputs),
         supported_target_os=tuple(row.get("supported_target_os", [])),
         supported_architectures=tuple(row.get("supported_architectures", [])),
-        supported_compiler_families=tuple(
-            row.get("supported_compiler_families", [])
-        ),
+        supported_compiler_families=tuple(row.get("supported_compiler_families", [])),
         unsupported_routes=tuple(row.get("unsupported_routes", [])),
     )
     if len(library.sha256) != 64:

@@ -173,8 +173,7 @@ def load_recipe_preparation(
                 row["state"] == "runtime-provider-ready" for row in normalized
             ),
             "prepared_not_executable": sum(
-                row["state"]
-                not in {"recipe-ready", "runtime-provider-ready"}
+                row["state"] not in {"recipe-ready", "runtime-provider-ready"}
                 for row in normalized
             ),
         },

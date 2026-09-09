@@ -41,10 +41,11 @@ def _safe_project_name(value: str) -> str:
     """
 
     normalized = "".join(
-        character
-        if character.isascii()
-        and (character.isalnum() or character in {"_", "."})
-        else "_"
+        (
+            character
+            if character.isascii() and (character.isalnum() or character in {"_", "."})
+            else "_"
+        )
         for character in value
     )
     if not normalized.strip("_."):

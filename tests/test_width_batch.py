@@ -126,7 +126,9 @@ class WidthBatchTests(unittest.TestCase):
         )
 
         self.assertEqual(len(batch["libraries"]), 21)
-        self.assertEqual(batch["authorities"]["study"], "coverage/c-malware-priority-v1.toml")
+        self.assertEqual(
+            batch["authorities"]["study"], "coverage/c-malware-priority-v1.toml"
+        )
         self.assertEqual(projected["readiness"]["recipe_ready_libraries"], 21)
         self.assertEqual(projected["readiness"]["materializable_executions"], 3_426)
         self.assertEqual(projected["readiness"]["blocked_executions"], 1_236)

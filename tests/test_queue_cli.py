@@ -1390,7 +1390,9 @@ finish_started_batch = true
 
         self.assertEqual(status, 0)
 
-    def test_worker_can_use_exact_synchronized_queue_without_resolving_plans(self) -> None:
+    def test_worker_can_use_exact_synchronized_queue_without_resolving_plans(
+        self,
+    ) -> None:
         queue = self._queue(armed=True)
         queue.write_text(
             queue.read_text(encoding="utf-8").replace(

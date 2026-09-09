@@ -6,7 +6,10 @@ import unittest
 class AndroidWidthEvidenceTests(unittest.TestCase):
     def test_snapshot_preserves_two_generations_and_four_abis(self):
         root = Path(__file__).resolve().parents[1]
-        path = root / "toolchains/evidence/c-android-width-v1-reference-host-2026-09-02.toml"
+        path = (
+            root
+            / "toolchains/evidence/c-android-width-v1-reference-host-2026-09-02.toml"
+        )
         document = tomllib.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(document["profile_id"], "c-android-width-v1")

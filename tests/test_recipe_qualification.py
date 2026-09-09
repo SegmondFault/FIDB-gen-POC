@@ -49,17 +49,13 @@ class RecipeQualificationTests(unittest.TestCase):
             for row in plan["cells"]
             if row["recipe_id"] == "libperl@5.44.0"
         }
-        self.assertEqual(
-            perl_routes, {"linux-x86-64-gcc", "linux-x86-64-gcc-12"}
-        )
+        self.assertEqual(perl_routes, {"linux-x86-64-gcc", "linux-x86-64-gcc-12"})
         protobuf_routes = {
             row["route_id"]
             for row in plan["cells"]
             if row["recipe_id"] == "protobuf@36.1"
         }
-        self.assertNotIn(
-            "windows-x86-64-llvm-mingw-clang-15", protobuf_routes
-        )
+        self.assertNotIn("windows-x86-64-llvm-mingw-clang-15", protobuf_routes)
 
     def test_input_digest_covers_qualification_and_artifact_validation_code(
         self,

@@ -204,7 +204,9 @@ matrices = ["tier0-uclibc-powerpc"]
 
         with Coordinator(self.database) as coordinator:
             status = coordinator.sync(config, now=10)
-        self.assertEqual(status["performance_profile"]["id"], "reference-host-94g-balanced")
+        self.assertEqual(
+            status["performance_profile"]["id"], "reference-host-94g-balanced"
+        )
 
     def test_queue_rejects_performance_profile_worker_drift(self):
         path = self.write_queue(
