@@ -110,7 +110,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(priority["summary"]["executions"], 3426)
         self.assertTrue(priority["readiness"]["ready"])
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
-        self.assertEqual(len(document["performance_profiles"]["profiles"]), 8)
+        self.assertEqual(len(document["performance_profiles"]["profiles"]), 9)
         self.assertEqual(
             len(document["source_digests"]["performance_profiles_sha256"]), 64
         )
