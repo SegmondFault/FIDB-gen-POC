@@ -18,13 +18,18 @@ retry_backoff_max_seconds = 900
 authority_failure_threshold = 5
 
 [schedule]
-enabled = false
+enabled = true
 timezone = "Europe/Luxembourg"
 days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 start = "00:00"
 stop_claiming = "05:30"
 finish_started_batch = true
 chain_batches = true
+
+[[schedule.date_overrides]]
+date = "2026-09-09"
+start = "09:00"
+stop_claiming = "14:30"
 
 [resources]
 min_available_memory_gib = 12
