@@ -466,7 +466,7 @@ path mapping remains useful for inspection:
 
 ```text
 Linux: $HOME/Projects/circl/FIDB-POC-unified
-macOS: /Volumes/linux-home-share/Projects/circl/FIDB-POC-unified
+macOS: /Volumes/<linux-home-share>/Projects/circl/FIDB-POC-unified
 ```
 
 Prepare the Mac without contacting the coordinator:
