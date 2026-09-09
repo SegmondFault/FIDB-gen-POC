@@ -57,7 +57,8 @@ The complete documentation map is in [`docs/README.md`](docs/README.md).
 | Retention and garbage collection | [`docs/operations/retention.md`](docs/operations/retention.md) |
 | Database export | [`docs/operations/export.md`](docs/operations/export.md) |
 | Operator recovery | [`operations/RECOVERY_RUNBOOK.md`](operations/RECOVERY_RUNBOOK.md) |
-| Maintainer and agent handoff | [`docs/operations/agent-runbook.md`](docs/operations/agent-runbook.md) |
+| Maintainer and agent entrypoint | [`AGENTS.md`](AGENTS.md) |
+| Detailed agent handoff | [`docs/operations/agent-runbook.md`](docs/operations/agent-runbook.md) |
 | Generated artifact boundaries | [`docs/artifact-boundaries.md`](docs/artifact-boundaries.md) |
 
 Historical design notes live under `docs/history/`. They explain why decisions
