@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -224,7 +225,7 @@ def _read_lane_database(
     lane_ids: set[str],
     lane_by_sublane: dict[str, str],
 ) -> dict[str, object]:
-    with _open_inventory_database(path) as connection:
+    with closing(_open_inventory_database(path)) as connection:
         application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
         if application_id == LANE_DATABASE_APPLICATION_ID:
             return _raw_database(root, path, connection, lane_ids)

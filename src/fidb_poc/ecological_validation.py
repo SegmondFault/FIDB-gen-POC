@@ -8,6 +8,7 @@ compatible lane generation and publishes explicit binary/library decisions.
 
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -830,7 +831,7 @@ def _corpus_matches(
     full_hashes = sorted(by_full_hash)
     for database in corpus:
         path = _inside(root, str(database["path"]), "lane database")
-        with _open_database(path) as connection:
+        with closing(_open_database(path)) as connection:
             application_id = int(
                 connection.execute("PRAGMA application_id").fetchone()[0]
             )
