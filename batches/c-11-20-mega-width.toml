@@ -6,7 +6,7 @@ state = "defined-disarmed"
 language_id = "c"
 purpose = "Apply the same expanded non-Apple compiler-generation and treatment width used for C10 to global study ranks 11–20, preserving a directly comparable width experiment."
 source_pack = "sources/c-top20-v1.toml"
-source_pack_sha256 = "eb58bab854f7df63b7217013376e951907c8813855aa213269ea77387bf7b18f"
+source_pack_sha256 = "8a31af016e9dfa493d6f916fbc040873e65d07a77a7408973e6cc2656206cf69"
 source_ids = [
   "harfbuzz",
   "freetype",
@@ -23,7 +23,7 @@ width_authority = "coverage/c-width-v2.toml"
 width_authority_sha256 = "228669026327dd6aee49af151167fa82e89dc3307bfdc795612682a73762d6f0"
 width_route_profile_digest = "2d2c7f74dff3fac244bc19f92c83885db8f9605ac2f3eca195a8b81ef1a3861d"
 width_study = "coverage/c-top20-width-study.toml"
-width_study_sha256 = "d1d0b4b030462a1de7ae886d198303cd5ec9710942ad8b3d64a976808dcc6945"
+width_study_sha256 = "82065e2c1c535a84df0cff89ea32281fa906e3b9f7beaa049895e7f9d0020ccb"
 recipe_policy = "Resolve each selected source as <source-id>@<pinned-version>; require its reviewed native recipe to match the source URL and SHA-256 before materialization."
 queue_policy = "Definition only. Keep out of plans/priority-queue.toml until every selected library has a reviewed build recipe, route applicability has been canaried, and the generated campaign is deliberately armed."
 
