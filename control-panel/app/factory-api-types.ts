@@ -1434,6 +1434,7 @@ export type PriorityScheduleSubject = {
   runtime_plan_path: string | null;
   runtime_plan_bound: boolean;
   width_batch_bound: boolean;
+  width_batch_ids: string[];
   qualification_satisfied: boolean;
   stage: string;
 };
