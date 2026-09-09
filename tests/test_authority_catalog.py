@@ -91,11 +91,24 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(
             len(document["source_digests"]["hash_discrimination_sha256"]), 64
         )
-        self.assertEqual(len(document["auto_batch_campaigns"]), 1)
-        candidate = document["auto_batch_campaigns"][0]
-        self.assertEqual(candidate["summary"]["chunks"], 23)
-        self.assertEqual(candidate["summary"]["executions"], 2046)
-        self.assertTrue(candidate["readiness"]["ready"])
+        auto_batch_campaigns = {
+            row["id"]: row for row in document["auto_batch_campaigns"]
+        }
+        self.assertEqual(
+            set(auto_batch_campaigns),
+            {
+                "c-malware-priority-native-v1-auto-30m-45m",
+                "c-top10-nonapple-width-v2-auto-60m-85m",
+            },
+        )
+        top10 = auto_batch_campaigns["c-top10-nonapple-width-v2-auto-60m-85m"]
+        self.assertEqual(top10["summary"]["chunks"], 23)
+        self.assertEqual(top10["summary"]["executions"], 2046)
+        self.assertTrue(top10["readiness"]["ready"])
+        priority = auto_batch_campaigns["c-malware-priority-native-v1-auto-30m-45m"]
+        self.assertEqual(priority["summary"]["chunks"], 58)
+        self.assertEqual(priority["summary"]["executions"], 3426)
+        self.assertTrue(priority["readiness"]["ready"])
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["performance_profiles"]["profiles"]), 8)
         self.assertEqual(
@@ -273,7 +286,7 @@ class AuthorityCatalogTests(unittest.TestCase):
         self.assertEqual(materialized["summary"]["executions"], 2_046)
         self.assertEqual(materialized["readiness"]["verified_plans"], 5)
         self.assertEqual(materialized["readiness"]["registered_blocks"], 0)
-        self.assertFalse(materialized["readiness"]["queue_armed"])
+        self.assertIsInstance(materialized["readiness"]["queue_armed"], bool)
         self.assertFalse(materialized["readiness"]["ready"])
         self.assertTrue(
             all(

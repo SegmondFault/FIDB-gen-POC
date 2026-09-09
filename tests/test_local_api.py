@@ -537,7 +537,21 @@ ledger = "var/campaigns/second.sqlite3"
         self.assertEqual(
             document["campaign_programmes"][0]["summary"]["candidate_population"], 276
         )
-        self.assertEqual(document["auto_batch_campaigns"][0]["summary"]["chunks"], 23)
+        auto_batch_campaigns = {
+            row["id"]: row for row in document["auto_batch_campaigns"]
+        }
+        self.assertEqual(
+            auto_batch_campaigns["c-top10-nonapple-width-v2-auto-60m-85m"]["summary"][
+                "chunks"
+            ],
+            23,
+        )
+        self.assertEqual(
+            auto_batch_campaigns["c-malware-priority-native-v1-auto-30m-45m"][
+                "summary"
+            ]["chunks"],
+            58,
+        )
         self.assertEqual(document["performance_profiles"]["default_profile"], "auto")
         self.assertEqual(len(document["recipes"]), 50)
         self.assertEqual(len(document["targets"]), 24)
