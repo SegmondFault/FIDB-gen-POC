@@ -54,7 +54,7 @@
       "id": "archive-only",
       "population": "pre-link-archive-members",
       "campaign_id": "c10-compact-fid-methodology-v2",
-      "producer_revision": "4c84cde8fcf90878b3ee6f905fdded5c519fc0c4",
+      "producer_revision": "9c1a08a6b291a703bf67f097d041274ae3e7a66a",
       "report_path": "artifacts/fid-matching-runs/c10-compact-fid-methodology-v2/full-report.json",
       "report_sha256": "dd2061d1e2907e4597a7c2e79e3d53150c27946dcff44aa13c0b91f9729ca7a2",
       "candidate_index_sha256": [
@@ -82,7 +82,7 @@
       "id": "linked-only",
       "population": "post-link-whole-archive-image",
       "campaign_id": "c10-linked-fid-methodology-v1",
-      "producer_revision": "ba113eca3d8e4ae40eae9ae4e115119283ff564b",
+      "producer_revision": "add47121d14ea012af76cfda74788b0a32efb764",
       "report_path": "artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/full-report.json",
       "report_sha256": "2dc236a3052c04702f2b9e8cebc6c1c19b6c01db22f4e553332d52944a9af054",
       "candidate_index_sha256": [
@@ -110,7 +110,7 @@
       "id": "archive-plus-linked",
       "population": "pre-link-plus-post-link-union",
       "campaign_id": "c10-archive-linked-fid-methodology-v1",
-      "producer_revision": "12c725204331e0c2815088ce15ec0d1471a36377",
+      "producer_revision": "68020a5c029522afa86409372653e1dd14f6b367",
       "report_path": "artifacts/fid-matching-runs/c10-archive-linked-fid-methodology-v1/full-report.json",
       "report_sha256": "ed880b3f248b7618d2d42c61df95ba4dd2501a4ca8f6378eb2713869ea6b1cce",
       "candidate_index_sha256": [

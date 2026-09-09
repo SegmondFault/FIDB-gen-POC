@@ -312,7 +312,7 @@ failure-retry effects before the 80-library plan is fixed.
 ## Current non-Apple qualification
 
 On 2026-09-02, `reference-host` qualified all nine Linux-managed routes at revision
-`17886c1c211c6fc78cda25c1c96cb2b507c83375`. Each route emitted both C and
+`9859ba3aad97d1fd7b6c994dcf62b46ffee20051`. Each route emitted both C and
 C++17 objects with the expected target identity and a static `ar` archive.
 The result was 9 qualified routes, 0 missing qualifications, 0 broken routes,
 and one deliberately deferred external Apple route. No library or FIDB batch

@@ -10,7 +10,7 @@ id = "archive-only"
 population = "archive-only"
 campaign_id = "c10-compact-fid-methodology-v2"
 report = "artifacts/fid-matching-runs/c10-compact-fid-methodology-v2/full-report.json"
-producer_revision = "4c84cde8fcf90878b3ee6f905fdded5c519fc0c4"
+producer_revision = "9c1a08a6b291a703bf67f097d041274ae3e7a66a"
 candidate_index = ["artifacts/fid-matching-runs/c10-compact-fid-methodology-v2/compact-candidate-index.sqlite3"]
 
 [[arm]]
@@ -18,7 +18,7 @@ id = "linked-only"
 population = "linked-only"
 campaign_id = "c10-linked-fid-methodology-v1"
 report = "artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/full-report.json"
-producer_revision = "ba113eca3d8e4ae40eae9ae4e115119283ff564b"
+producer_revision = "add47121d14ea012af76cfda74788b0a32efb764"
 candidate_index = ["artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/compact-candidate-index-linked.sqlite3"]
 generation_seal = "artifacts/linked-reference-runs/c10-linked-reference-v1/generation-seal.json"
 
@@ -27,7 +27,7 @@ id = "archive-plus-linked"
 population = "archive-plus-linked"
 campaign_id = "c10-archive-linked-fid-methodology-v1"
 report = "artifacts/fid-matching-runs/c10-archive-linked-fid-methodology-v1/full-report.json"
-producer_revision = "12c725204331e0c2815088ce15ec0d1471a36377"
+producer_revision = "68020a5c029522afa86409372653e1dd14f6b367"
 candidate_index = [
   "artifacts/fid-matching-runs/c10-compact-fid-methodology-v2/compact-candidate-index.sqlite3",
   "artifacts/fid-matching-runs/c10-linked-fid-methodology-v1/compact-candidate-index-linked.sqlite3",
