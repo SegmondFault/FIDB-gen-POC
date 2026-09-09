@@ -16,7 +16,7 @@
   },
   "comparison_authority": {
     "path": "validation/fid-reference-comparison.toml",
-    "sha256": "b3a5bf65fc8d930a2143355dcb966160b1acc1e1996a915ed656ed96dca9284a"
+    "sha256": "872e250a804ed9ee99616ae76a33f1b1e32a3beb60d752778613b04d869f5d94"
   },
   "comparison_report": {
     "path": "artifacts/fid-matching-runs/c10-reference-form-comparison-v1/comparison.json",
