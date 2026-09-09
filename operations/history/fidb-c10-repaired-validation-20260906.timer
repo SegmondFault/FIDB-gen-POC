@@ -9,4 +9,3 @@ Unit=fidb-c10-repaired-validation.service
 
 [Install]
 WantedBy=timers.target
-

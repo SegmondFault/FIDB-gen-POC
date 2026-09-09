@@ -245,4 +245,3 @@ sha256 = "28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775"
 download_bytes = 1070096
 filename = "libpng-1.6.58.tar.xz"
 source_directory = "libpng-1.6.58"
-

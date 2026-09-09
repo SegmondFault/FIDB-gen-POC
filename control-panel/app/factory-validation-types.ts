@@ -9,7 +9,6 @@ export type MachineValidationFailure = {
   candidate_owner: string;
   evidence_path: string;
 };
-
 export type MachineValidationRun = {
   schema_version?: 'fidb-machine-validation-run-status/v1';
   validation_id?: string;
@@ -37,7 +36,6 @@ export type MachineValidationRun = {
     stages: Array<{ id: string; state: string }>;
   };
 };
-
 export type MachineValidationCanaryGate = {
   ready: boolean;
   state: 'passed' | 'not-run' | 'stale-or-failed';
@@ -885,5 +883,3 @@ export type HashDiscriminationStatus = {
     } | null;
   };
 };
-
-
