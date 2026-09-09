@@ -20,7 +20,7 @@ class PerformanceProfilesTests(unittest.TestCase):
 
         self.assertEqual(catalog.default_profile, "auto")
         self.assertEqual(catalog.authority_path, "performance/profiles.toml")
-        self.assertEqual(len(catalog.profiles), 8)
+        self.assertEqual(len(catalog.profiles), 9)
         self.assertEqual(catalog.automatic_policy.maximum_workers, 32)
         self.assertEqual(catalog.automatic_policy.smt_sibling_weight, 0.25)
         self.assertEqual(selected.settings.worker_mode, "automatic")
@@ -37,6 +37,13 @@ class PerformanceProfilesTests(unittest.TestCase):
         self.assertEqual(profiles["reference-host-94g-balanced"].settings.workers, 20)
         self.assertEqual(
             profiles["reference-host-112g-throughput"].settings.workers, 29
+        )
+        self.assertEqual(
+            profiles["reference-host-127g-throughput"].settings.workers, 32
+        )
+        self.assertEqual(
+            profiles["reference-host-127g-throughput"].settings.ghidra_core_limit,
+            4,
         )
         self.assertEqual(
             profiles["m1-max-64g-balanced"].host["memory_model"], "unified"

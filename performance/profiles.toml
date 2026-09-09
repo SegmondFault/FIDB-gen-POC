@@ -196,6 +196,29 @@ build_jobs_per_cell = 4
 ghidra_heap_mib = 4096
 
 [[profiles]]
+id = "reference-host-127g-throughput"
+label = "reference-host / 127 GiB throughput"
+description = "Measured full-SMT policy for the 16-core, 32-thread Linux workstation with about 127 GiB assigned to system memory."
+qualification = "measured-openssl"
+guidance = "Thirty-two simultaneous OpenSSL cells sealed without failure at an 86.65 GB sampled RSS peak. Keep the live memory, disk, load and temperature gates enabled for cross-library work."
+evidence_path = "benchmarks/ghidra-concurrency-reference-host-127g-2026-09-09.toml"
+
+[profiles.host]
+system = "linux"
+architecture = "x86_64"
+physical_cores = 16
+logical_cpus = 32
+memory_mib = 127427
+memory_model = "dedicated-system-memory"
+
+[profiles.settings]
+worker_mode = "fixed"
+workers = 32
+build_jobs_per_cell = 4
+ghidra_heap_mib = 4096
+ghidra_core_limit = 4
+
+[[profiles]]
 id = "m1-max-64g-balanced"
 label = "M1 Max / 64 GiB unified memory"
 description = "Conservative starting point for the external Apple Silicon worker and its shared CPU/GPU memory pool."

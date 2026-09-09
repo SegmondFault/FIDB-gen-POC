@@ -1,0 +1,67 @@
+schema_version = "fidb-performance-evidence/v1"
+id = "ghidra-concurrency-reference-host-127g-2026-09-09"
+host = "reference-host"
+subject = "openssl-3.5.8"
+ghidra_version = "12.1.2"
+java_major = 21
+physical_cores = 16
+logical_cpus = 32
+visible_memory_mib = 127427
+ghidra_heap_mib = 4096
+ghidra_core_limit = 4
+build_jobs_per_cell = 4
+swap_kind = "zram"
+decision = "Qualify 32 workers as the 127 GiB host throughput profile. The 32-cell mixed non-Apple/Android run sealed without failure at 96.01 cells/hour and an 86.65 GB sampled aggregate RSS peak. It raised observed cells/hour 6.32% over the adjacent 29-worker run and 50.95% over the historical fixed-workload 20-worker baseline. Preserve runtime resource gates because the 29- and 32-worker route sets are not identical and other libraries can have different heap envelopes."
+caveat = "The 29-worker case contains the historical 29-route set; the 32-worker case adds three Android routes so the adjacent rate comparison is operational rather than an identical-workload experiment. Common-route semantics differed only in the already documented SH4 analysis nondeterminism and the known unversioned MinGW linked-image digest."
+
+[[case]]
+id = "production-authority-canary-one-worker"
+route_count = 1
+workers = 1
+wall_time_ns = 610100000000
+completed_cells = 1
+failed_cells = 0
+ghidra_core_limit = 4
+raw_result = "artifacts/benchmarks/width-pipeline/127g-authority-canary-1-worker-20260909T104027Z-80ee1415e75b/benchmark-result.json"
+
+[[case]]
+id = "fixed-twenty-nine-routes-twenty-nine-workers"
+route_count = 29
+workers = 29
+wall_time_ns = 1156026930910
+completed_cells = 29
+failed_cells = 0
+cells_per_wall_hour = 90.30931478198222
+peak_process_rss_bytes = 86050873344
+peak_scratch_bytes = 6805094400
+retained_bytes = 241703128
+signature_records = 408330
+unique_signature_sum = 281934
+raw_result = "artifacts/benchmarks/width-pipeline/127g-fixed29-29-workers-20260909T105147Z-05f7122b0c25/benchmark-result.json"
+raw_result_sha256 = "7446b89152bfc13dff93cb4f34c9028019e956139409883762484024e4564497"
+
+[[case]]
+id = "mixed-thirty-two-routes-thirty-two-workers"
+route_count = 32
+workers = 32
+wall_time_ns = 1199841632915
+completed_cells = 32
+failed_cells = 0
+cells_per_wall_hour = 96.0126710390296
+peak_process_rss_bytes = 86652227584
+peak_scratch_bytes = 4473073664
+retained_bytes = 261000279
+signature_records = 447328
+unique_signature_sum = 311262
+zram_peak_physical_bytes = 2328125440
+raw_result = "artifacts/benchmarks/width-pipeline/127g-fixed32-32-workers-20260909T111511Z-6cef5b71b7d4/benchmark-result.json"
+raw_result_sha256 = "b87099444867a322191f7e8a3dc0d88fc71df9382c0779f1883c5ea112050da9"
+
+[comparison.observed_rates]
+historical_twenty_worker_cells_per_hour = 63.60446243113246
+twenty_nine_worker_cells_per_hour = 90.30931478198222
+thirty_two_worker_cells_per_hour = 96.0126710390296
+twenty_nine_over_historical_twenty_percent = 41.985815664686044
+thirty_two_over_twenty_nine_percent = 6.315357691303469
+thirty_two_over_historical_twenty_percent = 50.95272779482576
+identical_workload = false

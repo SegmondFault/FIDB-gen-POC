@@ -104,6 +104,7 @@ project rather than a memory tweak.
 | `laptop-8c-32g` | 6 | 2 | 4 GiB | portable starting point |
 | `reference-host-94g-balanced` | 20 | 4 | 4 GiB | measured on OpenSSL |
 | `reference-host-112g-throughput` | 29 | 4 | 4 GiB | derived from measured OpenSSL run |
+| `reference-host-127g-throughput` | 32 | 4 | 4 GiB | measured on 32 OpenSSL routes |
 | `m1-max-64g-balanced` | 8 | 2 | 4 GiB | portable starting point |
 
 The laptop and M1 Max profiles are safe initial hypotheses, not benchmark
@@ -131,10 +132,16 @@ single Ghidra analysis faster. At 20 workers the measured run averaged roughly
 15 CPU cores of work; at 29 workers it averaged roughly 20.6, so scheduling and
 serial/tail effects remain relevant after memory pressure is relieved.
 
-The 94 GiB balanced profile remains the fixed cross-library campaign policy.
-Portable width runs default to host-resolved `auto`. Promote the
-112 GiB throughput profile only after representative large-library canaries
-show that its failure rate and hashes/hour remain favourable.
+The 127 GiB profile sealed 32 simultaneous OpenSSL cells at 96.01 cells/hour,
+an observed 6.32% increase over the adjacent 29-worker run and 50.95% over the
+historical fixed-workload 20-worker baseline. Peak sampled process RSS was
+86.65 GB. The host's swap is compressed-memory zram rather than disk-backed
+swap; its physical allocation peaked at 2.33 GB. These figures qualify the
+profile for the current campaign while the live memory, disk, load and thermal
+gates remain mandatory. The 29- and 32-worker route sets differ, so the 6.32%
+figure is operational evidence rather than an identical-workload comparison.
+
+Portable width runs continue to default to host-resolved `auto`.
 
 ## Qualification loop
 
