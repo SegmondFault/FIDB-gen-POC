@@ -161,4 +161,5 @@ under `docs/history/`.
 ## Licence
 
 The project is licensed under the Apache License, Version 2.0. See
-[`LICENSE`](LICENSE).
+[`LICENSE`](LICENSE). Project lineage and contribution attribution are recorded
+in [`CONTRIBUTORS.md`](CONTRIBUTORS.md) and the Git history.
