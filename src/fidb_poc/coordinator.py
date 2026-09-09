@@ -1029,6 +1029,162 @@ class Coordinator:
 
         return self.sync_queue(config, now=now, actor=actor)
 
+    def reconfigure_runtime(
+        self,
+        config: QueueConfig | str | Path,
+        *,
+        expected_sync_generation: int,
+        expected_active_jobs: int,
+        reason: str,
+        actor: str = "operator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Rebind runtime policy without replacing immutable execution work.
+
+        This transition is intentionally narrower than :meth:`sync_queue`.
+        It accepts only the queue already synchronized into the ledger, proves
+        that its ordered batch references and active-job population are
+        unchanged, and updates only coordinator runtime policy.
+        """
+
+        queue_config = self._coerce_config(config)
+        generation = _positive_integer(
+            expected_sync_generation, "expected sync generation"
+        )
+        expected_jobs = _positive_integer(expected_active_jobs, "expected active jobs")
+        reason_text = _text(reason, "runtime reconfiguration reason")
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            if not bool(state["paused"]):
+                raise CoordinatorError(
+                    "runtime reconfiguration requires a paused queue"
+                )
+            if int(state["sync_generation"]) != generation:
+                raise CoordinatorError(
+                    "runtime reconfiguration sync generation changed: "
+                    f"{state['sync_generation']} != {generation}"
+                )
+            if str(state["config_name"]) != queue_config.name:
+                raise CoordinatorError("runtime reconfiguration queue name changed")
+            if Path(str(state["config_path"])).resolve() != queue_config.source_path:
+                raise CoordinatorError("runtime reconfiguration queue path changed")
+
+            live = self._connection.execute("""
+                SELECT COUNT(*) AS count FROM jobs
+                WHERE active = 1 AND state IN ('leased', 'running')
+                """).fetchone()
+            if int(live["count"]) != 0:
+                raise CoordinatorError(
+                    "runtime reconfiguration requires zero live active jobs"
+                )
+            active_jobs = self._connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE active = 1"
+            ).fetchone()
+            if int(active_jobs["count"]) != expected_jobs:
+                raise CoordinatorError(
+                    "runtime reconfiguration active-job count changed: "
+                    f"{active_jobs['count']} != {expected_jobs}"
+                )
+            if any(batch.executions is None for batch in queue_config.batches):
+                raise CoordinatorError(
+                    "runtime reconfiguration requires executions on every batch"
+                )
+            configured_jobs = sum(
+                int(batch.executions or 0) for batch in queue_config.batches
+            )
+            if configured_jobs != expected_jobs:
+                raise CoordinatorError(
+                    "runtime reconfiguration queue job count changed: "
+                    f"{configured_jobs} != {expected_jobs}"
+                )
+
+            current_batches = self._connection.execute("""
+                SELECT batch_id, plan_path, matrices_json, position
+                FROM batches WHERE active = 1 ORDER BY position, batch_id
+                """).fetchall()
+            configured_batches = [
+                (
+                    batch.id,
+                    batch.plan_path,
+                    (
+                        _canonical_json(list(batch.matrices))
+                        if batch.matrices is not None
+                        else None
+                    ),
+                    position,
+                )
+                for position, batch in enumerate(queue_config.batches, start=1)
+            ]
+            durable_batches = [
+                (
+                    str(row["batch_id"]),
+                    str(row["plan_path"]),
+                    row["matrices_json"],
+                    int(row["position"]),
+                )
+                for row in current_batches
+            ]
+            if durable_batches != configured_batches:
+                raise CoordinatorError(
+                    "runtime reconfiguration cannot change ordered batch references"
+                )
+
+            previous_profile = (
+                json.loads(state["performance_json"])
+                if state["performance_json"] is not None
+                else None
+            )
+            next_profile = (
+                queue_config.performance_profile.document()
+                if queue_config.performance_profile is not None
+                else None
+            )
+            self._connection.execute(
+                """
+                UPDATE coordinator_state
+                SET armed = ?, max_workers = ?, performance_json = ?,
+                    poll_seconds = ?, lease_seconds = ?, max_attempts = ?,
+                    retry_backoff_seconds = ?, retry_backoff_max_seconds = ?,
+                    authority_failure_threshold = ?, operations_json = ?
+                WHERE singleton = 1
+                """,
+                (
+                    int(queue_config.armed),
+                    queue_config.max_workers,
+                    _canonical_json(next_profile) if next_profile is not None else None,
+                    queue_config.poll_seconds,
+                    queue_config.lease_seconds,
+                    queue_config.max_attempts,
+                    queue_config.retry_backoff_seconds,
+                    queue_config.retry_backoff_max_seconds,
+                    queue_config.authority_failure_threshold,
+                    _canonical_json(queue_config.operations.document()),
+                ),
+            )
+            self._event_locked(
+                "queue.runtime-reconfigured",
+                now=timestamp,
+                actor=actor,
+                payload={
+                    "reason": reason_text,
+                    "sync_generation": generation,
+                    "active_jobs": expected_jobs,
+                    "previous": {
+                        "armed": bool(state["armed"]),
+                        "max_workers": int(state["max_workers"]),
+                        "performance_profile": previous_profile,
+                    },
+                    "current": {
+                        "armed": queue_config.armed,
+                        "max_workers": queue_config.max_workers,
+                        "performance_profile": next_profile,
+                    },
+                    "execution_generation_preserved": True,
+                },
+            )
+        return self.status()
+
     def _state_locked(self) -> sqlite3.Row:
         state = self._connection.execute(
             "SELECT * FROM coordinator_state WHERE singleton = 1"

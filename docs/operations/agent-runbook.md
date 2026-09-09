@@ -271,6 +271,16 @@ changing an active generation. Never clear the ledger to make a plan fit.
 Synchronizing a corrected generation deactivates superseded jobs but retains
 their attempts and events. Preserve all `artifacts/runs/` attempt directories.
 
+Changing only the measured host envelope must not create a replacement plan
+generation. With the queue paused and zero live jobs, use
+`queue reconfigure-runtime` with the exact synchronization generation and
+active-job count reported by `queue status`. The transition permits arming,
+worker/JVM profile, retry, schedule, resource and notification changes, but
+rejects any queue name, path, ordered batch reference or job-count drift. Its
+append-only event records both profiles and the operator reason. A stale
+qualification gate still requires a fresh qualification before execution; the
+runtime transition does not bless or rewrite plan evidence.
+
 For unchanged identities, use the supported bounded transition:
 
 ```sh

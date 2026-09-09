@@ -330,6 +330,17 @@ def parser() -> argparse.ArgumentParser:
         "--full", action="store_true", help="include batches, jobs and events"
     )
 
+    reconfigure = commands.add_parser(
+        "reconfigure-runtime",
+        parents=[_common_parser(queue=True)],
+        help="rebind runtime policy without replacing synchronized jobs",
+    )
+    reconfigure.add_argument("--expected-sync-generation", required=True, type=int)
+    reconfigure.add_argument("--expected-active-jobs", required=True, type=int)
+    reconfigure.add_argument(
+        "--reason", required=True, help="durable operator rationale"
+    )
+
     status = commands.add_parser(
         "status",
         parents=[_common_parser(queue=False)],
@@ -1236,6 +1247,23 @@ def _status(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _reconfigure_runtime(arguments: argparse.Namespace) -> int:
+    root, state, queue = _paths(arguments, require_queue=True)
+    assert queue is not None
+    _existing_state(state)
+    config = QueueConfig.load(queue, root)
+    with Coordinator(state, root) as coordinator:
+        document = coordinator.reconfigure_runtime(
+            config,
+            expected_sync_generation=arguments.expected_sync_generation,
+            expected_active_jobs=arguments.expected_active_jobs,
+            reason=arguments.reason,
+            actor="operator",
+        )
+        _print_json(document)
+    return 0
+
+
 def _events(arguments: argparse.Namespace) -> int:
     root, state, _ = _paths(arguments, require_queue=False)
     _existing_state(state)
@@ -1693,6 +1721,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     handlers = {
         "sync": _sync,
+        "reconfigure-runtime": _reconfigure_runtime,
         "status": _status,
         "events": _events,
         "pause": _pause,

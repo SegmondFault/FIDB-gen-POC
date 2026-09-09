@@ -301,6 +301,23 @@ open. At 05:30 no new chunk starts, while the current chunk continues until it
 drains. The generated queue remains disarmed; its reviewed active copy is
 `plans/priority-queue.toml`.
 
+When only the measured runtime envelope changes during a partially completed
+generation, do not regenerate and resynchronize its plans. Pause the queue,
+stop all live workers, edit only runtime policy in the existing active queue,
+then use the guarded transition:
+
+```sh
+.venv/bin/fidb-poc queue reconfigure-runtime --project-root . \
+  --campaign-registry operations/campaigns.toml \
+  --expected-sync-generation GENERATION \
+  --expected-active-jobs JOBS \
+  --reason "adopt measured host profile"
+```
+
+It fails closed if the queue path, name, ordered batch references, durable job
+population or synchronization generation changed. It records the old and new
+runtime profiles while preserving every job, attempt and active admission.
+
 Use the control panel's **Timing** workspace or inspect
 `http://127.0.0.1:8765/api/v1/timings` on `reference-host`.  Require multiple
 completed worker-monotonic samples for compile and Ghidra/FID stages, and review

@@ -219,6 +219,72 @@ matrices = ["tier0-uclibc-powerpc"]
         ):
             self.config(path)
 
+    def test_runtime_reconfiguration_preserves_synchronized_jobs(self):
+        path = self.write_queue(armed=True, max_workers=4, batch_extra="executions = 6")
+        with Coordinator(self.database) as coordinator:
+            initial = coordinator.sync(self.config(path), now=10)
+            job_ids = [row["job_id"] for row in initial["jobs"]]
+            generation = initial["sync_generation"]
+            coordinator.pause("profile benchmark complete", now=11)
+
+            self.write_queue(armed=False, max_workers=8, batch_extra="executions = 6")
+            updated = coordinator.reconfigure_runtime(
+                self.config(path),
+                expected_sync_generation=generation,
+                expected_active_jobs=len(job_ids),
+                reason="adopt measured host profile",
+                now=12,
+            )
+
+            self.assertFalse(updated["armed"])
+            self.assertEqual(updated["max_workers"], 8)
+            self.assertEqual(updated["sync_generation"], generation)
+            self.assertEqual(
+                [row["job_id"] for row in coordinator.snapshot()["jobs"]], job_ids
+            )
+            event = coordinator.events()[-1]
+            self.assertEqual(event["event_type"], "queue.runtime-reconfigured")
+            self.assertTrue(event["payload"]["execution_generation_preserved"])
+
+    def test_runtime_reconfiguration_rejects_unpaused_or_changed_work(self):
+        path = self.write_queue(armed=True, max_workers=4, batch_extra="executions = 6")
+        with Coordinator(self.database) as coordinator:
+            initial = coordinator.sync(self.config(path), now=10)
+            generation = initial["sync_generation"]
+            active_jobs = len(initial["jobs"])
+            with self.assertRaisesRegex(CoordinatorError, "requires a paused queue"):
+                coordinator.reconfigure_runtime(
+                    self.config(path),
+                    expected_sync_generation=generation,
+                    expected_active_jobs=active_jobs,
+                    reason="not paused",
+                    now=11,
+                )
+
+            coordinator.pause("maintenance", now=12)
+            changed = self.write_queue(
+                batches=(
+                    (
+                        "batch-runtime",
+                        "changed",
+                        "plans/coverage-baseline.toml",
+                    ),
+                ),
+                armed=False,
+                max_workers=4,
+                batch_extra="executions = 6",
+            )
+            with self.assertRaisesRegex(
+                CoordinatorError, "cannot change ordered batch references"
+            ):
+                coordinator.reconfigure_runtime(
+                    self.config(changed),
+                    expected_sync_generation=generation,
+                    expected_active_jobs=active_jobs,
+                    reason="changed workload",
+                    now=13,
+                )
+
     def test_queue_resolves_auto_profile_to_exact_host_settings(self):
         path = self.write_queue(
             max_workers=20,
