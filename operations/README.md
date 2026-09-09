@@ -66,19 +66,19 @@ bypass qualification or arm itself.
 
 The host has 16 physical cores/32 hardware threads, and each reviewed build
 adapter may use four make jobs while every worker embeds one reusable Ghidra
-JVM. The queue binds `reference-host-94g-balanced`: twenty active leases, four build
-jobs per cell and a 4 GiB JVM heap ceiling. The twenty units named by
-`fidb-library-local-workers.target` supply exactly that measured concurrency;
+JVM. The active queue binds `reference-host-127g-throughput`: thirty-two active
+leases, four build jobs per cell, a four-core Ghidra limit and a 4 GiB JVM heap
+ceiling. The thirty-two units named by `fidb-library-local-workers.target`
+supply exactly that measured concurrency;
 the queue rejects a `max_workers` value which drifts from the named profile. An
 `auto` profile is resolved from physical cores, SMT siblings and OS-visible RAM
 at queue load; its effective settings and host facts are retained in coordinator
 state, and a different resolved worker count also fails closed.
-Do not interpret 32 hardware threads as permission to exceed the qualified
-twenty-worker envelope. That value is a coordinator ceiling, not a requirement
-to start every service instance. The 1,129-object OpenSSL Android recovery used
-14 active workers after its isolated 2,048-task canary measured about 5.43 GiB;
-twenty simultaneous copies of that observed worst-cell footprint would exceed
-94 GiB before host overhead.
+The coordinator ceiling is not an instruction to keep all services busy when a
+chunk contains fewer cells. The 32-worker qualification peaked at 86.65 GB RSS
+with about 127 GiB visible and sealed all cells. The 1,129-object OpenSSL
+Android recovery remains a larger per-cell warning: runtime resource gates must
+stop new claims if a future library approaches the host reserve.
 
 ## Before activation
 
@@ -288,12 +288,11 @@ systemctl --user status fidb-library-local-workers.target
 journalctl --user -u 'fidb-library-local-worker@*.service' -f
 ```
 
-The twenty-worker selection is grounded in the fixed-route OpenSSL measurement
-at 94 GiB. It peaked at 50.52 GB aggregate worker RSS, leaving substantial
-headroom on this host's current 93.93 GiB allocation. The resource gate still
-checks available memory, disk, load and temperature before each new claim.
-Twenty-nine workers remain an explicit burst experiment, not the default for
-previously unmeasured libraries.
+The thirty-two-worker selection is grounded in the 127 GiB OpenSSL measurement
+at `benchmarks/ghidra-concurrency-reference-host-127g-2026-09-09.toml`. It
+completed at 96.01 cells/hour with an 86.65 GB aggregate RSS peak. The resource
+gate still checks available memory, disk, load and temperature before each new
+claim.
 
 `[schedule].chain_batches = true` is enabled for the active short,
 pre-materialized chunks and requires `finish_started_batch = true`. After one
