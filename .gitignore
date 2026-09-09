@@ -25,6 +25,8 @@ __pycache__/
 *.py[cod]
 .DS_Store
 .idea/
+.codex/
+.agents/
 .pytest_cache/
 .coverage
 experiments/rust-staged/target/
