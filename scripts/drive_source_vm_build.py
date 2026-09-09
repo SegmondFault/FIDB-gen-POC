@@ -53,6 +53,7 @@ uclibc_defconfig; untouched for plain_make) and toolchain-dir/, plus
 scratch.qcow2 (pre-created) and an out/ subdirectory. Copies
 WORK_DIR/<output-relpath relative to src build root> to WORK_DIR/out/.
 """
+
 import argparse
 from pathlib import Path
 import pexpect
@@ -65,28 +66,37 @@ from fidb_poc.source_build import AdapterInputs, BUILD_ADAPTERS, shell_adapter_c
 parser = argparse.ArgumentParser()
 parser.add_argument("--work", required=True)
 parser.add_argument("--iso", required=True)
-parser.add_argument("--src-dir", help="source tree dir name under --work, pre-extracted on host")
+parser.add_argument(
+    "--src-dir", help="source tree dir name under --work, pre-extracted on host"
+)
 parser.add_argument(
     "--payload-archive",
     help="raw, unverified-format source archive filename under --work; extracted "
     "inside the VM instead of on the host. Mutually exclusive with --src-dir.",
 )
-parser.add_argument("--payload-kind", choices=("zip",), help="required with --payload-archive")
-parser.add_argument("--toolchain-dir", required=True, help="toolchain dir name under --work")
+parser.add_argument(
+    "--payload-kind", choices=("zip",), help="required with --payload-archive"
+)
+parser.add_argument(
+    "--toolchain-dir", required=True, help="toolchain dir name under --work"
+)
 parser.add_argument(
     "--build-adapter",
     choices=BUILD_ADAPTERS,
     default="uclibc_defconfig",
 )
 parser.add_argument(
-    "--arch", help="value for make ARCH= (uclibc_defconfig) or -DMIRAI_BOT_ARCH= (mirai_bot_gcc)"
+    "--arch",
+    help="value for make ARCH= (uclibc_defconfig) or -DMIRAI_BOT_ARCH= (mirai_bot_gcc)",
 )
 parser.add_argument(
-    "--cross-bin-prefix", required=True,
+    "--cross-bin-prefix",
+    required=True,
     help="cross compiler prefix relative to the toolchain dir, e.g. bin/powerpc-buildroot-linux-uclibc-",
 )
 parser.add_argument(
-    "--output-relpath", required=True,
+    "--output-relpath",
+    required=True,
     help="built artifact path relative to the source build root to copy out, e.g. lib/libc.a",
 )
 parser.add_argument("--jobs", default="4")  # matches the VM's hardcoded -smp 4
@@ -196,7 +206,7 @@ else:
     run(
         "sh -c 'set -- /root/payload/*/; "
         '[ "$#" -eq 1 ] && [ -d "$1" ] || { echo PAYLOAD_LAYOUT_ERROR; exit 1; }; '
-        "mv \"$1\" /root/build'",
+        'mv "$1" /root/build\'',
         timeout=30,
     )
 run(f"cp -r /mnt/ro/{args.toolchain_dir} /root/toolchain", timeout=180)
@@ -210,11 +220,14 @@ inputs = AdapterInputs(
 )
 if args.build_adapter == "uclibc_defconfig":
     run("ls -la /root/build/.config")
-    print(">>> starting build (host generated .config, no cross-compiler involved there)", flush=True)
+    print(
+        ">>> starting build (host generated .config, no cross-compiler involved there)",
+        flush=True,
+    )
 elif args.build_adapter == "plain_make":
     print(">>> starting build (plain make, no ARCH=/.config)", flush=True)
 else:  # mirai_bot_gcc -- mirrors the compile_bot() function in the fork's
-       # own mirai/build.sh: a direct gcc invocation, no Makefile
+    # own mirai/build.sh: a direct gcc invocation, no Makefile
     print(">>> starting build (mirai_bot_gcc, direct gcc invocation)", flush=True)
 build_command = (
     shell_adapter_command(inputs, Path("/root/build"), Path("/root/toolchain"))
