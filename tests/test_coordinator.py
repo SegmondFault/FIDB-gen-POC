@@ -182,6 +182,113 @@ matrices = ["tier0-uclibc-powerpc"]
                     "UPDATE events SET actor = 'changed' WHERE event_id = 1"
                 )
 
+    def test_sync_carries_only_identical_complete_and_quarantined_executions(self):
+        with Coordinator(self.database) as coordinator:
+            config = self.config()
+            initial = coordinator.sync(config, now=10)
+            initial_jobs = initial["jobs"]
+
+            complete_unchanged = coordinator.claim("complete-unchanged", now=20)
+            assert complete_unchanged is not None
+            coordinator.complete(
+                complete_unchanged["job_id"],
+                complete_unchanged["lease_token"],
+                complete_unchanged["lease_generation"],
+                now=21,
+            )
+
+            complete_changed = coordinator.claim("complete-changed", now=22)
+            assert complete_changed is not None
+            coordinator.complete(
+                complete_changed["job_id"],
+                complete_changed["lease_token"],
+                complete_changed["lease_generation"],
+                now=23,
+            )
+
+            quarantined = coordinator.claim("quarantined", now=24)
+            assert quarantined is not None
+            coordinator.fail(
+                quarantined["job_id"],
+                quarantined["lease_token"],
+                quarantined["lease_generation"],
+                "analysis exceeded its measured ceiling",
+                retryable=True,
+                failure_class="ghidra-import-analysis:PathologicalCellError",
+                pathological=True,
+                now=25,
+            )
+
+            ordinary_failure = coordinator.claim("ordinary-failure", now=26)
+            assert ordinary_failure is not None
+            coordinator.fail(
+                ordinary_failure["job_id"],
+                ordinary_failure["lease_token"],
+                ordinary_failure["lease_generation"],
+                "reviewed adapter failure",
+                retryable=False,
+                failure_class="build:AdapterError",
+                now=27,
+            )
+
+            plan = json.loads(
+                coordinator.connection.execute(
+                    "SELECT plan_json FROM plans"
+                ).fetchone()[0]
+            )
+            plan["plan_digest"] = "f" * 64
+            changed_cell = next(
+                cell
+                for cell in plan["cells"]
+                if cell["id"] == complete_changed["base_cell"]
+            )
+            changed_cell["execution_authority_revision"] = "changed"
+
+            with mock.patch("fidb_poc.coordinator.resolve_plan", return_value=plan):
+                refreshed = coordinator.sync(config, now=30)
+
+            active_by_base = {row["base_cell"]: row for row in refreshed["jobs"]}
+            self.assertEqual(
+                active_by_base[complete_unchanged["base_cell"]]["job_id"],
+                complete_unchanged["job_id"],
+            )
+            self.assertEqual(
+                active_by_base[complete_unchanged["base_cell"]]["state"], "complete"
+            )
+            self.assertNotEqual(
+                active_by_base[complete_changed["base_cell"]]["job_id"],
+                complete_changed["job_id"],
+            )
+            self.assertEqual(
+                active_by_base[complete_changed["base_cell"]]["state"], "queued"
+            )
+            self.assertEqual(
+                active_by_base[quarantined["base_cell"]]["job_id"],
+                quarantined["job_id"],
+            )
+            self.assertEqual(
+                active_by_base[quarantined["base_cell"]]["state"], "failed"
+            )
+            self.assertNotEqual(
+                active_by_base[ordinary_failure["base_cell"]]["job_id"],
+                ordinary_failure["job_id"],
+            )
+            self.assertEqual(
+                active_by_base[ordinary_failure["base_cell"]]["state"], "queued"
+            )
+            self.assertEqual(refreshed["pathological_quarantines"], 1)
+            self.assertEqual(len(refreshed["jobs"]), len(initial_jobs))
+            carry_events = [
+                event
+                for event in refreshed["events"]
+                if event["event_type"] == "job.execution-carried-forward"
+            ]
+            self.assertEqual(len(carry_events), 2)
+            self.assertEqual(
+                {event["payload"]["state"] for event in carry_events},
+                {"complete", "failed"},
+            )
+
     def test_queue_rejects_materialized_plan_file_drift(self):
         path = self.write_queue(batch_extra='plan_sha256 = "' + "0" * 64 + '"')
 

@@ -698,7 +698,9 @@ class Coordinator:
         Resolution happens before the database transaction, so an invalid plan
         cannot partially replace the active queue.  Existing jobs retain their
         terminal or in-flight state when the same immutable identity is synced
-        again.
+        again.  Completed jobs and active pathological quarantines may also be
+        carried across a metadata-only plan refresh, but only when the queue
+        row and resolved cell remain byte-for-byte identical.
         """
 
         queue_config = self._coerce_config(config)
@@ -774,6 +776,7 @@ class Coordinator:
         submitted = 0
         blocked = 0
         created_jobs = 0
+        carried_forward_jobs = 0
         with self._transaction():
             state = self._connection.execute(
                 "SELECT sync_generation FROM coordinator_state WHERE singleton = 1"
@@ -948,12 +951,101 @@ class Coordinator:
                     existing_job = self._connection.execute(
                         """
                         SELECT batch_id, plan_digest, base_cell_id,
-                               factor_variants_json, queue_row_json
+                               factor_variants_json, queue_row_json, state
                         FROM jobs WHERE job_id = ?
                         """,
                         (job_id,),
                     ).fetchone()
-                    if existing_job is None:
+                    carry_candidates: list[sqlite3.Row] = []
+                    if existing_job is None or existing_job["state"] in {
+                        "queued",
+                        "blocked",
+                    }:
+                        carry_candidates = self._connection.execute(
+                            """
+                            SELECT prior_jobs.job_id, prior_jobs.plan_digest,
+                                   prior_jobs.state
+                            FROM jobs AS prior_jobs
+                            JOIN resolved_cells AS prior_cells
+                              ON prior_cells.plan_digest = prior_jobs.plan_digest
+                             AND prior_cells.cell_id = prior_jobs.base_cell_id
+                            JOIN resolved_cells AS current_cells
+                              ON current_cells.plan_digest = ?
+                             AND current_cells.cell_id = ?
+                            LEFT JOIN pathological_cell_quarantines AS quarantine
+                              ON quarantine.job_id = prior_jobs.job_id
+                             AND quarantine.state = 'active'
+                            WHERE prior_jobs.active = 0
+                              AND prior_jobs.job_id != ?
+                              AND prior_jobs.batch_id = ?
+                              AND prior_jobs.base_cell_id = ?
+                              AND prior_jobs.factor_variants_json = ?
+                              AND prior_jobs.queue_row_json = ?
+                              AND prior_cells.cell_json = current_cells.cell_json
+                              AND (
+                                  (
+                                      prior_jobs.state = 'complete'
+                                      AND EXISTS (
+                                          SELECT 1 FROM attempts
+                                          WHERE attempts.job_id = prior_jobs.job_id
+                                            AND attempts.state = 'complete'
+                                      )
+                                  )
+                                  OR (
+                                      prior_jobs.state = 'failed'
+                                      AND quarantine.quarantine_id IS NOT NULL
+                                  )
+                              )
+                            ORDER BY prior_jobs.updated_at DESC, prior_jobs.job_id
+                            LIMIT 2
+                            """,
+                            (
+                                plan_digest,
+                                base_cell,
+                                job_id,
+                                batch.id,
+                                base_cell,
+                                factor_json,
+                                row_json,
+                            ),
+                        ).fetchall()
+                    if len(carry_candidates) > 1:
+                        raise CoordinatorError(
+                            "ambiguous terminal job carry-forward for "
+                            f"{batch.id}:{base_cell}"
+                        )
+                    if carry_candidates:
+                        carried_job = carry_candidates[0]
+                        self._connection.execute(
+                            """
+                            UPDATE jobs
+                            SET position = ?, active = 1, sync_generation = ?,
+                                updated_at = ?
+                            WHERE job_id = ?
+                            """,
+                            (
+                                int(row["position"]),
+                                generation,
+                                self._timestamp(timestamp),
+                                carried_job["job_id"],
+                            ),
+                        )
+                        carried_forward_jobs += 1
+                        self._event_locked(
+                            "job.execution-carried-forward",
+                            now=timestamp,
+                            actor=actor,
+                            batch_id=batch.id,
+                            job_id=str(carried_job["job_id"]),
+                            plan_digest=str(carried_job["plan_digest"]),
+                            payload={
+                                "base_cell": base_cell,
+                                "state": str(carried_job["state"]),
+                                "current_plan_digest": plan_digest,
+                                "reason": "identical resolved execution authority",
+                            },
+                        )
+                    elif existing_job is None:
                         self._connection.execute(
                             """
                             INSERT INTO jobs (
@@ -1061,6 +1153,7 @@ class Coordinator:
                     "submitted": submitted,
                     "blocked": blocked,
                     "created_jobs": created_jobs,
+                    "carried_forward_jobs": carried_forward_jobs,
                     "armed": queue_config.armed,
                 },
             )
