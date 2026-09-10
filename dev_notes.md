@@ -119,8 +119,9 @@ campaign-wide 10–30% improvement is a hypothesis to measure, not a guarantee.
 
 ## MIPS relocatable-object exception-analysis cost
 
-Status: observed in the Protobuf 36.1 MIPS tail; proposed experiments are not
-implemented and must not alter an in-flight attempt.
+Status: diagnostic bounding is implemented and enabled for the exact
+Protobuf/MIPS relocatable-object scope. The analyzer-disable experiment is
+implemented but remains disabled because it changes optimized FID evidence.
 
 ### Evidence
 
@@ -163,6 +164,21 @@ outputs are identical and wall time is neutral or lower. A different whole-file
 FIDB digest alone is not a semantic failure because fresh Ghidra containers
 carry per-run metadata.
 
+Implemented as `ghidra-lsda-burst-20-per-minute-v1`, selected by the reviewed
+`performance/fid-build-analysis.toml` authority and recorded in every seal.
+The implementation wraps Ghidra's actual `Msg` error logger rather than adding
+a Log4j `LoggerConfig`: Ghidra had already instantiated its logger, so the
+apparently installed Log4j filter never received real analyzer events. The
+wrapper delegates every non-target diagnostic unchanged and admits an initial
+20 exact-source errors followed by 20 per minute.
+
+On the same pathological object and 120-second observation, the corrected
+limiter reduced the application log from 9,570,312 to 986,464 bytes and the
+repeated `LSDACallSiteTable` events from 82,583 to 46. A separate small-object
+oracle retained the same 326 semantic records and the same normalized semantic
+SHA-256. The tracked evidence is
+`benchmarks/protobuf-mips-fid-analysis-2026-09-10.toml`.
+
 ### Experiment 2: optionally disable GCC exception analysis
 
 Identify the exact registered Ghidra analyzer responsible for the LSDA work and
@@ -181,6 +197,14 @@ experimental treatment until the recall and precision effect is understood. If
 it produces equivalent FID evidence and a representative speedup, qualify the
 policy before considering it for the canonical relocatable-object path. The
 existing analysis policy remains the rollback route throughout.
+
+The experiment found both outcomes. On a small `-O0` object, disabling the
+analyzer preserved all 326 semantic records. On a deterministic optimized
+object, however, the canonical and candidate policies produced 95 versus 92
+unique full hashes and different repeat-stable semantic digests. The
+pathological `-O0` candidate completed in 107.94 seconds while the canonical
+path exceeded a 600-second bound, but speed does not override the semantic
+failure. The rule therefore remains disabled and is not used by production.
 
 ## OpenSSL linker-sensitivity investigation
 

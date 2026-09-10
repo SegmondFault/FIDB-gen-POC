@@ -544,6 +544,56 @@ It was therefore not applied. Do not raise that ceiling merely to clear the
 backlog; review the exact plan and perform the initial collection manually if
 the evidence set is acceptable.
 
+For a paused incident, scope the dry-run to the exact batch rather than
+classifying the entire historical staging tree:
+
+```sh
+uv run fidb-poc retention plan --scope production --batch <batch-id>
+```
+
+Apply only the digest returned by that reviewed plan. This selector is illegal
+for other retention scopes and is rebound during apply, so it cannot silently
+expand to unrelated attempts. In the Protobuf/MIPS incident, the scoped plan
+removed 12,193,801,090 apparent bytes from 27 superseded or requeued attempts,
+retained 901,386 bytes of concise evidence bundles, preserved 25 sealed
+successes and quarantined 23 genuinely different failures.
+
+If reviewed TOML is already disarmed but stale generated qualification metadata
+prevents ordinary synchronization while leases remain, use the narrow recovery
+transition rather than editing SQLite:
+
+```sh
+uv run fidb-poc queue disarm-for-recovery \
+  --campaign-registry operations/campaigns.toml \
+  --expected-sync-generation <generation> \
+  --expected-active-jobs <count> \
+  --expected-live-jobs <count> \
+  --reason '<incident reason>'
+```
+
+It requires a paused queue, exact generation and counts, exact queue identity
+and unchanged ordered batch/job structure. It only clears durable admission
+and records `queue.recovery-disarmed`; then use the supported
+`requeue-interrupted` transition to preserve attempt evidence.
+
+## Protobuf/MIPS LSDA diagnostic storm
+
+Some Protobuf MIPS relocatable objects cause Ghidra's GCC exception analyzer to
+emit millions of identical `LSDACallSiteTable` errors. Do not retain the raw
+storm as if every line were independent evidence. The
+`performance/fid-build-analysis.toml` authority selects a bounded diagnostic
+policy for exactly this library/route/artifact shape; its identity and digest
+are recorded in the seal. The policy preserves an initial sample and a
+sustained sample while passing all unrelated warnings and errors unchanged.
+
+The tempting analyzer-disable policy remains an implemented, disabled
+experiment. It is much faster on one pathological `-O0` object, but it changed
+repeat-stable hashes on optimized input. Do not enable it to make the tail pass.
+Use `scripts/fid_build_policy_oracle.py` for bounded comparisons and review
+`benchmarks/protobuf-mips-fid-analysis-2026-09-10.toml`. The rollback is to
+disable the scoped diagnostic rule; the canonical analysis policy was never
+changed.
+
 ## Machine-validation execution
 
 The C10 machine-validation executor is independent of the production build

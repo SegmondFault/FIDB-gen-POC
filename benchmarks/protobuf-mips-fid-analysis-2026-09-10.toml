@@ -1,0 +1,79 @@
+schema_version = "fidb-performance-evidence/v1"
+id = "protobuf-mips-fid-analysis-2026-09-10"
+host = "reference-host"
+subject = "protobuf-36.1-mips32-be-relocatable-objects"
+ghidra_version = "12.1.2"
+java_major = 21
+decision = "Enable exact-source LSDA error rate limiting without changing the canonical analysis policy. Keep the GCC Exception Handlers disablement experiment implemented but off: optimized input changed semantic FID evidence."
+caveat = "The pathological canonical analyzer did not finish within the bounded observations, so the logging result proves bounded evidence volume rather than completion-time improvement. The analyzer-disable performance result is experimental and is not eligible for production admission."
+
+[logging]
+policy = "ghidra-lsda-burst-20-per-minute-v1"
+source_class = "ghidra.app.plugin.exceptionhandlers.gcc.structures.gccexcepttable.LSDACallSiteTable"
+initial_burst = 20
+sustained_events_per_minute = 20
+object_sha256 = "65335712c444038d2b6fb249679dc991dc6fcb0614ed021c0d68a83ca264ff5c"
+object_bytes = 2409352
+observation_seconds = 120
+baseline_application_log_bytes = 9570312
+candidate_application_log_bytes = 986464
+application_log_reduction_percent = 89.692457257
+baseline_lsda_error_events = 82583
+candidate_lsda_error_events = 46
+lsda_event_reduction_percent = 99.944298463
+semantic_change = false
+semantic_change_basis = "The diagnostic policy delegates or suppresses logging only; it does not mutate the program or analyzer configuration."
+
+[logging_semantic_oracle]
+object_sha256 = "5409c88a599276c68f2148c6cdac59c57e8795980e1ce55a06d4da31b42d1363"
+object_bytes = 265448
+baseline_wall_time_ns = 6694395199
+candidate_wall_time_ns = 7278476605
+baseline_semantic_records = 326
+candidate_semantic_records = 326
+baseline_semantic_sha256 = "afad65a85222f64b34bac3ad379990f2b18839ebc5754bc4cebcff05b2181f5e"
+candidate_semantic_sha256 = "afad65a85222f64b34bac3ad379990f2b18839ebc5754bc4cebcff05b2181f5e"
+semantic_equal = true
+baseline_raw_result_sha256 = "28c86f032afd45c53582c6af90f072c3a3a209fa84ebb89f49dc8ca0f5ef359c"
+candidate_raw_result_sha256 = "a64e3a1ea81c28433dab5515ea71b10a942df8241c702741dfb4236ca87e29a1"
+
+[analyzer_disable_small_o0]
+object_sha256 = "5409c88a599276c68f2148c6cdac59c57e8795980e1ce55a06d4da31b42d1363"
+object_bytes = 265448
+baseline_wall_time_ns = 6694395199
+candidate_wall_time_ns = 6608869019
+baseline_semantic_records = 326
+candidate_semantic_records = 326
+baseline_semantic_sha256 = "afad65a85222f64b34bac3ad379990f2b18839ebc5754bc4cebcff05b2181f5e"
+candidate_semantic_sha256 = "afad65a85222f64b34bac3ad379990f2b18839ebc5754bc4cebcff05b2181f5e"
+semantic_equal = true
+
+[analyzer_disable_optimized]
+object_sha256 = "f6384cd8e48575aac74762f6c9b9983d351342f99fd1632c9ebc8e85371da7f1"
+object_bytes = 164652
+baseline_wall_time_ns = 7615215398
+baseline_repeat_wall_time_ns = 7755304579
+candidate_wall_time_ns = 7686117233
+candidate_repeat_wall_time_ns = 7790420471
+baseline_semantic_records = 135
+candidate_semantic_records = 135
+baseline_unique_full_hashes = 95
+candidate_unique_full_hashes = 92
+baseline_semantic_sha256 = "f88579e9079bcc5a213124acc19f070dd866c32ad2de95d27d0f8c8bbf2d3e13"
+candidate_semantic_sha256 = "727ce3302709ad11ab88c4df45f38369de87d11b47ba78c5b9ebace20bc636ca"
+baseline_repeat_equal = true
+candidate_repeat_equal = true
+semantic_equal = false
+
+[analyzer_disable_pathological_o0]
+object_sha256 = "65335712c444038d2b6fb249679dc991dc6fcb0614ed021c0d68a83ca264ff5c"
+object_bytes = 2409352
+baseline_cutoff_seconds = 600
+baseline_completed = false
+candidate_wall_time_ns = 107939734267
+candidate_semantic_records = 2478
+candidate_semantic_sha256 = "d7c81296f8fe6faafe19aba10c4d57e6ce0498008b1bd2244d43ab335c4a6daa"
+candidate_added = 2617
+candidate_attempted = 3083
+candidate_excluded = 466
+speedup_lower_bound = 5.558657558
