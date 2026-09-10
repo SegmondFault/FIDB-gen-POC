@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fidb_poc.cli import main
 from fidb_poc.plan_request import load_plan_request, resolve_plan
@@ -55,6 +56,29 @@ class PlanRequestTests(unittest.TestCase):
         self.assertNotIn("executor", source["sensitivity"])
         factors = {row["id"]: row for row in first["sensitivity_catalog"]["factors"]}
         self.assertEqual(factors["ghidra-language"]["confidence"], "observed-sensitive")
+
+    def test_exact_qualification_gate_validation_is_reused(self):
+        cache: set[str] = set()
+        plans = (
+            self.root
+            / "plans/auto-materialized/c-malware-priority-native-v1-auto-30m-45m"
+        )
+        with mock.patch(
+            "fidb_poc.qualification_pipeline.validate_embedded_gates"
+        ) as validate:
+            resolve_plan(
+                plans / "chunk-001.toml",
+                self.root,
+                _qualification_validation_cache=cache,
+            )
+            resolve_plan(
+                plans / "chunk-002.toml",
+                self.root,
+                _qualification_validation_cache=cache,
+            )
+
+        validate.assert_called_once()
+        self.assertEqual(len(cache), 1)
 
     def test_native_routes_resolve_to_platform_specific_worker_pools(self):
         linux = resolve_plan(self.root / "plans/bzip2-native.toml", self.root)["cells"][

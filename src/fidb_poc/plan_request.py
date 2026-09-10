@@ -1306,6 +1306,7 @@ def resolve_plan(
     *,
     _runtime_status: dict[str, object] | None = None,
     _toolchain_catalog: dict[str, object] | None = None,
+    _qualification_validation_cache: set[str] | None = None,
 ) -> dict[str, object]:
     root = Path(project_root).resolve()
     request = load_plan_request(request_path)
@@ -1340,11 +1341,35 @@ def resolve_plan(
         width_batches[str(batch["id"])] = batch
         width_batches_by_authority[str(matrix["width_batch"])] = batch
     if width_batches:
-        validate_embedded_gates(
-            root,
-            list(width_batches.values()),
-            tuple(request.get("qualification_gates", ())),
-        )
+        qualification_gates = tuple(request.get("qualification_gates", ()))
+        validation_key = hashlib.sha256(
+            json.dumps(
+                {
+                    "batches": sorted(
+                        (
+                            str(batch["id"]),
+                            str(batch["batch_digest"]),
+                        )
+                        for batch in width_batches.values()
+                    ),
+                    "embedded_gates": qualification_gates,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest()
+        if (
+            _qualification_validation_cache is None
+            or validation_key not in _qualification_validation_cache
+        ):
+            validate_embedded_gates(
+                root,
+                list(width_batches.values()),
+                qualification_gates,
+            )
+            if _qualification_validation_cache is not None:
+                _qualification_validation_cache.add(validation_key)
     factors, factors_digest = _sensitivity_catalog(root)
     known_factors = {str(factor["id"]) for factor in factors}
     variants, variants_digest, coverage_summary = _factor_variants(

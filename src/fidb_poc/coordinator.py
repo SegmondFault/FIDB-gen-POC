@@ -711,8 +711,13 @@ class Coordinator:
                 list[dict[str, object]],
             ]
         ] = []
+        qualification_validation_cache: set[str] = set()
         for batch in queue_config.batches:
-            plan = resolve_plan(batch.plan, queue_config.project_root)
+            plan = resolve_plan(
+                batch.plan,
+                queue_config.project_root,
+                _qualification_validation_cache=qualification_validation_cache,
+            )
             if plan.get("schema_version") != RESOLVED_SCHEMA:
                 raise ValueError(f"batch {batch.id} did not resolve a supported plan")
             matrices = {
