@@ -712,10 +712,14 @@ class Coordinator:
             ]
         ] = []
         qualification_validation_cache: set[str] = set()
+        from .toolchain_packs import load_toolchain_pack_catalog
+
+        toolchain_catalog = load_toolchain_pack_catalog(queue_config.project_root)
         for batch in queue_config.batches:
             plan = resolve_plan(
                 batch.plan,
                 queue_config.project_root,
+                _toolchain_catalog=toolchain_catalog,
                 _qualification_validation_cache=qualification_validation_cache,
             )
             if plan.get("schema_version") != RESOLVED_SCHEMA:
