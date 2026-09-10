@@ -1054,6 +1054,16 @@ def build_commands(
         )
     if build_system in AUTOCONF_ADAPTERS:
         configure_options, make_targets = AUTOCONF_ADAPTERS[build_system]
+        # curl 8.22's Autoconf probe incorrectly enables IPv6 with the oldest
+        # reviewed llvm-mingw route even though its getaddrinfo declaration was
+        # not detected.  The resulting curl_setup.h deliberately aborts every
+        # compilation.  Keep the workaround bound to that exact compiler
+        # authority; newer llvm-mingw routes pass the probe and retain IPv6.
+        if (
+            build_system == "curl-autoconf"
+            and route.id == "windows-x86-64-llvm-mingw-clang-15"
+        ):
+            configure_options = (*configure_options, "--disable-ipv6")
         commands = [
             (
                 "sh",

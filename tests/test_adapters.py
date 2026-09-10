@@ -319,6 +319,24 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("--without-libnl", pcap[0])
         self.assertEqual(pcap[1], ("make", "-j3", "libpcap.a"))
 
+    def test_curl_disables_ipv6_only_for_broken_clang_15_mingw_probe(self):
+        windows = replace(
+            route(),
+            id="windows-x86-64-llvm-mingw-clang-15",
+            target_os="windows",
+            compiler_family="clang",
+        )
+        repaired = build_commands(
+            "curl-autoconf", route=windows, compiler_flags=("-O2",), jobs=4
+        )
+        self.assertIn("--disable-ipv6", repaired[0])
+
+        newer = replace(windows, id="windows-x86-64-llvm-mingw-clang-17")
+        unaffected = build_commands(
+            "curl-autoconf", route=newer, compiler_flags=("-O2",), jobs=4
+        )
+        self.assertNotIn("--disable-ipv6", unaffected[0])
+
     def test_priority_cmake_adapters_pin_inputs_and_static_targets(self):
         source_root = Path("/work/priority").resolve()
         opencl = build_commands(
