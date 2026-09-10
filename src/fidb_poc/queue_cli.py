@@ -341,6 +341,16 @@ def parser() -> argparse.ArgumentParser:
         "--reason", required=True, help="durable operator rationale"
     )
 
+    disarm = commands.add_parser(
+        "disarm-for-recovery",
+        parents=[_common_parser(queue=True)],
+        help="disarm a paused queue while preserving exact live lease evidence",
+    )
+    disarm.add_argument("--expected-sync-generation", required=True, type=int)
+    disarm.add_argument("--expected-active-jobs", required=True, type=int)
+    disarm.add_argument("--expected-live-jobs", required=True, type=int)
+    disarm.add_argument("--reason", required=True, help="durable operator rationale")
+
     status = commands.add_parser(
         "status",
         parents=[_common_parser(queue=False)],
@@ -1264,6 +1274,24 @@ def _reconfigure_runtime(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _disarm_for_recovery(arguments: argparse.Namespace) -> int:
+    root, state, queue = _paths(arguments, require_queue=True)
+    assert queue is not None
+    _existing_state(state)
+    config = QueueConfig.load(queue, root)
+    with Coordinator(state, root) as coordinator:
+        document = coordinator.disarm_for_recovery(
+            config,
+            expected_sync_generation=arguments.expected_sync_generation,
+            expected_active_jobs=arguments.expected_active_jobs,
+            expected_live_jobs=arguments.expected_live_jobs,
+            reason=arguments.reason,
+            actor="operator",
+        )
+        _print_json(document)
+    return 0
+
+
 def _events(arguments: argparse.Namespace) -> int:
     root, state, _ = _paths(arguments, require_queue=False)
     _existing_state(state)
@@ -1722,6 +1750,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     handlers = {
         "sync": _sync,
         "reconfigure-runtime": _reconfigure_runtime,
+        "disarm-for-recovery": _disarm_for_recovery,
         "status": _status,
         "events": _events,
         "pause": _pause,

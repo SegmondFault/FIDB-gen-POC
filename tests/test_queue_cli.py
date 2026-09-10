@@ -1366,6 +1366,50 @@ finish_started_batch = true
         self.assertEqual(document["queue"]["active_workers"], 0)
         self.assertEqual(document["queue"]["counts"]["queued"], 1)
 
+    def test_disarm_for_recovery_command_preserves_live_set(self) -> None:
+        queue = self._queue(armed=True)
+        queue.write_text(
+            queue.read_text(encoding="utf-8").replace(
+                'plan = "plans/mirai-baseline.toml"',
+                'plan = "plans/mirai-baseline.toml"\nexecutions = 1',
+            ),
+            encoding="utf-8",
+        )
+        with Coordinator(self.database, self.project_root) as coordinator:
+            snapshot = coordinator.sync(queue, now=10)
+            coordinator.claim("stopped-worker", now=20)
+            coordinator.pause("worker pool stopped", now=21)
+
+        queue = self._queue(armed=False)
+        queue.write_text(
+            queue.read_text(encoding="utf-8").replace(
+                'plan = "plans/mirai-baseline.toml"',
+                'plan = "plans/mirai-baseline.toml"\nexecutions = 1',
+            ),
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+        arguments = self._arguments("disarm-for-recovery", queue)
+        arguments.extend(
+            (
+                "--expected-sync-generation",
+                str(snapshot["sync_generation"]),
+                "--expected-active-jobs",
+                "1",
+                "--expected-live-jobs",
+                "1",
+                "--reason",
+                "reviewed service stop",
+            )
+        )
+        with contextlib.redirect_stdout(output):
+            status = main(arguments)
+
+        self.assertEqual(status, 0)
+        document = json.loads(output.getvalue())
+        self.assertFalse(document["armed"])
+        self.assertEqual(document["active_workers"], 1)
+
     def test_library_local_pool_is_passed_to_atomic_claim(self) -> None:
         queue = self._mixed_pool_queue()
         arguments = self._arguments("run", queue)

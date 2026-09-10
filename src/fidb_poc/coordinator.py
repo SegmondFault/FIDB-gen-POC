@@ -1185,6 +1185,127 @@ class Coordinator:
             )
         return self.status()
 
+    def disarm_for_recovery(
+        self,
+        config: QueueConfig | str | Path,
+        *,
+        expected_sync_generation: int,
+        expected_active_jobs: int,
+        expected_live_jobs: int,
+        reason: str,
+        actor: str = "operator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Disarm a paused queue without disturbing live recovery evidence.
+
+        This transition exists for service-manager stops: workers can be gone
+        while their fenced leases remain live in the ledger.  Normal runtime
+        reconfiguration correctly refuses that state, but interrupted-job
+        recovery must first prove that reviewed TOML is disarmed.  Exact
+        generation and population assertions prevent this narrow transition
+        from becoming an unguarded runtime edit.
+        """
+
+        queue_config = self._coerce_config(config)
+        generation = _positive_integer(
+            expected_sync_generation, "expected sync generation"
+        )
+        expected_jobs = _positive_integer(expected_active_jobs, "expected active jobs")
+        expected_live = _positive_integer(expected_live_jobs, "expected live jobs")
+        reason_text = _text(reason, "recovery disarm reason")
+        if queue_config.armed:
+            raise CoordinatorError("recovery disarm requires disarmed queue TOML")
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            if not bool(state["paused"]):
+                raise CoordinatorError("recovery disarm requires a paused queue")
+            if int(state["sync_generation"]) != generation:
+                raise CoordinatorError(
+                    "recovery disarm sync generation changed: "
+                    f"{state['sync_generation']} != {generation}"
+                )
+            if str(state["config_name"]) != queue_config.name:
+                raise CoordinatorError("recovery disarm queue name changed")
+            if Path(str(state["config_path"])).resolve() != queue_config.source_path:
+                raise CoordinatorError("recovery disarm queue path changed")
+
+            populations = self._connection.execute("""
+                SELECT COUNT(*) AS active_jobs,
+                       SUM(CASE WHEN state IN ('leased', 'running') THEN 1 ELSE 0 END)
+                           AS live_jobs
+                FROM jobs WHERE active = 1
+                """).fetchone()
+            if int(populations["active_jobs"]) != expected_jobs:
+                raise CoordinatorError(
+                    "recovery disarm active-job count changed: "
+                    f"{populations['active_jobs']} != {expected_jobs}"
+                )
+            if int(populations["live_jobs"] or 0) != expected_live:
+                raise CoordinatorError(
+                    "recovery disarm live-job count changed: "
+                    f"{populations['live_jobs']} != {expected_live}"
+                )
+            if any(batch.executions is None for batch in queue_config.batches):
+                raise CoordinatorError(
+                    "recovery disarm requires executions on every batch"
+                )
+            configured_jobs = sum(
+                int(batch.executions or 0) for batch in queue_config.batches
+            )
+            if configured_jobs != expected_jobs:
+                raise CoordinatorError(
+                    "recovery disarm queue job count changed: "
+                    f"{configured_jobs} != {expected_jobs}"
+                )
+            current_batches = self._connection.execute("""
+                SELECT batch_id, plan_path, matrices_json, position
+                FROM batches WHERE active = 1 ORDER BY position, batch_id
+                """).fetchall()
+            durable_batches = [
+                (
+                    str(row["batch_id"]),
+                    str(row["plan_path"]),
+                    row["matrices_json"],
+                    int(row["position"]),
+                )
+                for row in current_batches
+            ]
+            configured_batches = [
+                (
+                    batch.id,
+                    batch.plan_path,
+                    (
+                        _canonical_json(list(batch.matrices))
+                        if batch.matrices is not None
+                        else None
+                    ),
+                    position,
+                )
+                for position, batch in enumerate(queue_config.batches, start=1)
+            ]
+            if durable_batches != configured_batches:
+                raise CoordinatorError(
+                    "recovery disarm cannot change ordered batch references"
+                )
+
+            self._connection.execute(
+                "UPDATE coordinator_state SET armed = 0 WHERE singleton = 1"
+            )
+            self._event_locked(
+                "queue.recovery-disarmed",
+                now=timestamp,
+                actor=actor,
+                payload={
+                    "reason": reason_text,
+                    "sync_generation": generation,
+                    "active_jobs": expected_jobs,
+                    "live_jobs": expected_live,
+                    "live_evidence_preserved": True,
+                },
+            )
+        return self.status()
+
     def _state_locked(self) -> sqlite3.Row:
         state = self._connection.execute(
             "SELECT * FROM coordinator_state WHERE singleton = 1"

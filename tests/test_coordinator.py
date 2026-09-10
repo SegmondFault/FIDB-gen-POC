@@ -285,6 +285,48 @@ matrices = ["tier0-uclibc-powerpc"]
                     now=13,
                 )
 
+    def test_recovery_disarm_preserves_live_attempt_for_guarded_requeue(self):
+        path = self.write_queue(armed=True, max_workers=4, batch_extra="executions = 6")
+        with Coordinator(self.database) as coordinator:
+            initial = coordinator.sync(self.config(path), now=10)
+            generation = initial["sync_generation"]
+            lease = coordinator.claim("stopped-worker", now=11)
+            self.assertIsNotNone(lease)
+            coordinator.pause("worker pool stopped", now=12)
+
+            self.write_queue(armed=False, max_workers=4, batch_extra="executions = 6")
+            status = coordinator.disarm_for_recovery(
+                self.config(path),
+                expected_sync_generation=generation,
+                expected_active_jobs=6,
+                expected_live_jobs=1,
+                reason="service manager stop",
+                now=13,
+            )
+
+            self.assertFalse(status["armed"])
+            self.assertEqual(status["active_workers"], 1)
+            event = coordinator.events()[-1]
+            self.assertEqual(event["event_type"], "queue.recovery-disarmed")
+            self.assertTrue(event["payload"]["live_evidence_preserved"])
+
+    def test_recovery_disarm_fails_closed_on_live_count_drift(self):
+        path = self.write_queue(armed=True, max_workers=4, batch_extra="executions = 6")
+        with Coordinator(self.database) as coordinator:
+            initial = coordinator.sync(self.config(path), now=10)
+            coordinator.claim("stopped-worker", now=11)
+            coordinator.pause("worker pool stopped", now=12)
+            self.write_queue(armed=False, max_workers=4, batch_extra="executions = 6")
+            with self.assertRaisesRegex(CoordinatorError, "live-job count changed"):
+                coordinator.disarm_for_recovery(
+                    self.config(path),
+                    expected_sync_generation=initial["sync_generation"],
+                    expected_active_jobs=6,
+                    expected_live_jobs=2,
+                    reason="incorrect incident scope",
+                    now=13,
+                )
+
     def test_queue_resolves_auto_profile_to_exact_host_settings(self):
         path = self.write_queue(
             max_workers=20,
