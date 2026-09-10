@@ -181,3 +181,88 @@ experimental treatment until the recall and precision effect is understood. If
 it produces equivalent FID evidence and a representative speedup, qualify the
 policy before considering it for the canonical relocatable-object path. The
 existing analysis policy remains the rollback route throughout.
+
+## OpenSSL linker-sensitivity investigation
+
+Status: proposed bounded study. The existing C10 reference-form result proves
+that pre-link archive members and post-link images are materially different
+reference populations, but it does not measure how many signatures change
+between linker families or linker policies.
+
+### Question
+
+Measure how much the linker changes Ghidra FID evidence when the compiler,
+source, target, treatment and input object files are held fixed. Use OpenSSL
+3.5.8 first because its reviewed C recipe and existing C10 evidence make it a
+large, relevant test case without introducing C++ exception-analysis effects.
+
+Keep these quantities separate:
+
+- **signature survival:** whether the same source function retains its full
+  hash, specific hash and relationship evidence after linking;
+- **population change:** signatures or functions added, removed, folded or
+  synthesized by the link;
+- **detection effect:** marginal correct-owner matches, precision, recall,
+  false-positive rate and noisy-hash contribution; and
+- **cost:** extra link, Ghidra, storage and query work.
+
+The C10 archive-to-linked change of 66.86% to 91.46% recall is a detection
+effect, not a claim that 24.60% of hashes changed. Set overlap alone is also
+insufficient because duplicate and noisy hashes can hide which function
+changed; comparison must use symbol identity and link-map evidence where
+available.
+
+### First bounded matrix
+
+Compile one pinned x86-64 OpenSSL route and treatment once, seal its archive,
+then derive all link variants from those exact object bytes:
+
+1. GNU `ld.bfd`, canonical whole-archive shared image with symbolic binding;
+2. LLVM `lld`, the same shared-image policy;
+3. `ld.bfd`, a reviewed executable/PIE-shaped image with a neutral entry stub;
+4. `lld`, the same executable/PIE-shaped policy.
+
+The shared-image policy should initially match the qualified validation route:
+`-shared`, `-nostdlib`, `--whole-archive` and `-Bsymbolic`. The executable-shaped
+variant must record unresolved symbols and target selection rather than
+silently dropping archive members. Do not execute target binaries.
+
+Only after this four-cell comparison should the study consider section garbage
+collection, identical-code folding, relaxation or static-versus-dynamic
+binding. LTO is a separate compiler-plus-linker treatment because it cannot
+reuse the same ordinary object files.
+
+### Evidence and reproducibility
+
+For every variant retain:
+
+- exact source, route, compiler, treatment and sealed input-object identity;
+- linker path, family, version and binary digest;
+- normalized link command, link map, unresolved-symbol audit and output digest;
+- Ghidra version, language/compiler spec and analysis-policy identity;
+- per-function symbol identity, full hash, specific hash, size and relationships;
+- unchanged, changed, missing, new, folded and synthetic-function counts;
+- marginal unique hashes and correct-owner detection contribution; and
+- link/Ghidra/query wall time, CPU time, peak RSS, scratch, project and FIDB
+  bytes.
+
+Store the compact comparison and a human-readable receipt as tracked evidence;
+keep heavy binaries, Ghidra projects and generated databases under the existing
+ignored artifact boundary.
+
+### Planning hypotheses and expansion gate
+
+Before measurement, expect same-mode `ld.bfd` versus `lld` changes to cluster
+in functions containing calls, address materialization, thunks or
+architecture-specific relaxation. For ordinary non-LTO OpenSSL C code the
+working hypothesis is a low-single-digit percentage of full hashes, with a
+wider uncertainty band of roughly 1–10%. Changing the output shape or enabling
+garbage collection/folding may affect roughly 5–20% of the observable
+population, while LTO can be substantially larger. These are planning ranges,
+not findings or acceptance thresholds.
+
+Expand across compiler versions, treatments and targets only when a variant
+adds meaningful marginal validated coverage for acceptable wall time and
+storage. Treat linker identity as a derived representation axis, not as an
+automatic multiplication of every compilation cell. The current canonical
+link path remains available as the rollback route.
