@@ -195,6 +195,41 @@ The applicability-aware materializer must report exactly 3,426 executions;
 4,662 is the rectangular maximum and would manufacture 1,236 unsupported
 recipe/route cells. This native cross-compilation path does not require QEMU.
 
+## Emulator providers and target-built generators
+
+Emulation is a worker capability, not a global host assumption. Inspect or
+prepare the provider selected for the current host with:
+
+```sh
+uv run fidb-poc emulator status --project-root .
+uv run fidb-poc emulator pull --project-root .
+uv run fidb-poc emulator status --project-root . --probe
+```
+
+`emulators/registry.toml` is reviewed managed authority;
+`emulators/local.toml` is an ignored external-install binding. Never place an
+emulator path in a recipe, silently select a similarly named PATH executable,
+or register host-wide `binfmt_misc` rules as part of a build. Record the exact
+provider, version, executable digest, target mapping and sysroot in execution
+provenance. A managed provider that does not match the detected host must fail
+closed while leaving the control plane usable for remote dispatch.
+
+SCOTCH's `dummysizes` is not an ordinary host generator. It substitutes values
+derived from `sizeof` target data structures into `scotch.h`. A native-host
+build can therefore produce ABI-invalid headers for a cross target. Compile
+the generator with the target compiler and run it with the corresponding QEMU
+user-mode executable, normally through `CMAKE_CROSSCOMPILING_EMULATOR`; use a
+target sysroot or static link as required. Before expanding the SCOTCH recipe,
+qualify every target mapping with a generated-header audit and a complete
+library canary. Merely probing `qemu-ARCH --version` qualifies the provider
+binary, not this build-system integration.
+
+The exact Clang 15 llvm-mingw libcurl route has a separate known compatibility
+exception: its Autoconf IPv6 probe enables code whose `getaddrinfo` declaration
+was not detected. The fixed adapter appends `--disable-ipv6` only for
+`windows-x86-64-llvm-mingw-clang-15`; do not broaden that exception to newer
+routes whose probe succeeds.
+
 ## Route resolution lessons
 
 - A Ghidra `LanguageID` ending in `:default` does not imply that
