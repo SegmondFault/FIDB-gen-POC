@@ -363,6 +363,8 @@ class Coordinator:
                 ON jobs(state, active, batch_id, position, job_id);
             CREATE INDEX IF NOT EXISTS jobs_lease_expiry
                 ON jobs(state, lease_expires_at);
+            CREATE INDEX IF NOT EXISTS jobs_execution_identity
+                ON jobs(active, batch_id, base_cell_id, factor_variants_json);
 
             CREATE TABLE IF NOT EXISTS pathological_cell_quarantines (
                 quarantine_id INTEGER PRIMARY KEY AUTOINCREMENT,
