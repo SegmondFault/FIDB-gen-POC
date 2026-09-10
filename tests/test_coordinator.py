@@ -937,6 +937,55 @@ matrices = ["tier0-uclibc-powerpc"]
         self.assertEqual(status["execution_block"]["counts"]["queued"], 4)
         self.assertEqual(status["execution_block"]["counts"]["failed"], 0)
 
+    def test_pathological_timeout_is_quarantined_without_retry(self):
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(), now=10)
+            lease = coordinator.claim("worker-one", now=20)
+            terminal = coordinator.fail(
+                lease["job_id"],
+                lease["lease_token"],
+                lease["lease_generation"],
+                "analysis exceeded both ceilings",
+                retryable=True,
+                failure_class="ghidra-import-analysis:PathologicalCellError",
+                pathological=True,
+                now=21,
+            )
+            event_types = [row["event_type"] for row in coordinator.events()]
+
+        self.assertEqual(terminal["state"], "failed")
+        self.assertEqual(terminal["attempt_count"], 1)
+        self.assertIn("job.pathological-quarantined", event_types)
+
+    def test_operator_quarantine_and_release_preserve_attempt_history(self):
+        armed_path = self.write_queue(filename="armed.toml", armed=True)
+        disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(armed_path), now=10)
+            block = coordinator.start_next_block(
+                "manual:pathology", scheduled=False, now=11
+            )
+            jobs = [
+                row["job_id"]
+                for row in coordinator.snapshot()["jobs"]
+                if row["batch_id"] == block["batch_id"]
+            ][:2]
+            coordinator.sync(self.config(disarmed_path), now=12)
+            coordinator.pause("review pathology", now=13)
+            quarantined = coordinator.quarantine_pathological_jobs(
+                "batch-baseline", tuple(jobs), 2, "measured timeout", now=14
+            )
+            self.assertTrue(coordinator.finish_active_block_if_drained(now=15) is False)
+            released = coordinator.release_pathological_quarantine(
+                "batch-baseline", 2, "fallback canary passed", now=16
+            )
+            snapshot = coordinator.snapshot()
+
+        self.assertEqual(quarantined["quarantined"], 2)
+        self.assertEqual(released["released"], 2)
+        by_id = {row["job_id"]: row for row in snapshot["jobs"]}
+        self.assertTrue(all(by_id[job_id]["state"] == "queued" for job_id in jobs))
+
     def test_operator_requeue_interrupted_fences_worker_and_preserves_attempt(self):
         armed_path = self.write_queue(filename="armed.toml", armed=True)
         disarmed_path = self.write_queue(filename="disarmed.toml", armed=False)

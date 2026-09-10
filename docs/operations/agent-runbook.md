@@ -594,6 +594,38 @@ Use `scripts/fid_build_policy_oracle.py` for bounded comparisons and review
 disable the scoped diagnostic rule; the canonical analysis policy was never
 changed.
 
+When a reviewed set of cells is demonstrably pathological, isolate only those
+exact jobs through the supported evidence-preserving transition. The queue must
+be paused, disarmed and free of live leases:
+
+```sh
+uv run fidb-poc queue quarantine-pathological \
+  --batch <batch-id> \
+  --job <job-id> \
+  --job <job-id> \
+  --expected-count <exact-count> \
+  --reason '<measured failure and scope>'
+```
+
+The transition makes queued jobs terminal-failed, records a durable
+`pathological_cell_quarantines` row and preserves all existing attempts and
+artifacts. Repeat `--job` for every reviewed identity; the command fails closed
+if the set or count changed. After a narrow repair and representative canary,
+release exactly the recorded set with:
+
+```sh
+uv run fidb-poc queue release-pathological \
+  --batch <batch-id> \
+  --expected-count <exact-count> \
+  --reason '<repair commit and passing canary>'
+```
+
+An in-process `TaskMonitor.cancel()` experiment did not interrupt the observed
+LSDA analyzer storm. Automatic hard analysis deadlines therefore require a
+separate Ghidra process boundary. Do not represent a Python timer as reliable
+pathology detection, and do not blanket-disable an analyzer merely to avoid a
+timeout.
+
 ## Machine-validation execution
 
 The C10 machine-validation executor is independent of the production build

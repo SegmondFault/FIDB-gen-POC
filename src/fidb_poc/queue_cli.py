@@ -30,6 +30,7 @@ from .cell_runner import (
     CellAuthorityResolver,
     CellResolutionError,
     CellRunResult,
+    PathologicalCellError,
     ProgressEvent,
     preflight_cell_authority,
     run_cell,
@@ -408,6 +409,35 @@ def parser() -> argparse.ArgumentParser:
     )
     interrupted.add_argument(
         "--reason", required=True, help="durable operator rationale"
+    )
+
+    quarantine = commands.add_parser(
+        "quarantine-pathological",
+        parents=[_common_parser(queue=False)],
+        help="isolate an exact timed-out cell set while preserving all evidence",
+    )
+    quarantine.add_argument("--batch", required=True, help="exact active batch id")
+    quarantine.add_argument(
+        "--job",
+        action="append",
+        required=True,
+        dest="jobs",
+        help="exact job id to quarantine; repeat for each reviewed cell",
+    )
+    quarantine.add_argument("--expected-count", required=True, type=int)
+    quarantine.add_argument(
+        "--reason", required=True, help="durable operator rationale"
+    )
+
+    release = commands.add_parser(
+        "release-pathological",
+        parents=[_common_parser(queue=False)],
+        help="release an exact repaired quarantine after a passing canary",
+    )
+    release.add_argument("--batch", required=True, help="exact active batch id")
+    release.add_argument("--expected-count", required=True, type=int)
+    release.add_argument(
+        "--reason", required=True, help="durable repair and canary rationale"
     )
 
     commands.add_parser(
@@ -1208,7 +1238,10 @@ def _execute_claim(
             pass
         raise
     except Exception as error:
-        retryable = not isinstance(error, (CellResolutionError, ValueError))
+        pathological = isinstance(error, PathologicalCellError)
+        retryable = not isinstance(
+            error, (CellResolutionError, PathologicalCellError, ValueError)
+        )
         failure_class = (
             f"{failed_stage}:{type(error).__name__}"
             if failed_stage is not None
@@ -1222,6 +1255,7 @@ def _execute_claim(
                 f"{type(error).__name__}: {error}",
                 retryable=retryable,
                 failure_class=failure_class,
+                pathological=pathological,
             )
             _notify(
                 notifications,
@@ -1338,6 +1372,37 @@ def _requeue_interrupted(arguments: argparse.Namespace) -> int:
     _existing_state(state)
     with Coordinator(state, root) as coordinator:
         result = coordinator.requeue_interrupted_batch(
+            arguments.batch,
+            arguments.expected_count,
+            arguments.reason,
+            actor="operator",
+        )
+        result["queue"] = coordinator.status()
+        _print_json(result)
+    return 0
+
+
+def _quarantine_pathological(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        result = coordinator.quarantine_pathological_jobs(
+            arguments.batch,
+            tuple(arguments.jobs),
+            arguments.expected_count,
+            arguments.reason,
+            actor="operator",
+        )
+        result["queue"] = coordinator.status()
+        _print_json(result)
+    return 0
+
+
+def _release_pathological(arguments: argparse.Namespace) -> int:
+    root, state, _ = _paths(arguments, require_queue=False)
+    _existing_state(state)
+    with Coordinator(state, root) as coordinator:
+        result = coordinator.release_pathological_quarantine(
             arguments.batch,
             arguments.expected_count,
             arguments.reason,
@@ -1757,6 +1822,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "resume": _resume,
         "requeue-failed": _requeue_failed,
         "requeue-interrupted": _requeue_interrupted,
+        "quarantine-pathological": _quarantine_pathological,
+        "release-pathological": _release_pathological,
         "preflight": _preflight,
         "resolve-preflight": _resolution_preflight,
         "doctor": _doctor,

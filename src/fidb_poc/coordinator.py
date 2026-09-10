@@ -362,6 +362,29 @@ class Coordinator:
             CREATE INDEX IF NOT EXISTS jobs_lease_expiry
                 ON jobs(state, lease_expires_at);
 
+            CREATE TABLE IF NOT EXISTS pathological_cell_quarantines (
+                quarantine_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT NOT NULL REFERENCES jobs(job_id),
+                batch_id TEXT NOT NULL REFERENCES batches(batch_id),
+                state TEXT NOT NULL CHECK (state IN ('active', 'released')),
+                reason TEXT NOT NULL,
+                failure_class TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL CHECK (attempt_count >= 0),
+                created_at TEXT NOT NULL,
+                released_at TEXT,
+                release_reason TEXT,
+                CHECK (
+                    (state = 'active' AND released_at IS NULL AND release_reason IS NULL)
+                    OR
+                    (state = 'released' AND released_at IS NOT NULL
+                     AND release_reason IS NOT NULL)
+                )
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS one_active_pathological_quarantine
+                ON pathological_cell_quarantines(job_id) WHERE state = 'active';
+            CREATE INDEX IF NOT EXISTS pathological_quarantine_batch
+                ON pathological_cell_quarantines(batch_id, state, quarantine_id);
+
             CREATE TABLE IF NOT EXISTS attempts (
                 attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id TEXT NOT NULL REFERENCES jobs(job_id),
@@ -2271,6 +2294,7 @@ class Coordinator:
         *,
         retryable: bool = True,
         failure_class: str | None = None,
+        pathological: bool = False,
         now: float | datetime | None = None,
     ) -> dict[str, object]:
         """Record a fenced failure and requeue while attempts remain."""
@@ -2278,6 +2302,8 @@ class Coordinator:
         failure = _text(error, "failure error")
         if not isinstance(retryable, bool):
             raise ValueError("retryable must be a boolean")
+        if not isinstance(pathological, bool):
+            raise ValueError("pathological must be a boolean")
         classified = (
             _text(failure_class, "failure class") if failure_class is not None else None
         )
@@ -2287,8 +2313,10 @@ class Coordinator:
                 job_id, lease_token, lease_generation, timestamp
             )
             state = self._state_locked()
-            should_retry = retryable and int(row["attempt_count"]) < int(
-                state["max_attempts"]
+            should_retry = (
+                not pathological
+                and retryable
+                and int(row["attempt_count"]) < int(state["max_attempts"])
             )
             next_state = "queued" if should_retry else "failed"
             retry_delay = (
@@ -2348,11 +2376,46 @@ class Coordinator:
                     "attempt_count": int(row["attempt_count"]),
                     "retryable": retryable,
                     "failure_class": classified,
-                    "retry_cap_reached": retryable and not should_retry,
+                    "retry_cap_reached": (
+                        retryable and not pathological and not should_retry
+                    ),
+                    "pathological": pathological,
                     "retry_delay_seconds": retry_delay,
                     "eligible_at": eligible_at if should_retry else None,
                 },
             )
+            if pathological:
+                pathology_class = classified or "pathological:analysis-timeout"
+                self._connection.execute(
+                    """
+                    INSERT INTO pathological_cell_quarantines (
+                        job_id, batch_id, state, reason, failure_class,
+                        attempt_count, created_at
+                    ) VALUES (?, ?, 'active', ?, ?, ?, ?)
+                    """,
+                    (
+                        job_id,
+                        row["batch_id"],
+                        failure,
+                        pathology_class,
+                        int(row["attempt_count"]),
+                        self._timestamp(timestamp),
+                    ),
+                )
+                self._event_locked(
+                    "job.pathological-quarantined",
+                    now=timestamp,
+                    actor=str(row["leased_by"]),
+                    batch_id=str(row["batch_id"]),
+                    job_id=job_id,
+                    plan_digest=str(row["plan_digest"]),
+                    payload={
+                        "reason": failure,
+                        "failure_class": pathology_class,
+                        "attempt_count": int(row["attempt_count"]),
+                        "attempt_evidence_preserved": True,
+                    },
+                )
             if (
                 next_state == "failed"
                 and classified is not None
@@ -2389,6 +2452,189 @@ class Coordinator:
                         },
                     )
         return self.get_job(job_id)
+
+    def quarantine_pathological_jobs(
+        self,
+        batch_id: str,
+        job_ids: tuple[str, ...],
+        expected_count: int,
+        reason: str,
+        *,
+        actor: str = "operator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Quarantine an exact reviewed queued/failed set without erasing evidence."""
+
+        selected_batch = _identifier(batch_id, "quarantine batch id")
+        count = _positive_integer(expected_count, "quarantine expected count")
+        reason_text = _text(reason, "quarantine reason")
+        selected_jobs = tuple(
+            _identifier(value, "quarantine job id") for value in job_ids
+        )
+        if len(selected_jobs) != count or len(set(selected_jobs)) != count:
+            raise CoordinatorError(
+                "quarantine job ids must be unique and match expected count"
+            )
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            if bool(state["armed"]) or not bool(state["paused"]):
+                raise CoordinatorError(
+                    "pathological quarantine requires a paused, disarmed queue"
+                )
+            if state["active_batch_id"] not in (None, selected_batch):
+                raise CoordinatorError(
+                    "pathological quarantine cannot cross an active admission"
+                )
+            live = self._connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE state IN ('leased', 'running')"
+            ).fetchone()
+            if int(live["count"]):
+                raise CoordinatorError(
+                    "pathological quarantine requires no live leases"
+                )
+            placeholders = ",".join("?" for _ in selected_jobs)
+            rows = self._connection.execute(
+                f"SELECT * FROM jobs WHERE batch_id = ? AND active = 1 "
+                f"AND job_id IN ({placeholders}) ORDER BY position, job_id",
+                (selected_batch, *selected_jobs),
+            ).fetchall()
+            if len(rows) != count or any(
+                row["state"] not in {"queued", "failed"} for row in rows
+            ):
+                raise CoordinatorError(
+                    "quarantine selection changed or contains a live/complete job"
+                )
+            digest = hashlib.sha256()
+            for row in rows:
+                job_id = str(row["job_id"])
+                existing = self._connection.execute(
+                    "SELECT 1 FROM pathological_cell_quarantines "
+                    "WHERE job_id = ? AND state = 'active'",
+                    (job_id,),
+                ).fetchone()
+                if existing is not None:
+                    raise CoordinatorError(f"job is already quarantined: {job_id}")
+                digest.update(job_id.encode("ascii"))
+                digest.update(b"\n")
+                previous_error = row["error"]
+                if row["state"] == "queued":
+                    self._connection.execute(
+                        "UPDATE jobs SET state = 'failed', error = ?, "
+                        "failure_class = 'pathological:operator-quarantine', updated_at = ? "
+                        "WHERE job_id = ? AND state = 'queued'",
+                        (reason_text, self._timestamp(timestamp), job_id),
+                    )
+                self._connection.execute(
+                    "INSERT INTO pathological_cell_quarantines "
+                    "(job_id, batch_id, state, reason, failure_class, attempt_count, created_at) "
+                    "VALUES (?, ?, 'active', ?, 'pathological:operator-quarantine', ?, ?)",
+                    (
+                        job_id,
+                        selected_batch,
+                        reason_text,
+                        int(row["attempt_count"]),
+                        self._timestamp(timestamp),
+                    ),
+                )
+                self._event_locked(
+                    "job.pathological-quarantined",
+                    now=timestamp,
+                    actor=actor,
+                    batch_id=selected_batch,
+                    job_id=job_id,
+                    plan_digest=str(row["plan_digest"]),
+                    payload={
+                        "reason": reason_text,
+                        "previous_state": row["state"],
+                        "previous_error": previous_error,
+                        "attempt_evidence_preserved": True,
+                    },
+                )
+            summary = {
+                "batch_id": selected_batch,
+                "quarantined": count,
+                "job_ids_sha256": digest.hexdigest(),
+                "reason": reason_text,
+                "attempt_evidence_preserved": True,
+            }
+            self._event_locked(
+                "batch.pathological-jobs-quarantined",
+                now=timestamp,
+                actor=actor,
+                batch_id=selected_batch,
+                plan_digest=str(rows[0]["plan_digest"]),
+                payload=summary,
+            )
+            return summary
+
+    def release_pathological_quarantine(
+        self,
+        batch_id: str,
+        expected_count: int,
+        reason: str,
+        *,
+        actor: str = "operator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object]:
+        """Release exactly one reviewed quarantine set back to queued state."""
+
+        selected_batch = _identifier(batch_id, "quarantine batch id")
+        count = _positive_integer(expected_count, "quarantine expected count")
+        reason_text = _text(reason, "quarantine release reason")
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            if bool(state["armed"]) or not bool(state["paused"]):
+                raise CoordinatorError(
+                    "quarantine release requires a paused, disarmed queue"
+                )
+            live = self._connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE state IN ('leased', 'running')"
+            ).fetchone()
+            if int(live["count"]):
+                raise CoordinatorError("quarantine release requires no live leases")
+            rows = self._connection.execute(
+                "SELECT q.*, j.plan_digest FROM pathological_cell_quarantines q "
+                "JOIN jobs j ON j.job_id = q.job_id "
+                "WHERE q.batch_id = ? AND q.state = 'active' ORDER BY q.quarantine_id",
+                (selected_batch,),
+            ).fetchall()
+            if len(rows) != count:
+                raise CoordinatorError(
+                    f"quarantine release count mismatch: expected {count}, found {len(rows)}"
+                )
+            digest = hashlib.sha256()
+            for row in rows:
+                job_id = str(row["job_id"])
+                digest.update(job_id.encode("ascii"))
+                digest.update(b"\n")
+                self._connection.execute(
+                    "UPDATE pathological_cell_quarantines SET state = 'released', "
+                    "released_at = ?, release_reason = ? WHERE quarantine_id = ? AND state = 'active'",
+                    (self._timestamp(timestamp), reason_text, row["quarantine_id"]),
+                )
+                self._connection.execute(
+                    "UPDATE jobs SET state = 'queued', eligible_at = 0, error = NULL, "
+                    "failure_class = NULL, updated_at = ? WHERE job_id = ? AND state = 'failed'",
+                    (self._timestamp(timestamp), job_id),
+                )
+                self._event_locked(
+                    "job.pathological-quarantine-released",
+                    now=timestamp,
+                    actor=actor,
+                    batch_id=selected_batch,
+                    job_id=job_id,
+                    plan_digest=str(row["plan_digest"]),
+                    payload={"reason": reason_text, "attempt_evidence_preserved": True},
+                )
+            return {
+                "batch_id": selected_batch,
+                "released": count,
+                "job_ids_sha256": digest.hexdigest(),
+                "reason": reason_text,
+                "attempt_evidence_preserved": True,
+            }
 
     def fail_job(
         self,
@@ -2990,6 +3236,10 @@ class Coordinator:
         last_event = self._connection.execute(
             "SELECT MAX(event_id) AS event_id FROM events"
         ).fetchone()
+        active_pathologies = self._connection.execute(
+            "SELECT COUNT(*) AS count FROM pathological_cell_quarantines "
+            "WHERE state = 'active'"
+        ).fetchone()
         return {
             "schema_version": SNAPSHOT_SCHEMA,
             "status": runtime_status,
@@ -3018,6 +3268,7 @@ class Coordinator:
             "counts": counts,
             "claimable": claimable_jobs if armed and not paused else 0,
             "retry_wait": queued - claimable_jobs,
+            "pathological_quarantines": int(active_pathologies["count"]),
             "last_event_id": int(last_event["event_id"] or 0),
         }
 

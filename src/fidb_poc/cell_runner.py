@@ -69,6 +69,10 @@ class CellResolutionError(ValueError):
     """A queued cell no longer resolves exactly from reviewed authorities."""
 
 
+class PathologicalCellError(CellRunnerError):
+    """A cell exceeded both its reviewed analysis and recovery ceilings."""
+
+
 @dataclass(frozen=True)
 class GhidraRuntime:
     install_dir: Path

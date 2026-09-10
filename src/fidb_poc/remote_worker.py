@@ -19,7 +19,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from .cell_runner import CellResolutionError, ProgressEvent, run_cell
+from .cell_runner import (
+    CellResolutionError,
+    PathologicalCellError,
+    ProgressEvent,
+    run_cell,
+)
 from .coordinator import QueueConfig, WORKER_POOLS
 from .external_workers import (
     load_external_toolchain,
@@ -320,7 +325,10 @@ def execute_remote_lease(
             pass
         raise
     except Exception as error:
-        retryable = not isinstance(error, (CellResolutionError, ValueError))
+        pathological = isinstance(error, PathologicalCellError)
+        retryable = not isinstance(
+            error, (CellResolutionError, PathologicalCellError, ValueError)
+        )
         try:
             client.request(
                 "fail",
@@ -328,6 +336,7 @@ def execute_remote_lease(
                     **fields,
                     "error": f"{type(error).__name__}: {error}",
                     "retryable": retryable,
+                    "pathological": pathological,
                 },
             )
         except RemoteWorkerError:

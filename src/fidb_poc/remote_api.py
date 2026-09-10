@@ -890,7 +890,7 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                 )
                 return {"schema_version": REMOTE_API_SCHEMA, "event_id": event_id}
             if path == "/api/v1/worker/fail":
-                _only_fields(document, common | {"error", "retryable"})
+                _only_fields(document, common | {"error", "retryable", "pathological"})
                 retryable = document.get("retryable")
                 if not isinstance(retryable, bool):
                     raise RemoteApiError(
@@ -898,12 +898,20 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                         "invalid-field",
                         "retryable must be a boolean",
                     )
+                pathological = document.get("pathological", False)
+                if not isinstance(pathological, bool):
+                    raise RemoteApiError(
+                        HTTPStatus.BAD_REQUEST,
+                        "invalid-field",
+                        "pathological must be a boolean",
+                    )
                 job = coordinator.fail(
                     job_id,
                     token,
                     generation,
                     _text(document, "error"),
                     retryable=retryable,
+                    pathological=pathological,
                 )
                 try:
                     notification_policy = QueueConfig.load(

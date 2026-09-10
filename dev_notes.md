@@ -5,6 +5,29 @@ to future maintainers but are not yet execution authority. Operational changes
 remain controlled by reviewed TOML, tests, qualification gates and the agent
 runbook.
 
+## Pathological cell quarantine
+
+Status: durable quarantine implemented; automatic hard Ghidra timeout remains
+future work.
+
+One pathological object must not repeatedly consume a worker, exhaust retries,
+or prevent later qualified cells from using the pool. An execution error that
+is explicitly classified as pathological now fails terminally and receives a
+durable quarantine record. Operators can also quarantine an exact reviewed job
+set while the queue is paused, disarmed and lease-free. The record binds the
+job, batch, attempt count, failure class, reason and timestamps; existing
+attempt and artifact evidence is not deleted. Releasing a quarantine requires
+an exact count and a recorded repair/canary rationale.
+
+The attempted in-process Ghidra timeout was rejected by a live pathological
+object canary: `TaskMonitor.cancel()` did not interrupt the LSDA analyzer.
+Automatic time detection therefore requires a hard process-isolation boundary,
+not a cosmetic Python timer. Until that is implemented, the coordinator's
+exact operator transition isolates the known cells and lets later blocks run.
+The earlier Protobuf/MIPS oracle also showed that blanket-disabling the GCC
+exception analyzer can alter the signature population, so that experiment
+remains disabled. Active quarantine counts are exposed in queue status.
+
 ## Bounded cross-block tail filling
 
 Status: proposed and not implemented.
