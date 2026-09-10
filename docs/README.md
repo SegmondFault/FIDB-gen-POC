@@ -50,6 +50,11 @@ they are relied upon by another operator or agent.
 When historical prose conflicts with code, tests or current TOML, the reviewed
 TOML and executable validation gates win.
 
+## Development proposals
+
+- [`../dev_notes.md`](../dev_notes.md) records tracked, bounded engineering
+  improvements that have not yet become execution authority.
+
 ## Authority and live state
 
 - Human-reviewed TOML describes intent.

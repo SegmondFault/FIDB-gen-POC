@@ -60,6 +60,7 @@ The complete documentation map is in [`docs/README.md`](docs/README.md).
 | Maintainer and agent entrypoint | [`AGENTS.md`](AGENTS.md) |
 | Detailed agent handoff | [`docs/operations/agent-runbook.md`](docs/operations/agent-runbook.md) |
 | Generated artifact boundaries | [`docs/artifact-boundaries.md`](docs/artifact-boundaries.md) |
+| Proposed engineering improvements | [`dev_notes.md`](dev_notes.md) |
 
 Historical design notes live under `docs/history/`. They explain why decisions
 were made but are not current execution authority.
