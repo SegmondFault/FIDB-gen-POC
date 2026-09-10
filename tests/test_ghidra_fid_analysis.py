@@ -5,6 +5,8 @@ import tempfile
 from unittest.mock import Mock, patch
 
 from fidb_poc.ghidra_fid import (
+    LSDA_LOGGER_NAME,
+    _BoundedLsdaErrorLogger,
     analyze_and_export_program_signatures,
     _configure_fid_build_analysis,
     _configure_target_analysis,
@@ -15,6 +17,7 @@ from fidb_poc.ghidra_fid import (
 )
 from fidb_poc.validation_analysis import (
     FID_BUILD_ANALYSIS_POLICY,
+    FID_BUILD_RELOCATABLE_GCC_EXCEPTION_DISABLED_POLICY,
     FID_BUILD_RECOVERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_RECOVERY_POLICY,
@@ -37,7 +40,45 @@ class _Options:
         self.values[name] = value
 
 
+class _LogSource:
+    def __init__(self, name):
+        self.name = name
+
+    def getName(self):
+        return self.name
+
+
+class _LogDelegate:
+    def __init__(self):
+        self.calls = []
+
+    def __getattr__(self, name):
+        def record(*arguments):
+            self.calls.append((name, arguments))
+
+        return record
+
+
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_lsda_limiter_bounds_only_the_pathological_error_source(self):
+        now = [100.0]
+        delegate = _LogDelegate()
+        logger = _BoundedLsdaErrorLogger(delegate, clock=lambda: now[0])
+        lsda = _LogSource(LSDA_LOGGER_NAME)
+        unrelated = _LogSource("other.Analyzer")
+
+        for index in range(100):
+            logger.error(lsda, f"repeated {index}")
+        logger.warn(lsda, "not an error")
+        logger.error(unrelated, "unrelated error")
+        now[0] += 3.0
+        logger.error(lsda, "one replenished token")
+
+        self.assertEqual(logger.passed_lsda, 21)
+        self.assertEqual(logger.suppressed_lsda, 80)
+        self.assertEqual(len(delegate.calls), 23)
+        self.assertEqual(delegate.calls[-1][1][1], "one replenished token")
+
     def test_project_names_sanitize_recipe_punctuation_without_collisions(self):
         plus = _safe_project_name("FIDB_boringssl_14.0.0+r45_3_linux_x86")
         dash = _safe_project_name("FIDB_boringssl_14.0.0-r45_3_linux_x86")
@@ -90,6 +131,21 @@ class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
 
         safe.assert_called_once_with(program)
         enablement.assert_not_called()
+
+    def test_relocatable_policy_disables_only_gcc_exception_analysis(self):
+        program = object()
+        with (
+            patch("fidb_poc.ghidra_fid._configure_fid_safe_analysis") as safe,
+            patch(
+                "fidb_poc.ghidra_fid._set_registered_analysis_analyzer_enablement"
+            ) as enablement,
+        ):
+            _configure_fid_build_analysis(
+                program, FID_BUILD_RELOCATABLE_GCC_EXCEPTION_DISABLED_POLICY
+            )
+
+        safe.assert_called_once_with(program)
+        enablement.assert_called_once_with(program, {"GCC Exception Handlers": False})
 
     def test_missing_project_journal_rebuilds_once_then_exports(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -794,6 +794,10 @@ class PipelineTests(unittest.TestCase):
                 patch("fidb_poc.pipeline.pyghidra_identity", return_value="3.1.0"),
                 patch("fidb_poc.pipeline.ghidra_fid.ensure_started"),
                 patch(
+                    "fidb_poc.pipeline.ghidra_fid.configure_ghidra_diagnostics",
+                    return_value={"filtered": False},
+                ),
+                patch(
                     "fidb_poc.pipeline.ghidra_fid.build_library_fidb",
                     side_effect=fake_build,
                 ) as build,

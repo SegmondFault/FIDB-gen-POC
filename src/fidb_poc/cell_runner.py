@@ -26,6 +26,7 @@ from typing import Mapping, Sequence
 from . import ghidra_fid, libc_catalog, malware_build, pipeline
 from .config import Configuration, load_configuration, select_configuration
 from .elf import ElfFacts, ghidra_language, inspect_elf
+from .fid_build_policy import load_fid_build_policy
 from .hunt import _select_objects
 from .recipe_generator import generate_cells, load_recipes
 from .toolchain_registry import load_toolchains
@@ -1109,6 +1110,7 @@ def _native_outputs(
     verbose: bool,
     build_jobs_per_cell: int,
 ) -> tuple[Path, dict[str, int], dict[str, object], dict[str, object]]:
+    fid_build_policy = load_fid_build_policy(project_root)
     manifest = pipeline.execute(
         configuration,
         attempt_root,
@@ -1118,6 +1120,7 @@ def _native_outputs(
         source_downloads=project_root / MANAGED_SOURCE_DOWNLOADS,
         timing=timing.span,
         skipped=timing.skip,
+        fid_build_policy=fid_build_policy,
     )
     with timing.span(
         CellStage.FID_VALIDATION,
@@ -1170,6 +1173,13 @@ def _native_outputs(
         "analysis_artifact_path": row.get("analysis_artifact_path"),
         "analysis_artifact_sha256": row.get("analysis_artifact_sha256"),
         "object_count": int(row.get("object_count", "0")),
+        "fid_build_policy": {
+            "rule": row.get("fid_build_policy_rule"),
+            "analysis_policy": row.get("fid_build_analysis_policy"),
+            "diagnostic_policy": row.get("ghidra_diagnostic_policy"),
+            "authority_path": row.get("fid_build_policy_authority_path"),
+            "authority_sha256": row.get("fid_build_policy_authority_sha256"),
+        },
         "toolchain": {
             "compiler": {
                 "command": row.get("compiler_command"),

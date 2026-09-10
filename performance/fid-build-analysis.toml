@@ -1,0 +1,21 @@
+schema_version = "fidb-fid-build-policy/v1"
+default_analysis_policy = "ghidra-fid-safe-analysis-v1"
+default_diagnostic_policy = "ghidra-default-diagnostics-v1"
+
+[[rule]]
+id = "protobuf-mips-lsda-diagnostic-bound-v1"
+enabled = true
+libraries = ["protobuf"]
+route_prefixes = ["linux-mips32-be-", "linux-mips32-le-"]
+artifact_shapes = ["static-archive-members"]
+analysis_policy = "ghidra-fid-safe-analysis-v1"
+diagnostic_policy = "ghidra-lsda-burst-20-per-minute-v1"
+
+[[rule]]
+id = "protobuf-mips-relocatable-exception-analysis-experiment-v1"
+enabled = false
+libraries = ["protobuf"]
+route_prefixes = ["linux-mips32-be-", "linux-mips32-le-"]
+artifact_shapes = ["static-archive-members"]
+analysis_policy = "ghidra-fid-safe-relocatable-gcc-exception-disabled-v1"
+diagnostic_policy = "ghidra-lsda-burst-20-per-minute-v1"

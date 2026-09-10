@@ -15,16 +15,29 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import threading
+import time
 from typing import Callable, ContextManager, Mapping
 
 import pyghidra
 
 from .validation_analysis import (
     FID_BUILD_ANALYSIS_POLICY,
+    FID_BUILD_RELOCATABLE_GCC_EXCEPTION_DISABLED_POLICY,
     FID_BUILD_RECOVERY_ANALYSIS_POLICY,
+    GHIDRA_DEFAULT_DIAGNOSTIC_POLICY,
+    GHIDRA_LSDA_BURST_DIAGNOSTIC_POLICY,
     QUERY_ANALYSIS_POLICY,
     QUERY_ANALYSIS_RECOVERY_POLICY,
 )
+
+LSDA_LOGGER_NAME = (
+    "ghidra.app.plugin.exceptionhandlers.gcc.structures.gccexcepttable."
+    "LSDACallSiteTable"
+)
+
+_BASE_GHIDRA_ERROR_LOGGER = None
+_ACTIVE_GHIDRA_ERROR_LOGGER = None
 
 TimingFactory = Callable[
     [str, str, Mapping[str, object] | None], ContextManager[dict[str, object]]
@@ -93,6 +106,116 @@ def ensure_started(install_dir: Path, environment: dict[str, str]) -> bool:
     os.environ.update(environment)
     pyghidra.start(install_dir=install_dir.resolve())
     return True
+
+
+class _BoundedLsdaErrorLogger:
+    """Delegate Ghidra diagnostics while rate-limiting one pathological source."""
+
+    def __init__(
+        self,
+        delegate,
+        *,
+        burst: int = 20,
+        events_per_minute: float = 20.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.delegate = delegate
+        self.capacity = float(burst)
+        self.tokens = float(burst)
+        self.tokens_per_second = events_per_minute / 60.0
+        self.clock = clock
+        self.updated_at = clock()
+        self.lock = threading.Lock()
+        self.passed_lsda = 0
+        self.suppressed_lsda = 0
+
+    @staticmethod
+    def _source_name(source) -> str:
+        try:
+            return str(source.getName())
+        except (AttributeError, TypeError):
+            try:
+                return str(source.getClass().getName())
+            except (AttributeError, TypeError):
+                return ""
+
+    def _allow_lsda(self) -> bool:
+        with self.lock:
+            now = self.clock()
+            elapsed = max(0.0, now - self.updated_at)
+            self.tokens = min(
+                self.capacity, self.tokens + elapsed * self.tokens_per_second
+            )
+            self.updated_at = now
+            if self.tokens < 1.0:
+                self.suppressed_lsda += 1
+                return False
+            self.tokens -= 1.0
+            self.passed_lsda += 1
+            return True
+
+    def _forward(self, method: str, source, message, *rest):
+        if (
+            method == "error"
+            and self._source_name(source) == LSDA_LOGGER_NAME
+            and not self._allow_lsda()
+        ):
+            return None
+        return getattr(self.delegate, method)(source, message, *rest)
+
+    def trace(self, source, message, *rest):
+        return self._forward("trace", source, message, *rest)
+
+    def debug(self, source, message, *rest):
+        return self._forward("debug", source, message, *rest)
+
+    def info(self, source, message, *rest):
+        return self._forward("info", source, message, *rest)
+
+    def warn(self, source, message, *rest):
+        return self._forward("warn", source, message, *rest)
+
+    def error(self, source, message, *rest):
+        return self._forward("error", source, message, *rest)
+
+
+def configure_ghidra_diagnostics(policy: str) -> dict[str, object]:
+    """Install or clear the exact-source LSDA limiter in Ghidra's ``Msg`` path.
+
+    Workers reuse their JVM across cells, so every call first removes our
+    error-logger proxy.  The default policy therefore restores Ghidra's normal
+    logger instead of inheriting a previous cell's performance policy.
+    """
+
+    import jpype
+    from ghidra.util import ErrorLogger, Msg
+
+    global _ACTIVE_GHIDRA_ERROR_LOGGER, _BASE_GHIDRA_ERROR_LOGGER
+
+    if _BASE_GHIDRA_ERROR_LOGGER is None:
+        field = Msg.class_.getDeclaredField("errorLogger")
+        field.setAccessible(True)
+        _BASE_GHIDRA_ERROR_LOGGER = field.get(None)
+    Msg.setErrorLogger(_BASE_GHIDRA_ERROR_LOGGER)
+    _ACTIVE_GHIDRA_ERROR_LOGGER = None
+    if policy == GHIDRA_DEFAULT_DIAGNOSTIC_POLICY:
+        return {"policy": policy, "logger": LSDA_LOGGER_NAME, "filtered": False}
+    if policy != GHIDRA_LSDA_BURST_DIAGNOSTIC_POLICY:
+        raise ValueError(f"unsupported Ghidra diagnostic policy: {policy}")
+
+    bounded = _BoundedLsdaErrorLogger(_BASE_GHIDRA_ERROR_LOGGER)
+    proxy = jpype.JProxy(ErrorLogger, inst=bounded)
+    Msg.setErrorLogger(proxy)
+    # JPype proxies and their Python delegates must remain strongly referenced
+    # for the lifetime of the Java callback registration.
+    _ACTIVE_GHIDRA_ERROR_LOGGER = (proxy, bounded)
+    return {
+        "policy": policy,
+        "logger": LSDA_LOGGER_NAME,
+        "filtered": True,
+        "initial_burst": 20,
+        "sustained_events_per_minute": 20,
+    }
 
 
 def _configure_fid_safe_analysis(program) -> None:
@@ -202,15 +325,21 @@ def _configure_fid_build_analysis(program, analysis_policy: str) -> None:
     _configure_fid_safe_analysis(program)
     if analysis_policy == FID_BUILD_ANALYSIS_POLICY:
         return
-    if analysis_policy != FID_BUILD_RECOVERY_ANALYSIS_POLICY:
-        raise ValueError(f"unsupported FID build analysis policy: {analysis_policy}")
-    _set_registered_analysis_analyzer_enablement(
-        program,
-        {
-            "Call-Fixup Installer": False,
-            "Non-Returning Functions - Discovered": False,
-        },
-    )
+    if analysis_policy == FID_BUILD_RECOVERY_ANALYSIS_POLICY:
+        _set_registered_analysis_analyzer_enablement(
+            program,
+            {
+                "Call-Fixup Installer": False,
+                "Non-Returning Functions - Discovered": False,
+            },
+        )
+        return
+    if analysis_policy == FID_BUILD_RELOCATABLE_GCC_EXCEPTION_DISABLED_POLICY:
+        _set_registered_analysis_analyzer_enablement(
+            program, {"GCC Exception Handlers": False}
+        )
+        return
+    raise ValueError(f"unsupported FID build analysis policy: {analysis_policy}")
 
 
 def build_library_fidb(
