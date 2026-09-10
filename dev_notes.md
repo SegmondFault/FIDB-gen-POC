@@ -212,6 +212,41 @@ insufficient because duplicate and noisy hashes can hide which function
 changed; comparison must use symbol identity and link-map evidence where
 available.
 
+### Preliminary OpenSSL bellwether
+
+A read-only comparison was run against retained signature evidence while the
+production campaign continued. It performed no compilation, linking or Ghidra
+analysis and used idle-class I/O plus the lowest CPU scheduling priority.
+
+The comparison selected OpenSSL 3.5.8, Linux x86-64, GCC 12 and `baseline_o2`.
+It joined the archive-member and linked-image signature ledgers by function
+name, then restricted the hash-survival calculation to 12,064 names having
+exactly one record on each side:
+
+| Measure | Unchanged | Changed |
+| --- | ---: | ---: |
+| Full hash | 12,042 / 12,064 (99.8176%) | 22 / 12,064 (0.1824%) |
+| Specific hash | 11,942 / 12,064 (98.9887%) | 122 / 12,064 (1.0113%) |
+| Both hashes | 11,942 / 12,064 (98.9887%) | 122 / 12,064 (1.0113%) |
+
+The archive ledger contained 12,156 records and the linked ledger 12,155. It
+had one archive-only function name and no linked-only name. As a second view,
+99.7395% of the linked population's unique full hashes and 98.7158% of its
+unique specific hashes were also present in the archive population.
+
+This bellwether suggests that raw hash mutation was not the main cause of the
+large C10 archive-to-linked detection difference. Linked-image grouping,
+relationships and FID decision context are stronger candidate explanations.
+It also moves the expectation for ordinary non-LTO, same-mode linker-family
+variation toward the lower end of the planning range.
+
+This is not formal linker-sensitivity evidence. The archive ledger came from
+an earlier build with the same declared identity rather than a retained proof
+that both sides used byte-identical object files; names were not qualified with
+the link map; and both populations used the existing linker path rather than a
+controlled `ld.bfd` versus `lld` pair. Preserve the four-cell same-object study
+below as the required experiment.
+
 ### First bounded matrix
 
 Compile one pinned x86-64 OpenSSL route and treatment once, seal its archive,
