@@ -98,6 +98,26 @@ class DateScheduleOverride:
 
 
 @dataclass(frozen=True)
+class TailFillPolicy:
+    enabled: bool = False
+    max_active_blocks: int = 1
+    minimum_idle_slots: int = 4
+    conservative_block_minutes: int = 60
+    require_estimated_fit_before_cutoff: bool = True
+
+    def document(self) -> dict[str, object]:
+        return {
+            "enabled": self.enabled,
+            "max_active_blocks": self.max_active_blocks,
+            "minimum_idle_slots": self.minimum_idle_slots,
+            "conservative_block_minutes": self.conservative_block_minutes,
+            "require_estimated_fit_before_cutoff": (
+                self.require_estimated_fit_before_cutoff
+            ),
+        }
+
+
+@dataclass(frozen=True)
 class SchedulePolicy:
     enabled: bool = False
     timezone_name: str = "UTC"
@@ -107,6 +127,7 @@ class SchedulePolicy:
     hard_cutoff: time | None = time(23, 59)
     finish_started_batch: bool = False
     chain_batches: bool = False
+    tail_fill: TailFillPolicy = TailFillPolicy()
     date_overrides: tuple[DateScheduleOverride, ...] = ()
 
     @property
@@ -125,6 +146,7 @@ class SchedulePolicy:
             ),
             "finish_started_batch": self.finish_started_batch,
             "chain_batches": self.chain_batches,
+            "tail_fill": self.tail_fill.document(),
             "date_overrides": [override.document() for override in self.date_overrides],
         }
 
@@ -402,6 +424,7 @@ def load_operations_policy(
             "finish_started_batch",
             "chain_batches",
             "date_overrides",
+            "tail_fill",
         },
         "schedule table",
     )
@@ -431,6 +454,51 @@ def load_operations_policy(
         raise ValueError("schedule chain_batches must be a boolean")
     if chain_batches and not finish_started_batch:
         raise ValueError("schedule chain_batches requires finish_started_batch")
+    tail_fill_row = schedule_row.get("tail_fill", {})
+    if not isinstance(tail_fill_row, dict):
+        raise ValueError("schedule tail_fill must be a table")
+    _only_keys(
+        tail_fill_row,
+        {
+            "enabled",
+            "max_active_blocks",
+            "minimum_idle_slots",
+            "conservative_block_minutes",
+            "require_estimated_fit_before_cutoff",
+        },
+        "schedule tail_fill table",
+    )
+    tail_fill_enabled = tail_fill_row.get("enabled", False)
+    require_fit = tail_fill_row.get("require_estimated_fit_before_cutoff", True)
+    if not isinstance(tail_fill_enabled, bool) or not isinstance(require_fit, bool):
+        raise ValueError("schedule tail_fill booleans must be boolean")
+    max_active_blocks = tail_fill_row.get(
+        "max_active_blocks", 2 if tail_fill_enabled else 1
+    )
+    minimum_idle_slots = tail_fill_row.get("minimum_idle_slots", 4)
+    conservative_block_minutes = tail_fill_row.get("conservative_block_minutes", 60)
+    for value, label in (
+        (max_active_blocks, "max_active_blocks"),
+        (minimum_idle_slots, "minimum_idle_slots"),
+        (conservative_block_minutes, "conservative_block_minutes"),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ValueError(f"schedule tail_fill {label} must be a positive integer")
+    if max_active_blocks not in {1, 2}:
+        raise ValueError("schedule tail_fill max_active_blocks must be 1 or 2")
+    if tail_fill_enabled and (
+        max_active_blocks != 2 or not chain_batches or not finish_started_batch
+    ):
+        raise ValueError(
+            "enabled tail_fill requires two active blocks and chained finished batches"
+        )
+    tail_fill = TailFillPolicy(
+        enabled=tail_fill_enabled,
+        max_active_blocks=max_active_blocks,
+        minimum_idle_slots=minimum_idle_slots,
+        conservative_block_minutes=conservative_block_minutes,
+        require_estimated_fit_before_cutoff=require_fit,
+    )
     start = _clock(schedule_row.get("start", "00:00"), "schedule start")
     stop_claiming = _clock(
         schedule_row.get("stop_claiming", "23:58"),
@@ -496,6 +564,7 @@ def load_operations_policy(
         hard_cutoff=hard_cutoff,
         finish_started_batch=finish_started_batch,
         chain_batches=chain_batches,
+        tail_fill=tail_fill,
         date_overrides=tuple(overrides),
     )
     schedule._window(date(2026, 1, 1))

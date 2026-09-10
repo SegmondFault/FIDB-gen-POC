@@ -168,12 +168,16 @@ class AutoBatchBuilderTests(unittest.TestCase):
         self.assertEqual(queue["schedule"]["stop_claiming"], "05:30")
         self.assertTrue(policy.schedule.finish_started_batch)
         self.assertTrue(policy.schedule.chain_batches)
+        self.assertTrue(policy.schedule.tail_fill.enabled)
+        self.assertEqual(policy.schedule.tail_fill.max_active_blocks, 2)
         self.assertNotIn("hard_cutoff", queue["schedule"])
 
         canary = tomllib.loads(_render_queue(document, source, canary_only=True))
         self.assertFalse(canary["queue"]["armed"])
         self.assertFalse(canary["schedule"]["enabled"])
         self.assertFalse(canary["schedule"]["chain_batches"])
+        self.assertFalse(canary["schedule"]["tail_fill"]["enabled"])
+        self.assertEqual(canary["schedule"]["tail_fill"]["max_active_blocks"], 1)
         self.assertEqual(canary["queue"]["batch_order"], ["chunk-001"])
         self.assertEqual(len(canary["batch"]), 1)
 

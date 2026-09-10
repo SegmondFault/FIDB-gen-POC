@@ -60,6 +60,13 @@ class OperationsPolicyTests(unittest.TestCase):
                     "stop_claiming": "05:30",
                     "finish_started_batch": True,
                     "chain_batches": True,
+                    "tail_fill": {
+                        "enabled": True,
+                        "max_active_blocks": 2,
+                        "minimum_idle_slots": 6,
+                        "conservative_block_minutes": 45,
+                        "require_estimated_fit_before_cutoff": True,
+                    },
                 }
             },
             self.root,
@@ -74,6 +81,9 @@ class OperationsPolicyTests(unittest.TestCase):
         self.assertFalse(closed.claims_allowed)
         self.assertTrue(policy.finish_started_batch)
         self.assertTrue(policy.chain_batches)
+        self.assertTrue(policy.tail_fill.enabled)
+        self.assertEqual(policy.tail_fill.minimum_idle_slots, 6)
+        self.assertEqual(policy.tail_fill.conservative_block_minutes, 45)
         self.assertEqual(policy.document()["start"], "01:00")
         self.assertEqual(policy.document()["stop_claiming"], "05:30")
         self.assertIsNone(policy.document()["hard_cutoff"])

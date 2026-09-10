@@ -27,6 +27,13 @@ stop_claiming = "05:30"
 finish_started_batch = true
 chain_batches = true
 
+[schedule.tail_fill]
+enabled = true
+max_active_blocks = 2
+minimum_idle_slots = 4
+conservative_block_minutes = 60
+require_estimated_fit_before_cutoff = true
+
 [[schedule.date_overrides]]
 date = "2026-09-09"
 start = "09:00"

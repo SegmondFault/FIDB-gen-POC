@@ -354,6 +354,18 @@ def _render_queue(
         if name in schedule:
             lines.append(f"{name} = {_toml_value(schedule[name])}")
 
+    lines.extend(
+        [
+            "",
+            "[schedule.tail_fill]",
+            f"enabled = {_toml_value(not canary_only)}",
+            f"max_active_blocks = {2 if not canary_only else 1}",
+            "minimum_idle_slots = 4",
+            "conservative_block_minutes = 60",
+            "require_estimated_fit_before_cutoff = true",
+        ]
+    )
+
     for table_name, table in (
         ("resources", source_resources),
         ("notifications", source_notifications),

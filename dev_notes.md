@@ -30,7 +30,7 @@ remains disabled. Active quarantine counts are exposed in queue status.
 
 ## Bounded cross-block tail filling
 
-Status: proposed and not implemented.
+Status: implemented behind reviewed TOML; production observation pending.
 
 ### Problem
 
@@ -92,13 +92,14 @@ analysis, FID generation or the resulting evidence.
 - The feature must be TOML-controlled and safely disabled to recover the
   current single-active-block behaviour.
 
-Suggested initial controls:
+Initial controls:
 
 ```toml
-[operations.scheduling.tail_fill]
-enabled = false
+[schedule.tail_fill]
+enabled = true
 max_active_blocks = 2
 minimum_idle_slots = 4
+conservative_block_minutes = 60
 require_estimated_fit_before_cutoff = true
 ```
 
@@ -133,12 +134,13 @@ some of its cells are running.
 6. Benchmark hashes or sealed cells per wall-clock hour, peak resident memory,
    retries, failures and post-drain retention behaviour.
 
-The default path should change only if the representative benchmark is
-wall-time neutral or faster and produces identical evidence. A useful initial
-acceptance target is at least a 10% wall-time improvement on an uneven workload
-without increased failures or breached resource gates. The observed tail had
-only 34.4% worker occupancy, so the local opportunity was much larger; a
-campaign-wide 10–30% improvement is a hypothesis to measure, not a guarantee.
+The deterministic 32-worker tail model in
+`scripts/benchmark_tail_fill_scheduler.py` compares an 11-cell, 120-minute
+primary tail followed by 36 ten-minute cells. Serial blocks take 140 modeled
+minutes; bounded tail filling takes 120, a projected 14.29% reduction without
+changing job identities or artifacts. This clears the 10% model gate, but it is
+not a production measurement. The first resumed campaign must still record
+actual wall time, failures and resource-gate behaviour.
 
 ## OpenSSL linker-sensitivity investigation
 

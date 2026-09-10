@@ -471,6 +471,62 @@ matrices = ["tier0-uclibc-powerpc"]
             )
             self.assertEqual(second["batch_id"], "batch-bzip2")
 
+    def test_tail_fill_admits_only_successor_after_primary_queue_is_claimed(self):
+        path = self.write_queue(
+            batches=(
+                ("batch-baseline", "coverage baseline", "plans/coverage-baseline.toml"),
+                ("batch-mirai", "mirai", "plans/mirai-baseline.toml"),
+            ),
+            max_workers=4,
+        )
+        with Coordinator(self.database) as coordinator:
+            coordinator.sync(self.config(path), now=10)
+            primary = coordinator.start_next_block(
+                "manual:tail-fill", scheduled=False, now=20
+            )
+            self.assertEqual(primary["batch_id"], "batch-baseline")
+
+            primary_leases = [
+                coordinator.claim(f"primary-{index}", batch_id="batch-baseline", now=21)
+                for index in range(4)
+            ]
+            self.assertTrue(all(primary_leases))
+            self.assertIsNone(
+                coordinator.admit_lookahead_block(
+                    "manual:too-busy", minimum_idle_slots=2, now=22
+                )
+            )
+            for lease in primary_leases[:3]:
+                coordinator.complete(
+                    lease["job_id"],
+                    lease["lease_token"],
+                    lease["lease_generation"],
+                    now=23,
+                )
+
+            block = coordinator.admit_lookahead_block(
+                "manual:tail-fill:lookahead", minimum_idle_slots=2, now=24
+            )
+            self.assertEqual(block["lookahead"]["batch_id"], "batch-mirai")
+            successor = coordinator.claim(
+                "lookahead-worker",
+                batch_ids=("batch-baseline", "batch-mirai"),
+                now=25,
+            )
+            self.assertEqual(successor["batch_id"], "batch-mirai")
+
+            final_primary = primary_leases[-1]
+            coordinator.complete(
+                final_primary["job_id"],
+                final_primary["lease_token"],
+                final_primary["lease_generation"],
+                now=26,
+            )
+            self.assertTrue(coordinator.finish_active_block_if_drained(now=27))
+            promoted = coordinator.execution_block()
+            self.assertEqual(promoted["batch_id"], "batch-mirai")
+            self.assertFalse(promoted["lookahead"]["active"])
+
     def test_max_workers_caps_concurrent_leases(self):
         path = self.write_queue(max_workers=2)
         with Coordinator(self.database) as coordinator:

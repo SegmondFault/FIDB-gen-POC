@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 from dataclasses import dataclass
+from datetime import datetime
 import fcntl
 import hashlib
 import hmac
@@ -16,6 +17,7 @@ from pathlib import Path
 import re
 import socket
 import tempfile
+import time
 from typing import Mapping, Sequence
 from urllib.parse import urlsplit
 
@@ -822,14 +824,42 @@ class RemoteWorkerHandler(BaseHTTPRequestHandler):
                         },
                         "pool": pool_status,
                     }
+                tail_fill = queue.operations.schedule.tail_fill
+                if (
+                    block is not None
+                    and bool(block["active"])
+                    and tail_fill.enabled
+                    and not bool(block["lookahead"]["active"])
+                    and schedule.claims_allowed
+                ):
+                    fits = not tail_fill.require_estimated_fit_before_cutoff
+                    if schedule.stop_claiming_at is not None:
+                        remaining = (
+                            datetime.fromisoformat(
+                                schedule.stop_claiming_at
+                            ).timestamp()
+                            - time.time()
+                        )
+                        fits = remaining >= tail_fill.conservative_block_minutes * 60
+                    if fits:
+                        block = (
+                            coordinator.admit_lookahead_block(
+                                f"{block['admission_id']}:lookahead",
+                                minimum_idle_slots=tail_fill.minimum_idle_slots,
+                                actor=credential.worker_id,
+                            )
+                            or block
+                        )
+                claim_batches = None
+                if block is not None and bool(block["active"]):
+                    claim_batches = [str(block["batch_id"])]
+                    lookahead = block.get("lookahead")
+                    if isinstance(lookahead, dict) and bool(lookahead.get("active")):
+                        claim_batches.append(str(lookahead["batch_id"]))
                 lease = coordinator.claim(
                     credential.worker_id,
                     pool=pool,
-                    batch_id=(
-                        str(block["batch_id"])
-                        if block is not None and bool(block["active"])
-                        else None
-                    ),
+                    batch_ids=tuple(claim_batches) if claim_batches else None,
                 )
                 if block is not None and lease is None:
                     coordinator.finish_active_block_if_drained(

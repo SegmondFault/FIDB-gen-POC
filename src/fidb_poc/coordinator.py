@@ -279,6 +279,8 @@ class Coordinator:
                 operations_json TEXT NOT NULL DEFAULT '{}',
                 active_batch_id TEXT,
                 active_admission_id TEXT,
+                lookahead_batch_id TEXT,
+                lookahead_admission_id TEXT,
                 last_schedule_admission_id TEXT,
                 sync_generation INTEGER NOT NULL CHECK (sync_generation >= 0),
                 synced_at TEXT
@@ -552,6 +554,14 @@ class Coordinator:
             self._connection.execute(
                 "ALTER TABLE coordinator_state ADD COLUMN active_admission_id TEXT"
             )
+        if "lookahead_batch_id" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN lookahead_batch_id TEXT"
+            )
+        if "lookahead_admission_id" not in state_columns:
+            self._connection.execute(
+                "ALTER TABLE coordinator_state ADD COLUMN lookahead_admission_id TEXT"
+            )
         if "last_schedule_admission_id" not in state_columns:
             self._connection.execute(
                 "ALTER TABLE coordinator_state ADD COLUMN last_schedule_admission_id TEXT"
@@ -592,11 +602,12 @@ class Coordinator:
                 retry_backoff_seconds, retry_backoff_max_seconds,
                 authority_failure_threshold,
                 operations_json, active_batch_id, active_admission_id,
+                lookahead_batch_id, lookahead_admission_id,
                 last_schedule_admission_id,
                 sync_generation, synced_at
             ) VALUES (
                 1, NULL, NULL, 0, 0, 4, NULL, 5, 3600, 3, 0, 0, 0, '{}',
-                NULL, NULL, NULL, 0, NULL
+                NULL, NULL, NULL, NULL, NULL, 0, NULL
             )
             """)
         # Keep the query planner's statistics current after migrations add the
@@ -1012,18 +1023,23 @@ class Coordinator:
                     else:
                         submitted += 1
 
-            active_batch = self._state_locked()["active_batch_id"]
-            if active_batch is not None:
+            admission_state = self._state_locked()
+            for batch_field, admission_field in (
+                ("active_batch_id", "active_admission_id"),
+                ("lookahead_batch_id", "lookahead_admission_id"),
+            ):
+                batch_id = admission_state[batch_field]
+                if batch_id is None:
+                    continue
                 still_active = self._connection.execute(
                     "SELECT 1 FROM batches WHERE batch_id = ? AND active = 1",
-                    (active_batch,),
+                    (batch_id,),
                 ).fetchone()
                 if still_active is None:
-                    self._connection.execute("""
-                        UPDATE coordinator_state
-                        SET active_batch_id = NULL, active_admission_id = NULL
-                        WHERE singleton = 1
-                        """)
+                    self._connection.execute(
+                        f"UPDATE coordinator_state SET {batch_field} = NULL, "
+                        f"{admission_field} = NULL WHERE singleton = 1"
+                    )
 
             self._event_locked(
                 "queue.synced",
@@ -1337,18 +1353,11 @@ class Coordinator:
             raise CoordinatorError("coordinator state is missing")
         return state
 
-    def execution_block(self) -> dict[str, object]:
-        """Return the durable batch admission which workers may drain."""
-
-        state = self._state_locked()
-        batch_id = state["active_batch_id"]
+    def _block_document(
+        self, batch_id: object, admission_id: object
+    ) -> dict[str, object]:
         if batch_id is None:
-            return {
-                "active": False,
-                "batch_id": None,
-                "admission_id": None,
-                "last_schedule_admission_id": state["last_schedule_admission_id"],
-            }
+            return {"active": False, "batch_id": None, "admission_id": None}
         rows = self._connection.execute(
             """
             SELECT jobs.state, COUNT(*) AS count
@@ -1363,11 +1372,23 @@ class Coordinator:
         return {
             "active": True,
             "batch_id": str(batch_id),
-            "admission_id": str(state["active_admission_id"]),
-            "last_schedule_admission_id": state["last_schedule_admission_id"],
+            "admission_id": str(admission_id),
             "counts": counts,
             "remaining": counts["queued"] + counts["leased"] + counts["running"],
         }
+
+    def execution_block(self) -> dict[str, object]:
+        """Return the primary and bounded look-ahead admissions workers may drain."""
+
+        state = self._state_locked()
+        primary = self._block_document(
+            state["active_batch_id"], state["active_admission_id"]
+        )
+        primary["last_schedule_admission_id"] = state["last_schedule_admission_id"]
+        primary["lookahead"] = self._block_document(
+            state["lookahead_batch_id"], state["lookahead_admission_id"]
+        )
+        return primary
 
     def start_next_block(
         self,
@@ -1393,6 +1414,10 @@ class Coordinator:
                 return None
             if state["active_batch_id"] is not None:
                 return self.execution_block()
+            if state["lookahead_batch_id"] is not None:
+                raise CoordinatorError(
+                    "look-ahead admission exists without a primary block"
+                )
             if (
                 scheduled
                 and not allow_scheduled_reentry
@@ -1430,6 +1455,83 @@ class Coordinator:
             )
             return self.execution_block()
 
+    def admit_lookahead_block(
+        self,
+        admission_id: str,
+        *,
+        minimum_idle_slots: int,
+        actor: str = "coordinator",
+        now: float | datetime | None = None,
+    ) -> dict[str, object] | None:
+        """Admit only the immediate successor when the primary has no queued work."""
+
+        admission = _text(admission_id, "look-ahead admission id")
+        idle_threshold = _positive_integer(minimum_idle_slots, "minimum idle slots")
+        timestamp = self._now(now)
+        with self._transaction():
+            state = self._state_locked()
+            primary_id = state["active_batch_id"]
+            if not bool(state["armed"]) or bool(state["paused"]):
+                return None
+            if primary_id is None:
+                return None
+            if state["lookahead_batch_id"] is not None:
+                return self.execution_block()
+            primary_queued = self._connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE batch_id = ? "
+                "AND active = 1 AND state = 'queued'",
+                (primary_id,),
+            ).fetchone()
+            if int(primary_queued["count"]):
+                return None
+            live = self._connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE active = 1 "
+                "AND state IN ('leased', 'running')"
+            ).fetchone()
+            idle_slots = int(state["max_workers"]) - int(live["count"])
+            if idle_slots < idle_threshold:
+                return None
+            primary = self._connection.execute(
+                "SELECT position FROM batches WHERE batch_id = ? AND active = 1",
+                (primary_id,),
+            ).fetchone()
+            if primary is None:
+                raise CoordinatorError("primary admission is not an active batch")
+            successor = self._connection.execute(
+                """
+                SELECT batches.* FROM batches
+                WHERE batches.active = 1 AND batches.position > ?
+                  AND EXISTS (
+                    SELECT 1 FROM jobs WHERE jobs.batch_id = batches.batch_id
+                      AND jobs.active = 1
+                      AND jobs.state IN ('queued', 'leased', 'running')
+                  )
+                ORDER BY batches.position, batches.batch_id LIMIT 1
+                """,
+                (primary["position"],),
+            ).fetchone()
+            if successor is None:
+                return None
+            self._connection.execute(
+                "UPDATE coordinator_state SET lookahead_batch_id = ?, "
+                "lookahead_admission_id = ? WHERE singleton = 1",
+                (successor["batch_id"], admission),
+            )
+            self._event_locked(
+                "batch.lookahead-admitted",
+                now=timestamp,
+                actor=actor,
+                batch_id=str(successor["batch_id"]),
+                plan_digest=str(successor["plan_digest"]),
+                payload={
+                    "admission_id": admission,
+                    "primary_batch_id": primary_id,
+                    "idle_slots": idle_slots,
+                    "minimum_idle_slots": idle_threshold,
+                },
+            )
+            return self.execution_block()
+
     def finish_active_block_if_drained(
         self,
         *,
@@ -1459,9 +1561,14 @@ class Coordinator:
             batch = self._connection.execute(
                 "SELECT plan_digest FROM batches WHERE batch_id = ?", (batch_id,)
             ).fetchone()
+            lookahead_id = state["lookahead_batch_id"]
+            lookahead_admission = state["lookahead_admission_id"]
             self._connection.execute("""
                 UPDATE coordinator_state
-                SET active_batch_id = NULL, active_admission_id = NULL
+                SET active_batch_id = lookahead_batch_id,
+                    active_admission_id = lookahead_admission_id,
+                    lookahead_batch_id = NULL,
+                    lookahead_admission_id = NULL
                 WHERE singleton = 1
                 """)
             self._event_locked(
@@ -1472,6 +1579,22 @@ class Coordinator:
                 plan_digest=str(batch["plan_digest"]) if batch is not None else None,
                 payload={"admission_id": admission_id},
             )
+            if lookahead_id is not None:
+                promoted = self._connection.execute(
+                    "SELECT plan_digest FROM batches WHERE batch_id = ?",
+                    (lookahead_id,),
+                ).fetchone()
+                self._event_locked(
+                    "batch.lookahead-promoted",
+                    now=timestamp,
+                    actor=actor,
+                    batch_id=str(lookahead_id),
+                    plan_digest=str(promoted["plan_digest"]),
+                    payload={
+                        "admission_id": str(lookahead_admission),
+                        "drained_primary_batch_id": str(batch_id),
+                    },
+                )
             return True
 
     def _close_open_stage_attempts_locked(
@@ -1655,15 +1778,27 @@ class Coordinator:
         now: float | datetime | None = None,
         pool: str | None = None,
         batch_id: str | None = None,
+        batch_ids: tuple[str, ...] | None = None,
     ) -> dict[str, object] | None:
         """Atomically claim the first eligible job in batch and job order."""
 
         worker = _text(worker_id, "worker id")
         if pool is not None and pool not in WORKER_POOLS:
             raise ValueError(f"unsupported worker pool: {pool}")
+        if batch_id is not None and batch_ids is not None:
+            raise ValueError("claim accepts either batch_id or batch_ids")
         selected_batch = (
             _identifier(batch_id, "claim batch id") if batch_id is not None else None
         )
+        selected_batches = (
+            tuple(_identifier(value, "claim batch id") for value in batch_ids)
+            if batch_ids is not None
+            else None
+        )
+        if selected_batches is not None and (
+            not selected_batches or len(set(selected_batches)) != len(selected_batches)
+        ):
+            raise ValueError("claim batch_ids must be non-empty and unique")
         timestamp = self._now(now)
         with self._transaction():
             self._recover_expired_locked(timestamp)
@@ -1700,6 +1835,10 @@ class Coordinator:
             if selected_batch is not None:
                 claim_query += " AND jobs.batch_id = ?"
                 parameters.append(selected_batch)
+            elif selected_batches is not None:
+                placeholders = ",".join("?" for _ in selected_batches)
+                claim_query += f" AND jobs.batch_id IN ({placeholders})"
+                parameters.extend(selected_batches)
             claim_query += " ORDER BY batches.position, jobs.position, jobs.job_id"
             if pool is None:
                 claim_query += " LIMIT 1"

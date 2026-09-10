@@ -1708,14 +1708,41 @@ def _run_worker(arguments: argparse.Namespace) -> int:
                     time.sleep(config.poll_seconds)
                     continue
                 last_resource_block = None
+                tail_fill = config.operations.schedule.tail_fill
+                if (
+                    finish_started
+                    and tail_fill.enabled
+                    and block is not None
+                    and bool(block["active"])
+                    and not bool(block["lookahead"]["active"])
+                    and bool(schedule["claims_allowed"])
+                ):
+                    stop_value = schedule.get("stop_claiming_at")
+                    fits = not tail_fill.require_estimated_fit_before_cutoff
+                    if isinstance(stop_value, str):
+                        remaining = (
+                            datetime.fromisoformat(stop_value).timestamp() - time.time()
+                        )
+                        fits = remaining >= tail_fill.conservative_block_minutes * 60
+                    if fits:
+                        block = (
+                            coordinator.admit_lookahead_block(
+                                f"{block['admission_id']}:lookahead",
+                                minimum_idle_slots=tail_fill.minimum_idle_slots,
+                                actor=arguments.worker_id,
+                            )
+                            or block
+                        )
+                claim_batches = None
+                if finish_started and block is not None and bool(block["active"]):
+                    claim_batches = [str(block["batch_id"])]
+                    lookahead = block.get("lookahead")
+                    if isinstance(lookahead, dict) and bool(lookahead.get("active")):
+                        claim_batches.append(str(lookahead["batch_id"]))
                 lease = coordinator.claim(
                     arguments.worker_id,
                     pool=arguments.pool,
-                    batch_id=(
-                        str(block["batch_id"])
-                        if finish_started and block is not None
-                        else None
-                    ),
+                    batch_ids=tuple(claim_batches) if claim_batches else None,
                 )
                 if lease is not None:
                     drained_notified = False
