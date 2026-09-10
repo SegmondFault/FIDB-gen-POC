@@ -343,6 +343,37 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(evidence["failure_fingerprint"], action["failure_fingerprint"])
         self.assertTrue((bundle / "files/work/logs/build.log").is_file())
 
+    def test_batch_scoped_plan_only_bundles_selected_failures(self) -> None:
+        selected = self.add_job(30, "failed")
+        selected_root = self.add_failed_attempt(selected, 301, 1, "selected failure")
+        other = self.add_job(31, "failed")
+        other_root = self.add_failed_attempt(other, 311, 1, "other failure")
+        with closing(sqlite3.connect(self.database)) as connection, connection:
+            connection.execute(
+                "UPDATE jobs SET batch_id='batch-other' WHERE job_id=?", (other,)
+            )
+
+        plan = compile_retention_plan(
+            self.root, scope="production", batch_id="batch-test"
+        )
+
+        self.assertEqual(plan["batch_id"], "batch-test")
+        self.assertEqual(len(plan["actions"]), 1)
+        self.assertEqual(plan["actions"][0]["job_id"], selected)
+        self.assertEqual(plan["quarantined"], [])
+        write_retention_plan(plan, self.root)
+        apply_retention_plan(self.root, plan["plan_digest"])
+        self.assertFalse(selected_root.exists())
+        self.assertTrue(other_root.exists())
+
+    def test_batch_scoped_plan_requires_production_scope(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires production scope"):
+            compile_retention_plan(
+                self.root,
+                scope="machine-validation",
+                batch_id="batch-test",
+            )
+
     def test_different_failed_retry_is_quarantined_and_not_removed(self) -> None:
         job_id = self.add_job(4, "failed")
         first = self.add_failed_attempt(job_id, 41, 1, "configure failed")

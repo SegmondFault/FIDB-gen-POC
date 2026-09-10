@@ -1240,6 +1240,7 @@ def compile_retention_plan(
     scope: str = "all",
     trigger: str = "manual",
     session_id: str | None = None,
+    batch_id: str | None = None,
 ) -> dict[str, object]:
     if scope not in {"all", "production", "machine-validation"}:
         raise ValueError(
@@ -1247,6 +1248,11 @@ def compile_retention_plan(
         )
     if trigger not in {"manual", "queue-drained", "machine-validation-complete"}:
         raise ValueError("retention trigger is unsupported")
+    selected_batch = None
+    if batch_id is not None:
+        selected_batch = _text(batch_id, "retention batch id")
+        if scope != "production":
+            raise ValueError("batch-scoped retention requires production scope")
     started = time.monotonic_ns()
     generated_at = datetime.now(timezone.utc).isoformat()
     policy = load_retention_policy(project_root, authority)
@@ -1262,20 +1268,28 @@ def compile_retention_plan(
     try:
         ledger_fingerprint = _ledger_fingerprint(connection)
         effective_session_id = session_id or _latest_session(connection)
-        jobs = (
-            {
-                str(row["job_id"]): row
-                for row in connection.execute("SELECT * FROM jobs ORDER BY job_id")
-            }
-            if production_enabled
-            else {}
-        )
+        jobs = {}
+        if production_enabled:
+            if selected_batch is None:
+                job_rows = connection.execute("SELECT * FROM jobs ORDER BY job_id")
+            else:
+                job_rows = connection.execute(
+                    "SELECT * FROM jobs WHERE batch_id = ? ORDER BY job_id",
+                    (selected_batch,),
+                )
+            jobs = {str(row["job_id"]): row for row in job_rows}
+            if selected_batch is not None and not jobs:
+                raise RetentionError(
+                    f"retention batch is absent from the ledger: {selected_batch}"
+                )
         attempts_by_job: dict[str, list[sqlite3.Row]] = {}
         if production_enabled:
             for row in connection.execute(
                 "SELECT * FROM attempts ORDER BY job_id, attempt_number, attempt_id"
             ):
-                attempts_by_job.setdefault(str(row["job_id"]), []).append(row)
+                job_id = str(row["job_id"])
+                if job_id in jobs:
+                    attempts_by_job.setdefault(job_id, []).append(row)
 
         for job_id, job in jobs.items():
             if str(job["state"]) != "complete":
@@ -1540,7 +1554,7 @@ def compile_retention_plan(
             )
 
         staging_root = policy.runs / "staging"
-        if production_enabled and staging_root.is_dir():
+        if production_enabled and selected_batch is None and staging_root.is_dir():
             for path in staging_root.iterdir():
                 if not path.is_dir() or path.is_symlink():
                     quarantined.append(
@@ -1638,6 +1652,8 @@ def compile_retention_plan(
         "quarantined": quarantined,
         "summary": summary,
     }
+    if selected_batch is not None:
+        plan_basis["batch_id"] = selected_batch
     elapsed = time.monotonic_ns() - started
     estimate = max(
         elapsed / 1_000_000_000,
@@ -1802,6 +1818,7 @@ def write_retention_plan(plan: Mapping[str, object], project_root: str | Path) -
             "generated_at": plan["generated_at"],
             "scope": plan["scope"],
             "trigger": plan["trigger"],
+            **({"batch_id": plan["batch_id"]} if "batch_id" in plan else {}),
         },
     )
     return path
@@ -1823,6 +1840,8 @@ def _saved_plan_digest(plan: Mapping[str, object]) -> str:
             "summary",
         )
     }
+    if "batch_id" in plan:
+        basis["batch_id"] = plan["batch_id"]
     return _digest(basis)
 
 
@@ -1993,6 +2012,7 @@ def apply_retention_plan(
             scope=str(saved.get("scope", "all")),
             trigger=str(saved.get("trigger", "manual")),
             session_id=str(saved["session_id"]),
+            batch_id=(str(saved["batch_id"]) if "batch_id" in saved else None),
         )
         if current["plan_digest"] != plan_digest:
             raise RetentionError(
@@ -2063,6 +2083,7 @@ def apply_retention_plan(
             "session_id": saved["session_id"],
             "scope": saved["scope"],
             "trigger": saved["trigger"],
+            **({"batch_id": saved["batch_id"]} if "batch_id" in saved else {}),
             "started_at": started_at,
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "duration_ns": duration,
@@ -2224,6 +2245,10 @@ def parser() -> argparse.ArgumentParser:
         choices=("all", "production", "machine-validation"),
         default="all",
     )
+    plan.add_argument(
+        "--batch",
+        help="limit production retention to one exact ledger batch id",
+    )
     apply = commands.add_parser(
         "apply", parents=[common], help="apply one exact current plan"
     )
@@ -2245,6 +2270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arguments.state,
                 arguments.policy,
                 scope=arguments.scope,
+                batch_id=arguments.batch,
             )
             path = write_retention_plan(document, arguments.project_root)
             document = {
