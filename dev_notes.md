@@ -117,3 +117,67 @@ without increased failures or breached resource gates. The observed tail had
 only 34.4% worker occupancy, so the local opportunity was much larger; a
 campaign-wide 10–30% improvement is a hypothesis to measure, not a guarantee.
 
+## MIPS relocatable-object exception-analysis cost
+
+Status: observed in the Protobuf 36.1 MIPS tail; proposed experiments are not
+implemented and must not alter an in-flight attempt.
+
+### Evidence
+
+The affected cells import 86 relocatable C++ object files individually. A
+sample MIPS32 big-endian GCC 12 `optimization_o0` attempt contained about
+54 MiB of objects and had already produced an approximately 1.9 GiB Ghidra
+project. Its Ghidra application logs occupied about 600 MiB and contained about
+5.9 million repeated `LSDACallSiteTable` errors reporting call-site or landing-
+pad ranges outside inferred function bodies. A completed optimized comparison
+contained about 11 MiB of objects and recorded about 204,000 messages of the
+same class.
+
+The current inference is that Ghidra's GCC exception analysis is repeatedly
+trying to reconcile C++ LSDA records with function boundaries while the
+archive members are still relocatable and therefore lack their final linked
+layout. `-O0` increases the object and exception-analysis population. Repeated
+message formatting and disk writes then compound the analysis cost. This must
+be tested rather than treated as a proven causal decomposition.
+
+### Experiment 1: suppress repeated LSDA logging
+
+Test an analysis policy that preserves the analyzer but suppresses, samples or
+rate-limits repeated `LSDACallSiteTable` messages after recording a bounded
+diagnostic summary. Do not simply discard the existence of the condition: the
+attempt evidence should retain the total or sampled count, affected analyzer,
+route and object population.
+
+Compare the candidate against the canonical path using the same pinned source,
+toolchain, route and treatment. Measure:
+
+- Ghidra wall and CPU time;
+- application-log bytes and write volume;
+- peak resident memory and Ghidra-project bytes;
+- function and program counts;
+- normalized full and specific FID hashes and relationships; and
+- packed and raw FID population results.
+
+Logging suppression may become a default-path optimisation only if semantic
+outputs are identical and wall time is neutral or lower. A different whole-file
+FIDB digest alone is not a semantic failure because fresh Ghidra containers
+carry per-run metadata.
+
+### Experiment 2: optionally disable GCC exception analysis
+
+Identify the exact registered Ghidra analyzer responsible for the LSDA work and
+add a named, versioned analysis-policy experiment that disables it only for
+relocatable archive members on the affected route. The policy must be explicit
+in TOML and provenance; it must fail closed if the expected analyzer cannot be
+identified. It must not silently affect linked images or unrelated targets.
+
+Run a small MIPS oracle covering at least optimized and `-O0` Protobuf cells.
+Compare the same timing, population, full-hash, specific-hash and relationship
+evidence used for logging suppression. Also query both candidate databases
+against fixed linked MIPS binaries to detect a change in useful matches.
+
+If disabling the analyzer changes FID evidence, retain it only as an explicit
+experimental treatment until the recall and precision effect is understood. If
+it produces equivalent FID evidence and a representative speedup, qualify the
+policy before considering it for the canonical relocatable-object path. The
+existing analysis policy remains the rollback route throughout.
