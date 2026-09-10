@@ -8,7 +8,7 @@ bounded build treatments while preserving the provenance of every result.
 The current project is larger than a demonstration script. It includes:
 
 - a TOML-authoritative build matrix and campaign programme;
-- portable x86-64 Linux-hosted toolchain packs;
+- host-scoped managed and external toolchain/emulator providers;
 - local and remote worker coordination with durable SQLite state;
 - Ghidra FID/FIDBF production and linked-image reference populations;
 - per-cohort machine validation and corpus-level hash-discrimination evidence;
@@ -51,6 +51,7 @@ The complete documentation map is in [`docs/README.md`](docs/README.md).
 | --- | --- |
 | End-to-end build path | [`docs/architecture/pipeline.md`](docs/architecture/pipeline.md) |
 | Toolchain packs and targets | [`docs/architecture/toolchains.md`](docs/architecture/toolchains.md) |
+| Emulator providers | [`emulators/README.md`](emulators/README.md) |
 | Lane databases and compaction | [`docs/architecture/lane-databases.md`](docs/architecture/lane-databases.md) |
 | Machine/ecological validation | [`validation/README.md`](validation/README.md) |
 | Hash discrimination | [`docs/validation/hash-discrimination.md`](docs/validation/hash-discrimination.md) |
@@ -75,6 +76,7 @@ recipes/            Reviewed library and malware build recipes
 sources/            Source acquisition authorities and locks
 targets/            Target/ABI catalogue
 toolchains/         Toolchain routes, packs, profiles and qualifications
+emulators/          Host-scoped managed and external emulator providers
 performance/        Host detection and execution profiles
 batches/            Reviewed width-batch definitions
 campaigns/          Long-horizon corpus programmes
@@ -92,10 +94,36 @@ Generated `artifacts/`, `var/` and `work/` trees are local state. They are not
 part of a source-only checkout and must be transferred through their own
 evidence or export manifests.
 
+## QEMU and host compatibility
+
+The control plane is not tied to the host that performs compilation. Workers
+advertise their host, toolchain and emulator capabilities, and the scheduler
+must assign only compatible work. The first managed emulator provider is the
+standard static QEMU user-mode suite for an x86-64 Linux worker; it is one
+provider implementation, not a project-wide platform requirement.
+
+On a matching host, pull and inspect the checksum-pinned provider without a
+global package installation or `binfmt_misc` registration:
+
+```sh
+uv run fidb-poc emulator status --project-root .
+uv run fidb-poc emulator pull --project-root .
+uv run fidb-poc emulator status --project-root . --probe
+```
+
+An existing QEMU installation on another host can be declared in the ignored
+`emulators/local.toml` using [`emulators/local.example.toml`](emulators/local.example.toml).
+The resolved executable paths, versions and SHA-256 values become provenance.
+If a host has neither a matching managed provider nor an external one, the
+control plane remains usable and execution can be dispatched to a compatible
+worker.
+
 ## Development setup
 
-Run development tools directly on an x86-64 Linux checkout. Python 3.10 or newer
-is supported; the locked environment is managed with `uv`.
+Python 3.10 or newer is supported and the locked environment is managed with
+`uv`. The current complete production matrix is qualified on an x86-64 Linux
+worker; other hosts can operate the control plane, declare compatible local
+providers, or dispatch execution to remote workers.
 
 ```sh
 uv sync --locked

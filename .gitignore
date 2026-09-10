@@ -18,6 +18,7 @@ artifacts/linked-reference-runs/
 artifacts/repository-safeguards/
 qualification/evidence/
 var/
+emulators/local.toml
 dist/
 build/
 *.egg-info/

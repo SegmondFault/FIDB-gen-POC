@@ -539,10 +539,18 @@ var/fidb-toolchains/downloads/   verified upstream archives
 var/fidb-toolchains/prepared/    safely extracted pack roots
 var/fidb-toolchains/composed/    reviewed derived routes, when defined
 var/fidb-toolchains/qualified/   qualification records and smoke artifacts
+var/fidb-emulators/              verified and prepared host emulator providers
 var/fidb-remote-upload-locks/    coordinator-local transfer serialization
 artifacts/runs/remote-staging/   incomplete authenticated uploads
 artifacts/runs/                  atomically published sealed attempts
 ```
+
+Emulators are a separate host capability rather than compiler identity. The
+reviewed provider registry is `emulators/registry.toml`; managed downloads and
+prepared binaries remain ignored below `var/fidb-emulators/`. A clone on a
+different host can point `emulators/local.toml` at an external installation or
+dispatch execution to a compatible worker. A managed provider for one host is
+never treated as a project-wide platform restriction.
 
 The Mac uses its own ignored `var/fidb-remote-worker/` attempt scratch. Only
 the three sealed outputs return to Linux.

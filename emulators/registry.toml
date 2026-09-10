@@ -1,0 +1,52 @@
+schema_version = "fidb-emulator-registry/v1"
+
+# Logical target names are independent of the host package. An external QEMU
+# installation may override any executable name in emulators/local.toml.
+[qemu_user_targets]
+linux-x86-32 = "qemu-i386-static"
+linux-x86-64 = "qemu-x86_64-static"
+linux-arm32 = "qemu-arm-static"
+linux-aarch64 = "qemu-aarch64-static"
+linux-m68k = "qemu-m68k-static"
+linux-mips32-be = "qemu-mips-static"
+linux-mips32-le = "qemu-mipsel-static"
+linux-mips64-be = "qemu-mips64-static"
+linux-mips64-le = "qemu-mips64el-static"
+linux-powerpc32-be = "qemu-ppc-static"
+linux-powerpc64-be = "qemu-ppc64-static"
+linux-powerpc64-le = "qemu-ppc64le-static"
+linux-riscv32 = "qemu-riscv32-static"
+linux-riscv64 = "qemu-riscv64-static"
+linux-sh4 = "qemu-sh4-static"
+
+[[managed_provider]]
+id = "arch-qemu-user-static-11.1.0-1-linux-x86-64"
+label = "QEMU user-mode static 11.1.0 (Arch package)"
+engine = "qemu"
+mode = "user"
+version = "11.1.0"
+host_os = "linux"
+host_architecture = "x86_64"
+url = "https://archive.archlinux.org/packages/q/qemu-user-static/qemu-user-static-11.1.0-1-x86_64.pkg.tar.zst"
+sha256 = "f52f0f458d433e1ad9c970027baffaa9ecfa63f905bdecb80d23f64e72bf68d9"
+download_bytes = 13204255
+installed_bytes = 141568009
+archive_format = "arch-pkg-tar-zstd"
+bin_directory = "usr/bin"
+license_directory = "usr/share/licenses/qemu-user-static"
+upstream_authority = "https://www.qemu.org/"
+package_authority = "https://archlinux.org/packages/extra/x86_64/qemu-user-static/"
+signature_url = "https://archive.archlinux.org/packages/q/qemu-user-static/qemu-user-static-11.1.0-1-x86_64.pkg.tar.zst.sig"
+signature_primary_fingerprint = "991F6E3F0765CF6295888586139B09DA5BF0D338"
+signature_review = "Verified with the Arch Linux package keyring on 2026-09-10. Runtime acquisition is content-addressed by the reviewed SHA-256."
+license_ids = [
+  "GPL-2.0-only",
+  "GPL-2.0-or-later",
+  "LGPL-2.0-or-later",
+  "LGPL-2.1-or-later",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "MIT",
+  "ISC",
+  "various-open-source",
+]

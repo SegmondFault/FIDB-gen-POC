@@ -1,0 +1,17 @@
+schema_version = "fidb-emulator-local/v1"
+provider = "external"
+engine = "qemu"
+mode = "user"
+root = "/usr/bin"
+
+# External installations need not use the "-static" package names. Declare
+# every target that this host is allowed to execute; omitted targets remain
+# unavailable and will not be guessed from PATH.
+[executables]
+linux-aarch64 = "qemu-aarch64"
+linux-arm32 = "qemu-arm"
+linux-mips32-be = "qemu-mips"
+linux-mips32-le = "qemu-mipsel"
+linux-powerpc32-be = "qemu-ppc"
+linux-sh4 = "qemu-sh4"
+linux-m68k = "qemu-m68k"

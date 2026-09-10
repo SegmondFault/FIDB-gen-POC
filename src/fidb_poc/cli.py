@@ -1376,6 +1376,10 @@ def main(argv: list[str] | None = None) -> int:
         from .toolchain_cli import main as toolchain_main
 
         return toolchain_main(tokens[1:])
+    if tokens and tokens[0] == "emulator":
+        from .emulator_providers import main as emulator_main
+
+        return emulator_main(tokens[1:])
     if tokens and tokens[0] == "source":
         from .source_cli import main as source_main
 
