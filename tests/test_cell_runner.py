@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from fidb_poc import libc_catalog
+from fidb_poc import ghidra_fid, libc_catalog
 from fidb_poc.cell_runner import (
     CellAuthorityResolver,
     CellResolutionError,
@@ -229,7 +229,6 @@ class CellRunnerTests(unittest.TestCase):
             source_downloads=None,
             timing=None,
             skipped=None,
-            fid_build_policy=None,
         ):
             self.assertEqual(configuration.libraries[0].name, "zlib")
             self.assertFalse(verbose)
@@ -238,7 +237,13 @@ class CellRunnerTests(unittest.TestCase):
                 source_downloads,
                 self.project_root / "var/fidb-sources/downloads",
             )
-            self.assertIsNotNone(fid_build_policy)
+            self.assertEqual(
+                ghidra_fid._ACTIVE_FID_BUILD_POLICY,
+                (
+                    "ghidra-fid-safe-analysis-v1",
+                    "ghidra-default-diagnostics-v1",
+                ),
+            )
             if progress is not None:
                 progress("native fake")
             fidb = root / "artifacts/libs/fidb/native.fidb"
@@ -309,6 +314,7 @@ class CellRunnerTests(unittest.TestCase):
             )
             self.assertEqual(seal["artifacts"]["fidb"]["bytes"], 11)
             self.assertEqual(seal["artifacts"]["fidbf"]["bytes"], 9)
+            self.assertEqual(seal["evidence"]["fid_build_policy"]["rule"], "default")
 
     def test_width_runtime_resolves_versioned_and_base_toolchain_shapes(self):
         plan = resolve_plan(

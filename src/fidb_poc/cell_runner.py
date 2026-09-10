@@ -1111,17 +1111,31 @@ def _native_outputs(
     build_jobs_per_cell: int,
 ) -> tuple[Path, dict[str, int], dict[str, object], dict[str, object]]:
     fid_build_policy = load_fid_build_policy(project_root)
-    manifest = pipeline.execute(
-        configuration,
-        attempt_root,
-        progress=None,
-        verbose=verbose,
-        build_jobs_per_cell=build_jobs_per_cell,
-        source_downloads=project_root / MANAGED_SOURCE_DOWNLOADS,
-        timing=timing.span,
-        skipped=timing.skip,
-        fid_build_policy=fid_build_policy,
+    if not (
+        len(configuration.libraries)
+        == len(configuration.routes)
+        == len(configuration.treatments)
+        == 1
+    ):
+        raise CellRunnerError("native coordinator execution requires one exact cell")
+    selection = fid_build_policy.select(
+        configuration.libraries[0],
+        configuration.routes[0],
+        configuration.treatments[0],
     )
+    with ghidra_fid.fid_build_policy_context(
+        selection.analysis_policy, selection.diagnostic_policy
+    ):
+        manifest = pipeline.execute(
+            configuration,
+            attempt_root,
+            progress=None,
+            verbose=verbose,
+            build_jobs_per_cell=build_jobs_per_cell,
+            source_downloads=project_root / MANAGED_SOURCE_DOWNLOADS,
+            timing=timing.span,
+            skipped=timing.skip,
+        )
     with timing.span(
         CellStage.FID_VALIDATION,
         "validating native pipeline FID result",
@@ -1174,11 +1188,11 @@ def _native_outputs(
         "analysis_artifact_sha256": row.get("analysis_artifact_sha256"),
         "object_count": int(row.get("object_count", "0")),
         "fid_build_policy": {
-            "rule": row.get("fid_build_policy_rule"),
-            "analysis_policy": row.get("fid_build_analysis_policy"),
-            "diagnostic_policy": row.get("ghidra_diagnostic_policy"),
-            "authority_path": row.get("fid_build_policy_authority_path"),
-            "authority_sha256": row.get("fid_build_policy_authority_sha256"),
+            "rule": selection.rule_id,
+            "analysis_policy": selection.analysis_policy,
+            "diagnostic_policy": selection.diagnostic_policy,
+            "authority_path": selection.authority_path,
+            "authority_sha256": selection.authority_sha256,
         },
         "toolchain": {
             "compiler": {

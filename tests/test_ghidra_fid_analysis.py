@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import Mock, patch
 
+from fidb_poc import ghidra_fid as ghidra_fid_module
 from fidb_poc.ghidra_fid import (
     LSDA_LOGGER_NAME,
     _BoundedLsdaErrorLogger,
@@ -60,6 +61,24 @@ class _LogDelegate:
 
 
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_fid_build_policy_context_restores_nested_policy(self):
+        self.assertIsNone(ghidra_fid_module._ACTIVE_FID_BUILD_POLICY)
+        with ghidra_fid_module.fid_build_policy_context("analysis-a", "logging-a"):
+            self.assertEqual(
+                ghidra_fid_module._ACTIVE_FID_BUILD_POLICY,
+                ("analysis-a", "logging-a"),
+            )
+            with ghidra_fid_module.fid_build_policy_context("analysis-b", "logging-b"):
+                self.assertEqual(
+                    ghidra_fid_module._ACTIVE_FID_BUILD_POLICY,
+                    ("analysis-b", "logging-b"),
+                )
+            self.assertEqual(
+                ghidra_fid_module._ACTIVE_FID_BUILD_POLICY,
+                ("analysis-a", "logging-a"),
+            )
+        self.assertIsNone(ghidra_fid_module._ACTIVE_FID_BUILD_POLICY)
+
     def test_lsda_limiter_bounds_only_the_pathological_error_source(self):
         now = [100.0]
         delegate = _LogDelegate()

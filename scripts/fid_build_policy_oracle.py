@@ -87,6 +87,7 @@ def main() -> int:
         language=arguments.language,
         compiler_spec=arguments.compiler_spec,
         analysis_policy=arguments.analysis_policy,
+        diagnostic_policy=arguments.diagnostic_policy,
     )
     signatures = output / "signatures.jsonl"
     signature_counts = ghidra_fid.export_fid_signatures(

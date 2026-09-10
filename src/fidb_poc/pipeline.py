@@ -33,7 +33,6 @@ from .adapters import (
     prepare_build_workspace,
 )
 from .config import Configuration, Library, Route, Treatment
-from .fid_build_policy import FidBuildPolicyAuthority
 from .toolchain_cache import acquire_pinned, inspect_cached
 from .timing import utc_now
 
@@ -134,11 +133,6 @@ class BuildRecord:
     object_count: int = 0
     ghidra_language: str = ""
     ghidra_compiler_spec: str = ""
-    fid_build_policy_rule: str = ""
-    fid_build_analysis_policy: str = ""
-    ghidra_diagnostic_policy: str = ""
-    fid_build_policy_authority_path: str = ""
-    fid_build_policy_authority_sha256: str = ""
     ghidra_version: str = ""
     ghidra_release: str = ""
     ghidra_build: str = ""
@@ -1476,7 +1470,6 @@ def _populate_group(
     verbose: bool = False,
     *,
     timing: TimingFactory | None = None,
-    fid_build_policy: FidBuildPolicyAuthority | None = None,
 ) -> None:
     group_id = f"{route.id}-{treatment.id}"
     projects = project_root / "work/ghidra/projects" / group_id
@@ -1556,44 +1549,6 @@ def _populate_group(
 
         candidate_fidb = candidates / f"{library.identifier}-{group_id}.fidb"
         project_name = f"FIDB_{library.identifier}_{group_id}".replace("-", "_")
-        selection = (
-            fid_build_policy.select(library, route, treatment)
-            if fid_build_policy is not None
-            else None
-        )
-        analysis_policy = (
-            selection.analysis_policy
-            if selection is not None
-            else ghidra_fid.FID_BUILD_ANALYSIS_POLICY
-        )
-        diagnostic_policy = (
-            selection.diagnostic_policy
-            if selection is not None
-            else ghidra_fid.GHIDRA_DEFAULT_DIAGNOSTIC_POLICY
-        )
-        record = records[key]
-        record.fid_build_policy_rule = selection.rule_id if selection else "default"
-        record.fid_build_analysis_policy = analysis_policy
-        record.ghidra_diagnostic_policy = diagnostic_policy
-        record.fid_build_policy_authority_path = (
-            selection.authority_path if selection else ""
-        )
-        record.fid_build_policy_authority_sha256 = (
-            selection.authority_sha256 if selection else ""
-        )
-        with _timed(
-            timing,
-            "ghidra-diagnostic-policy",
-            "configuring bounded Ghidra diagnostics",
-            {
-                "library": library.identifier,
-                "route": route.id,
-                "policy": diagnostic_policy,
-            },
-        ) as diagnostic_metrics:
-            diagnostic_metrics.update(
-                ghidra_fid.configure_ghidra_diagnostics(diagnostic_policy)
-            )
         result = ghidra_fid.build_library_fidb(
             objects=staged_objects,
             project_dir=projects / library.identifier,
@@ -1604,7 +1559,6 @@ def _populate_group(
             variant=group_id,
             language=route.ghidra_language,
             compiler_spec=route.ghidra_compiler_spec,
-            analysis_policy=analysis_policy,
             timing=timing,
         )
         candidate_signatures = candidates / (
@@ -1700,7 +1654,6 @@ def populate_fidbs(
     verbose: bool = False,
     *,
     timing: TimingFactory | None = None,
-    fid_build_policy: FidBuildPolicyAuthority | None = None,
 ) -> None:
     for route in configuration.routes:
         for treatment in configuration.treatments:
@@ -1720,7 +1673,6 @@ def populate_fidbs(
                     objects,
                     verbose=verbose,
                     timing=timing,
-                    fid_build_policy=fid_build_policy,
                 )
             except (
                 KeyError,
@@ -1834,7 +1786,6 @@ def execute(
     source_downloads: Path | None = None,
     timing: TimingFactory | None = None,
     skipped: SkipCallback | None = None,
-    fid_build_policy: FidBuildPolicyAuthority | None = None,
 ) -> Path:
     if build_jobs_per_cell < 1 or build_jobs_per_cell > 32:
         raise ValueError("build jobs per cell must be between 1 and 32")
@@ -1996,7 +1947,6 @@ def execute(
         object_sets,
         verbose=verbose,
         timing=timing,
-        fid_build_policy=fid_build_policy,
     )
     ordered = [
         records[(library.identifier, route.id, treatment.id)]

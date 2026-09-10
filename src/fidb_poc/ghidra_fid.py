@@ -10,7 +10,7 @@ that launcher, so the same failure mode cannot occur.
 
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import hashlib
 import json
 from pathlib import Path
@@ -38,10 +38,31 @@ LSDA_LOGGER_NAME = (
 
 _BASE_GHIDRA_ERROR_LOGGER = None
 _ACTIVE_GHIDRA_ERROR_LOGGER = None
+_ACTIVE_FID_BUILD_POLICY: tuple[str, str] | None = None
 
 TimingFactory = Callable[
     [str, str, Mapping[str, object] | None], ContextManager[dict[str, object]]
 ]
+
+
+@contextmanager
+def fid_build_policy_context(analysis_policy: str, diagnostic_policy: str):
+    """Apply one cell's reviewed post-compilation FID policy.
+
+    Coordinator workers execute one cell at a time in a dedicated process.
+    Keeping this policy at the Ghidra boundary prevents post-build diagnostic
+    changes from invalidating the separate compilation qualification digest.
+    Nested callers are restored deterministically for tests and diagnostics.
+    """
+
+    global _ACTIVE_FID_BUILD_POLICY
+
+    previous = _ACTIVE_FID_BUILD_POLICY
+    _ACTIVE_FID_BUILD_POLICY = (analysis_policy, diagnostic_policy)
+    try:
+        yield
+    finally:
+        _ACTIVE_FID_BUILD_POLICY = previous
 
 
 def _safe_project_name(value: str) -> str:
@@ -354,6 +375,7 @@ def build_library_fidb(
     language: str,
     compiler_spec: str,
     analysis_policy: str = FID_BUILD_ANALYSIS_POLICY,
+    diagnostic_policy: str = GHIDRA_DEFAULT_DIAGNOSTIC_POLICY,
     timing: TimingFactory | None = None,
 ) -> dict[str, int]:
     """Import+analyze every object into one fresh Ghidra project, then build
@@ -368,6 +390,16 @@ def build_library_fidb(
 
     if not objects:
         raise ValueError(f"no objects submitted for {library}")
+
+    if _ACTIVE_FID_BUILD_POLICY is not None:
+        analysis_policy, diagnostic_policy = _ACTIVE_FID_BUILD_POLICY
+    with _timed(
+        timing,
+        "ghidra-diagnostic-policy",
+        "configuring bounded Ghidra diagnostics",
+        {"library": library, "policy": diagnostic_policy},
+    ) as diagnostic_metrics:
+        diagnostic_metrics.update(configure_ghidra_diagnostics(diagnostic_policy))
 
     project_dir = _safe_project_location(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
