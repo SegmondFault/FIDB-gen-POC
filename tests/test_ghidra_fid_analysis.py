@@ -16,6 +16,7 @@ from fidb_poc.ghidra_fid import (
     _safe_project_location,
     _set_registered_analysis_boolean_option,
 )
+from fidb_poc.timing import CellStage
 from fidb_poc.validation_analysis import (
     FID_BUILD_ANALYSIS_POLICY,
     FID_BUILD_RELOCATABLE_GCC_EXCEPTION_DISABLED_POLICY,
@@ -61,6 +62,12 @@ class _LogDelegate:
 
 
 class GhidraTargetAnalysisPolicyTests(unittest.TestCase):
+    def test_diagnostic_policy_has_a_typed_timing_stage(self):
+        self.assertIs(
+            CellStage("ghidra-diagnostic-policy"),
+            CellStage.GHIDRA_DIAGNOSTIC_POLICY,
+        )
+
     def test_fid_build_policy_context_restores_nested_policy(self):
         self.assertIsNone(ghidra_fid_module._ACTIVE_FID_BUILD_POLICY)
         with ghidra_fid_module.fid_build_policy_context("analysis-a", "logging-a"):

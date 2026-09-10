@@ -36,6 +36,7 @@ class CellStage(str, Enum):
     ARCHIVE_OBJECT_SELECTION = "archive-object-selection"
     ARTIFACT_VALIDATION = "artifact-validation"
     GHIDRA_STARTUP = "ghidra-startup"
+    GHIDRA_DIAGNOSTIC_POLICY = "ghidra-diagnostic-policy"
     GHIDRA_IMPORT_ANALYSIS = "ghidra-import-analysis"
     FID_POPULATION = "fid-population"
     FID_VALIDATION = "fid-validation"
