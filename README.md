@@ -156,6 +156,8 @@ npx tsc --noEmit
 npm run build
 ```
 
+Note: The control panel is mostly a collection of ideas of what a future control panel could/should look like. It needs a solid tidy up, though it is useful as an aide memoir on the many noving parts.
+
 See [`operations/README.md`](operations/README.md) for installing and operating
 the coordinator, workers and control panel. Do not arm work merely to test the
 interface; use the read-only checks and disarmed materialisers first.
